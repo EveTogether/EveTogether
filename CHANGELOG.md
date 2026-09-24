@@ -17,6 +17,15 @@ release notes, not this file.
 
 ## [Unreleased]
 
+- **Added: you can now remove a character.** Until now a character you had added stayed in the list for good. Its
+  settings have a Remove character button at the bottom: two clicks and it is decoupled from every server, its EVE
+  sign-in is revoked at CCP, and its skills, implants, killmails, messages, cached metrics and tokens are deleted from
+  this PC. Your runs and fittings stay unless you tick "Also delete this character's runs and fittings". A run that is
+  still going is stopped first. A character that commands an active fleet can't be removed until you hand the fleet
+  over or stop it. If a server can't be reached, the character is removed anyway and that server is told the next time
+  it connects. Signing in with the character again adds it back.
+- **Changed: red buttons such as Conclude and Remove read better.** Their red label sat on a light wash that left it
+  just under the contrast the rest of the app keeps to; the wash is gone, the red outline stays.
 - **Fixed: the server no longer answers unauthenticated requests to the old test endpoints.** `GET`/`POST /ships` and
   `GET /sync-logs` were leftovers from early development and let anyone who could reach a server read its sync log or
   add rows to its database. They are gone.

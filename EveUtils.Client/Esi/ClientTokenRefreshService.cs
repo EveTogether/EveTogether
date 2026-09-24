@@ -141,6 +141,32 @@ public sealed class ClientTokenRefreshService(
     }
 
     /// <summary>
+    /// Runs <paramref name="removal"/> while no refresh for this character can be in flight, then drops everything
+    /// kept for it (ET-345). A refresh that already started finishes first: letting it run alongside would write the
+    /// rotated token — and, with a changed grant, the registry row — back after the removal had deleted them.
+    /// </summary>
+    public async Task<T> ForgetAsync<T>(int charId, Func<Task<T>> removal, CancellationToken cancellationToken = default)
+    {
+        var gate = _gates.GetOrAdd(charId, static _ => new SemaphoreSlim(1, 1));
+        await gate.WaitAsync(cancellationToken);
+        T removed;
+        try
+        {
+            removed = await removal();
+        }
+        finally
+        {
+            _backoffs.TryRemove(charId, out _);
+            _refused.TryRemove(charId, out _);
+            _forcedRefreshAfter.TryRemove(charId, out _);
+            gate.Release();
+        }
+
+        statusTracker.Forget(charId);
+        return removed;
+    }
+
+    /// <summary>
     /// ESI answered 401 for this character's token. Distrusts the stored token so the next check refreshes rather
     /// than believing its expiry, and puts the character on the badge as <see cref="TokenStatus.Rejected"/> — a
     /// refused token used to be invisible here, because nothing carried ESI's opinion back into the status the UI

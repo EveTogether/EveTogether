@@ -35,6 +35,7 @@ using EveUtils.Shared.Modules.Market.Repositories;
 using EveUtils.Shared.Modules.Market.Services;
 using EveUtils.Client.Pairing;
 using EveUtils.Client.Theming;
+using EveUtils.Client.Characters;
 using EveUtils.Client.Transport;
 using EveUtils.Client.Updates;
 using EveUtils.Shared.Transport;
@@ -95,6 +96,8 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
     private readonly ServerFitShareClient? _fitShare;
     private readonly IFitExportActions? _fitExportActions;
     private readonly ServerCouplingService? _coupling;
+    private readonly CharacterRemovalService? _removal;
+    private ActivityWindowViewModel? _activityWindow;
     private readonly IServerRegistry? _serverRegistry;
     private readonly FleetClient? _fleetClient;
     private readonly Random _random = new();
@@ -423,6 +426,8 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         _fitShare = services.GetRequiredService<ServerFitShareClient>();
         _fitExportActions = services.GetRequiredService<IFitExportActions>();
         _coupling = services.GetRequiredService<ServerCouplingService>();
+        _removal = services.GetRequiredService<CharacterRemovalService>();
+        _dialogs.ActivityWindowChanged += window => _activityWindow = window;
         _serverRegistry = services.GetRequiredService<IServerRegistry>();
         _fleetClient = services.GetRequiredService<FleetClient>();
         Inbox = services.GetRequiredService<InboxViewModel>(); // subscribes to MessageDeliveredEvent on the bus
@@ -1615,6 +1620,73 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         ActivityStatus = $"Decoupled from {link.DisplayName}.";
         await RefreshCharactersAsync();
         await RefreshFittingsTabsAsync();
+    }
+
+    /// <summary>What stands in the way of removing a character: an active fleet it commands, or a run still on the
+    /// clock (ET-345).</summary>
+    public async Task<CharacterRemovalCheck?> CheckCharacterRemovalAsync(int characterId) =>
+        _removal is null ? null : await _removal.CheckAsync(characterId);
+
+    /// <summary>
+    /// Removes a character from this PC (ET-345). Asks again what stands in the way, because the confirmation can have
+    /// stood open while a run started; a fleet that became active meanwhile refuses the removal (false). An open run is
+    /// stopped the usual way first — through the activity window when that is the one showing it.
+    /// </summary>
+    public async Task<bool> RemoveCharacterAsync(int characterId, string name, bool deleteRunsAndFittings)
+    {
+        if (_removal is null || _services is null)
+            return false;
+
+        var check = await _removal.CheckAsync(characterId);
+        if (check.IsBlocked)
+            return false;
+
+        await _StopOpenRunsAsync(check.OpenRunIds);
+
+        HashSet<CharacterDataKind> dataToErase = deleteRunsAndFittings
+            ? [CharacterDataKind.Cache, CharacterDataKind.History]
+            : [CharacterDataKind.Cache];
+        var unreachable = await _removal.RemoveAsync(characterId, name, dataToErase);
+
+        _observedCharacters.Remove(name);
+        if (_trackersByCharacter.TryGetValue(name, out var tracker))
+            _dialogs?.CloseDpsOverlay(tracker);
+
+        ActivityStatus = unreachable.Count == 0
+            ? $"Removed {name}."
+            : $"Removed {name}. {string.Join(", ", await _ServerNamesAsync(unreachable))} could not be reached; " +
+              "the decouple is sent there as soon as it can be.";
+        await RefreshCharactersAsync();
+        await RefreshFittingsTabsAsync();
+        return true;
+    }
+
+    private async Task _StopOpenRunsAsync(IReadOnlyList<Guid> runIds)
+    {
+        if (_services is null || runIds.Count == 0)
+            return;
+
+        var now = DateTime.UtcNow;
+        using var scope = _services.CreateScope();
+        var dispatcher = scope.ServiceProvider.GetRequiredService<IDispatcher>();
+        foreach (var runId in runIds)
+        {
+            if (_activityWindow is { RunState: ActivityRunState.Running } window && window.RunId == runId)
+                window.StopRun(now);
+            else
+                await dispatcher.Send(new SetRunStoppedCommand(runId, now));
+        }
+    }
+
+    private async Task<IReadOnlyList<string>> _ServerNamesAsync(IReadOnlyList<string> addresses)
+    {
+        if (_serverRegistry is null)
+            return addresses;
+
+        List<string> names = [];
+        foreach (var address in addresses)
+            names.Add(await _serverRegistry.DisplayNameAsync(address));
+        return names;
     }
 
     // ── Fittings ──────────────────────────────────────────────────────────────────────────────────

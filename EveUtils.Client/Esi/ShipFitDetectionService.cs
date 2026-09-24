@@ -225,6 +225,18 @@ public sealed class ShipFitDetectionService(
         }
     }
 
+    /// <summary>Drops a removed character's reading and its manual fit choices, the stored rows included (ET-345).</summary>
+    public async Task ForgetCharacterAsync(int characterId, CancellationToken cancellationToken = default)
+    {
+        _readings.TryRemove(characterId, out _);
+        foreach ((int CharacterId, int ShipTypeId) key in _manualFits.Keys.Where(key => key.CharacterId == characterId))
+            _manualFits.TryRemove(key, out _);
+
+        IReadOnlyList<ClientSetting> stored = await settings.ListAsync(cancellationToken);
+        foreach (ClientSetting setting in stored.Where(setting => setting.Key.StartsWith(_OverrideKeyPrefix(characterId), StringComparison.Ordinal)))
+            await settings.DeleteAsync(setting.Key, cancellationToken);
+    }
+
     private async Task _ClearManualFitsAsync(int characterId, CancellationToken cancellationToken)
     {
         foreach ((int CharacterId, int ShipTypeId) key in _manualFits.Keys.Where(key => key.CharacterId == characterId))

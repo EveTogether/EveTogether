@@ -12,7 +12,7 @@ namespace EveUtils.Client.ViewModels;
 /// <summary>
 /// The per-character settings dialog: identity + ESI status + ESI scopes (+ add-scope
 /// re-auth) + the list of coupled servers (each with live status, a gear-button trust dialog and Decouple) +
-/// "Couple to server". Opened from the gear button on a character row; replaces the former always-on detail pane.
+/// "Couple to server" + "Remove character". Opened from the gear button on a character row; replaces the former always-on detail pane.
 /// Delegates the actual operations to <see cref="MainWindowViewModel"/> (one source of truth for the
 /// couple/decouple/re-auth flows) and rebuilds its own view of the data afterwards.
 /// </summary>
@@ -29,7 +29,39 @@ public partial class CharacterDialogViewModel : ObservableObject, IDisposable
     /// <summary>Server-coupling + ESI scopes are only offered for ESI-linked characters.</summary>
     public bool CanCouple => !IsLocalOnly;
 
-    [ObservableProperty] private string _name = "";
+    /// <summary>Only a signed-in character is stored on this PC; a local-only row is a gamelog name and nothing more.</summary>
+    public bool CanRemove => !IsLocalOnly;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(RemovalQuestion))]
+    private string _name = "";
+
+    // ── Remove character (ET-345) ── the normal case is two clicks: the button, then Remove. The confirmation stands
+    // inline so it can carry the history checkbox and the open-run note without a second window.
+
+    [ObservableProperty] private bool _isConfirmingRemoval;
+
+    /// <summary>Runs and fittings stay unless this is ticked: they are history, partly shared with the fleet, and a
+    /// saved run already keeps the pilot's name.</summary>
+    [ObservableProperty] private bool _deleteRunsAndFittings;
+
+    [ObservableProperty] private bool _removalStopsOpenRun;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsRemovalBlocked))]
+    private string _removalBlockedReason = "";
+
+    public bool IsRemovalBlocked => RemovalBlockedReason.Length > 0;
+
+    public string RemovalQuestion => $"Remove {Name} from this PC?";
+
+    public string RemovalExplanation =>
+        "It is decoupled from every server and signed out at CCP, and its skills, implants, killmails, messages and " +
+        "cached metrics are deleted from this PC. Signing in with it again adds it back, and a gamelog it writes later " +
+        "shows it as a local-only character.";
+
+    /// <summary>Raised once the character is gone: this dialog has nothing left to show.</summary>
+    public event Action? CloseRequested;
 
     /// <summary>
     /// What this character actually shares, for the tooltip on the scopes block.
@@ -135,6 +167,43 @@ public partial class CharacterDialogViewModel : ObservableObject, IDisposable
     {
         if (await _owner.ShowServerTrustAsync(link))
             await DecoupleAsync(link); // user pressed Decouple inside the trust dialog
+    }
+
+    [RelayCommand]
+    private async Task RemoveCharacter()
+    {
+        var check = await _owner.CheckCharacterRemovalAsync(CharacterId);
+        if (check is null)
+            return;
+
+        RemovalBlockedReason = check.BlockingFleetName is { } fleet
+            ? $"{Name} commands the active fleet \"{fleet}\". Hand the fleet over or stop it first, then remove the character."
+            : "";
+        RemovalStopsOpenRun = check.HasOpenRun;
+        IsConfirmingRemoval = !check.IsBlocked;
+    }
+
+    [RelayCommand]
+    private void CancelRemoval()
+    {
+        IsConfirmingRemoval = false;
+        DeleteRunsAndFittings = false;
+    }
+
+    [RelayCommand]
+    private async Task ConfirmRemoval()
+    {
+        Status = $"Removing {Name}…";
+        if (await _owner.RemoveCharacterAsync(CharacterId, Name, DeleteRunsAndFittings))
+        {
+            CloseRequested?.Invoke();
+            return;
+        }
+
+        // Something changed while the confirmation stood open (a fleet went active): show why, the same way the first
+        // click would have.
+        Status = "";
+        await RemoveCharacter();
     }
 
     // Only this dialog's character, and only its link to that server. The dialog shows one character's couplings, so

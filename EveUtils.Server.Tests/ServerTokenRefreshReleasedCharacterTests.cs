@@ -150,7 +150,7 @@ public sealed class ServerTokenRefreshReleasedCharacterTests : IDisposable
     {
         public List<string> Revoked { get; } = [];
 
-        public Task RevokeRefreshTokenAsync(string refreshToken, string clientId, string clientSecret, CancellationToken cancellationToken = default)
+        public Task RevokeRefreshTokenAsync(string refreshToken, string clientId, string? clientSecret = null, CancellationToken cancellationToken = default)
         {
             Revoked.Add(refreshToken);
             return Task.CompletedTask;
