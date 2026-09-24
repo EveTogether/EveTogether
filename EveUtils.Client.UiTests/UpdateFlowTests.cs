@@ -142,6 +142,34 @@ public class UpdateFlowTests
         Assert.Equal(["Later", "What's new"], offer.Actions.Select(action => action.Label));
     }
 
+    // ET-339: nobody has to restart to have a channel switch reach the next check — the setting is read fresh
+    // every time, so this proves it actually gets there rather than only that ChannelChoice resolves it in isolation.
+    [AvaloniaTheory]
+    [InlineData("Nightly", UpdateChannel.Nightly)]
+    [InlineData("Stable", UpdateChannel.Stable)]
+    public async Task StartupCheck_AsksTheChannelStoredInSettings(string stored, UpdateChannel expected)
+    {
+        var harness = Build();
+        using var instance = harness.Instance;
+        using var scope = instance.Services.CreateScope();
+        await scope.ServiceProvider.GetRequiredService<IDispatcher>().Send(new SetSettingCommand("updates.channel", stored));
+
+        await RunStartupCheckAsync(harness);
+
+        Assert.Equal(expected, harness.Updates.LastChannel);
+    }
+
+    [AvaloniaFact]
+    public async Task StartupCheck_DefaultsToStable_WhenNoChannelIsStored()
+    {
+        var harness = Build();
+        using var instance = harness.Instance;
+
+        await RunStartupCheckAsync(harness);
+
+        Assert.Equal(UpdateChannel.Stable, harness.Updates.LastChannel);
+    }
+
     [AvaloniaFact]
     public async Task StartupCheck_IsSkipped_WhenTheStartupSettingIsOff()
     {

@@ -46,6 +46,7 @@ public sealed partial class AboutViewModel : ViewModelBase
     // decided by the check's message code and never by its text.
     private readonly IUpdateService? _updates;
     private readonly Func<AppRelease, Task>? _onInstallRequested;
+    private readonly UpdateChannel _channel;
     private AppRelease? _offered;
 
     /// <summary>
@@ -75,11 +76,13 @@ public sealed partial class AboutViewModel : ViewModelBase
         ICharacterInfoService? characterInfo,
         IUpdateService? updates = null,
         IUpdateSupportProbe? updateSupport = null,
-        Func<AppRelease, Task>? onInstallRequested = null)
+        Func<AppRelease, Task>? onInstallRequested = null,
+        UpdateChannel channel = UpdateChannel.Stable)
     {
         Version = $"v{AppInfo.Version}";
         _updates = updates;
         _onInstallRequested = onInstallRequested;
+        _channel = channel;
         ApplySupport(updateSupport?.Detect() ?? UpdateSupport.NotInstalled);
 
         // Shuffled per view so no creator is permanently listed first — neither is "the" lead.
@@ -138,7 +141,7 @@ public sealed partial class AboutViewModel : ViewModelBase
 
         try
         {
-            ApplyCheck(await _updates.CheckAsync());
+            ApplyCheck(await _updates.CheckAsync(_channel));
         }
         finally
         {

@@ -1171,6 +1171,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         bool localApiEnabled;
         int localApiPort;
         bool checkUpdatesOnStartup;
+        bool includeNightlyBuilds;
         bool openFleetRunWindow;
         bool autoPublishFleetRuns;
         bool autoStartMissions;
@@ -1190,6 +1191,9 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
             localApiPort = int.TryParse(settings.FirstOrDefault(s => s.Key == LocalApi.LocalApiServer.PortSettingKey)?.Value, out var lp)
                 ? lp : LocalApi.LocalApiServer.DefaultPort;
             checkUpdatesOnStartup = settings.FirstOrDefault(s => s.Key == CheckUpdatesOnStartupSettingKey)?.Value != "false"; // default on
+            includeNightlyBuilds = EveUtils.Client.Updates.ChannelChoice.Resolve(
+                settings.FirstOrDefault(s => s.Key == UpdateChannelSettingKey)?.Value,
+                EveUtils.Shared.App.AppInfo.Version) == EveUtils.Client.Updates.UpdateChannel.Nightly;
             openFleetRunWindow = settings.FirstOrDefault(s => s.Key == EveUtils.Client.Runs.FleetRunWindowPresenter.AutoOpenSettingKey)?.Value == "true"; // default off: a toast is offered instead
             autoPublishFleetRuns = settings.FirstOrDefault(s => s.Key == EveUtils.Client.Runs.FleetRunAutoPublisher.EnabledSettingKey)?.Value != "false"; // default on
             autoStartMissions = settings.FirstOrDefault(s => s.Key == EveUtils.Client.Clipboard.ClipboardMissionOffer.AutoStartSettingKey)?.Value != "false"; // default on
@@ -1204,7 +1208,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
             loadImages, _theme?.Current ?? FactionTheme.Gallente, SdeVersionLabel(), ApplySettingsAsync, openDetailAfterImport, toastPosition,
             localApiEnabled, localApiPort, localApiStatusLabel, localApi, checkUpdatesOnStartup, _clipboardWatch, initialCategory, openFleetRunWindow,
             autoPublishFleetRuns, shares.IsShared(MetricKind.Loot), shares.IsShared(MetricKind.MiningYield), autoStartMissions, autoStartSites,
-            _weekStart?.FirstDay ?? Calendar.WeekStartService.SystemDefault());
+            _weekStart?.FirstDay ?? Calendar.WeekStartService.SystemDefault(), includeNightlyBuilds, _services.GetService<IUpdateService>());
     }
 
     /// <summary>Opens the About dialog: app identity + version, creator credits with portraits,
@@ -1222,7 +1226,8 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
             characterInfo,
             _services?.GetService<IUpdateService>(),
             _services?.GetService<IUpdateSupportProbe>(),
-            ShowUpdateOfferAsync));
+            ShowUpdateOfferAsync,
+            await ResolveUpdateChannelAsync()));
     }
 
     /// <summary>Persist + apply the settings chosen in the settings module (invoked on Save; Cancel/close never calls
@@ -1268,6 +1273,14 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
                 LocalApi.LocalApiServer.PortSettingKey, result.LocalApiPort.ToString()));
             await dispatcher.Send(new SetSettingCommand(
                 CheckUpdatesOnStartupSettingKey, result.CheckUpdatesOnStartup ? "true" : "false"));
+            // Only when the channel was actually touched (ET-339) — a Save triggered by an unrelated setting must
+            // never freeze the derived default into a choice nobody made.
+            if (result.ChannelChoiceMade)
+            {
+                await dispatcher.Send(new SetSettingCommand(
+                    UpdateChannelSettingKey,
+                    result.IncludeNightlyBuilds ? nameof(EveUtils.Client.Updates.UpdateChannel.Nightly) : nameof(EveUtils.Client.Updates.UpdateChannel.Stable)));
+            }
             await dispatcher.Send(new SetSettingCommand(
                 EveUtils.Client.Runs.FleetRunWindowPresenter.AutoOpenSettingKey, result.OpenFleetRunWindowImmediately ? "true" : "false"));
             await dispatcher.Send(new SetSettingCommand(
@@ -2317,8 +2330,26 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         }
     }
 
-    // ── Application updates (ET-32) ─────────────────────────────────────────────────────────────────
+    // ── Application updates (ET-32, ET-339) ─────────────────────────────────────────────────────────
     private const string CheckUpdatesOnStartupSettingKey = "updates.check-on-startup";   // default on
+    private const string UpdateChannelSettingKey = "updates.channel";   // "Stable"/"Nightly"; absent = follow the running build
+
+    // Read fresh every time rather than cached, so a channel switch takes effect on the very next check without a
+    // restart (ET-339) — the same reason IsStartupUpdateCheckEnabledAsync reads straight from the store.
+    private async Task<EveUtils.Client.Updates.UpdateChannel> ResolveUpdateChannelAsync()
+    {
+        if (_services is null)
+        {
+            return EveUtils.Client.Updates.UpdateChannel.Stable;
+        }
+
+        using var scope = _services.CreateScope();
+        var settings = await scope.ServiceProvider.GetRequiredService<IDispatcher>().Query(new GetSettingsQuery());
+
+        return EveUtils.Client.Updates.ChannelChoice.Resolve(
+            settings.FirstOrDefault(s => s.Key == UpdateChannelSettingKey)?.Value,
+            EveUtils.Shared.App.AppInfo.Version);
+    }
 
     /// <summary>
     /// The restart banner: a package is downloaded and waiting, and stays waiting until it is applied.
@@ -2351,7 +2382,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
     {
         if (_services is null || !await IsStartupUpdateCheckEnabledAsync()) return;
 
-        var check = await _services.GetRequiredService<IUpdateService>().CheckAsync();
+        var check = await _services.GetRequiredService<IUpdateService>().CheckAsync(await ResolveUpdateChannelAsync());
 
         if (UpdateNotice.StartupStatus(check, InstalledVersion) is { } status)
             ActivityStatus = status;
@@ -2400,7 +2431,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         ActivityStatus =
             $"Downloading v{release.Version}… the app stays usable, you'll be asked to restart when it's ready.";
 
-        var download = await _services.GetRequiredService<IUpdateService>().DownloadAsync();
+        var download = await _services.GetRequiredService<IUpdateService>().DownloadAsync(await ResolveUpdateChannelAsync());
         if (!download.IsSuccess)
         {
             ActivityStatus = UpdateNotice.Reason(download);

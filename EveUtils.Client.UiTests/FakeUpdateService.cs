@@ -33,13 +33,24 @@ public sealed class FakeUpdateService : IUpdateService
     /// </summary>
     public int Applied { get; private set; }
 
-    public Task<Result<AppRelease?>> CheckAsync(CancellationToken cancellationToken = default)
+    /// <summary>
+    /// The channel the most recent <see cref="CheckAsync"/>/<see cref="DownloadAsync"/> call was asked for
+    /// (ET-339) — so a test can assert the setting actually reached the call.
+    /// </summary>
+    public UpdateChannel? LastChannel { get; private set; }
+
+    public Task<Result<AppRelease?>> CheckAsync(UpdateChannel channel, CancellationToken cancellationToken = default)
     {
         Checks++;
+        LastChannel = channel;
         return OnCheck();
     }
 
-    public Task<Result> DownloadAsync(CancellationToken cancellationToken = default) => OnDownload();
+    public Task<Result> DownloadAsync(UpdateChannel channel, CancellationToken cancellationToken = default)
+    {
+        LastChannel = channel;
+        return OnDownload();
+    }
 
     public void ApplyDownloadedUpdateAndRestart() => Applied++;
 }
