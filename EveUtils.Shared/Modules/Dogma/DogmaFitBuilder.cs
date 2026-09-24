@@ -92,7 +92,9 @@ public sealed class DogmaFitBuilder(IDogmaDataAccessor data) : ISingletonService
     {
         IEnumerable<int> skillIds = skills.SkillTypeIdsToInject(data.GetSkillTypeIds());
         if (structureOnly)
+        {
             skillIds = skillIds.Where(id => data.GetGroupId(id) == StructureSkillGroupId);
+        }
         var result = new List<DogmaItem>();
         foreach (var skillId in skillIds)
         {
