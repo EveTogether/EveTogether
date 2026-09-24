@@ -67,6 +67,7 @@ sealed class Program
         RunResilient(Services.GetRequiredService<EveUtils.Client.Esi.ShipFitDetectionService>().StartAsync(refreshCts.Token), "ship-fit-detection");
         RunResilient(Services.GetRequiredService<EveUtils.Client.Skills.SkillRefreshService>().StartAsync(refreshCts.Token), "skill-refresh");
         RunResilient(Services.GetRequiredService<EveUtils.Client.Implants.ImplantRefreshService>().StartAsync(refreshCts.Token), "implant-refresh");
+        RunResilient(Services.GetRequiredService<EveUtils.Client.Killmails.KillmailRefreshService>().StartAsync(refreshCts.Token), "killmail-refresh");
         RunResilient(Services.GetRequiredService<EveUtils.Client.Platform.EveClientPresenceService>().StartAsync(refreshCts.Token), "eve-client-presence");
         StartResumeRecovery(refreshCts.Token);
         // Automatic EVE settings sync (ET-60): does nothing at all unless the user configured and enabled it, and
