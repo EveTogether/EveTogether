@@ -90,7 +90,7 @@ jobs:
         id: version
         shell: bash
         run: |
-          base=$(git tag -l --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n1 | sed 's/^v//')
+          base=$(git tag -l --sort=-v:refname | { grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' || true; } | head -n1 | sed 's/^v//')
           base="${base:-0.0.1}"
           echo "VERSION=${base}-nightly.${{ github.run_number }}" >> "$GITHUB_ENV"
 
@@ -152,7 +152,7 @@ jobs:
       - name: Resolve the nightly version
         id: version
         run: |
-          base=$(git tag -l --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n1 | sed 's/^v//')
+          base=$(git tag -l --sort=-v:refname | { grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' || true; } | head -n1 | sed 's/^v//')
           base="${base:-0.0.1}"
           echo "VERSION=${base}-nightly.${{ github.run_number }}" >> "$GITHUB_ENV"
 
@@ -217,7 +217,7 @@ jobs:
       - name: Resolve the nightly version
         id: version
         run: |
-          base=$(git tag -l --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n1 | sed 's/^v//')
+          base=$(git tag -l --sort=-v:refname | { grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' || true; } | head -n1 | sed 's/^v//')
           base="${base:-0.0.1}"
           echo "VERSION=${base}-nightly.${{ github.run_number }}" >> "$GITHUB_ENV"
 
@@ -296,7 +296,7 @@ jobs:
       - name: Resolve the nightly version
         id: version
         run: |
-          base=$(git tag -l --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n1 | sed 's/^v//')
+          base=$(git tag -l --sort=-v:refname | { grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' || true; } | head -n1 | sed 's/^v//')
           base="${base:-0.0.1}"
           echo "version=${base}-nightly.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
           echo "sha=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
@@ -372,7 +372,7 @@ jobs:
         shell: bash
         run: |
           IMAGE=ghcr.io/evetogether/eve-together-server
-          base=$(git tag -l --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n1 | sed 's/^v//')
+          base=$(git tag -l --sort=-v:refname | { grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' || true; } | head -n1 | sed 's/^v//')
           base="${base:-0.0.1}"
           VERSION="${base}-nightly.${{ github.run_number }}"
           echo "tags=$IMAGE:nightly,$IMAGE:$VERSION" >> "$GITHUB_OUTPUT"
