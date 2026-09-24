@@ -169,6 +169,9 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
     /// fleet-less unreachable server has no row to act on.</summary>
     public ObservableCollection<FleetServerGroupViewModel> UnreachableServers { get; } = [];
 
+    /// <summary>Per server, one line naming the known characters that are not connected to it.</summary>
+    public ObservableCollection<string> NotConnectedNotices { get; } = [];
+
     [ObservableProperty] private string _serverLabel = "Resolving server…";
     [ObservableProperty] private string _statusMessage = "";
     [ObservableProperty] private string _activeFleetLabel = "Not participating in a fleet.";
@@ -181,6 +184,8 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
 
     /// <summary>Drives the visibility of the "unreachable servers" strip (only shown when there is something to act on).</summary>
     [ObservableProperty] private bool _hasUnreachableServers;
+
+    [ObservableProperty] private bool _hasNotConnectedNotices;
 
     /// <summary>Drives the "Local fleets" section header (hidden when there are no client-only fleets).</summary>
     [ObservableProperty] private bool _hasLocalFleets;
@@ -217,9 +222,15 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
         // timeout — the fleets of a reachable server then only appeared "after a while", or not at all. A server that
         // fails this sweep keeps its last-known fleets (rather than vanishing) and is reported in the status line.
         var servers = await _sessions.ListServersAsync();
-        var loads = await Task.WhenAll(servers.Select(server => LoadServerAsync(server, active)));
+        var tokenHolders = (await _characters.GetAllAsync()).Where(c => c.EsiCharacterId is not null).ToList();
+        var loads = await Task.WhenAll(servers.Select(server => LoadServerAsync(server, active, tokenHolders)));
 
         RebuildPerServer(ServerGroups, loads, load => load.Group);
+
+        NotConnectedNotices.Clear();
+        foreach (var notice in loads.Select(l => l.NotConnectedNotice).OfType<string>())
+            NotConnectedNotices.Add(notice);
+        HasNotConnectedNotices = NotConnectedNotices.Count > 0;
 
         // Unreachable servers get their own strip with a DECOUPLE button — a fleet-less stale server (an old dev/test
         // coupling) otherwise has no row to remove it from.
@@ -238,7 +249,7 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
     /// <summary>Loads one coupled server's fleets in isolation. A transport failure (server down/unreachable) is caught
     /// and reported via <see cref="ServerLoad.Ok"/> = false instead of propagating, so it can't abort the other
     /// servers' loads. A disbanded fleet is Archived (soft-delete) so only Active ones show.</summary>
-    private async Task<ServerLoad> LoadServerAsync(string server, long? active)
+    private async Task<ServerLoad> LoadServerAsync(string server, long? active, IReadOnlyList<Character> tokenHolders)
     {
         var sessions = await _sessions.LoadAllAsync(server);
         var serverName = sessions.Count == 0 ? server : await _serverRegistry.DisplayNameAsync(server);
@@ -248,6 +259,7 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
             return new ServerLoad(server, serverName, true, group);
 
         var coupledIds = sessions.Select(s => s.CharacterId).ToHashSet();
+        var notice = _NotConnectedNotice(serverName, tokenHolders.Where(c => !coupledIds.Contains(c.EsiCharacterId.GetValueOrDefault())).Select(c => c.Name).ToList());
 
         try
         {
@@ -317,11 +329,20 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
         }
         catch (FleetTransportException)
         {
-            return new ServerLoad(server, serverName, false, null);
+            return new ServerLoad(server, serverName, false, null, notice);
         }
 
-        return new ServerLoad(server, serverName, true, group);
+        return new ServerLoad(server, serverName, true, group, notice);
     }
+
+    /// <summary>One bundled line per server for the characters that have no session there — they are never asked for
+    /// their fleets, so without this line their fleets are missing with no explanation.</summary>
+    private static string? _NotConnectedNotice(string serverName, IReadOnlyList<string> names) => names.Count switch
+    {
+        0 => null,
+        1 => $"{names[0]} is not connected to {serverName} — its fleets are not shown here",
+        _ => $"{string.Join(", ", names.Take(names.Count - 1))} and {names[^1]} are not connected to {serverName} — their fleets are not shown here",
+    };
 
     /// <summary>Resolves the creator's name for a fleet I don't own (best-effort, off the UI thread via the metered
     /// ESI pipeline) so the row can show "Owner: &lt;name&gt;". My own fleets show "you" without a lookup.</summary>
@@ -364,7 +385,7 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
     /// <summary>One coupled server's fleet groups for a single reload, or a failure marker (<see cref="Ok"/> = false)
     /// when that server was unreachable — so a dead server is isolated from the rest of the multi-server sweep.</summary>
     private sealed record ServerLoad(
-        string Server, string ServerName, bool Ok, FleetServerGroupViewModel? Group);
+        string Server, string ServerName, bool Ok, FleetServerGroupViewModel? Group, string? NotConnectedNotice = null);
 
     // --- Member leaves (stream B / B-2): my characters in a fleet, with their fit + skill + a self-assign action. ---
 
