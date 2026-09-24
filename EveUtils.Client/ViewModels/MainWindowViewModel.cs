@@ -106,7 +106,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
     private CancellationTokenSource? _feedCts;
     private CancellationTokenSource? _signInCts;
     private readonly DpsRenderDriver? _renderDriver;
-    private string _localCharacter = "Pilot-" + (Environment.GetEnvironmentVariable("EVEUTILS_INSTANCE") ?? "Local");
+    private string _localCharacter = "Pilot-" + (Composition.ClientDataLocation.InstanceName() ?? "Local");
 
     // ── Ctrl+Shift+T: reopen last closed tab (ET-209) ────────────────────────────────────────────
     // Scoped to the no-argument, single-instance rail modules: reopening one is exactly re-running the same

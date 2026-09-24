@@ -1,4 +1,4 @@
-# EveUtils — developer shortcuts
+# EVE Together — developer shortcuts
 #
 # Usage: make <target>   (run `make` or `make help` for the list)
 #
@@ -48,14 +48,14 @@ endif
 SERVER_TEST_DATA       ?= /tmp/eveutils-test-server-data
 DOTNET_RUN_SERVER_TEST := dotnet run --project $(SERVER) -c $(CONFIG)
 
-# Headless CLIENT suites run under an ISOLATED throwaway instance (EVEUTILS_INSTANCE), never the real
+# Headless CLIENT suites run under an ISOLATED throwaway instance (EVETOGETHER_INSTANCE), never the real
 # client data dir that holds your actual characters/server links, so a test run can never pollute
 # production state (the client-side counterpart of the server test isolation). `make client` keeps the real
 # instance. Wipe the throwaway instance with `make clean-test-data`. The instance is handed to the test
 # recipes via a target-specific `export` below, same cross-platform reason as the server data dir.
-CLIENT_TEST_INSTANCE   ?= eveutils-test-client
+CLIENT_TEST_INSTANCE   ?= evetogether-test-client
 DOTNET_RUN_CLIENT_TEST := dotnet run --project $(CLIENT) -c $(CONFIG)
-CLIENT_TEST_DATA       := $(or $(XDG_DATA_HOME),$(HOME)/.local/share)/EveUtils/$(CLIENT_TEST_INSTANCE)
+CLIENT_TEST_DATA       := $(or $(XDG_DATA_HOME),$(HOME)/.local/share)/EveTogetherData/$(CLIENT_TEST_INSTANCE)
 
 .DEFAULT_GOAL := help
 
@@ -110,7 +110,7 @@ test-fleet-invite test-fleet-participation test-fleet-cleanup test-fleet-active-
 	export EVEUTILS_SERVER_DATA_DIR := $(SERVER_TEST_DATA)
 
 test-unit test-client test-integration smoke test-esi test-gamelog test-fleet-client test-fleet-metric test-remote: \
-	export EVEUTILS_INSTANCE := $(CLIENT_TEST_INSTANCE)
+	export EVETOGETHER_INSTANCE := $(CLIENT_TEST_INSTANCE)
 
 .PHONY: test test-unit test-integration
 test: test-unit test-server test-client ## Run every test runnable on a clean checkout

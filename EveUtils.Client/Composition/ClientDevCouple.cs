@@ -13,7 +13,7 @@ namespace EveUtils.Client.Composition;
 /// <summary>
 /// Development-only shortcut (via <c>--dev-couple &lt;token&gt; &lt;charName&gt; &lt;charId&gt; [https://host]</c>): pins the
 /// server cert (TOFU) and stores a client session for one of the server's seeded dev characters, then exits — no
-/// EVE SSO. Run once per instance (<c>EVEUTILS_INSTANCE=A/B</c>) so the GUI restores the connection on next start.
+/// EVE SSO. Run once per instance (<c>EVETOGETHER_INSTANCE=A/B</c>) so the GUI restores the connection on next start.
 /// Lets two client instances connect at once for the fleet two-client scenarios.
 /// </summary>
 public static class ClientDevCouple

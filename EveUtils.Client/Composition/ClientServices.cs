@@ -81,7 +81,7 @@ public static class ClientServices
         services.AddSingleton<IWireEventCatalog, MessagingWireEvents>(); // deserialize message deliveries aimed at us
         services.AddSingleton<IWireEventCatalog, RunsWireEvents>(); // a group mate's run landed on the server (ET-245)
         services.AddWireEvents();        // event-type registry for the remote bus
-        services.AddClientDatabase(ClientDbConnectionString()); // per-instance SQLite (EVEUTILS_INSTANCE)
+        services.AddClientDatabase(ClientDbConnectionString()); // per-instance SQLite (EVETOGETHER_INSTANCE)
         services.AddSdeModule(DataDirectory()); // read-only SDE store (user-prompted import + progress popup)
         services.AddHttpClient(TypeImageProvider.HttpClientName, client =>
         {
@@ -179,14 +179,14 @@ public static class ClientServices
         services.AddSingleton<EveUtils.Client.Platform.EveClientPresenceService>(); // 5 s sweep for running EVE clients → character-list badge
     }
 
-    // Per-instance data dir + DB so two clients (EVEUTILS_INSTANCE=A / =B) don't share state —
+    // Per-instance data dir + DB so two clients (EVETOGETHER_INSTANCE=A / =B) don't share state —
     // needed to demo the fleet sync (ship/DPS) between two clients on one machine. Public so the Settings dialog can
-    // open it in the OS file browser ("Show Data Folder").
+    // open it in the OS file browser ("Show Data Folder"). The first call also moves a legacy EveUtils folder, so it
+    // must stay ahead of everything that opens the database or the ESI files.
     public static string DataDirectory()
     {
-        var instance = Environment.GetEnvironmentVariable("EVEUTILS_INSTANCE")?.Trim();
-        var root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "EveUtils");
-        var dir = string.IsNullOrEmpty(instance) ? root : Path.Combine(root, instance);
+        var root = ClientDataLocation.Root;
+        var dir = ClientDataLocation.InstanceName() is { } instance ? Path.Combine(root, instance) : root;
         Directory.CreateDirectory(dir);
         return dir;
     }

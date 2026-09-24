@@ -515,7 +515,7 @@ using (var scope = app.Services.CreateScope())
         var protector = scope.ServiceProvider.GetRequiredService<ITokenProtector>();
         // Two synthetic characters + sessions so two client instances can connect at once for the fleet
         // two-client scenarios (invite round-trip, member graphs) without a live EVE SSO. The "-2" token is the
-        // second instance's bearer (EVEUTILS_INSTANCE=B + --dev-couple <token> ...).
+        // second instance's bearer (EVETOGETHER_INSTANCE=B + --dev-couple <token> ...).
         var devCharacters = new[]
         {
             (Token: devToken, Name: "DevTester", Id: 91000000),
