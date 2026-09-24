@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using EveUtils.Shared.Cqrs;
+using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Esi.Http;
 using EveUtils.Shared.Modules.Killmails;
 using EveUtils.Shared.Modules.Killmails.Commands;
@@ -70,13 +71,17 @@ public sealed class EsiKillmailImporter(IEsiClient esi, ILocalKillmailRepository
 
             await repository.AddMissingAsync(characterId, killmails, cancellationToken);
             // Also without new mails: a loss nothing fitted before may fit a run stopped or fitted since.
+            Result<int> linked;
             await using (AsyncServiceScope scope = scopes.CreateAsyncScope())
             {
-                await scope.ServiceProvider.GetRequiredService<IDispatcher>()
+                linked = await scope.ServiceProvider.GetRequiredService<IDispatcher>()
                     .Send(new LinkKillmailsToRunsCommand(characterId), cancellationToken);
             }
 
-            return KillmailImportResult.Ok(killmails.Count);
+            return linked.IsSuccess
+                ? KillmailImportResult.Ok(killmails.Count)
+                : new KillmailImportResult(KillmailImportStatus.Failed, killmails.Count,
+                    linked.Messages.FirstOrDefault()?.Text ?? "Linking losses to their runs failed.");
         }
         finally
         {

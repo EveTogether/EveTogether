@@ -38,8 +38,14 @@ internal sealed class SetKillmailRunLinkCommandHandler(IDbContextFactory<ClientD
         }
 
         Guid? previousRunId = loss.RunId;
-        loss.RunId = command.RunId;
-        loss.LinkSource = KillmailLinkSource.Manual;
+        // The pod that followed this ship goes along, or it would keep its implants on a run that lost no ship.
+        List<LocalKillmail> moved = [loss, .. await _FollowingPodsAsync(db, loss, cancellationToken)];
+        foreach (LocalKillmail killmail in moved)
+        {
+            killmail.RunId = command.RunId;
+            killmail.LinkSource = KillmailLinkSource.Manual;
+        }
+
         await db.SaveChangesAsync(cancellationToken);
         // Both activities change: the one the loss left and the one it joined.
         foreach (Guid affected in new[] { previousRunId, command.RunId }.OfType<Guid>().Distinct())
@@ -48,5 +54,22 @@ internal sealed class SetKillmailRunLinkCommandHandler(IDbContextFactory<ClientD
         }
 
         return Result.Success();
+    }
+
+    private static async Task<List<LocalKillmail>> _FollowingPodsAsync(ClientDbContext db, LocalKillmail ship,
+        CancellationToken cancellationToken)
+    {
+        if (ship.RunId is null || KillmailRunLinker.IsCapsule(ship.VictimShipTypeId))
+        {
+            return [];
+        }
+
+        DateTime untilUtc = ship.KillmailTimeUtc + KillmailRunLinker.CapsuleGrace;
+        return await db.Set<LocalKillmail>()
+            .Where(pod => pod.CharacterId == ship.CharacterId && pod.IsLoss && pod.RunId == ship.RunId
+                          && pod.LinkSource == KillmailLinkSource.Auto
+                          && KillmailRunLinker.CapsuleTypeIds.Contains(pod.VictimShipTypeId)
+                          && pod.KillmailTimeUtc >= ship.KillmailTimeUtc && pod.KillmailTimeUtc <= untilUtc)
+            .ToListAsync(cancellationToken);
     }
 }

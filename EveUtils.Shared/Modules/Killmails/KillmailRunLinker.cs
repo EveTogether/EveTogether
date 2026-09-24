@@ -25,7 +25,10 @@ public static class KillmailRunLinker
     /// <summary>How long after its ship a capsule loss still follows that ship's run.</summary>
     public static readonly TimeSpan CapsuleGrace = TimeSpan.FromSeconds(60);
 
-    public static bool IsCapsule(int shipTypeId) => shipTypeId is 670 or 33328;
+    /// <summary>The capsule and the Genolution capsule.</summary>
+    public static readonly int[] CapsuleTypeIds = [670, 33328];
+
+    public static bool IsCapsule(int shipTypeId) => CapsuleTypeIds.Contains(shipTypeId);
 
     /// <summary>
     /// The run <paramref name="loss"/> belongs to. A capsule follows the latest linked ship loss up to

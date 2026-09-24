@@ -92,7 +92,8 @@ public sealed class KillmailRunLinkTests
         Assert.Equal(expectedCandidates, match.CandidateCount);
     }
 
-    /// <summary>Criterion 5. The pod follows its ship's run; red if a pod-only loss makes its run lose a ship.</summary>
+    /// <summary>Criterion 5. The pod, lost past the ship rule's two minutes, follows its ship's run only by the pod rule;
+    /// red if a pod-only loss makes its run lose a ship.</summary>
     [Fact]
     public async Task Link_ThePodFollowsItsShip_AndOnlyTheShipMakesTheRunLoseIt()
     {
@@ -101,8 +102,8 @@ public sealed class KillmailRunLinkTests
         Guid shipRun = await _SaveRunAsync(dispatcher, ActivityKind.Site, KSpace, StartedAtUtc);
         Guid podRun = await _SaveRunAsync(dispatcher, ActivityKind.Site, KSpace, StartedAtUtc.AddHours(1));
         await _AddAsync(instance,
-            _Loss(1, StartedAtUtc.AddMinutes(10), KSpace, Rifter),
-            _Loss(2, StartedAtUtc.AddMinutes(10).AddSeconds(30), KSpace, Capsule),
+            _Loss(1, StoppedAtUtc.AddSeconds(100), KSpace, Rifter),
+            _Loss(2, StoppedAtUtc.AddSeconds(130), KSpace, Capsule),
             _Loss(3, StartedAtUtc.AddHours(1).AddMinutes(10), KSpace, Capsule));
 
         await dispatcher.Send(new LinkKillmailsToRunsCommand(Pilot), Ct);
@@ -183,7 +184,8 @@ public sealed class KillmailRunLinkTests
         Assert.Equal((970_000m, 970_000m, 970_000m), (row.Isk.Total, detail.Value?.Isk.Total, day));
     }
 
-    /// <summary>Criterion 9. Red if anything of the killmail travels with the run to a server.</summary>
+    /// <summary>Criterion 9. Red if linking touches the run itself, such as its revision or sync state, or if anything
+    /// of the killmail is added to what travels to a server.</summary>
     [Fact]
     public async Task WireData_OfARunWithALinkedLoss_IsTheSameAsWithout()
     {
@@ -214,7 +216,7 @@ public sealed class KillmailRunLinkTests
         VictimShipTypeId = shipTypeId,
         VictimCharacterId = Pilot,
         LinkSource = KillmailLinkSource.None,
-        ImportedAtUtc = atUtc,
+        ImportedAtUtc = DateTime.UtcNow,
         Items = [.. items]
     };
 
