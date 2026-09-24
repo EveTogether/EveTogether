@@ -37,12 +37,16 @@ internal sealed class GetKillmailDetailQueryHandler(
         decimal? shipValue = prices.TryGetValue(killmail.VictimShipTypeId, out double shipPrice) ? (decimal)shipPrice : null;
         IReadOnlyList<KillmailDetailItemLineDto> items = _Lines(killmail.Items, prices);
 
-        int topDamage = killmail.Attackers.Count == 0 ? 0 : killmail.Attackers.Max(attacker => attacker.DamageDone);
-        IReadOnlyList<KillmailDetailAttackerLineDto> attackers = [.. killmail.Attackers
-            .OrderBy(attacker => attacker.Ordinal)
+        List<LocalKillmailAttacker> attackersByEsiOrder = [.. killmail.Attackers.OrderBy(attacker => attacker.Ordinal)];
+        // Max damage, tie broken by ESI order (AC5): Aggregate keeps the earlier one unless a later one is strictly
+        // greater, so every attacker tied on the same top figure reads TOP DAMAGE except the first only.
+        int? topDamageOrdinal = attackersByEsiOrder.Count == 0
+            ? null
+            : attackersByEsiOrder.Aggregate((best, next) => next.DamageDone > best.DamageDone ? next : best).Ordinal;
+        IReadOnlyList<KillmailDetailAttackerLineDto> attackers = [.. attackersByEsiOrder
             .Select(attacker => new KillmailDetailAttackerLineDto(attacker.Ordinal, attacker.AttackerCharacterId,
                 attacker.CorporationId, attacker.AllianceId, attacker.FactionId, attacker.ShipTypeId, attacker.WeaponTypeId,
-                attacker.DamageDone, attacker.FinalBlow, attacker.DamageDone == topDamage))];
+                attacker.DamageDone, attacker.FinalBlow, attacker.Ordinal == topDamageOrdinal))];
 
         KillmailLinkedRunDto? linkedRun = killmail.IsLoss && killmail.RunId is { } runId
             ? await _LinkedRunAsync(db, runId, killmail.KillmailId, killmail.LinkSource, cancellationToken)

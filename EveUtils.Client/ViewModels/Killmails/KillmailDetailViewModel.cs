@@ -153,8 +153,10 @@ public sealed partial class KillmailDetailViewModel : ViewModelBase
 
         PrimaryFigureLabel = detail.IsLoss ? "ISK LOST" : "ISK DESTROYED";
         PrimaryFigureText = destroyedValue is null && droppedValue is null ? "no price" : IskFormat.Compact(totalValue);
-        DestroyedText = destroyedValue is { } d ? IskFormat.Compact(d) : "no price";
-        DroppedText = droppedValue is { } dr ? IskFormat.Compact(dr) : "0";
+        DestroyedText = destroyedValue is { } d ? IskFormat.Compact(d) : "no price"; // the ship always counts, so
+        // null here only ever means nothing at all is priced yet — never "nothing was destroyed".
+        bool hasDroppedLines = detail.Items.Any(item => !item.IsDestroyed);
+        DroppedText = droppedValue is { } dropped ? IskFormat.Compact(dropped) : hasDroppedLines ? "no price" : "0";
         DamageTakenText = detail.DamageTaken.ToString("N0", CultureInfo.InvariantCulture);
 
         if (detail.IsLoss)
@@ -212,6 +214,9 @@ public sealed partial class KillmailDetailViewModel : ViewModelBase
     {
         IReadOnlyList<Character> characters = await _services.GetRequiredService<ICharacterRegistry>().GetAllAsync();
         RunsOverviewViewModel shown = _dialogs.ShowRuns(new RunsOverviewViewModel(_dispatcher, _dialogs, _services, characters));
+        // ShowRuns fires LoadAsync without awaiting it (fire-and-observe, like every other Show* call) — awaited here
+        // instead, or OpenRunAsync would find no row yet and silently do nothing on a screen that was not already open.
+        await shown.LoadAsync();
         await shown.OpenRunAsync(activitySummaryId, day);
     }
 

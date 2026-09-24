@@ -37,8 +37,9 @@ public static class KillmailFitBuilder
             items.Add(new EsiFittingItem(item.TypeId, flag, (int)quantity));
         }
 
-        // FittingId only ever serves FitDetailWindowViewModel.ModuleId here (this fit is never stored) — the
-        // killmail id keeps two different killmails' FIT DETAIL tabs apart instead of colliding on a shared 0.
-        return new EsiFitting(killmail.KillmailId, name, string.Empty, killmail.VictimShipTypeId, items);
+        // FittingId only ever serves FitDetailWindowViewModel.ModuleId here (this fit is never stored) — negated so
+        // it can never collide with a real positive ESI fitting id sharing the same "fit-detail:esi:{id}" tab space,
+        // while still keeping two different killmails' FIT DETAIL tabs apart instead of colliding on a shared 0.
+        return new EsiFitting(-killmail.KillmailId, name, string.Empty, killmail.VictimShipTypeId, items);
     }
 }

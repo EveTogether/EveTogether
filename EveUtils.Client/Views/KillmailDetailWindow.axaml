@@ -69,6 +69,16 @@
             </StackPanel>
         </Border>
 
+        <!-- Docked children declared before the fill child (ET-285 trap, see ActivityDetailWindow.axaml): the last
+             child in the tree gets LastChildFill's remaining space regardless of its own Dock value, so the footer
+             must come first in source order and the ScrollViewer last, or the footer would take over the layout. -->
+        <Border DockPanel.Dock="Bottom" Padding="14,10">
+            <Grid ColumnDefinitions="Auto,*,Auto">
+                <Button Classes="small ghost" Content="COPY ESI LINK" Command="{Binding CopyEsiLinkCommand}"/>
+                <TextBlock Grid.Column="2" Classes="hint" Margin="0" Text="{Binding FooterText}"/>
+            </Grid>
+        </Border>
+
         <ScrollViewer HorizontalScrollBarVisibility="Disabled">
             <StackPanel>
 
@@ -153,12 +163,5 @@
 
             </StackPanel>
         </ScrollViewer>
-
-        <Border DockPanel.Dock="Bottom" Padding="14,10">
-            <Grid ColumnDefinitions="Auto,*,Auto">
-                <Button Classes="small ghost" Content="COPY ESI LINK" Command="{Binding CopyEsiLinkCommand}"/>
-                <TextBlock Grid.Column="2" Classes="hint" Margin="0" Text="{Binding FooterText}"/>
-            </Grid>
-        </Border>
     </DockPanel>
 </v:ChromedWindow>

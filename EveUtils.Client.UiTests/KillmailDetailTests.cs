@@ -131,7 +131,7 @@ public sealed class KillmailDetailTests
         await viewModel.OpenFitCommand.ExecuteAsync(null);
 
         Assert.NotNull(dialogs.LastFitDetail);
-        Assert.Equal("fit-detail:esi:1", dialogs.LastFitDetail!.ModuleId); // no local id: read-only
+        Assert.Equal("fit-detail:esi:-1", dialogs.LastFitDetail!.ModuleId); // no local id: read-only
         Assert.Equal(before, (await fittings.ListAllAsync(Ct)).Count);
     }
 

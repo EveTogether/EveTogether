@@ -535,7 +535,10 @@ public sealed class DialogService : IDialogService, ISingletonService
     public void ShowKillmailDetail(KillmailDetailViewModel viewModel)
     {
         _Observe(viewModel.LoadAsync(), "this screen could not be read");
-        Route(new KillmailDetailWindow(viewModel), viewModel.Title, "killmails", viewModel.ModuleId, MaterialIconKind.SkullOutline);
+        // A fixed label, not viewModel.Title: ModuleFrame/HostTab capture the title string once, here, before the
+        // load above has a chance to name the ship — the same reason ACTIVITY's own tab reads "ACTIVITY" rather than
+        // the site name. The window's own title bar still shows the ship once loaded (bound to Title live).
+        Route(new KillmailDetailWindow(viewModel), "KILLMAIL", "killmails", viewModel.ModuleId, MaterialIconKind.SkullOutline);
     }
 
     /// <summary>A modal dialog rather than a docked module (ET-163 nazorg): filling in a run is a moment, not a
