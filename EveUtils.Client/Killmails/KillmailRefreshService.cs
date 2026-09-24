@@ -52,8 +52,13 @@ public sealed class KillmailRefreshService(
             var characters = await registry.GetAllAsync(cancellationToken);
             foreach (var character in characters)
             {
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    return;
+                }
+
                 var characterId = character.EsiCharacterId ?? 0;
-                if (cancellationToken.IsCancellationRequested || characterId <= 0)
+                if (characterId <= 0)
                 {
                     continue;
                 }

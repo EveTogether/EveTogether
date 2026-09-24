@@ -80,15 +80,15 @@ public sealed class KillmailImportTests : IDisposable
     }
 
     [Theory]
-    [InlineData(77, 88, true)]   // this character died, another pilot landed the final blow
-    [InlineData(99, 88, false)]  // this character helped on a kill another pilot finished
-    public async Task ImportAsync_IsLossFollowsTheVictim_AndKeepsDamageTaken(int victimId, int finalBlowId, bool expectedLoss)
+    [InlineData(77, true)]   // this character died to pilot 88's final blow
+    [InlineData(99, false)]  // this character helped on a kill pilot 88 finished
+    public async Task ImportAsync_IsLossFollowsTheVictim_AndKeepsDamageTaken(int victimId, bool expectedLoss)
     {
         _routes[Page1] = () => _RecentPage(1, 1);
         _routes["/killmails/1/hash1/"] = () => Json(200, $$"""
             {"killmail_id":1,"killmail_time":"2026-09-20T12:00:00Z","solar_system_id":32000042,
              "victim":{"character_id":{{victimId}},"ship_type_id":17715,"damage_taken":12345,"items":[]},
-             "attackers":[{"character_id":{{finalBlowId}},"damage_done":9000,"final_blow":true},
+             "attackers":[{"character_id":88,"damage_done":9000,"final_blow":true},
                           {"character_id":77,"damage_done":3345,"final_blow":false}]}
             """);
         var (client, _, _) = _Pipeline(EsiAuthorization.Authorized("token"));
@@ -179,7 +179,7 @@ public sealed class KillmailImportTests : IDisposable
         _routes[Page2] = () => Json(500, "{\"error\":\"boom\"}");
         _routes["/killmails/1/hash1/"] = () => Json(200, _Killmail(1));
         _routes["/killmails/2/hash2/"] = () => Json(200, _Killmail(2));
-        var (client, _, _) = _Pipeline(EsiAuthorization.Authorized("token"));
+        var (client, _, stub) = _Pipeline(EsiAuthorization.Authorized("token"));
         var importer = new EsiKillmailImporter(client, Repository);
         await importer.ImportAsync(CharacterId, TestContext.Current.CancellationToken);
         _routes[Page2] = () => _RecentPage(2, 2);
@@ -187,6 +187,7 @@ public sealed class KillmailImportTests : IDisposable
         var result = await importer.ImportAsync(CharacterId, TestContext.Current.CancellationToken);
 
         Assert.Equal(2, result.ImportedCount);
+        Assert.Single(stub.Captured, request => new Uri(request.Uri).PathAndQuery == Page1);
     }
 
     public void Dispose()

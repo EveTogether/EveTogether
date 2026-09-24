@@ -37,7 +37,11 @@ public sealed class EsiCacheHandler(IEsiCacheStore store, IEsiRateLimitMonitor m
 
         if (response.StatusCode == HttpStatusCode.NotModified && cached is not null)
         {
-            var refreshed = cached with { ExpiresAt = ComputeExpiry(response, request.RequestUri, now), StoredAt = now };
+            var refreshed = cached with
+            {
+                ExpiresAt = ComputeExpiry(response, request.RequestUri, now), StoredAt = now,
+                Pages = EsiCacheHeaders.ReadPages(response) ?? cached.Pages
+            };
             await store.SetAsync(key, refreshed, cancellationToken);
             response.Dispose();
             return FromCache(refreshed);
