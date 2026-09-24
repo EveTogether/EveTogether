@@ -212,7 +212,7 @@ public sealed class SqliteSdeAccessor : ISdeAccessor
             return null;
         using var command = connection.CreateCommand();
         command.CommandText =
-            "SELECT typeId, groupId, nameEn, published, mass, volume, capacity, marketGroupId FROM Type WHERE typeId = $id;";
+            "SELECT typeId, groupId, nameEn, published, mass, volume, capacity, marketGroupId, description FROM Type WHERE typeId = $id;";
         command.Parameters.AddWithValue("$id", typeId);
         using var reader = command.ExecuteReader();
         if (!reader.Read())
@@ -225,7 +225,8 @@ public sealed class SqliteSdeAccessor : ISdeAccessor
             reader.GetDouble(4),
             reader.GetDouble(5),
             reader.GetDouble(6),
-            reader.IsDBNull(7) ? null : reader.GetInt32(7));
+            reader.IsDBNull(7) ? null : reader.GetInt32(7),
+            reader.IsDBNull(8) ? null : reader.GetString(8));
     }
 
     public bool IsMutatedType(int typeId)
@@ -313,6 +314,32 @@ public sealed class SqliteSdeAccessor : ISdeAccessor
             result.Add(new SdeChargeType(reader.GetInt32(0), reader.GetString(1),
                 reader.IsDBNull(2) ? null : reader.GetDouble(2)));
         return result;
+    }
+
+    public IReadOnlyList<SdeSkill> GetSkillsInGroup(int groupId)
+    {
+        using var connection = Open();
+        if (connection is null)
+        {
+            return [];
+        }
+        using var command = connection.CreateCommand();
+        command.CommandText =
+            "SELECT t.typeId, t.nameEn, r.value, p.value, s.value, t.published " +
+            "FROM Type t " +
+            "JOIN TypeDogmaAttribute r ON r.typeId = t.typeId AND r.attributeId = 275 " +
+            "JOIN TypeDogmaAttribute p ON p.typeId = t.typeId AND p.attributeId = 180 " +
+            "JOIN TypeDogmaAttribute s ON s.typeId = t.typeId AND s.attributeId = 181 " +
+            "WHERE t.groupId = $g AND t.published = 1 ORDER BY t.nameEn;";
+        command.Parameters.AddWithValue("$g", groupId);
+        var skills = new List<SdeSkill>();
+        using var reader = command.ExecuteReader();
+        while (reader.Read())
+        {
+            skills.Add(new SdeSkill(reader.GetInt32(0), reader.GetString(1),
+                (int)reader.GetDouble(2), (int)reader.GetDouble(3), (int)reader.GetDouble(4), reader.GetInt64(5) != 0));
+        }
+        return skills;
     }
 
     public IReadOnlyList<SdeNamedType> GetBoosterTypes()

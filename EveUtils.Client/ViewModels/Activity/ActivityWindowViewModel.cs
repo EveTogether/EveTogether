@@ -1160,7 +1160,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
                     // Same path the live tail uses (GamelogWatcherService.PumpAsync) — a Metaliminal Meteoroid's
                     // "pale shadow" line that fell while the app was closed must set the outcome on catch-up too
                     // (ET-262), not just on the live tail.
-                    _gamelog.AddNotify(characterName, notify.Timestamp, notify.Message);
+                    _gamelog.AddNotify(characterName, notify.Timestamp, notify.Message, notify.Language);
                     break;
             }
         }

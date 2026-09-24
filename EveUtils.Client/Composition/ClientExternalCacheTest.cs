@@ -13,7 +13,7 @@ namespace EveUtils.Client.Composition;
 /// for the public-ESI fetch and a movable clock, so it can prove: a first lookup hits ESI and writes the cache; a
 /// second lookup within 24h is served from the cache with no further ESI call; after the clock advances past a day
 /// the lookup re-fetches from ESI. Because it touches the client DB, run it on a throwaway instance:
-/// <c>EVEUTILS_INSTANCE=tmp3a dotnet run --project EveUtils.Client -- --external-cache-test</c>. Exit 0 = pass, 1 = fail.
+/// <c>EVETOGETHER_INSTANCE=tmp3a dotnet run --project EveUtils.Client -- --external-cache-test</c>. Exit 0 = pass, 1 = fail.
 /// </summary>
 public static class ClientExternalCacheTest
 {

@@ -10,8 +10,8 @@ using Microsoft.Extensions.Logging;
 namespace EveUtils.Client.UiTests;
 
 /// <summary>
-/// Builds the real client DI on a unique throwaway <c>EVEUTILS_INSTANCE</c> so a UI test never touches a real
-/// client database (feedback_test_setup_isolation: an instance name is no guarantee of emptiness — always use a
+/// Builds the real client DI on a unique throwaway <c>EVETOGETHER_INSTANCE</c> under <see cref="TestDataRoot"/> so a
+/// UI test never touches a real client database (feedback_test_setup_isolation: an instance name is no guarantee of emptiness — always use a
 /// guaranteed-unique scratch instance). Everything runs locally: no server, no gRPC. Disposing tears the service
 /// provider down, clears the env var and deletes the scratch data directory.
 /// </summary>
@@ -47,7 +47,7 @@ public sealed class TestClientInstance : IDisposable
     public static TestClientInstance Create(Action<IServiceCollection>? configure = null, string? instanceName = null)
     {
         var name = instanceName ?? "uitest-" + Guid.NewGuid().ToString("N");
-        Environment.SetEnvironmentVariable("EVEUTILS_INSTANCE", name);
+        Environment.SetEnvironmentVariable("EVETOGETHER_INSTANCE", name);
 
         var services = ClientServices.Build(collection =>
         {
@@ -68,15 +68,14 @@ public sealed class TestClientInstance : IDisposable
             db.Database.Migrate();
         }
 
-        var dataDirectory = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "EveUtils", name);
+        var dataDirectory = ClientServices.DataDirectory();
         return new TestClientInstance(services, dataDirectory, name);
     }
 
     public void Dispose()
     {
         (Services as IDisposable)?.Dispose();
-        Environment.SetEnvironmentVariable("EVEUTILS_INSTANCE", null);
+        Environment.SetEnvironmentVariable("EVETOGETHER_INSTANCE", null);
 
         if (KeepDataOnDispose)
             return;

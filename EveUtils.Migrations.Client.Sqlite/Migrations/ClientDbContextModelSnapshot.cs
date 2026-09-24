@@ -563,6 +563,25 @@ namespace EveUtils.Migrations.Client.Sqlite.Migrations
                     b.ToTable("CharacterImplant");
                 });
 
+            modelBuilder.Entity("EveUtils.Shared.Modules.Killmails.Entities.KillmailEntityName", b =>
+                {
+                    b.Property<long>("Id")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Name")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("RefreshedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("KillmailEntityName");
+                });
+
             modelBuilder.Entity("EveUtils.Shared.Modules.Killmails.Entities.LocalKillmail", b =>
                 {
                     b.Property<int>("CharacterId")
@@ -1476,6 +1495,32 @@ namespace EveUtils.Migrations.Client.Sqlite.Migrations
                     b.HasKey("Address");
 
                     b.ToTable("CoupledServer");
+                });
+
+            modelBuilder.Entity("EveUtils.Shared.Transport.PendingServerRevoke", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("AccessToken")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Address")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("CharacterId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Address");
+
+                    b.ToTable("PendingServerRevoke");
                 });
 
             modelBuilder.Entity("EveUtils.Shared.Modules.Fleet.Composition.FleetCompositionEntry", b =>

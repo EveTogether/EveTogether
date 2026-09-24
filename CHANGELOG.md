@@ -11,6 +11,10 @@ server as a Docker image to `ghcr.io/evetogether/eve-together-server` — tagged
 (always the newest build) and with the release version (`:X.Y.Z`). The notes for a release are
 taken from the matching `## vX.Y.Z` section below.
 
+A separate nightly pipeline (`.github/workflows/nightly.yml`) publishes a rolling pre-release
+build of `main` on its own schedule, replacing itself each time; its own commit list is its
+release notes, not this file.
+
 ## [Unreleased]
 
 - **Added: a lost ship is linked to the run you lost it in.** When a loss comes in, EVE Together looks for the one run
@@ -21,6 +25,55 @@ taken from the matching `## vX.Y.Z` section below.
   abyssal run shows FAILED, any other run SHIP LOST. A new LINKED LOSS block on the detail screen shows the ship, fit,
   final blow and why it was linked, and lets you move the loss to another run or unlink it; your choice is never
   undone. The loss stays on your computer and is not sent along when you publish a run to a server.
+- **Changed: killmail character, corporation and alliance names are now resolved and cached locally.** No visible
+  change yet — groundwork for the upcoming kill/loss overview. A name is looked up from public ESI (or, for NPC
+  corporations and factions, your own local database) only once per month by default, and always shows the
+  corporation and alliance from the moment of the kill, never a character's corporation today.
+- **Fixed: a fit's stats no longer count a ship skill your character has not trained as level I.** With a
+  character's own skills selected, an untrained hull skill still gave its first level of bonus (a Ferox without Caldari
+  Battlecruiser showed 304.8 instead of 290.3 DPS); it now gives none, the same as a skill at level 0.
+- **Added: you can now remove a character.** Until now a character you had added stayed in the list for good. Its
+  settings have a Remove character button at the bottom: two clicks and it is decoupled from every server, its EVE
+  sign-in is revoked at CCP, and its skills, implants, killmails, messages, cached metrics and tokens are deleted from
+  this PC. Your runs and fittings stay unless you tick "Also delete this character's runs and fittings". A run that is
+  still going is stopped first. A character that commands an active fleet can't be removed until you hand the fleet
+  over or stop it. If a server can't be reached, the character is removed anyway and that server is told the next time
+  it connects. Signing in with the character again adds it back.
+- **Fixed: public fleets in the fleet list now update live even when you're not in them.** When a commander started,
+  stopped or concluded a public fleet, or created or disbanded one, only its members saw it change; everyone else kept
+  seeing the old status until they pressed Refresh. That includes a fleet the server stands down on its own after it
+  empties or goes quiet. Invite-only fleets stay private: only their members are told about them, as before.
+- **Changed: red buttons such as Conclude and Remove read better.** Their red label sat on a light wash that left it
+  just under the contrast the rest of the app keeps to; the wash is gone, the red outline stays.
+- **Changed: nightly builds now show their build date, commit and run number instead of a release number.** If you installed an
+  earlier nightly, reinstall once from the nightly release page; later nightly updates will work as usual. Stable builds
+  keep their regular version.
+- **Changed: the local EVE database now includes skill details and item descriptions.** It downloads fresh the next
+  time you start the app so the upcoming skill catalogue can use EVE's own data.
+- **Fixed: the server no longer answers unauthenticated requests to the old test endpoints.** `GET`/`POST /ships` and
+  `GET /sync-logs` were leftovers from early development and let anyone who could reach a server read its sync log or
+  add rows to its database. They are gone.
+- **Fixed: deleting a paired character in the server panel now revokes its token at EVE too.** Until now the panel
+  removed the stored token but left it valid at EVE; it now revokes it, like decoupling does. If EVE cannot be
+  reached the character is still deleted.
+- **Fixed: decoupling a character now really lets go of it on the server.** Until now the server kept the character's
+  EVE sign-in and went on refreshing it every minute after you decoupled. When the last machine decouples, the server
+  now deletes the character with its stored token and revokes that token at EVE. A character that is still coupled
+  from another PC is left alone and keeps working. If the server was offline when you decoupled, the client
+  remembers it and tells the server the next time it connects. On startup the server also clears characters that
+  earlier decouples had left behind.
+- **Added: EVE Together reads your game log in more client languages.** Until now only an English client produced DPS,
+  repairs, neuts, application, mining, bounty or a location; a German or Russian client got nothing, without a word.
+  The language is now read from the game log itself, and German, Russian, French, Spanish, Japanese and Chinese work
+  next to English. These were built from the game's own text but only tested on constructed lines, no real log in
+  those languages was available, so tell us if a number looks off. A game log in any other language now shows
+  "Game log language not supported yet" instead of quietly doing nothing.
+- **Changed: your data folder is now called `EveTogetherData`.** It used to be `%LOCALAPPDATA%\EveUtils`; on the
+  first start of this version everything in it — settings, sign-ins, fits, runs, caches and backups — moves over in one
+  step, nothing to do on your side. If the move cannot happen (for example another copy of EVE Together still has the
+  folder open), the app simply keeps using the old folder that time and tries again at the next start. Settings ->
+  Show Data Folder opens the new location. Running two copies side by side now uses `EVETOGETHER_INSTANCE`; the old
+  `EVEUTILS_INSTANCE` keeps working.
 - **Changed: the local EVE database now also carries regions, NPC corporations and factions.** No visible change
   yet — this is groundwork for the upcoming kill/loss overview, so a killmail's system, region and NPC attacker
   resolve from your own machine instead of another lookup to CCP's servers. Because the database format changed,
@@ -29,6 +82,13 @@ taken from the matching `## vX.Y.Z` section below.
   default; characters that are already signed in need to sign in again to grant it. Every 5 minutes it picks up new kills and
   losses of the last 90 days and keeps them on your computer, also after they drop out of that window. This is the
   groundwork for linking a lost ship to its run and for a kills overview.
+- **Added: an opt-in nightly build, and its own Updates tab to follow it.** Settings has a new Updates category:
+  a Stable/Nightly release-channel switch next to the "Check for updates on startup" toggle, and a THIS INSTALL
+  card showing your version, build date and channel with a "Check now" button. Leave the channel on Stable and you
+  stay on tagged releases — the default for everyone. Switch to Nightly and the app starts looking for nightlies
+  too: a rolling, replaced-every-night build of the latest commits, published automatically whenever something on
+  `main` actually changed. Nightlies are ahead of the next stable release, so switching back to stable doesn't
+  undo one — you stay on it until a newer stable version ships.
 - **Added: rewrite what a run cost you by hand.** A saved activity's CONSUMABLES block has a REWRITE CONSUMABLES BY
   HAND button for each of your characters, the same box you already use to rewrite loot. Set the filament to 0 when a
   fleetmate's was used, or add the ammo, drones, boosters and nanite paste you went through. Every line is valued at

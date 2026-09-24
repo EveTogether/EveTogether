@@ -7,7 +7,8 @@ namespace EveUtils.Client.UiTests;
 
 /// <summary>
 /// The release pipeline writes the update feed that <see cref="UpdateChannelName"/> reads, and the two agree only
-/// by both spelling the same four names. Nothing fails when they stop agreeing: <c>vpk pack --channel</c> writes
+/// by both spelling the same eight names — four RIDs, each on the stable stream (ET-339; nightly.yml carries the
+/// nightly half of the same pairing). Nothing fails when they stop agreeing: <c>vpk pack --channel</c> writes
 /// <c>releases.{channel}.json</c>, an install asks for the name it builds itself, and a name that is not there is
 /// not an error — the check finds nothing, reports no update, and that installation is never offered a version
 /// again. So the workflow is read here and held against the app.
@@ -18,30 +19,41 @@ namespace EveUtils.Client.UiTests;
 /// </summary>
 public class ReleaseWorkflowChannelTests
 {
-    /// <summary>The four the app publishes for, asked through the platform/architecture seam so one machine can form all four.</summary>
+    /// <summary>The four RIDs the app publishes for, on the stable stream release.yml packs — the platform/architecture/stream seam lets one machine form all four.</summary>
     private static string[] PublishedChannels =>
     [
-        UpdateChannelName.For("win", Architecture.X64),
-        UpdateChannelName.For("linux", Architecture.X64),
-        UpdateChannelName.For("osx", Architecture.Arm64),
-        UpdateChannelName.For("osx", Architecture.X64),
+        UpdateChannelName.For("win", Architecture.X64, UpdateChannel.Stable),
+        UpdateChannelName.For("linux", Architecture.X64, UpdateChannel.Stable),
+        UpdateChannelName.For("osx", Architecture.Arm64, UpdateChannel.Stable),
+        UpdateChannelName.For("osx", Architecture.X64, UpdateChannel.Stable),
     ];
 
     /// <summary>
-    /// Every build job passes its own <c>RUNTIME_ID</c> straight through as <c>--channel</c>, so these are the
-    /// names <c>vpk pack</c> writes into the release. The macOS pair arrives as a matrix rather than as a literal.
+    /// Every build job passes its own <c>RUNTIME_ID</c> as the base of <c>--channel</c>, with <c>-stable</c>
+    /// appended literally — so these are the names <c>vpk pack</c> writes into the release. The macOS pair arrives
+    /// as a matrix rather than as a literal. The literal <c>-stable</c> suffix is asserted separately: a typo or a
+    /// dropped suffix there would strand every published feed's stream without failing the RID comparison alone.
     /// </summary>
     [Fact]
     public void TheChannelsTheWorkflowPacks_AreTheChannelsTheAppAsksFor()
     {
         var workflow = File.ReadAllText(_WorkflowPath());
 
-        string[] packed =
+        string[] baseRids =
         [
             .. _Matches(workflow, @"^\s*RUNTIME_ID:\s*(?!\$\{\{)(\S+)\s*$"),
             .. _Matches(workflow, @"^\s*rid:\s*\[([^\]]+)\]\s*$")
                 .SelectMany(list => list.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)),
         ];
+
+        // Anchored to the start of the line (after leading whitespace) so the explanatory comment above — which
+        // also mentions "--channel" in prose — is not read as a fourth invocation. Captures to end of line, not
+        // just to the next space: the value itself is "${{ env.RUNTIME_ID }}-stable", which contains spaces.
+        var channelFlags = _Matches(workflow, @"^\s*--channel\s+(.+)$");
+        Assert.Equal(3, channelFlags.Count); // one vpk pack per build job: windows, linux, macos
+        Assert.All(channelFlags, flag => Assert.Equal("${{ env.RUNTIME_ID }}-stable", flag));
+
+        var packed = baseRids.Select(rid => $"{rid}-stable");
 
         Assert.Equal(PublishedChannels.Order(), packed.Order());
     }

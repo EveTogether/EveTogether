@@ -14,5 +14,6 @@ public static class KillmailsModule
         modelBuilder.ApplyConfiguration(new LocalKillmailConfiguration());
         modelBuilder.ApplyConfiguration(new LocalKillmailItemConfiguration());
         modelBuilder.ApplyConfiguration(new LocalKillmailAttackerConfiguration());
+        modelBuilder.ApplyConfiguration(new KillmailEntityNameConfiguration());
     }
 }

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using EveUtils.Grpc;
 using EveUtils.Server.Grpc;
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Messaging;
@@ -13,6 +14,7 @@ using EveUtils.Shared.Modules.Fleet.Enums;
 using EveUtils.Shared.Modules.Fleet.Metrics;
 using EveUtils.Shared.Modules.Fleet.Repositories.Implementations;
 using EveUtils.Shared.Modules.Messaging.Commands;
+using Grpc.Core;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 using FleetEntity = EveUtils.Shared.Modules.Fleet.Entities.Fleet;
@@ -34,11 +36,13 @@ public class FleetAutoStopSweepTests
     private const int Owner = 4001;
     private const int Flying = 4002;
     private const int Departed = 4003;
+    private const int Onlooker = 4004;
 
     private static readonly FleetCleanupOptions Options = FleetCleanupOptions.Default;
     private static readonly DateTimeOffset Now = new(2026, 9, 4, 20, 30, 0, TimeSpan.Zero);
 
     private readonly SqliteServerDbContextFactory _factory = new();
+    private readonly ConnectedClients _clients = new();
 
     // ── Harness ─────────────────────────────────────────────────────────────────────────────────────
 
@@ -73,13 +77,15 @@ public class FleetAutoStopSweepTests
     }
 
     private async Task<(FleetRepository Repo, Harness Harness, FleetAutoStopRunner Runner, long FleetId)> StartedFleetAsync(
-        CancellationToken ct, DateTimeOffset? lastActivityAt = null, params int[] members)
+        CancellationToken ct, DateTimeOffset? lastActivityAt = null, FleetVisibility visibility = FleetVisibility.InviteOnly,
+        params int[] members)
     {
         var repo = new FleetRepository(_factory);
         var fleetId = await repo.AddAsync(new FleetEntity
         {
             Name = "Wednesday Homefronts",
             CreatorCharacterId = Owner,
+            Visibility = visibility,
             State = FleetState.Active,
             Activation = FleetActivation.Active,
             ActivatedAt = Now - TimeSpan.FromHours(3),
@@ -93,7 +99,7 @@ public class FleetAutoStopSweepTests
             }, ct);
 
         var harness = new Harness(repo);
-        return (repo, harness, new FleetAutoStopRunner(repo, harness, new ConnectedClients(), NullLogger<FleetAutoStopRunner>.Instance), fleetId);
+        return (repo, harness, new FleetAutoStopRunner(repo, harness, new FleetChangeAnnouncer(repo, _clients), NullLogger<FleetAutoStopRunner>.Instance), fleetId);
     }
 
     private static DateTimeOffset Silent => Now - FleetMemberPresence.SilentAfter - TimeSpan.FromMinutes(5);
@@ -245,6 +251,69 @@ public class FleetAutoStopSweepTests
         var toMember = Assert.Single(harness.Messages);
         Assert.Equal(Flying, toMember.RecipientCharacterId);
         Assert.DoesNotContain("automatically", toMember.Title, StringComparison.OrdinalIgnoreCase);
+    }
+
+    // ── Who hears it (ET-10) ────────────────────────────────────────────────────────────────────────
+
+    /// <summary>A pilot with the fleet list open who is on no roster: a public fleet standing itself down is news on
+    /// their screen, and before ET-10 only its members and owner were told.</summary>
+    [Fact]
+    public async Task APublicFleetStandingDown_ReachesAConnectedNonMember()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var onlooker = Connect(Onlooker);
+        var (_, _, runner, fleetId) = await StartedFleetAsync(ct, visibility: FleetVisibility.Public);
+
+        await runner.SweepAsync(Now, Options, brakeEngaged: false, ct);
+
+        var received = Assert.Single(onlooker.Written).Event;
+        Assert.Equal("fleet.changed", received.EventType);
+        Assert.Equal(fleetId, received.FleetId);
+    }
+
+    /// <summary>
+    /// The boundary: in one sweep an invite-only fleet and a public one both stand down. The onlooker hears the public
+    /// one only, and what they hear names the fleet and what happened to it — never who is on its roster.
+    /// </summary>
+    [Fact]
+    public async Task AnInviteOnlyFleetStandingDown_StaysOnItsRoster_AndThePublicPushCarriesNoRoster()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var onlooker = Connect(Onlooker);
+        var member = Connect(Flying);
+        var (repo, _, runner, hiddenId) = await StartedFleetAsync(ct, members: [Flying]);
+        await repo.TouchMemberSeenAsync(hiddenId, Flying, Silent, ct);
+        var (_, _, _, publicId) = await StartedFleetAsync(ct, visibility: FleetVisibility.Public, members: [Departed]);
+        await repo.TouchMemberSeenAsync(publicId, Departed, Silent, ct);
+
+        await runner.SweepAsync(Now, Options, brakeEngaged: false, ct);
+
+        Assert.Contains(member.Written, envelope => envelope.Event.FleetId == hiddenId);
+        var received = Assert.Single(onlooker.Written).Event;
+        Assert.Equal(publicId, received.FleetId);
+        Assert.DoesNotContain(Departed.ToString(), received.PayloadJson);
+        Assert.DoesNotContain(Owner.ToString(), received.PayloadJson);
+        Assert.Equal(0, received.CharacterId);
+        Assert.Equal(0, received.TargetCharacterId);
+    }
+
+    private RecordingWriter Connect(int characterId)
+    {
+        var writer = new RecordingWriter();
+        _clients.Add(new ConnectedClient($"conn-{characterId}", characterId, $"Pilot {characterId}", writer));
+        return writer;
+    }
+
+    private sealed class RecordingWriter : IServerStreamWriter<ServerEnvelope>
+    {
+        public List<ServerEnvelope> Written { get; } = [];
+        public WriteOptions? WriteOptions { get; set; }
+        public Task WriteAsync(ServerEnvelope message) => WriteAsync(message, CancellationToken.None);
+        public Task WriteAsync(ServerEnvelope message, CancellationToken cancellationToken)
+        {
+            Written.Add(message);
+            return Task.CompletedTask;
+        }
     }
 
     // ── Phases the sweep may not touch ──────────────────────────────────────────────────────────────

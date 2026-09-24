@@ -140,8 +140,11 @@
         <Setter Property="Background" Value="#08FFFFFF"/>
         <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
     </Style>
-    <!-- Destructive / terminal action (e.g. CONCLUDE) — red so it stands out from neutral/accent buttons. -->
+    <!-- Destructive / terminal action (e.g. CONCLUDE) — red so it stands out from neutral/accent buttons. No wash
+         behind it: the red label on the shared #22FFFFFF button fill measured 4.0–4.4:1 in every theme, under the
+         4.5 floor; on the bare window or panel it clears it (RemoveCharacterContrastTests, ET-345). -->
     <Style Selector="Button.danger">
+        <Setter Property="Background" Value="Transparent"/>
         <Setter Property="Foreground" Value="{StaticResource RedBrush}"/>
         <Setter Property="BorderBrush" Value="{StaticResource RedBrush}"/>
     </Style>
@@ -965,6 +968,33 @@
     <Style Selector="ToggleButton.section:checked TextBlock.caret">
         <Setter Property="RenderTransform" Value="rotate(90deg)"/>
     </Style>
+
+    <!-- ── Segmented control (ET-339) ── a pair of adjoining ToggleButtons standing in for a single-choice
+         control (the Updates tab's release-channel picker). New to Settings, everything else there reuses the
+         existing row/label pattern. Reuses ToggleButton.section's checked-state-on-the-presenter trick (the stock
+         Fluent theme owns :pointerover/:checked there, so a plain top-level Setter loses to it); code-behind
+         keeps exactly one of the pair checked. -->
+    <Style Selector="ToggleButton.segmented">
+        <Setter Property="Background" Value="{DynamicResource BgPanelBrush}"/>
+        <Setter Property="Foreground" Value="{DynamicResource TextAccentBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+        <Setter Property="BorderThickness" Value="0,0,1,0"/>
+        <Setter Property="CornerRadius" Value="0"/>
+        <Setter Property="Padding" Value="14,6"/>
+        <Setter Property="FontSize" Value="11"/>
+        <Setter Property="MinWidth" Value="72"/>
+        <Setter Property="HorizontalContentAlignment" Value="Center"/>
+    </Style>
+    <Style Selector="ToggleButton.segmented:pointerover /template/ ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
+    </Style>
+    <Style Selector="ToggleButton.segmented:checked /template/ ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
+    </Style>
+    <Style Selector="ToggleButton.segmented:checked">
+        <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+    </Style>
+
     <Style Selector="TextBlock.sectiontitle">
         <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
         <Setter Property="FontSize" Value="10"/>

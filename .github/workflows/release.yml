@@ -24,12 +24,12 @@ env:
   VPK_VERSION: '1.2.0'
 
   # vpk pack --channel writes releases.{channel}.json, and the installed app asks for exactly that file by the
-  # name UpdateChannelName builds from its own platform and architecture (EveUtils.Client/Updates/
-  # UpdateChannelName.cs). The four names below ARE those four names, and they are also the .NET RIDs the
-  # matrix builds — which is why each job passes its own RUNTIME_ID straight through as the channel instead of
-  # mapping one onto the other. Nothing at runtime fails when these drift apart: the updater simply asks for a
-  # file that is not there and goes quiet forever, so the publish-assets job asserts all four exist.
-  CHANNELS: win-x64 linux-x64 osx-arm64 osx-x64
+  # name UpdateChannelName builds from its own platform, architecture and stream (EveUtils.Client/Updates/
+  # UpdateChannelName.cs). The eight names below ARE those names: the four RIDs the matrix builds, each with the
+  # "-stable" suffix this workflow packs (ET-339; nightly.yml packs the same four RIDs with "-nightly" instead).
+  # Nothing at runtime fails when these drift apart: the updater simply asks for a file that is not there and goes
+  # quiet forever, so the publish-assets job asserts all four exist.
+  CHANNELS: win-x64-stable linux-x64-stable osx-arm64-stable osx-x64-stable
 
 jobs:
   build-windows:
@@ -92,13 +92,13 @@ jobs:
           --packDir ${{ env.OUTPUT_DIR }}
           --mainExe ${{ env.APP_NAME }}.exe
           --icon ${{ env.ICON_ICO }}
-          --channel ${{ env.RUNTIME_ID }}
+          --channel ${{ env.RUNTIME_ID }}-stable
           --outputDir artifacts-velopack
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
-          name: windows
+          name: release-windows
           path: artifacts-velopack/*
 
   build-linux:
@@ -161,14 +161,14 @@ jobs:
           --packDir ${{ env.OUTPUT_DIR }}
           --mainExe ${{ env.APP_NAME }}
           --icon ${{ env.ICON_PNG }}
-          --channel ${{ env.RUNTIME_ID }}
+          --channel ${{ env.RUNTIME_ID }}-stable
           --categories "Utility;Game"
           --outputDir artifacts-velopack
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
-          name: linux
+          name: release-linux
           path: artifacts-velopack/*
 
   build-macos:
@@ -254,13 +254,13 @@ jobs:
           --packDir ${{ env.OUTPUT_DIR }}
           --mainExe ${{ env.APP_NAME }}
           --icon eve-together.icns
-          --channel ${{ env.RUNTIME_ID }}
+          --channel ${{ env.RUNTIME_ID }}-stable
           --outputDir artifacts-velopack
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
-          name: macos-${{ matrix.rid }}
+          name: release-macos-${{ matrix.rid }}
           path: artifacts-velopack/*
 
   publish-assets:
@@ -271,10 +271,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      # Scoped to the release-* uploads (build-windows/linux/macos) — an unfiltered download also picks up
+      # whatever else the run's artifact pool holds, such as docker/build-push-action's own build-record
+      # upload from the sibling publish-server-image job, which has no needs: gate and can finish first.
       - name: Download artifacts
         uses: actions/download-artifact@v8
         with:
           path: dist
+          pattern: release-*
           merge-multiple: true
 
       # The one failure in this pipeline that is otherwise completely silent. An installed copy asks its feed
@@ -335,21 +339,21 @@ jobs:
 
           ### Which file do I download?
 
-          **Windows** — `EveTogether-win-x64-Setup.exe`. It installs EVE Together for your user account, and that
-          copy can update itself from this release on. Nothing here is code-signed, so SmartScreen will say the
-          publisher is unknown: choose **More info → Run anyway**. `EveTogether-win-x64-Portable.zip` is the same
-          build as a folder you unpack yourself — it runs, but a portable copy cannot update itself, and it says so
-          rather than pretending.
+          **Windows** — `EveTogether-win-x64-stable-Setup.exe`. It installs EVE Together for your user account, and
+          that copy can update itself from this release on. Nothing here is code-signed, so SmartScreen will say the
+          publisher is unknown: choose **More info → Run anyway**. `EveTogether-win-x64-stable-Portable.zip` is the
+          same build as a folder you unpack yourself — it runs, but a portable copy cannot update itself, and it says
+          so rather than pretending.
 
-          **macOS** — `EveTogether-osx-arm64-Setup.pkg` on Apple Silicon, `EveTogether-osx-x64-Setup.pkg` on Intel.
-          Take the one for your Mac: they are separate builds, and neither is offered the other's updates. The
-          download is not notarized, so Gatekeeper refuses a copy your browser fetched and reports that it is
+          **macOS** — `EveTogether-osx-arm64-stable-Setup.pkg` on Apple Silicon, `EveTogether-osx-x64-stable-Setup.pkg`
+          on Intel. Take the one for your Mac: they are separate builds, and neither is offered the other's updates.
+          The download is not notarized, so Gatekeeper refuses a copy your browser fetched and reports that it is
           damaged. It is not — the flag is written by the downloader. Clear just that flag after installing, with
           `xattr -dr com.apple.quarantine "/Applications/EVE Together.app"`.
 
-          **Linux** — `EveTogether-linux-x64.AppImage`, which is both the download and the installed app. It arrives
-          without its executable bit: `chmod +x` it, then run it. It mounts itself with FUSE; on a distribution that
-          ships only fuse3, either install `libfuse2` or run it with `--appimage-extract-and-run`.
+          **Linux** — `EveTogether-linux-x64-stable.AppImage`, which is both the download and the installed app. It
+          arrives without its executable bit: `chmod +x` it, then run it. It mounts itself with FUSE; on a
+          distribution that ships only fuse3, either install `libfuse2` or run it with `--appimage-extract-and-run`.
 
           ### Already running EVE Together? Switch over once, by hand.
 

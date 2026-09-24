@@ -49,7 +49,8 @@ public sealed class DashboardOverviewQueryCountTests
         await _SeedAsync(factory, rows, ct);
 
         var dataAdmin = new DataAdminService(
-            factory, new SharedFitRepository(factory), new ServerAuthRepository(factory), new FleetCompositionRepository(factory), new NoDispatcher());
+            factory, new SharedFitRepository(factory), new ServerAuthRepository(factory), new FleetCompositionRepository(factory), new NoDispatcher(),
+            UnusedReleaser.Create(factory));
         var nameLookup = new EsiNameLookup(new UnreachableEsi(), NullLogger<EsiNameLookup>.Instance, TimeProvider.System);
         var overview = new DashboardOverviewService(factory, dataAdmin, nameLookup, TimeProvider.System);
 

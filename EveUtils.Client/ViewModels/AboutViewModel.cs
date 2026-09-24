@@ -46,6 +46,7 @@ public sealed partial class AboutViewModel : ViewModelBase
     // decided by the check's message code and never by its text.
     private readonly IUpdateService? _updates;
     private readonly Func<AppRelease, Task>? _onInstallRequested;
+    private readonly UpdateChannel _channel;
     private AppRelease? _offered;
 
     /// <summary>
@@ -75,11 +76,13 @@ public sealed partial class AboutViewModel : ViewModelBase
         ICharacterInfoService? characterInfo,
         IUpdateService? updates = null,
         IUpdateSupportProbe? updateSupport = null,
-        Func<AppRelease, Task>? onInstallRequested = null)
+        Func<AppRelease, Task>? onInstallRequested = null,
+        UpdateChannel channel = UpdateChannel.Stable)
     {
-        Version = $"v{AppInfo.Version}";
+        Version = AppInfo.DisplayVersion;
         _updates = updates;
         _onInstallRequested = onInstallRequested;
+        _channel = channel;
         ApplySupport(updateSupport?.Detect() ?? UpdateSupport.NotInstalled);
 
         // Shuffled per view so no creator is permanently listed first — neither is "the" lead.
@@ -138,7 +141,7 @@ public sealed partial class AboutViewModel : ViewModelBase
 
         try
         {
-            ApplyCheck(await _updates.CheckAsync());
+            ApplyCheck(await _updates.CheckAsync(_channel));
         }
         finally
         {
@@ -152,9 +155,9 @@ public sealed partial class AboutViewModel : ViewModelBase
 
         switch (UpdateNotice.Classify(check))
         {
-            case UpdateNoticeKind.Available:
-                UpdateHeadline = $"EVE Together v{check.Value!.Version} is available.";
-                UpdateDetail = $"You're on {Version}. The download is {UpdateDownloadSize.Format(check.Value.SizeBytes)}.";
+            case UpdateNoticeKind.Available when check.Value is { } release:
+                UpdateHeadline = $"EVE Together {release.DisplayVersion} is available.";
+                UpdateDetail = $"You're on {Version}. The download is {UpdateDownloadSize.Format(release.SizeBytes)}.";
                 CanInstallUpdate = _onInstallRequested is not null;
                 CheckForUpdatesLabel = "Check again";
                 break;

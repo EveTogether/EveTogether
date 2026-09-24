@@ -41,8 +41,10 @@ public sealed class DogmaCalculator(
             ids.Add(drone.TypeId);
         foreach (var fighter in fit.Fighters ?? [])
             ids.Add(fighter.TypeId);
-        foreach (var skillId in fit.Skills.InjectsAllSkills ? data.GetSkillTypeIds() : fit.Skills.ExplicitSkillTypeIds)
+        foreach (var skillId in fit.Skills.SkillTypeIdsToInject(data.GetSkillTypeIds()))
+        {
             ids.Add(skillId);
+        }
         return ids;
     }
 }

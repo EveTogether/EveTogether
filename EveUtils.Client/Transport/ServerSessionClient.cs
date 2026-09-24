@@ -10,11 +10,12 @@ namespace EveUtils.Client.Transport;
 /// <summary>
 /// Calls the server's <c>Session.Revoke</c> RPC over the TOFU-pinned channel to decouple a
 /// character: the server invalidates the session and cuts the bus stream. The client still drops its
-/// local session afterwards (so an unreachable server can't keep us "coupled").
+/// local session afterwards (so an unreachable server can't keep us "coupled"); the caller keeps the revoke
+/// for later when the outcome is <see cref="ServerRevokeOutcome.Unreachable"/>.
 /// </summary>
-public sealed class ServerSessionClient(GrpcChannelFactory channelFactory) : ISingletonService
+public sealed class ServerSessionClient(GrpcChannelFactory channelFactory) : IServerSessionRevoker, ISingletonService
 {
-    public async Task<(bool Ok, string Message)> RevokeAsync(
+    public async Task<ServerRevokeOutcome> RevokeAsync(
         string serverAddress, string sessionToken, CancellationToken cancellationToken = default)
     {
         var channel = channelFactory.CreatePinned(serverAddress);
@@ -26,11 +27,11 @@ public sealed class ServerSessionClient(GrpcChannelFactory channelFactory) : ISi
             var reply = await client.RevokeAsync(
                 new RevokeRequest { SessionToken = sessionToken },
                 deadline: DateTime.UtcNow.AddSeconds(5), cancellationToken: cancellationToken);
-            return (reply.Ok, reply.Message);
+            return reply.Ok ? ServerRevokeOutcome.Revoked : ServerRevokeOutcome.NoSuchSession;
         }
-        catch (RpcException ex)
+        catch (RpcException)
         {
-            return (false, ex.Status.Detail);
+            return ServerRevokeOutcome.Unreachable;
         }
     }
 }

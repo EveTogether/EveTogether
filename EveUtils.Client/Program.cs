@@ -18,6 +18,7 @@ using EveUtils.Shared.Modules.Esi.Status;
 using EveUtils.Shared.Logging;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Velopack;
 
 namespace EveUtils.Client;
@@ -38,6 +39,7 @@ sealed class Program
         // Last-chance net (ET-197): armed as early as possible so a fault anywhere further in startup still
         // leaves a trace. Writes straight to app-errors.jsonl, bypassing ILogger/DI — see CrashLog for why.
         CrashLog.Install(ClientServices.DataDirectory());
+        LogDataFolderMove(ClientDataLocation.Migration);
 
         // The UI is English-only (§2) and the client's formatting helpers already pass InvariantCulture, so pin
         // the process instead of letting numbers follow the OS locale — that is the one element that would
@@ -256,7 +258,7 @@ sealed class Program
         // the same database, and a diagnostic run has no business ending a run the pilot is flying.
         //
         // ponytail: "a previous process" is really "no other process", which holds because one data directory is one
-        // client — that is what EVEUTILS_INSTANCE exists to keep true. A second launch against the same directory
+        // client — that is what EVETOGETHER_INSTANCE exists to keep true. A second launch against the same directory
         // would stop the first one's run. Give the row the session that owns it if that ever stops being true.
         using (var scope = Services.CreateScope())
         {
@@ -331,6 +333,22 @@ sealed class Program
     {
         var faulting = Task.Run(() => throw new InvalidOperationException("ET-197 deliberate crash-test: task"));
         while (!faulting.IsCompleted) Thread.Sleep(10);
+    }
+
+    static void LogDataFolderMove(DataMigration migration)
+    {
+        switch (migration.Outcome)
+        {
+            case DataMigrationOutcome.Moved:
+                CrashLog.Record(LogLevel.Information, "DataFolder",
+                    $"Moved the data folder from {ClientDataLocation.LegacyFolderName} to {ClientDataLocation.FolderName}");
+                break;
+            case DataMigrationOutcome.Failed:
+                CrashLog.Record(LogLevel.Warning, "DataFolder",
+                    $"Could not move the data folder to {ClientDataLocation.FolderName}; running on {ClientDataLocation.LegacyFolderName} this time and retrying at the next start",
+                    migration.Error?.Message);
+                break;
+        }
     }
 
     /// <summary>

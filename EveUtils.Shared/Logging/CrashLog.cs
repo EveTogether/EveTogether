@@ -55,6 +55,12 @@ public static class CrashLog
     public static void WriteShutdownMarker(string context) =>
         AppendLine(new LogEntry(DateTimeOffset.Now, LogLevel.Information, "Crash", $"Clean shutdown: {context}", null));
 
+    /// <summary>
+    /// A startup fact recorded before DI and <c>ILogStore</c> exist, next to the crash lines in the same file.
+    /// </summary>
+    public static void Record(LogLevel level, string category, string message, string? detail = null) =>
+        AppendLine(new LogEntry(DateTimeOffset.Now, level, category, message, detail));
+
     private static void Write(string source, Exception? exception)
     {
         var message = exception is null

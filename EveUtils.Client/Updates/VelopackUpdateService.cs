@@ -25,13 +25,14 @@ internal sealed class VelopackUpdateService(ILogger<VelopackUpdateService> logge
     private UpdateManager? _pendingManager;
     private VelopackAsset? _pendingRelease;
 
-    public Task<Result<AppRelease?>> CheckAsync(CancellationToken cancellationToken = default) =>
-        CheckAsync(Feed(), locator: null, Patience, logger, cancellationToken);
+    public Task<Result<AppRelease?>> CheckAsync(UpdateChannel channel, CancellationToken cancellationToken = default) =>
+        CheckAsync(channel, Feed(channel), locator: null, Patience, logger, cancellationToken);
 
     /// <summary>
     /// The check with the feed and the installation handed in, so a test needs neither the network nor an installed copy.
     /// </summary>
     internal static async Task<Result<AppRelease?>> CheckAsync(
+        UpdateChannel channel,
         IUpdateSource source,
         IVelopackLocator? locator,
         TimeSpan patience,
@@ -39,7 +40,7 @@ internal sealed class VelopackUpdateService(ILogger<VelopackUpdateService> logge
         CancellationToken cancellationToken)
     {
         Result<(UpdateManager Manager, UpdateInfo? Info)> lookup =
-            await _LookUpAsync(source, locator, patience, logger, cancellationToken);
+            await _LookUpAsync(channel, source, locator, patience, logger, cancellationToken);
 
         if (!lookup.IsSuccess)
             return Result<AppRelease?>.Failure([.. lookup.Messages]);
@@ -48,10 +49,11 @@ internal sealed class VelopackUpdateService(ILogger<VelopackUpdateService> logge
             lookup.Value.Info is { TargetFullRelease: { } release } ? _ToRelease(release) : null);
     }
 
-    public Task<Result> DownloadAsync(CancellationToken cancellationToken = default) =>
-        DownloadAsync(Feed(), locator: null, Patience, logger, cancellationToken);
+    public Task<Result> DownloadAsync(UpdateChannel channel, CancellationToken cancellationToken = default) =>
+        DownloadAsync(channel, Feed(channel), locator: null, Patience, logger, cancellationToken);
 
     internal async Task<Result> DownloadAsync(
+        UpdateChannel channel,
         IUpdateSource source,
         IVelopackLocator? locator,
         TimeSpan patience,
@@ -59,7 +61,7 @@ internal sealed class VelopackUpdateService(ILogger<VelopackUpdateService> logge
         CancellationToken cancellationToken)
     {
         Result<(UpdateManager Manager, UpdateInfo? Info)> lookup =
-            await _LookUpAsync(source, locator, patience, logger, cancellationToken);
+            await _LookUpAsync(channel, source, locator, patience, logger, cancellationToken);
 
         if (!lookup.IsSuccess)
             return Result.Failure([.. lookup.Messages]);
@@ -99,6 +101,7 @@ internal sealed class VelopackUpdateService(ILogger<VelopackUpdateService> logge
     }
 
     private static async Task<Result<(UpdateManager Manager, UpdateInfo? Info)>> _LookUpAsync(
+        UpdateChannel channel,
         IUpdateSource source,
         IVelopackLocator? locator,
         TimeSpan patience,
@@ -112,8 +115,14 @@ internal sealed class VelopackUpdateService(ILogger<VelopackUpdateService> logge
 
         try
         {
+            // Built per call rather than cached: the channel is a construction option, and the operator can change
+            // it while the app is running (ET-339).
             var manager = new UpdateManager(
-                source, new UpdateOptions { ExplicitChannel = UpdateChannelName.Current }, locator);
+                source, new UpdateOptions
+                {
+                    ExplicitChannel = UpdateChannelName.For(channel),
+                    AllowVersionDowngrade = channel == UpdateChannel.Nightly,
+                }, locator);
 
             Task<UpdateInfo?> check = manager.CheckForUpdatesAsync();
 
@@ -152,7 +161,10 @@ internal sealed class VelopackUpdateService(ILogger<VelopackUpdateService> logge
         $"This copy was not placed by the EVE Together installer, so it cannot update itself. The latest release is at {RepositoryUrl}/releases",
         Source);
 
-    internal static IUpdateSource Feed() => new GithubSource(RepositoryUrl, AccessToken, prerelease: false);
+    // `prerelease` lets the nightly be seen at all, withholding it on stable (ET-339) — belt-and-suspenders beside
+    // the separate channel feed files, which already keep a stable install from ever seeing a nightly asset.
+    internal static IUpdateSource Feed(UpdateChannel channel) =>
+        new GithubSource(RepositoryUrl, AccessToken, prerelease: channel == UpdateChannel.Nightly);
 
     // Deliberately none: GitHub lists draft releases only to callers with push access, so asking anonymously is
     // what keeps a half-finished draft from counting as an update candidate.
@@ -160,7 +172,14 @@ internal sealed class VelopackUpdateService(ILogger<VelopackUpdateService> logge
 
     private static AppRelease _ToRelease(VelopackAsset release)
     {
-        var version = release.Version.ToFullString();
+        string version = release.Version.ToFullString();
+        if (version.Contains("-nightly.", StringComparison.Ordinal))
+        {
+            string identity = release.NotesMarkdown?.Trim() is { } notes &&
+                notes.StartsWith("nightly-", StringComparison.Ordinal) ? notes : "nightly";
+
+            return new AppRelease(identity, string.Empty, $"{RepositoryUrl}/releases/tag/nightly", release.Size);
+        }
 
         return new AppRelease(
             version, release.NotesMarkdown ?? string.Empty, $"{RepositoryUrl}/releases/tag/v{version}", release.Size);

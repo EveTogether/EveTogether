@@ -16,7 +16,7 @@ namespace EveUtils.Client.UiTests;
 /// </summary>
 public sealed class FakeSdeAccessor : ISdeAccessor
 {
-    private sealed record Entry(int TypeId, string Name, int GroupId, SdeSlotType Slot, bool IsTurret, double Volume, bool IsMutated = false, int? MetaGroupId = null);
+    private sealed record Entry(int TypeId, string Name, int GroupId, SdeSlotType Slot, bool IsTurret, double Volume, bool IsMutated = false, int? MetaGroupId = null, bool Published = true);
 
     private readonly Dictionary<int, Entry> _types = new();
     private readonly Dictionary<int, int> _groupCategory = new();
@@ -32,9 +32,9 @@ public sealed class FakeSdeAccessor : ISdeAccessor
     public bool IsAvailable { get; private set; } = true;
     public SdeVersion? Version => new(1, DateTimeOffset.UnixEpoch);
 
-    public FakeSdeAccessor Add(int typeId, string name, int groupId, int categoryId, SdeSlotType slot = SdeSlotType.None, bool isTurret = false, double volume = 0, bool isMutated = false, string? groupName = null, int? metaGroupId = null)
+    public FakeSdeAccessor Add(int typeId, string name, int groupId, int categoryId, SdeSlotType slot = SdeSlotType.None, bool isTurret = false, double volume = 0, bool isMutated = false, string? groupName = null, int? metaGroupId = null, bool published = true)
     {
-        _types[typeId] = new Entry(typeId, name, groupId, slot, isTurret, volume, isMutated, metaGroupId);
+        _types[typeId] = new Entry(typeId, name, groupId, slot, isTurret, volume, isMutated, metaGroupId, published);
         _groupCategory[groupId] = categoryId;
         _byName[name] = typeId;
         if (groupName is not null)
@@ -118,6 +118,14 @@ public sealed class FakeSdeAccessor : ISdeAccessor
                 _attrs.TryGetValue(e.TypeId, out var a) ? a.FirstOrDefault(x => x.AttributeId == 128)?.Value : null))
             .ToList();
 
+    public IReadOnlyList<SdeSkill> GetSkillsInGroup(int groupId) =>
+        _types.Values.Where(e => e.GroupId == groupId && e.Published)
+            .Select(e => new SdeSkill(e.TypeId, e.Name,
+                (int)(_attrs.GetValueOrDefault(e.TypeId)?.FirstOrDefault(a => a.AttributeId == 275)?.Value ?? 0),
+                (int)(_attrs.GetValueOrDefault(e.TypeId)?.FirstOrDefault(a => a.AttributeId == 180)?.Value ?? 0),
+                (int)(_attrs.GetValueOrDefault(e.TypeId)?.FirstOrDefault(a => a.AttributeId == 181)?.Value ?? 0), e.Published))
+            .OrderBy(skill => skill.Name).ToList();
+
     public SdeFitRequirement? GetFitRequirement(int typeId) =>
         _types.TryGetValue(typeId, out var e) && e.Slot != SdeSlotType.None
             ? new SdeFitRequirement(e.Slot, 1, false, e.IsTurret)
@@ -197,8 +205,17 @@ public sealed class FakeSdeAccessor : ISdeAccessor
     public SdeSolarSystem? GetSolarSystem(int solarSystemId) =>
         _solarSystemsByName.Values.FirstOrDefault(system => system.SolarSystemId == solarSystemId);
 
-    // No fixtures wired up here — nothing under test today reads NPC corporation/faction names through this fake.
-    public string? GetNpcCorporationName(int corporationId) => null;
+    private readonly Dictionary<int, string> _npcCorporations = new();
+
+    public FakeSdeAccessor AddNpcCorporation(int corporationId, string name)
+    {
+        _npcCorporations[corporationId] = name;
+        return this;
+    }
+
+    public string? GetNpcCorporationName(int corporationId) => _npcCorporations.GetValueOrDefault(corporationId);
+
+    // No fixture wired up here — nothing under test today reads faction names through this fake.
     public string? GetFactionName(int factionId) => null;
 
     public void Close() { }
