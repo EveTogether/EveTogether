@@ -72,6 +72,46 @@ jobs:
             echo "build=true" >> "$GITHUB_OUTPUT"
           fi
 
+  tests:
+    needs: changes
+    if: needs.changes.outputs.build == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Run UI and server tests
+        shell: pwsh
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $false
+          dotnet test EveUtils.Client.UiTests/EveUtils.Client.UiTests.csproj -c Release --logger "trx;LogFileName=ui.trx" --results-directory TestResults
+          $uiExit = $LASTEXITCODE
+          dotnet test EveUtils.Server.Tests/EveUtils.Server.Tests.csproj -c Release --logger "trx;LogFileName=server.trx" --results-directory TestResults
+          $serverExit = $LASTEXITCODE
+
+          "## Nightly test results" >> $env:GITHUB_STEP_SUMMARY
+          $failedTests = @(Get-ChildItem TestResults -Filter '*.trx' -Recurse -ErrorAction SilentlyContinue | ForEach-Object {
+            ([xml](Get-Content -Raw -LiteralPath $_.FullName)).SelectNodes("//*[local-name()='UnitTestResult' and @outcome='Failed']") |
+              ForEach-Object { "- $($_.GetAttribute('testName'))" }
+          })
+          if ($failedTests.Count -gt 0) {
+            "### Failed tests" >> $env:GITHUB_STEP_SUMMARY
+            $failedTests >> $env:GITHUB_STEP_SUMMARY
+          }
+          if ($uiExit -ne 0 -or $serverExit -ne 0) {
+            if ($failedTests.Count -eq 0) {
+              "A test process failed before writing named results." >> $env:GITHUB_STEP_SUMMARY
+            }
+            exit 1
+          }
+          "UI and server tests passed." >> $env:GITHUB_STEP_SUMMARY
+
   build-windows:
     needs: changes
     if: needs.changes.outputs.build == 'true'
