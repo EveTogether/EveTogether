@@ -75,7 +75,7 @@ public static class GameLogCatchUpReader
                 if (trimmed.Length == 0)
                     continue;
 
-                if (LogLineParser.Parse(trimmed) is not { } parsed)
+                if (LogLineParser.Parse(trimmed, header.Language) is not { } parsed)
                     continue;
 
                 if (parsed.Timestamp > sinceUtc && parsed.Timestamp <= untilUtc)

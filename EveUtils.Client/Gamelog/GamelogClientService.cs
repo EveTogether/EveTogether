@@ -4,7 +4,6 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using EveUtils.Client.Esi;
@@ -21,6 +20,7 @@ using EveUtils.Shared.Modules.Gamelog.Commands;
 using EveUtils.Shared.Modules.Gamelog.Dtos;
 using EveUtils.Shared.Modules.Gamelog.Events;
 using EveUtils.Shared.Modules.Gamelog.Models;
+using EveUtils.Shared.Modules.Gamelog.Parsing;
 using EveUtils.Shared.Modules.Gamelog.Repositories;
 using EveUtils.Shared.Modules.Runs.Commands;
 using EveUtils.Shared.Modules.Runs.Entities;
@@ -45,7 +45,7 @@ namespace EveUtils.Client.Gamelog;
 /// The id→name map (seeded from <see cref="ICharacterRegistry"/> + sign-in) is what couples a fleet sample to the
 /// correct character's real combat — so a member's graph shows that member's actual DPS, not a global blob.
 /// </summary>
-public sealed partial class GamelogClientService : IFleetMetricSource, ISingletonService
+public sealed class GamelogClientService : IFleetMetricSource, ISingletonService
 {
     private readonly IServiceProvider _services;
     private readonly IEventBus _eventBus;
@@ -148,17 +148,6 @@ public sealed partial class GamelogClientService : IFleetMetricSource, ISingleto
     // The notify line EVE writes for a wreck salvaged (domain/homefronts.md §8).
     private const string SalvageSuccessPrefix = "You successfully salvage";
 
-    // The notify line EVE writes when a Metaliminal Meteoroid's single asteroid runs dry (ET-262, measured against
-    // Jithran's own 2026-08-28/29 gamelogs, domain/homefronts.md §6.1) — the one hard local signal a site completed.
-    // The mining module leading it varies ("Miner II", "Mining Drone II", "Modulated Strip Miner II", …), so only
-    // this fixed tail is matched.
-    private const string PaleShadowSuffix = "a pale shadow of its former glory.";
-
-    // The notify line a command-burst booster's own gamelog writes, once per burst module per cycle (ET-283,
-    // measured against Abnoba Auscent's Orca log of 2026-08-31: "Your Mining Foreman Burst II has applied bonuses to
-    // 4 fleet members."). Only the booster's log ever carries this — a receiver's log stays silent.
-    [GeneratedRegex(@"^Your (?<module>.+) has applied bonuses to (?<count>\d+) fleet members\.$")]
-    private static partial Regex MiningBoostRegex();
 
     public GamelogClientService(IServiceProvider services, IEventBus eventBus, ICharacterRegistry? registry = null,
         EveClientPresenceService? presence = null)
@@ -739,17 +728,25 @@ public sealed partial class GamelogClientService : IFleetMetricSource, ISingleto
     }
 
     /// <summary>Record a notable notify/warning event (scramble, jam, neut, …).</summary>
-    public void AddNotify(string characterName, DateTime at, string message)
+    public void AddNotify(string characterName, DateTime at, string message, GamelogLanguage language = GamelogLanguage.English)
     {
         var name = Resolve(characterName);
         Metrics(name).RecordNotify(at, message);
         if (message.StartsWith(SalvageSuccessPrefix, StringComparison.OrdinalIgnoreCase))
             RaiseContribution(name, SiteContribution.Salvage, 1, at);
-        if (message.EndsWith(PaleShadowSuffix, StringComparison.OrdinalIgnoreCase) && _idByName.TryGetValue(name, out var characterId))
+        // The Metaliminal Meteoroid's single asteroid ran dry (ET-262, measured against Jithran's own 2026-08-28/29
+        // gamelogs) — the one hard local signal a site completed.
+        if (GamelogNotices.IsResourceDepleted(message, language) && _idByName.TryGetValue(name, out var characterId))
+        {
             HomefrontCompletionObserved?.Invoke(characterId, at);
-        if (MiningBoostRegex().Match(message) is { Success: true } boost && _idByName.TryGetValue(name, out var boosterId))
-            MiningBoostObserved?.Invoke(boosterId, boost.Groups["module"].Value,
-                int.Parse(boost.Groups["count"].Value, CultureInfo.InvariantCulture), at);
+        }
+        // A command-burst booster's own gamelog writes this once per burst module per cycle (ET-283, measured against
+        // Abnoba Auscent's Orca log of 2026-08-31). Only the booster's log ever carries it — a receiver's stays silent.
+        if (GamelogNotices.TryReadMiningBoost(message, language, out var boostModule, out var boosted)
+            && _idByName.TryGetValue(name, out var boosterId))
+        {
+            MiningBoostObserved?.Invoke(boosterId, boostModule, boosted, at);
+        }
         MetricsChanged?.Invoke();
     }
 

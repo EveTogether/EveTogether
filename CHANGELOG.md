@@ -17,6 +17,12 @@ release notes, not this file.
 
 ## [Unreleased]
 
+- **Added: EVE Together reads your game log in more client languages.** Until now only an English client produced DPS,
+  repairs, neuts, application, mining, bounty or a location; a German or Russian client got nothing, without a word.
+  The language is now read from the game log itself, and German, Russian, French, Spanish, Japanese and Chinese work
+  next to English. These were built from the game's own text but only tested on constructed lines, no real log in
+  those languages was available, so tell us if a number looks off. A game log in any other language now shows
+  "Game log language not supported yet" instead of quietly doing nothing.
 - **Changed: your data folder is now called `EveTogetherData`.** It used to be `%LOCALAPPDATA%\EveUtils`; on the
   first start of this version everything in it — settings, sign-ins, fits, runs, caches and backups — moves over in one
   step, nothing to do on your side. If the move cannot happen (for example another copy of EVE Together still has the

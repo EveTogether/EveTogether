@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.RegularExpressions;
+using EveUtils.Shared.Modules.Gamelog.Languages;
 using EveUtils.Shared.Modules.Gamelog.Models;
 using EveUtils.Shared.Modules.Gamelog.Parsing;
 
@@ -35,6 +36,10 @@ public sealed partial class GameLogWatcher : IDisposable
 
     public event EventHandler<GameLogEventArgs>? EventParsed;
     public event EventHandler<string>? CharacterDetected;
+
+    /// <summary>Raised with the character name when a log's header is in a language this build cannot read yet — its
+    /// lines are then never parsed, so the pilot has to be told.</summary>
+    public event EventHandler<string>? LanguageNotSupported;
 
     public void Start()
     {
@@ -124,8 +129,17 @@ public sealed partial class GameLogWatcher : IDisposable
                 _known.Add(header.CharacterName);
             }
 
-            CharacterDetected?.Invoke(this, header.CharacterName);
-            EmitLastKnownLocation(path, header.CharacterName);
+            _AnnounceDetected(header);
+            EmitLastKnownLocation(path, header);
+        }
+    }
+
+    private void _AnnounceDetected(GameLogHeader header)
+    {
+        CharacterDetected?.Invoke(this, header.CharacterName);
+        if (header.Language == GamelogLanguage.Unknown)
+        {
+            LanguageNotSupported?.Invoke(this, header.CharacterName);
         }
     }
 
@@ -225,12 +239,14 @@ public sealed partial class GameLogWatcher : IDisposable
 
             if (headerJustDetected)
             {
-                CharacterDetected?.Invoke(this, header.CharacterName);
+                _AnnounceDetected(header);
 
                 // For files that already existed when watching started, surface the last known location from history
                 // so the system is known immediately (without replaying historical combat/mining).
                 if (offset > 0)
-                    EmitLastKnownLocation(path, header.CharacterName);
+                {
+                    EmitLastKnownLocation(path, header);
+                }
             }
 
             if (completeBlock.Length == 0)
@@ -242,7 +258,7 @@ public sealed partial class GameLogWatcher : IDisposable
                 if (trimmed.Length == 0)
                     continue;
 
-                var parsed = LogLineParser.Parse(trimmed);
+                var parsed = LogLineParser.Parse(trimmed, header.Language);
                 if (parsed is not null)
                     EventParsed?.Invoke(this, new GameLogEventArgs(header.CharacterName, parsed));
             }
@@ -252,8 +268,13 @@ public sealed partial class GameLogWatcher : IDisposable
         }
     }
 
-    private void EmitLastKnownLocation(string path, string characterName)
+    private void EmitLastKnownLocation(string path, GameLogHeader header)
     {
+        if (GamelogGrammar.For(header.Language) is not { } grammar)
+        {
+            return;
+        }
+
         try
         {
             using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
@@ -264,13 +285,14 @@ public sealed partial class GameLogWatcher : IDisposable
             for (var i = lines.Length - 1; i >= 0; i--)
             {
                 var line = lines[i];
-                if (!line.Contains("Jumping from", StringComparison.Ordinal) &&
-                    !line.Contains("Undocking from", StringComparison.Ordinal))
-                    continue;
-
-                if (LogLineParser.Parse(line.TrimEnd('\r')) is LocationEvent location)
+                if (!grammar.LocationMarkers.Any(marker => line.Contains(marker, StringComparison.Ordinal)))
                 {
-                    EventParsed?.Invoke(this, new GameLogEventArgs(characterName, location));
+                    continue;
+                }
+
+                if (LogLineParser.Parse(line.TrimEnd('\r'), header.Language) is LocationEvent location)
+                {
+                    EventParsed?.Invoke(this, new GameLogEventArgs(header.CharacterName, location));
                     return;
                 }
             }
