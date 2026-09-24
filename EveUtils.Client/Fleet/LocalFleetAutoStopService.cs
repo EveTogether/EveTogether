@@ -61,7 +61,7 @@ public sealed class LocalFleetAutoStopService(
 
         List<(long, FleetStopTrigger)> stopped = [];
         using var scope = scopeFactory.CreateScope();
-        var repository = scope.ServiceProvider.GetRequiredService<IFleetRepository>();
+        var repository = scope.ServiceProvider.GetRequiredService<IFleetReader>();
 
         foreach (var ownerId in owners)
         foreach (FleetEntity fleet in await repository.ListByCreatorAsync(ownerId, cancellationToken))

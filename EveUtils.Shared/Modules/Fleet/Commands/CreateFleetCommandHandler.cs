@@ -28,6 +28,7 @@ internal sealed class CreateFleetCommandHandler(IFleetRepository repository, IEv
             ToTime = command.ToTime,
             OfflineBehavior = command.OfflineBehavior,
             CreatorCharacterId = command.ActingCharacterId,
+            IsClientOnly = command.IsClientOnly,
             State = FleetState.Active,
             CreatedAt = now,
             LastActivityAt = now

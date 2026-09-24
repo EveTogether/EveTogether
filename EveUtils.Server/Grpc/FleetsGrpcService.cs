@@ -31,9 +31,10 @@ public sealed class FleetsGrpcService(
     ServerSessionService sessions,
     IDispatcher dispatcher,
     ConnectedClients connectedClients,
-    IFleetRepository fleets,
-    IFleetCompositionRepository compositions,
+    IFleetReader fleets,
+    IFleetCompositionReader compositions,
     FleetCompositionAuthorizer compositionAuthorizer,
+    FleetActivityTracker activity,
     IServerAuthRepository serverAuth) : GrpcFleets.FleetsBase
 {
     private const string NotAuthenticated = "Not authenticated — pair with the server first.";
@@ -583,7 +584,7 @@ public sealed class FleetsGrpcService(
 
         // Participation is now derived server-side: a connected roster member is automatically in the fleet's
         // broadcast set, so there is no separate "enter" state to set — this just stamps activity.
-        await fleets.TouchActivityAsync(request.FleetId, DateTimeOffset.UtcNow, context.CancellationToken);
+        await activity.NoteAsync(request.FleetId, DateTimeOffset.UtcNow, context.CancellationToken);
         return new FleetActionReply { Accepted = true, Message = "Active." };
     }
 

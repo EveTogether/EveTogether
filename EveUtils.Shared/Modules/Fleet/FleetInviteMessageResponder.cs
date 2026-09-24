@@ -20,7 +20,7 @@ namespace EveUtils.Shared.Modules.Fleet;
 /// via the <see cref="IScopedService"/> marker.
 /// </summary>
 public sealed class FleetInviteMessageResponder(
-    IFleetRepository repository, IDispatcher dispatcher, IServerAuthRepository serverAuthRepository)
+    IFleetReader repository, IDispatcher dispatcher, IServerAuthRepository serverAuthRepository)
     : IMessageResponder, IScopedService
 {
     public MessageKind Kind => MessageKind.FleetInvite;

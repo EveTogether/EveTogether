@@ -22,7 +22,7 @@ namespace EveUtils.Client.ViewModels;
 /// <summary>
 /// The reusable fit picker. <see cref="FitPickerMode.Multi"/> checks several fits and
 /// returns them on ADD; <see cref="FitPickerMode.Single"/> picks one immediately through a
-/// Select button. Sources are the local library (<see cref="IFittingRepository"/>), each coupled server's shared fits
+/// Select button. Sources are the local library (<see cref="IFittingReader"/>), each coupled server's shared fits
 /// (<see cref="ServerFitShareClient"/>) and — when scoped to a coupled composition — that doctrine's allowed fits
 /// grouped by role. Each fit becomes a <see cref="FitReferenceInfo"/> snapshot.
 /// </summary>
@@ -145,7 +145,7 @@ public sealed partial class FitPickerViewModel : ObservableObject
 
     private async Task _LoadLocalAsync()
     {
-        var fittings = await _services.GetRequiredService<IFittingRepository>().ListAllAsync();
+        var fittings = await _services.GetRequiredService<IFittingReader>().ListAllAsync();
         var names = (await _services.GetRequiredService<ICharacterRegistry>().GetAllAsync())
             .Where(c => c.EsiCharacterId is not null)
             .ToDictionary(c => c.EsiCharacterId!.Value, c => c.Name);

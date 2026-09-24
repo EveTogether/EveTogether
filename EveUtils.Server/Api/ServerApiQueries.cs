@@ -19,9 +19,9 @@ namespace EveUtils.Server.Api;
 /// maps it to shapes that carry nothing an external consumer should not see.
 /// </summary>
 public sealed class ServerApiQueries(
-    IFleetRepository fleets,
-    IFleetCompositionRepository compositions,
-    ISharedFitRepository fits,
+    IFleetReader fleets,
+    IFleetCompositionReader compositions,
+    ISharedFitReader fits,
     IServerAuthRepository serverAuth,
     ICharacterMetricStateRepository metrics) : IScopedService
 {

@@ -14,7 +14,7 @@ namespace EveUtils.Client.Fleet;
 
 /// <summary>
 /// <see cref="IFleetClient"/> for a client-only fleet: serves the same roster window from the local SQLite
-/// via <see cref="ClientFleetService"/> (Shared CQRS handlers) + the client <see cref="IFleetRepository"/>, with no
+/// via <see cref="ClientFleetService"/> (Shared CQRS handlers) + the client <see cref="IFleetReader"/>, with no
 /// server or gRPC. Anti-splintering: no duplicate roster UI and no duplicate model — only this thin adapter.
 ///
 /// Client-only specifics: there are no remote invites/join-requests (those lists are empty); "connected characters"
@@ -22,7 +22,7 @@ namespace EveUtils.Client.Fleet;
 /// onto that position (no round-trip — the owner vouches for their own character).
 /// </summary>
 public sealed class LocalFleetClient(
-    ClientFleetService local, IFleetRepository repository, ICharacterRegistry characters, int ownerCharacterId)
+    ClientFleetService local, IFleetReader repository, ICharacterRegistry characters, int ownerCharacterId)
     : IFleetClient, IFleetCompositionClientSource
 {
     /// <summary>The local doctrine library for the same owner (ET-171). The composition repository is the one
@@ -30,7 +30,7 @@ public sealed class LocalFleetClient(
     public IFleetCompositionClient CreateCompositionClient(System.IServiceProvider services) =>
         new LocalFleetCompositionClient(
             local,
-            services.GetRequiredService<IFleetCompositionRepository>(),
+            services.GetRequiredService<IFleetCompositionReader>(),
             ownerCharacterId);
 
     public async Task<FleetInfo?> GetFleetAsync(long fleetId)

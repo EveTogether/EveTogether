@@ -18,7 +18,7 @@ namespace EveUtils.Client.Esi;
 public sealed class ShipFitDetectionService(
     IEsiCharacterShipClient ships,
     ICharacterRegistry registry,
-    IFittingRepository fittings,
+    IFittingReader fittings,
     ISettingRepository settings,
     IEsiAvailabilityState availability,
     IEsiRateLimitMonitor rateLimits,

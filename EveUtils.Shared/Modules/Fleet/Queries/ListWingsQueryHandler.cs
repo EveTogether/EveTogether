@@ -4,7 +4,7 @@ using EveUtils.Shared.Modules.Fleet.Repositories;
 
 namespace EveUtils.Shared.Modules.Fleet.Queries;
 
-internal sealed class ListWingsQueryHandler(IFleetRepository repository)
+internal sealed class ListWingsQueryHandler(IFleetReader repository)
     : IQueryHandler<ListWingsQuery, IReadOnlyList<FleetWing>>
 {
     public Task<IReadOnlyList<FleetWing>> Handle(ListWingsQuery query, CancellationToken cancellationToken = default)

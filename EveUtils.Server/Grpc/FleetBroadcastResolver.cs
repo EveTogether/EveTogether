@@ -10,7 +10,7 @@ namespace EveUtils.Server.Grpc;
 /// character automatically because they no longer satisfy "member ∧ connected", so there is no participation state
 /// to keep in sync (which previously let a kicked/disbanded member keep receiving the fleet's broadcasts).
 /// </summary>
-public sealed class FleetBroadcastResolver(IFleetRepository repository, ConnectedClients connectedClients)
+public sealed class FleetBroadcastResolver(IFleetReader repository, ConnectedClients connectedClients)
 {
     /// <summary>The roster members of the fleet that currently hold a live connection — the fleet-scoped delivery set.</summary>
     public async Task<IReadOnlyList<int>> ConnectedMembersAsync(long fleetId, CancellationToken cancellationToken = default)

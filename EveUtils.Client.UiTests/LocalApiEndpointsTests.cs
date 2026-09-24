@@ -147,7 +147,7 @@ public class LocalApiEndpointsTests
 
         var services = new ServiceCollection();
         services.AddSingleton<ICharacterRegistry>(registry);
-        services.AddScoped<IFittingRepository>(_ => repo);
+        services.AddScoped<IFittingReader>(_ => repo);
         var provider = services.BuildServiceProvider();
 
         return new LocalApiServer(new NoSettings(), provider, Microsoft.Extensions.Logging.Abstractions.NullLogger<LocalApiServer>.Instance);

@@ -2,7 +2,9 @@ using EveUtils.Shared.Modules.Fittings.Entities;
 
 namespace EveUtils.Shared.Modules.Fittings.Repositories;
 
-public interface ISharedFitRepository
+/// <summary>A server's shared fit library: <see cref="ISharedFitReader"/> plus the writes, taken only by the fittings
+/// command handlers (ET-383).</summary>
+public interface ISharedFitRepository : ISharedFitReader
 {
     Task AddAsync(SharedFit fit, CancellationToken cancellationToken = default);
 
@@ -13,8 +15,6 @@ public interface ISharedFitRepository
     /// </summary>
     Task<SharedFit?> AddOrMatchAsync(SharedFit fit, CancellationToken cancellationToken = default);
 
-    Task<SharedFit?> GetAsync(int id, CancellationToken cancellationToken = default);
-    Task<IReadOnlyList<SharedFit>> ListAsync(CancellationToken cancellationToken = default);
     /// <summary>Removes a shared fit from the server library by its DB id. True if it existed.</summary>
     Task<bool> RemoveAsync(int id, CancellationToken cancellationToken = default);
 

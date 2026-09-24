@@ -4,7 +4,7 @@ using EveUtils.Shared.Modules.Ships.Repositories;
 
 namespace EveUtils.Shared.Modules.Ships.Queries;
 
-internal sealed class GetShipsQueryHandler(IShipRepository repository)
+internal sealed class GetShipsQueryHandler(IShipReader repository)
     : IQueryHandler<GetShipsQuery, IReadOnlyList<ShipDto>>
 {
     public async Task<IReadOnlyList<ShipDto>> Handle(GetShipsQuery query, CancellationToken cancellationToken = default)

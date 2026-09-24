@@ -31,7 +31,7 @@ public sealed class CharacterRemovalService(
     GamelogClientService gamelog,
     ShipFitDetectionService fitDetection,
     IEnumerable<ICharacterDataEraser> erasers,
-    IFleetRepository fleets,
+    IFleetReader fleets,
     IFleetTransportClient fleetTransport,
     IServiceScopeFactory scopes,
     ILogger<CharacterRemovalService> logger) : ISingletonService

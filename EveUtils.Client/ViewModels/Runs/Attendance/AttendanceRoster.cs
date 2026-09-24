@@ -38,7 +38,7 @@ public static class AttendanceRoster
             if (participant.ClientOnly)
             {
                 using IServiceScope scope = services.CreateScope();
-                return [.. (await scope.ServiceProvider.GetRequiredService<IFleetRepository>().ListMembersAsync(fleetId))
+                return [.. (await scope.ServiceProvider.GetRequiredService<IFleetReader>().ListMembersAsync(fleetId))
                     .Select(member => new RosterCharacter(member.CharacterId, member.IsExternal, member.LastSeenAt))];
             }
 

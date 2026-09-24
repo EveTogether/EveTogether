@@ -33,4 +33,8 @@ public sealed class FleetChangedEvent(FleetChangePayload data, int? characterId 
     /// <summary>A character the change took off this fleet's roster, who has to hear it although the roster no longer
     /// holds them.</summary>
     public int? FormerMemberCharacterId { get; init; }
+
+    /// <summary>The roster and owner of a fleet the change deleted outright (ET-383), who have to hear it although no
+    /// fleet is left to read them from.</summary>
+    public IReadOnlyList<int> FormerRosterCharacterIds { get; init; } = [];
 }

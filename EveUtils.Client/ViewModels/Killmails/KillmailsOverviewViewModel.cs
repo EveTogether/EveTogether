@@ -21,6 +21,7 @@ using EveUtils.Shared.Modules.Esi;
 using EveUtils.Shared.Modules.Gamelog.Aggregation;
 using EveUtils.Shared.Modules.Killmails;
 using EveUtils.Shared.Modules.Killmails.Dtos;
+using EveUtils.Shared.Modules.Killmails.Enums;
 using EveUtils.Shared.Modules.Killmails.Queries;
 using EveUtils.Shared.Modules.Killmails.Repositories;
 using EveUtils.Shared.Modules.Sde;
@@ -52,8 +53,8 @@ namespace EveUtils.Client.ViewModels.Killmails;
 /// <see cref="ICharacterRegistry.RegistryChanged"/> — the same seam <c>SkillRefreshService</c>, <c>ImplantRefreshService</c>,
 /// <c>ShipFitDetectionService</c> and <c>MetricsWindowViewModel</c> already use for a changed character/scope status —
 /// rather than waiting for a re-open (<see cref="RefreshModule"/>) that may never come. A new killmail the background
-/// <c>KillmailRefreshService</c> finds on its own 5-minute tick reaches this screen the same way, through
-/// <see cref="EsiKillmailImporter.KillmailsImported"/> (ET-363 AC3) — one seam, not two.</para>
+/// <c>KillmailRefreshService</c> finds on its own 5-minute tick reaches this screen through
+/// <see cref="KillmailsChangeFeed"/> (ET-363 AC3, ET-383), the same feed a run link made in another window arrives on.</para>
 /// </summary>
 public sealed partial class KillmailsOverviewViewModel : ViewModelBase, IRefreshableModule, IDisposable
 {
@@ -67,7 +68,6 @@ public sealed partial class KillmailsOverviewViewModel : ViewModelBase, IRefresh
     private readonly CharacterFaceCache _faces;
     private readonly TimeProvider _clock;
     private readonly ICharacterRegistry? _registry;
-    private readonly EsiKillmailImporter? _importer;
     private readonly IDisposable? _changeSubscription;
     private readonly KillmailShowFilterTileViewModel _allFilter;
     private readonly KillmailShowFilterTileViewModel _killsFilter;
@@ -121,28 +121,18 @@ public sealed partial class KillmailsOverviewViewModel : ViewModelBase, IRefresh
             _registry.RegistryChanged += _OnRegistryChanged;
         }
 
-        _importer = services.GetService<EsiKillmailImporter>();
-        if (_importer is not null)
-        {
-            _importer.KillmailsImported += _OnKillmailsImported;
-        }
-
-        _changeSubscription = services.GetService<KillmailsChangeFeed>()?.Subscribe(_ => _ReadAsync());
+        _changeSubscription = services.GetService<KillmailsChangeFeed>()?.Subscribe(changes =>
+            changes.Any(change => change.Data.Kind == KillmailsChangeKind.Imported) ? _RefreshCharactersAndReadAsync() : _ReadAsync());
     }
 
-    /// <summary>Releases the <see cref="ICharacterRegistry.RegistryChanged"/> and
-    /// <see cref="EsiKillmailImporter.KillmailsImported"/> subscriptions — called by <c>KillmailsWindow</c>'s own
-    /// <c>Closed</c> handler, the same pattern <c>MetricsWindow</c> uses.</summary>
+    /// <summary>Releases the <see cref="ICharacterRegistry.RegistryChanged"/> and <see cref="KillmailsChangeFeed"/>
+    /// subscriptions — called by <c>KillmailsWindow</c>'s own <c>Closed</c> handler, the same pattern
+    /// <c>MetricsWindow</c> uses.</summary>
     public void Dispose()
     {
         if (_registry is not null)
         {
             _registry.RegistryChanged -= _OnRegistryChanged;
-        }
-
-        if (_importer is not null)
-        {
-            _importer.KillmailsImported -= _OnKillmailsImported;
         }
 
         _changeSubscription?.Dispose();
@@ -152,10 +142,6 @@ public sealed partial class KillmailsOverviewViewModel : ViewModelBase, IRefresh
     // background thread (a re-auth's own registry write, or another module's background refresh), so the rebuild
     // that touches the bound Characters/Days collections has to be posted to the UI thread rather than run inline.
     private void _OnRegistryChanged() => Dispatcher.UIThread.Post(() => _ = _RefreshCharactersAndReadAsync());
-
-    // A new killmail the background refresh (or another window's paste) found for some character (ET-363 AC3) —
-    // reuses the exact same rebuild-and-read as a registry change rather than a second, narrower refresh path.
-    private void _OnKillmailsImported(int characterId) => Dispatcher.UIThread.Post(() => _ = _RefreshCharactersAndReadAsync());
 
     public ObservableCollection<KillmailCharacterOptionViewModel> Characters { get; } = [];
 

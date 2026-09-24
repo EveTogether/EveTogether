@@ -611,7 +611,7 @@ public class MultipleConcurrentRunsTests
                 inGame: true, ActivityWindowHarness.CharacterId, SecondCharacterId));
             services.AddSingleton<ISdeAccessor>(new FakeSdeAccessor().AddSolarSystem(new SdeSolarSystem(30004552, "Mabnen", 0.4)));
             services.AddSingleton<IShipFitDetectionService>(new FakePerCharacterFitDetection(readings));
-            services.AddSingleton<IFittingRepository>(new FakeFittingRepository(fittings));
+            services.AddSingleton<IFittingReader>(new FakeFittingRepository(fittings));
         });
         await harness.Services.GetRequiredService<ICharacterRegistry>()
             .AddOrUpdateAsync(new Character("Second Pilot", SecondCharacterId));

@@ -19,7 +19,7 @@ namespace EveUtils.Client.LocalApi;
 
 /// <summary>
 /// fleet + composition reads for the local API. Mirrors how <c>FleetsViewModel</c> aggregates fleets across both
-/// sources — client-only fleets via the client-bound <see cref="IFleetRepository"/>, and per coupled server via
+/// sources — client-only fleets via the client-bound <see cref="IFleetReader"/>, and per coupled server via
 /// <see cref="IFleetTransportClient"/> — and how the roster windows build an <see cref="IFleetClient"/> per scope.
 /// Read-only and snapshot-shaped: live per-member fleet metrics are a streamed signal, not a readable state.
 /// </summary>
@@ -44,7 +44,7 @@ public sealed partial class LocalApiQueries
         var items = new List<FleetListItemDto>();
         var seen = new HashSet<long>();
         await using var scope = rootServices.CreateAsyncScope();
-        var repository = scope.ServiceProvider.GetRequiredService<IFleetRepository>();
+        var repository = scope.ServiceProvider.GetRequiredService<IFleetReader>();
 
         foreach (var character in await registry.GetAllAsync(cancellationToken))
         {
@@ -298,13 +298,13 @@ public sealed partial class LocalApiQueries
 
     private LocalFleetClient _LocalFleetClient(AsyncServiceScope scope, int actingCharacterId) =>
         new(rootServices.GetRequiredService<ClientFleetService>(),
-            scope.ServiceProvider.GetRequiredService<IFleetRepository>(),
+            scope.ServiceProvider.GetRequiredService<IFleetReader>(),
             rootServices.GetRequiredService<ICharacterRegistry>(),
             actingCharacterId);
 
     private LocalFleetCompositionClient _LocalCompositionClient(AsyncServiceScope scope, int actingCharacterId) =>
         new(rootServices.GetRequiredService<ClientFleetService>(),
-            scope.ServiceProvider.GetRequiredService<IFleetCompositionRepository>(),
+            scope.ServiceProvider.GetRequiredService<IFleetCompositionReader>(),
             actingCharacterId);
 
     private async Task<string?> _ServerNameAsync(string server, CancellationToken cancellationToken)

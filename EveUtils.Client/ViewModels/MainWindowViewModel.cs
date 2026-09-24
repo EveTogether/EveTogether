@@ -868,7 +868,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         var fit = row.Fit;
         // fit-metadata: a local fit carries the user's notes + tags (server-shared rows don't) — shown in the header.
         var metadata = row.LocalFitId is { } metaId
-            ? await _services.GetRequiredService<IFittingRepository>().FindByIdAsync(metaId)
+            ? await _services.GetRequiredService<IFittingReader>().FindByIdAsync(metaId)
             : null;
         var characters = Characters.Select(c => (c.CharacterId, c.Name)).ToList();
         var settings = _services.GetService<ISettingRepository>();
@@ -1862,33 +1862,16 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         return settings.FirstOrDefault(s => s.Key == OpenDetailAfterImportSettingKey)?.Value != "false"; // default on
     }
 
+    /// <summary>Stores a server fit in the local library; the Local tab follows through <see cref="FittingsChangeFeed"/>.</summary>
     private async Task DownloadServerFit(SharedFitInfo sf)
     {
         if (_services is null) return;
-        var repo = _services.GetRequiredService<IFittingRepository>();
-
-        // Content-hash dedup (2026-06-04): if the same fit is already in the local library, don't download a duplicate
-        // — tell the user which fit it matched instead.
-        var contentHash = EveUtils.Shared.Modules.Fittings.FitContentHash.Compute(sf.RawJson);
-        var duplicate = await repo.FindByContentHashAsync(contentHash);
-        if (duplicate is not null)
-        {
-            FittingsStatus = $"Already have '{sf.Name}' locally as '{duplicate.Name}' — not downloaded again.";
-            return;
-        }
-
-        await repo.UpsertAsync(new EveUtils.Shared.Modules.Fittings.Entities.LocalFitting
-        {
-            OwnerId = sf.SharedByCharacterName,   // display source
-            EsiFittingId = sf.EsiFittingId,
-            Name = sf.Name,
-            ShipTypeId = sf.ShipTypeId,
-            RawJson = sf.RawJson,
-            ContentHash = contentHash,
-            ImportedAt = DateTimeOffset.UtcNow
-        });
-        FittingsStatus = $"Downloaded '{sf.Name}' to local library.";
-        await LoadFittingsAsync(); // reflect the download in the Local tab
+        using var scope = _services.CreateScope();
+        var downloaded = await scope.ServiceProvider.GetRequiredService<IDispatcher>().Send(new DownloadSharedFitCommand(
+            new FitSharedPayload(sf.EsiFittingId, sf.Name, sf.ShipTypeId, sf.RawJson, sf.SharedByCharacterName)));
+        FittingsStatus = downloaded is { IsSuccess: true, Value: > 0 }
+            ? $"Downloaded '{sf.Name}' to local library."
+            : downloaded.Messages.FirstOrDefault()?.Text ?? $"Could not download '{sf.Name}'.";
     }
 
     /// <summary>Delete a fit from a server's shared library — confirmed first.</summary>
@@ -2038,14 +2021,21 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
     private async Task<FitMetadataDraft?> EditLocalFitMetadataAsync(int localFitId, Func<Task> reload)
     {
         if (_services is null || _dialogs is null) return null;
-        var repo = _services.GetRequiredService<IFittingRepository>();
-        var fit = await repo.FindByIdAsync(localFitId);
+        var fit = await _services.GetRequiredService<IFittingReader>().FindByIdAsync(localFitId);
         if (fit is null) return null;
 
         var edited = await _dialogs.EditFitMetadataAsync(new FitMetadataDraft(fit.Name, fit.Description, fit.Tags));
         if (edited is null) return null;
 
-        await repo.UpdateMetadataAsync(localFitId, edited.Name, edited.Description, edited.Tags);
+        using var scope = _services.CreateScope();
+        var saved = await scope.ServiceProvider.GetRequiredService<IDispatcher>()
+            .Send(new EditFittingMetadataCommand(localFitId, edited.Name, edited.Description, edited.Tags));
+        if (!saved.IsSuccess)
+        {
+            FittingsStatus = saved.Messages.FirstOrDefault()?.Text ?? $"Could not update '{fit.Name}'.";
+            return null;
+        }
+
         FittingsStatus = $"Updated '{edited.Name}'.";
         await reload();
         return edited;
@@ -2055,16 +2045,14 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
     private async Task DeleteLocalFitByIdAsync(int localFitId, Func<Task> reload)
     {
         if (_services is null || _dialogs is null) return;
-        var repo = _services.GetRequiredService<IFittingRepository>();
-        var fit = await repo.FindByIdAsync(localFitId);
+        var fit = await _services.GetRequiredService<IFittingReader>().FindByIdAsync(localFitId);
         if (fit is null) return;
 
         if (!await _dialogs.ConfirmAsync("Delete fitting",
                 $"Remove '{fit.Name}' from your local library? This does not touch EVE or the server.", okText: "Delete"))
             return;
 
-        await repo.RemoveByIdAsync(localFitId);
-        FittingsStatus = $"Deleted '{fit.Name}' locally.";
+        FittingsStatus = await _DeleteLocalFitAsync(localFitId, fit.Name);
         await reload();
     }
 
@@ -2076,10 +2064,19 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
                 $"Remove '{fitting.Name}' from your local library? This does not touch EVE or the server."))
             return;
 
-        var repo = _services.GetRequiredService<IFittingRepository>();
-        await repo.RemoveByIdAsync(fitting.Id);
-        FittingsStatus = $"Deleted '{fitting.Name}' locally.";
-        await LoadFittingsAsync();
+        FittingsStatus = await _DeleteLocalFitAsync(fitting.Id, fitting.Name);
+    }
+
+    /// <summary>Removes a local fit and returns the status line; the Local list follows through
+    /// <see cref="FittingsChangeFeed"/>.</summary>
+    private async Task<string> _DeleteLocalFitAsync(int localFitId, string name)
+    {
+        if (_services is null) return $"Could not delete '{name}'.";
+        using var scope = _services.CreateScope();
+        var deleted = await scope.ServiceProvider.GetRequiredService<IDispatcher>().Send(new DeleteLocalFittingCommand(localFitId));
+        return deleted.IsSuccess
+            ? $"Deleted '{name}' locally."
+            : deleted.Messages.FirstOrDefault()?.Text ?? $"Could not delete '{name}'.";
     }
 
     private void OnFitShared(FitSharedEvent evt) =>

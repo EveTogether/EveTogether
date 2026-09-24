@@ -62,7 +62,7 @@ public sealed partial class FitWindowSectionViewModel(IRunWindowContext context)
 
     private async Task _LoadFitStatsAsync(int? fittingId)
     {
-        if (fittingId is not { } id || Context.Services.GetService<IFittingRepository>() is not { } fittings)
+        if (fittingId is not { } id || Context.Services.GetService<IFittingReader>() is not { } fittings)
         {
             ApplyFitStats(null, fitCouldBeRead: true);
             return;

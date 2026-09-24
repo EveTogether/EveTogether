@@ -21,18 +21,10 @@ namespace EveUtils.Client.Killmails;
 /// known ids, then adds each new mail from <c>/killmails/{id}/{hash}/</c> with its items and attackers, ids only.
 /// Every successful import then links the character's unlinked losses to their runs (ET-331).
 /// </summary>
-public sealed class EsiKillmailImporter(IEsiClient esi, ILocalKillmailRepository repository, IServiceScopeFactory scopes)
+public sealed class EsiKillmailImporter(IEsiClient esi, ILocalKillmailReader killmails, IServiceScopeFactory scopes)
 {
     // One import per character at a time, shared across instances, so two callers never add the same mail twice.
     private static readonly ConcurrentDictionary<int, SemaphoreSlim> _importGates = new();
-
-    /// <summary>Fired after new killmails land in storage for a character — a live KILLMAILS overview listens here to
-    /// refresh itself (ET-363 AC3), the same "announce after it actually landed" shape as
-    /// <see cref="ICharacterRegistry.RegistryChanged"/> already uses for a character/scope change; this class is a
-    /// registered singleton, so the background <c>KillmailRefreshService</c> and every open overview share the one
-    /// instance the event travels through. Raised on whichever thread the import ran on — never the UI thread — so a
-    /// listener touching bound collections has to marshal it itself.</summary>
-    public event Action<int>? KillmailsImported;
 
     public async Task<KillmailImportResult> ImportAsync(int characterId, CancellationToken cancellationToken = default)
     {
@@ -51,7 +43,7 @@ public sealed class EsiKillmailImporter(IEsiClient esi, ILocalKillmailRepository
                     return _Failure(recent.Error);
                 }
 
-                var known = await repository.GetKnownIdsAsync(characterId,
+                var known = await killmails.GetKnownIdsAsync(characterId,
                     recent.Value.Select(entry => entry.KillmailId).ToList(), cancellationToken);
                 var unknown = recent.Value.Where(entry => !known.Contains(entry.KillmailId)).ToList();
                 if (unknown.Count == 0)
@@ -65,7 +57,7 @@ public sealed class EsiKillmailImporter(IEsiClient esi, ILocalKillmailRepository
 
             // ponytail: all or nothing, so a failed page or mail is retried next time instead of hiding behind a known
             // page 1; a mail that fails for good blocks the import, skip-and-log it if that ever happens.
-            var killmails = new List<LocalKillmail>();
+            var fetched = new List<LocalKillmail>();
             foreach (var entry in newRefs.DistinctBy(entry => entry.KillmailId))
             {
                 var detail = await esi.GetAsync<EsiKillmail>($"/killmails/{entry.KillmailId}/{entry.KillmailHash}/",
@@ -75,26 +67,23 @@ public sealed class EsiKillmailImporter(IEsiClient esi, ILocalKillmailRepository
                     return _Failure(detail.Error);
                 }
 
-                killmails.Add(_ToEntity(characterId, entry.KillmailHash, detail.Value));
+                fetched.Add(_ToEntity(characterId, entry.KillmailHash, detail.Value));
             }
 
-            await repository.AddMissingAsync(characterId, killmails, cancellationToken);
-            if (killmails.Count > 0)
+            await using AsyncServiceScope scope = scopes.CreateAsyncScope();
+            IDispatcher dispatcher = scope.ServiceProvider.GetRequiredService<IDispatcher>();
+            Result stored = await dispatcher.Send(new StoreKillmailsCommand(characterId, fetched), cancellationToken);
+            if (!stored.IsSuccess)
             {
-                KillmailsImported?.Invoke(characterId);
+                return new KillmailImportResult(KillmailImportStatus.Failed, 0,
+                    stored.Messages.FirstOrDefault()?.Text ?? "Storing the killmails failed.");
             }
 
             // Also without new mails: a loss nothing fitted before may fit a run stopped or fitted since.
-            Result<int> linked;
-            await using (AsyncServiceScope scope = scopes.CreateAsyncScope())
-            {
-                linked = await scope.ServiceProvider.GetRequiredService<IDispatcher>()
-                    .Send(new LinkKillmailsToRunsCommand(characterId), cancellationToken);
-            }
-
+            Result<int> linked = await dispatcher.Send(new LinkKillmailsToRunsCommand(characterId), cancellationToken);
             return linked.IsSuccess
-                ? KillmailImportResult.Ok(killmails.Count)
-                : new KillmailImportResult(KillmailImportStatus.Failed, killmails.Count,
+                ? KillmailImportResult.Ok(fetched.Count)
+                : new KillmailImportResult(KillmailImportStatus.Failed, fetched.Count,
                     linked.Messages.FirstOrDefault()?.Text ?? "Linking losses to their runs failed.");
         }
         finally
@@ -106,9 +95,9 @@ public sealed class EsiKillmailImporter(IEsiClient esi, ILocalKillmailRepository
     /// <summary>
     /// Imports one killmail by id + hash — a pasted ESI link or in-game <c>killReport:</c> link (ET-338), bypassing
     /// the 5-minute cache on <c>/characters/{id}/killmails/recent/</c>. Stored for every own character on the mail,
-    /// victim or attacker; refused with nothing stored when none of them are. No repository method beyond
-    /// <see cref="ILocalKillmailRepository.AddMissingAsync"/> is needed: it already skips a mail already known for
-    /// that character, so a mail the feed later re-discovers (or already found first) never duplicates.
+    /// victim or attacker; refused with nothing stored when none of them are. <see cref="StoreKillmailsCommand"/>
+    /// already skips a mail already known for that character, so a mail the feed later re-discovers (or already found
+    /// first) never duplicates.
     /// </summary>
     public async Task<KillmailImportResult> ImportOneAsync(int killmailId, string hash, CancellationToken cancellationToken = default)
     {
@@ -125,11 +114,9 @@ public sealed class EsiKillmailImporter(IEsiClient esi, ILocalKillmailRepository
             mailCharacterIds.Add(victimId);
         }
 
-        IReadOnlyList<Character> characters;
-        await using (AsyncServiceScope scope = scopes.CreateAsyncScope())
-        {
-            characters = await scope.ServiceProvider.GetRequiredService<ICharacterRegistry>().GetAllAsync(cancellationToken);
-        }
+        await using AsyncServiceScope scope = scopes.CreateAsyncScope();
+        IReadOnlyList<Character> characters =
+            await scope.ServiceProvider.GetRequiredService<ICharacterRegistry>().GetAllAsync(cancellationToken);
 
         List<int> ownCharacterIds = [.. characters
             .Select(character => character.EsiCharacterId)
@@ -147,7 +134,14 @@ public sealed class EsiKillmailImporter(IEsiClient esi, ILocalKillmailRepository
             await gate.WaitAsync(cancellationToken);
             try
             {
-                await repository.AddMissingAsync(characterId, [_ToEntity(characterId, hash, killmail)], cancellationToken);
+                Result result = await scope.ServiceProvider.GetRequiredService<IDispatcher>()
+                    .Send(new StoreKillmailsCommand(characterId, [_ToEntity(characterId, hash, killmail)]), cancellationToken);
+                if (!result.IsSuccess)
+                {
+                    return new KillmailImportResult(KillmailImportStatus.Failed, stored,
+                        result.Messages.FirstOrDefault()?.Text ?? "Storing the killmail failed.");
+                }
+
                 stored++;
             }
             finally

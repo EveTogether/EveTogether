@@ -4,7 +4,7 @@ using EveUtils.Shared.Modules.Messaging.Repositories;
 
 namespace EveUtils.Shared.Modules.Messaging.Queries;
 
-internal sealed class ListPendingMessagesQueryHandler(IMessageRepository repository)
+internal sealed class ListPendingMessagesQueryHandler(IMessageReader repository)
     : IQueryHandler<ListPendingMessagesQuery, IReadOnlyList<QueuedMessage>>
 {
     public Task<IReadOnlyList<QueuedMessage>> Handle(ListPendingMessagesQuery query, CancellationToken cancellationToken = default)

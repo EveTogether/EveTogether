@@ -110,8 +110,9 @@ handler ──(write ok)──► <Module>ChangedEvent (Local) ──► ChangeF
   server, and only the host knows who else must hear it. So each host has a **relay subscriber** on the signal:
   - *server* — a relay subscribes and pushes the change over the bus stream to its audience: `FleetChangeAnnouncer`
     sends a listed fleet's lifecycle change to every connected character and anything else to the fleet's roster,
-    owner, actor and a member it just removed; `CompositionChangeRelay` sends a shared composition's change to every
-    connected character;
+    owner, actor, a member it just removed and the former roster of a fleet it deleted; `CompositionChangeRelay` sends
+    a shared composition's change to every connected character; `SharedFitChangeRelay` turns a shared-library change
+    into the `fittings.shared` / `fittings.deleted` push every connection listens for;
   - *client* — `ServerConnection` republishes a server-sourced event on the local bus, stamped with its server, so
     a screen hears a server change and a local one through the same signal.
 - **Echo rule.** The server relays to the acting client as well; a client does not publish for a change it made
@@ -128,17 +129,26 @@ handler ──(write ok)──► <Module>ChangedEvent (Local) ──► ChangeF
   list, nor a ticket on the known-gap list; a behaviour half runs each scenario against a real store and bus. The
   known-gap list is a ratchet: `KnownGapCount` only goes down, and is now zero. Settings, ApiKeys, Sync, the gamelog
   hit rows, `ShareFitting` and `PushFittingToEsi` are on the exemption list, each with the reason.
+- **Writes go through the commands (ET-383).** A write that skips the handler skips the signal. Each signalling
+  module's repository therefore extends a read-only reader (`IFleetReader`, `IFleetCompositionReader`,
+  `IFittingReader`, `ISharedFitReader`, `ILocalKillmailReader`, `IMessageReader`, `IShipReader`), and
+  `WriteRepositoryGuardTests` fails for a type outside the command handlers that takes the repository itself. The
+  control panel's deletes, the fleet cleanup sweep, the local-fleet add, the fit library actions and the killmail
+  import all dispatch commands. Allowed with a reason: the ESI fleet appliers and the run sync applier (they publish or
+  relay themselves), the join-request responder (it runs inside its handlers), message delivery bookkeeping and the
+  killmail name cache. The guard reads constructors only; the `Checks` self-tests and the activity trackers resolve
+  their store per call and fall outside it.
 
 **Rejected:** a *dispatcher behaviour* that publishes after every command — it knows neither the id nor the audience,
 signals falsely on idempotent no-ops and duplicates on nested dispatch. An *EF `SaveChanges` interceptor* —
 `ExecuteUpdate`/`ExecuteDelete` bypass the change tracker, it sees rows rather than meaning, fires on high-frequency
 writes too, and risks echo.
 
-**Where the code does not follow it yet** (tracked under epic ET-379):
+**Where the code does not follow it yet:**
 
-- Writes outside the dispatcher — `DataAdminService`, `FleetCleanupRunner`, `ClientFleetService.AddLocalCharacterAsync`,
-  `EsiKillmailImporter`, the fit deletes and downloads in `MainWindowViewModel` — are invisible to the test (ET-383).
 - `MessageRespondedEvent` has no relay yet: the recipient's other connections are not told an invite was answered.
+- Paired characters and sessions (ServerAuth) have no commands and no signal: no client lists them, and the control
+  panel reloads its own list after a delete.
 
 ## Auth — two per-character modes
 

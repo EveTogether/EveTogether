@@ -133,7 +133,7 @@ public sealed class CompositionChangeRelayTests : IDisposable
         var service = new FleetsGrpcService(
             sessions, services.GetRequiredService<IDispatcher>(), clients, services.GetRequiredService<IFleetRepository>(),
             services.GetRequiredService<IFleetCompositionRepository>(), services.GetRequiredService<FleetCompositionAuthorizer>(),
-            authRepository);
+            new FleetActivityTracker(services), authRepository);
         return (service, issued.AccessToken);
     }
 

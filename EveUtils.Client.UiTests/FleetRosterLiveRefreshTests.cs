@@ -49,8 +49,15 @@ public class FleetRosterLiveRefreshTests
         for (var i = 0; i < 100 && roster.Tree.Count == 0; i++) await Task.Delay(50, ct);
         Assert.StartsWith("Fleet (1)", RootLabel(roster));
 
-        // A second member joins after the roster was loaded.
-        await fleetService.AddLocalCharacterAsync(fleetId, Other, Owner);
+        // A second member lands after the roster was loaded — written past the commands, so only the events published
+        // below can tell the roster about it.
+        var wing = (await repository.ListWingsAsync(fleetId, ct)).First();
+        var squad = (await repository.ListSquadsAsync(wing.Id, ct)).First();
+        await repository.AddMemberAsync(new FleetMember
+        {
+            FleetId = fleetId, CharacterId = Other, Role = FleetRole.SquadMember, WingId = wing.Id, SquadId = squad.Id,
+            JoinTime = DateTimeOffset.UtcNow
+        }, ct);
 
         // An unrelated fleet's change must NOT reload this roster.
         await bus.PublishAsync(new FleetChangedEvent(new FleetChangePayload(fleetId + 999, FleetChangeKind.RosterChanged)), EventTarget.Local, ct);

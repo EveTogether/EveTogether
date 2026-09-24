@@ -3,7 +3,8 @@ using EveUtils.Server.Auth;
 using EveUtils.Shared.Cqrs.Permissions;
 using EveUtils.Shared.Identity;
 using EveUtils.Shared.Modules.Fittings;
-using EveUtils.Shared.Modules.Fittings.Entities;
+using EveUtils.Shared.Cqrs;
+using EveUtils.Shared.Modules.Fittings.Commands;
 using EveUtils.Shared.Modules.Fittings.Events;
 using EveUtils.Shared.Modules.Fittings.Repositories;
 using EveUtils.Shared.Modules.ServerAuth.Entities;
@@ -16,17 +17,18 @@ namespace EveUtils.Server.Grpc;
 /// <summary>
 /// Synchronous fit-sharing. Auth-gated by the server session token; enforces the
 /// <c>fit.sync</c> app-permission SERVER-SIDE and returns a real accept/deny result so the client
-/// can show the truth (a fire-and-forget event gave false "shared" feedback). On accept it stores the
-/// fit and reroutes it to the other connected clients over the event bus. A refused session is the
+/// can show the truth (a fire-and-forget event gave false "shared" feedback). Stores and deletes go through
+/// <see cref="StoreSharedFitCommand"/> and <see cref="DeleteSharedFitCommand"/>, whose signal
+/// <see cref="SharedFitChangeRelay"/> pushes to every connected client (ET-383). A refused session is the
 /// exception: that answers <see cref="StatusCode.Unauthenticated"/>, not a reply payload — see
 /// <see cref="AuthenticateAsync"/>.
 /// </summary>
 public sealed class FittingsGrpcService(
     ServerSessionService sessions,
-    ISharedFitRepository repository,
+    ISharedFitReader sharedFits,
+    IDispatcher dispatcher,
     IAccessPolicy policy,
     IPrincipalAccessor principals,
-    ConnectedClients connectedClients,
     ILogger<FittingsGrpcService> logger) : GrpcFittings.FittingsBase
 {
     public override async Task<ShareFitReply> ShareFit(ShareFitRequest request, ServerCallContext context)
@@ -46,44 +48,21 @@ public sealed class FittingsGrpcService(
             return new ShareFitReply { Accepted = false, Message = "fit.sync is disabled on the server." };
         }
 
-        var match = await repository.AddOrMatchAsync(new SharedFit
-        {
-            EsiFittingId = request.EsiFittingId,
-            Name = request.Name,
-            ShipTypeId = request.ShipTypeId,
-            RawJson = request.RawJson,
-            SharedByCharacterName = sharedByCharacterName,
-            SharedByCharacterId = sharedByCharacterId,
-            SharedAt = DateTimeOffset.UtcNow
-        }, context.CancellationToken);
+        var stored = await dispatcher.Send(new StoreSharedFitCommand(
+            new FitSharedPayload(request.EsiFittingId, request.Name, request.ShipTypeId, request.RawJson, sharedByCharacterName),
+            sharedByCharacterId), context.CancellationToken);
+        if (!stored.IsSuccess)
+            return new ShareFitReply { Accepted = false, Message = stored.Messages.FirstOrDefault()?.Text ?? "Sharing failed." };
 
-        // Content-hash dedup (2026-06-04): an identical fit is already in the library — don't add a second row or
-        // reroute a "new fit" event; report which fit it matched so the user knows why nothing changed.
-        if (match is not null)
+        // Content-hash dedup (2026-06-04): an identical fit is already in the library, so nothing was added; the
+        // message names the fit it matched so the user knows why nothing changed.
+        if (stored.Value == 0)
         {
-            logger.LogInformation("Skipped duplicate share '{Name}' from {Char}: same content as '{Existing}' (id {Id}).",
-                request.Name, sharedByCharacterName, match.Name, match.Id);
-            return new ShareFitReply
-            {
-                Accepted = true,
-                Message = $"Already shared as '{match.Name}' — not added again (same fit)."
-            };
+            logger.LogInformation("Skipped duplicate share '{Name}' from {Char}.", request.Name, sharedByCharacterName);
+            return new ShareFitReply { Accepted = true, Message = stored.Messages.FirstOrDefault()?.Text ?? "" };
         }
 
-        // Reroute to connected clients so they see the new shared fit. Reuse the wire event.
-        var payload = new FitSharedPayload(request.EsiFittingId, request.Name, request.ShipTypeId,
-            request.RawJson, sharedByCharacterName);
-        var envelope = new EventEnvelope
-        {
-            EventType = "fittings.shared",
-            EventId = Guid.NewGuid().ToString(),
-            CharacterId = sharedByCharacterId,
-            Timestamp = DateTimeOffset.UtcNow.ToString("o"),
-            PayloadJson = System.Text.Json.JsonSerializer.Serialize(payload)
-        };
-        await connectedClients.BroadcastExceptAsync("", envelope, context.CancellationToken);
-
-        logger.LogInformation("Stored + rerouted shared fit '{Name}' from {Char}.", request.Name, sharedByCharacterName);
+        logger.LogInformation("Stored shared fit '{Name}' from {Char}.", request.Name, sharedByCharacterName);
         return new ShareFitReply { Accepted = true, Message = "Shared." };
     }
 
@@ -92,7 +71,7 @@ public sealed class FittingsGrpcService(
         await AuthenticateAsync(context);
 
         var reply = new GetSharedFitsReply { Ok = true, Message = "" };
-        foreach (var fit in await repository.ListAsync(context.CancellationToken))
+        foreach (var fit in await sharedFits.ListAsync(context.CancellationToken))
         {
             reply.Fits.Add(new SharedFitDto
             {
@@ -120,19 +99,10 @@ public sealed class FittingsGrpcService(
             return new DeleteSharedFitReply { Accepted = false, Message = "You don't have rights to manage the server library (fit.manage)." };
         }
 
-        var removed = await repository.RemoveAsync(request.Id, context.CancellationToken);
-        if (!removed)
-            return new DeleteSharedFitReply { Accepted = false, Message = "Fit not found on the server." };
-
-        var envelope = new EventEnvelope
-        {
-            EventType = "fittings.deleted",
-            EventId = Guid.NewGuid().ToString(),
-            CharacterId = session.SyncedCharacter?.EsiCharacterId ?? 0,
-            Timestamp = DateTimeOffset.UtcNow.ToString("o"),
-            PayloadJson = System.Text.Json.JsonSerializer.Serialize(new FitDeletedPayload(request.Id))
-        };
-        await connectedClients.BroadcastExceptAsync("", envelope, context.CancellationToken);
+        var deleted = await dispatcher.Send(
+            new DeleteSharedFitCommand(request.Id, session.SyncedCharacter?.EsiCharacterId), context.CancellationToken);
+        if (!deleted.IsSuccess)
+            return new DeleteSharedFitReply { Accepted = false, Message = deleted.Messages.FirstOrDefault()?.Text ?? "Delete failed." };
 
         return new DeleteSharedFitReply { Accepted = true, Message = "Deleted." };
     }

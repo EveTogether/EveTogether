@@ -43,7 +43,7 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
     private readonly IClientSessionStore _sessions;
     private readonly IServerRegistry _serverRegistry;
     private readonly ClientFleetService _localFleets; // client-only fleets (no server)
-    private readonly IFleetRepository _fleetRepository; // client-bound repo: reads local fleets/roster
+    private readonly IFleetReader _fleetRepository; // client-bound repo: reads local fleets/roster
     private readonly ICharacterRegistry _characters;
     private readonly IToastService _toasts;
     private readonly IFleetMetricsLauncher _metricsLauncher;
@@ -79,7 +79,7 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
         _sessions = services.GetRequiredService<IClientSessionStore>();
         _serverRegistry = services.GetRequiredService<IServerRegistry>();
         _localFleets = services.GetRequiredService<ClientFleetService>();
-        _fleetRepository = services.GetRequiredService<IFleetRepository>();
+        _fleetRepository = services.GetRequiredService<IFleetReader>();
         _characters = services.GetRequiredService<ICharacterRegistry>();
         _toasts = services.GetRequiredService<IToastService>();
         _metricsLauncher = services.GetRequiredService<IFleetMetricsLauncher>();
@@ -613,7 +613,7 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
     private IFleetCompositionClient CompositionClientFor(string? server, int actingCharacterId) =>
         server is null
             ? new LocalFleetCompositionClient(_localFleets,
-                _services.GetRequiredService<EveUtils.Shared.Modules.Fleet.Composition.Repositories.IFleetCompositionRepository>(),
+                _services.GetRequiredService<EveUtils.Shared.Modules.Fleet.Composition.Repositories.IFleetCompositionReader>(),
                 actingCharacterId)
             : new ServerFleetCompositionClient(_fleets, server, actingCharacterId);
 
@@ -777,28 +777,21 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
         if (characterIds is null || characterIds.Count == 0)
             return;
 
-        var addedIds = new List<int>();
+        var added = 0;
         string? lastError = null;
         foreach (var characterId in characterIds)
         {
-            var result = await _localFleets.AddLocalCharacterAsync(row.Id, characterId, row.Info.CreatorCharacterId);
-            if (result.IsSuccess) addedIds.Add(characterId);
+            var result = await _ownActions.RunAsync(row.Id,
+                () => _localFleets.AddLocalCharacterAsync(row.Id, characterId, row.Info.CreatorCharacterId));
+            if (result.IsSuccess) added++;
             else lastError = result.Messages.FirstOrDefault()?.Text;
         }
-
-        int added = addedIds.Count;
 
         StatusMessage = lastError is null
             ? $"Added {added} character{(added == 1 ? "" : "s")}."
             : $"Added {added}; failed: {lastError}";
-        if (added == 0)
-            return;
-
-        await LoadLocalFleetsAsync(); // the card is this fleet's roster — a member added to it has to appear on it.
-        // …and on fleet metrics and the roster window, if either stands open. This add writes past the fleet commands, so
-        // it has no signal of its own to carry that news (ET-383).
-        foreach (int characterId in addedIds)
-            _Announce(FleetRosterChange.Added(row.Id, characterId));
+        if (added > 0)
+            await LoadLocalFleetsAsync(); // the card is this fleet's roster — a member added to it has to appear on it.
     }
 
     /// <summary>Adds an external EVE pilot (no local session) to a client-only fleet on trust.</summary>
@@ -1075,7 +1068,7 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
 
         var client = new LocalFleetClient(_localFleets, _fleetRepository, _characters, row.Info.CreatorCharacterId);
         var compositions = new LocalFleetCompositionClient(_localFleets,
-            _services.GetRequiredService<EveUtils.Shared.Modules.Fleet.Composition.Repositories.IFleetCompositionRepository>(),
+            _services.GetRequiredService<EveUtils.Shared.Modules.Fleet.Composition.Repositories.IFleetCompositionReader>(),
             row.Info.CreatorCharacterId);
         _dialogs.ShowRoster(new FleetRosterViewModel(
             _services, client, row.Info, isOwner: true, row.Info.CreatorCharacterId,
