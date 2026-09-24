@@ -184,8 +184,8 @@ public sealed class SqliteSdeAccessor : ISdeAccessor
             return false;
         using var command = connection.CreateCommand();
         // Match the canonical English name first (pri 0), then a locale alias (pri 1); within each, prefer a
-        // published type. Deterministic so a cross-locale name collision resolves to the English/published type
-        // rather than an arbitrary row.
+        // published type, then the lowest id. Deterministic so a name collision (two unpublished types named "Clan
+        // Commons", ET-348) resolves to the same row every time rather than an arbitrary one.
         command.CommandText =
             """
             SELECT typeId FROM (
@@ -193,7 +193,7 @@ public sealed class SqliteSdeAccessor : ISdeAccessor
                 UNION ALL
                 SELECT a.typeId, t.published, 1 AS pri FROM TypeNameAlias a JOIN Type t ON t.typeId = a.typeId WHERE a.nameKey = $key
             )
-            ORDER BY pri, published DESC
+            ORDER BY pri, published DESC, typeId
             LIMIT 1;
             """;
         command.Parameters.AddWithValue("$key", NameKey(name));
@@ -203,6 +203,29 @@ public sealed class SqliteSdeAccessor : ISdeAccessor
             return true;
         }
         return false;
+    }
+
+    public IReadOnlyList<int> FindTypeIdsByName(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return [];
+        using var connection = Open();
+        if (connection is null)
+            return [];
+        using var command = connection.CreateCommand();
+        command.CommandText =
+            """
+            SELECT typeId FROM Type WHERE nameKey = $key
+            UNION
+            SELECT typeId FROM TypeNameAlias WHERE nameKey = $key
+            ORDER BY typeId;
+            """;
+        command.Parameters.AddWithValue("$key", NameKey(name));
+        List<int> typeIds = [];
+        using var reader = command.ExecuteReader();
+        while (reader.Read())
+            typeIds.Add(reader.GetInt32(0));
+        return typeIds;
     }
 
     public SdeType? GetType(int typeId)

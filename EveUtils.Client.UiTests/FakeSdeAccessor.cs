@@ -98,6 +98,15 @@ public sealed class FakeSdeAccessor : ISdeAccessor
         return _byName.TryGetValue(name.Trim(), out typeId);
     }
 
+    public IReadOnlyList<int> FindTypeIdsByName(string name)
+    {
+        TypeLookups++;
+        return [.. _types.Values
+            .Where(entry => string.Equals(entry.Name, name.Trim(), StringComparison.OrdinalIgnoreCase))
+            .Select(entry => entry.TypeId)
+            .Order()];
+    }
+
     public SdeType? GetType(int typeId)
     {
         TypeLookups++;

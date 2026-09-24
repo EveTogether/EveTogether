@@ -29,4 +29,5 @@ public sealed record SettingsResult(
     bool AutoStartSites = true,
     DayOfWeek WeekStartsOn = DayOfWeek.Monday,
     bool IncludeNightlyBuilds = false,
-    bool ChannelChoiceMade = false);
+    bool ChannelChoiceMade = false,
+    bool OfferHomefrontRuns = true);

@@ -224,6 +224,9 @@ sealed class Program
         // Brings the run window up on every member's screen when the FC starts — without taking focus (ET-105).
         _ = Services.GetRequiredService<EveUtils.Client.Runs.FleetRunWindowPresenter>();
 
+        // Offers a homefront run from the enemies seen in the game log, while in a fleet (ET-348).
+        _ = Services.GetRequiredService<EveUtils.Client.Runs.HomefrontDetector>();
+
         // Publishes a fleet run to its fleet's server on SAVE and pulls a group mate's the moment the server says it
         // arrived (ET-245). Up before the startup auto-save below, so a fleet run that save commits is queued too.
         _ = Services.GetRequiredService<EveUtils.Client.Runs.FleetRunAutoPublisher>();
