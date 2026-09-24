@@ -239,6 +239,14 @@
                                 <TextBlock Text="RUNS" FontSize="9" LetterSpacing="1" HorizontalAlignment="Center"/>
                             </StackPanel>
                         </Button>
+                        <Button Classes="railitem" Classes.active="{Binding IsKillmailsActive}"
+                                Command="{Binding LaunchModuleCommand}" CommandParameter="killmails"
+                                ToolTip.Tip="Killmails — your own kills and losses, read from ESI">
+                            <StackPanel HorizontalAlignment="Center" Spacing="5">
+                                <mi:MaterialIcon Classes="rail" Kind="SkullOutline"/>
+                                <TextBlock Text="KILLS" FontSize="9" LetterSpacing="1" HorizontalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
                         <Button Classes="railitem" Classes.active="{Binding IsCompositionsActive}"
                                 Command="{Binding LaunchModuleCommand}" CommandParameter="compositions" ToolTip.Tip="Fleet Compositions">
                             <StackPanel HorizontalAlignment="Center" Spacing="5">

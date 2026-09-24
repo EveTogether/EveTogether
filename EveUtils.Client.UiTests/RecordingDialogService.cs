@@ -8,6 +8,7 @@ using EveUtils.Client.Runs;
 using EveUtils.Client.ViewModels;
 using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Client.ViewModels.FitBrowser;
+using EveUtils.Client.ViewModels.Killmails;
 using EveUtils.Client.ViewModels.Runs;
 using EveUtils.Shared.Modules.Esi;
 using EveUtils.Shared.Modules.Fittings.Dtos;
@@ -352,6 +353,12 @@ public sealed class RecordingDialogService : IDialogService
     public RunsOverviewViewModel? LastRuns { get; private set; }
 
     public RunsOverviewViewModel ShowRuns(RunsOverviewViewModel viewModel) => LastRuns = viewModel;
+
+    /// <summary>The KILLMAILS overview the module launcher asked for, or null — a hook to drive it without standing
+    /// up the real window (ET-332).</summary>
+    public KillmailsOverviewViewModel? LastKillmails { get; private set; }
+
+    public KillmailsOverviewViewModel ShowKillmails(KillmailsOverviewViewModel viewModel) => LastKillmails = viewModel;
 
     /// <summary>The save-a-preset dialog the tool asked for, or null — and a hook to drive it (pick a path and
     /// export) without a window.</summary>
