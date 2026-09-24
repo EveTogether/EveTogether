@@ -16,7 +16,7 @@ namespace EveUtils.Client.UiTests;
 /// </summary>
 public sealed class FakeSdeAccessor : ISdeAccessor
 {
-    private sealed record Entry(int TypeId, string Name, int GroupId, SdeSlotType Slot, bool IsTurret, double Volume, bool IsMutated = false, int? MetaGroupId = null);
+    private sealed record Entry(int TypeId, string Name, int GroupId, SdeSlotType Slot, bool IsTurret, double Volume, bool IsMutated = false, int? MetaGroupId = null, bool Published = true);
 
     private readonly Dictionary<int, Entry> _types = new();
     private readonly Dictionary<int, int> _groupCategory = new();
@@ -32,9 +32,9 @@ public sealed class FakeSdeAccessor : ISdeAccessor
     public bool IsAvailable { get; private set; } = true;
     public SdeVersion? Version => new(1, DateTimeOffset.UnixEpoch);
 
-    public FakeSdeAccessor Add(int typeId, string name, int groupId, int categoryId, SdeSlotType slot = SdeSlotType.None, bool isTurret = false, double volume = 0, bool isMutated = false, string? groupName = null, int? metaGroupId = null)
+    public FakeSdeAccessor Add(int typeId, string name, int groupId, int categoryId, SdeSlotType slot = SdeSlotType.None, bool isTurret = false, double volume = 0, bool isMutated = false, string? groupName = null, int? metaGroupId = null, bool published = true)
     {
-        _types[typeId] = new Entry(typeId, name, groupId, slot, isTurret, volume, isMutated, metaGroupId);
+        _types[typeId] = new Entry(typeId, name, groupId, slot, isTurret, volume, isMutated, metaGroupId, published);
         _groupCategory[groupId] = categoryId;
         _byName[name] = typeId;
         if (groupName is not null)
@@ -119,11 +119,11 @@ public sealed class FakeSdeAccessor : ISdeAccessor
             .ToList();
 
     public IReadOnlyList<SdeSkill> GetSkillsInGroup(int groupId) =>
-        _types.Values.Where(e => e.GroupId == groupId)
+        _types.Values.Where(e => e.GroupId == groupId && e.Published)
             .Select(e => new SdeSkill(e.TypeId, e.Name,
                 (int)(_attrs.GetValueOrDefault(e.TypeId)?.FirstOrDefault(a => a.AttributeId == 275)?.Value ?? 0),
                 (int)(_attrs.GetValueOrDefault(e.TypeId)?.FirstOrDefault(a => a.AttributeId == 180)?.Value ?? 0),
-                (int)(_attrs.GetValueOrDefault(e.TypeId)?.FirstOrDefault(a => a.AttributeId == 181)?.Value ?? 0), true))
+                (int)(_attrs.GetValueOrDefault(e.TypeId)?.FirstOrDefault(a => a.AttributeId == 181)?.Value ?? 0), e.Published))
             .OrderBy(skill => skill.Name).ToList();
 
     public SdeFitRequirement? GetFitRequirement(int typeId) =>
