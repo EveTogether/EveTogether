@@ -17,6 +17,9 @@ release notes, not this file.
 
 ## [Unreleased]
 
+- **Fixed: a fit's stats no longer count a ship skill your character has not trained as level I.** With a
+  character's own skills selected, an untrained hull skill still gave its first level of bonus (a Ferox without Caldari
+  Battlecruiser showed 304.8 instead of 290.3 DPS); it now gives none, the same as a skill at level 0.
 - **Fixed: the server no longer answers unauthenticated requests to the old test endpoints.** `GET`/`POST /ships` and
   `GET /sync-logs` were leftovers from early development and let anyone who could reach a server read its sync log or
   add rows to its database. They are gone.

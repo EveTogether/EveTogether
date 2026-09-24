@@ -85,12 +85,12 @@ public sealed class DogmaFitBuilder(IDogmaDataAccessor data) : ISingletonService
         new(typeId, state, data.GetGroupId(typeId) ?? 0, data.GetCategoryId(typeId) ?? 0, isAlwaysOn,
             data.GetBaseAttributes(typeId));
 
-    // The all-V baseline injects every skill (skills carry the fitting/navigation/tanking bonuses, not just the
-    // modules' required skills); a character snapshot injects its trained skills. Either way the level is forced. For a
-    // structure only the Structure-Management group applies, so the set is filtered to it.
+    // Every skill is injected (skills carry the fitting/navigation/tanking bonuses, not just the modules' required
+    // skills), a character's untrained ones at level 0, and the level is forced. For a structure only the
+    // Structure-Management group applies, so the set is filtered to it.
     private List<DogmaItem> BuildSkills(SkillSource skills, bool structureOnly)
     {
-        IEnumerable<int> skillIds = skills.InjectsAllSkills ? data.GetSkillTypeIds() : skills.ExplicitSkillTypeIds;
+        IEnumerable<int> skillIds = skills.SkillTypeIdsToInject(data.GetSkillTypeIds());
         if (structureOnly)
             skillIds = skillIds.Where(id => data.GetGroupId(id) == StructureSkillGroupId);
         var result = new List<DogmaItem>();
