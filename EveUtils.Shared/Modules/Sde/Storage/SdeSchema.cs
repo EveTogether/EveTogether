@@ -25,9 +25,10 @@ public static class SdeSchema
     /// v8 added <c>Site.gameplayDescription</c> and the <c>Site.includedTypeIdsJson</c>/<c>excludedTypeIdsJson</c>
     /// pair (ET-232) — the individual-hull refinement <c>shipGroupIdsJson</c> alone could not express;
     /// v9 added <c>SolarSystem.regionId</c> and the <c>Region</c>, <c>NpcCorporation</c> and <c>Faction</c> tables
-    /// (ET-335) so a killmail's system, region, attacker corporation and faction resolve from the SDE instead of ESI.
+    /// (ET-335) so a killmail's system, region, attacker corporation and faction resolve from the SDE instead of ESI;
+    /// v10 added <c>Type.description</c> for the skill catalogue (ET-351).
     /// </summary>
-    public const int SchemaVersion = 9;
+    public const int SchemaVersion = 10;
 
     /// <summary>Schema-creating statements, run before the bulk load.</summary>
     public static readonly string[] CreateTables =
@@ -38,6 +39,7 @@ public static class SdeSchema
             typeId        INTEGER PRIMARY KEY,
             groupId       INTEGER NOT NULL,
             nameEn        TEXT NOT NULL,
+            description   TEXT,
             nameKey       TEXT NOT NULL,
             published     INTEGER NOT NULL,
             mass          REAL NOT NULL,

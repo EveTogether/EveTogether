@@ -29,6 +29,8 @@ release notes, not this file.
 - **Changed: nightly builds now show their build date, commit and run number instead of a release number.** If you installed an
   earlier nightly, reinstall once from the nightly release page; later nightly updates will work as usual. Stable builds
   keep their regular version.
+- **Changed: the local EVE database now includes skill details and item descriptions.** It downloads fresh the next
+  time you start the app so the upcoming skill catalogue can use EVE's own data.
 - **Fixed: the server no longer answers unauthenticated requests to the old test endpoints.** `GET`/`POST /ships` and
   `GET /sync-logs` were leftovers from early development and let anyone who could reach a server read its sync log or
   add rows to its database. They are gone.

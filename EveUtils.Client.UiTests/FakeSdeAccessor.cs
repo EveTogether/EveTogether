@@ -118,6 +118,14 @@ public sealed class FakeSdeAccessor : ISdeAccessor
                 _attrs.TryGetValue(e.TypeId, out var a) ? a.FirstOrDefault(x => x.AttributeId == 128)?.Value : null))
             .ToList();
 
+    public IReadOnlyList<SdeSkill> GetSkillsInGroup(int groupId) =>
+        _types.Values.Where(e => e.GroupId == groupId)
+            .Select(e => new SdeSkill(e.TypeId, e.Name,
+                (int)(_attrs.GetValueOrDefault(e.TypeId)?.FirstOrDefault(a => a.AttributeId == 275)?.Value ?? 0),
+                (int)(_attrs.GetValueOrDefault(e.TypeId)?.FirstOrDefault(a => a.AttributeId == 180)?.Value ?? 0),
+                (int)(_attrs.GetValueOrDefault(e.TypeId)?.FirstOrDefault(a => a.AttributeId == 181)?.Value ?? 0), true))
+            .OrderBy(skill => skill.Name).ToList();
+
     public SdeFitRequirement? GetFitRequirement(int typeId) =>
         _types.TryGetValue(typeId, out var e) && e.Slot != SdeSlotType.None
             ? new SdeFitRequirement(e.Slot, 1, false, e.IsTurret)

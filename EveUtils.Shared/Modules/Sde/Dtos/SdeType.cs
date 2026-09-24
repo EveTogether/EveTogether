@@ -9,4 +9,5 @@ public sealed record SdeType(
     double Mass,
     double Volume,
     double Capacity,
-    int? MarketGroupId);
+    int? MarketGroupId,
+    string? Description = null);
