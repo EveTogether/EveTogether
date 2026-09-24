@@ -55,6 +55,10 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
     // on identity, never on value: two changes about the same pilot are still two pieces of news.
     private readonly List<FleetRosterChange> _ownAnnouncements = [];
 
+    // The lifecycle calls this window is making on a fleet; the change a local one raises is not news to it, it redraws
+    // itself once the call returns.
+    private readonly OwnFleetActions _ownActions = new();
+
     // The cards whose member list the user unfolded. A reload rebuilds every row from scratch, and a removal is a
     // reload (ET-52), so without this an expanded 50-man list snapped shut the moment the FC removed someone from it.
     private readonly HashSet<long> _expandedCards = [];
@@ -121,6 +125,9 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
             _ownAnnouncements.RemoveAt(own);
             return;
         }
+
+        if (_ownActions.Covers(change.FleetId))
+            return;
 
         // Both halves of the list, not just the server one: the fleet the change is about may well be a client-only
         // fleet, whose cards LoadLocalFleetsAsync builds and ReloadAsync never touches.
@@ -738,7 +745,7 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
         if (string.IsNullOrWhiteSpace(name))
             return;
 
-        var created = await _localFleets.CreateLocalFleetAsync(name, null, ownerId.Value);
+        var created = await _ownActions.RunAsync(OwnFleetActions.AnyFleet, () => _localFleets.CreateLocalFleetAsync(name, null, ownerId.Value));
         StatusMessage = created.IsSuccess
             ? $"Created local fleet '{name}'."
             : $"Create failed: {created.Messages.FirstOrDefault()?.Text}";
@@ -850,7 +857,7 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
             SetActive(null, null);
         }
 
-        var disbanded = await _localFleets.DisbandFleetAsync(row.Id, row.Info.CreatorCharacterId);
+        var disbanded = await _ownActions.RunAsync(row.Id, () => _localFleets.DisbandFleetAsync(row.Id, row.Info.CreatorCharacterId));
         StatusMessage = disbanded.IsSuccess
             ? $"Disbanded local fleet '{row.Name}'."
             : $"Disband failed: {disbanded.Messages.FirstOrDefault()?.Text}";

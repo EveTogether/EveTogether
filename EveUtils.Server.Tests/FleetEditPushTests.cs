@@ -7,6 +7,7 @@ using EveUtils.Shared.Cqrs.Permissions;
 using EveUtils.Shared.Data;
 using EveUtils.Shared.DependencyInjection;
 using EveUtils.Shared.Identity;
+using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Fleet;
 using EveUtils.Shared.Modules.Fleet.Composition;
 using EveUtils.Shared.Modules.Fleet.Composition.Repositories;
@@ -47,6 +48,7 @@ public sealed class FleetEditPushTests : IDisposable
         services.AddServerIdentity();
         services.AddPermissionRegistry();
         services.AddCqrs();
+        services.AddEventBus();
         services.AddSharedServices(ExecutionHost.Server);
         services.AddFleetModule();
         services.AddSingleton<IDbContextFactory<SharedDbContext>>(_factory);

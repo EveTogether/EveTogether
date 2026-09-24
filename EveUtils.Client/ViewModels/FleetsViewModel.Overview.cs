@@ -850,7 +850,7 @@ public sealed partial class FleetsViewModel
         if (choice == FleetStartChoice.Cancel)
             return;
 
-        var started = await client.StartFleetAsync(row.Id);
+        var started = await _ownActions.RunAsync(row.Id, () => client.StartFleetAsync(row.Id));
         if (!started.Ok)
         {
             StatusMessage = $"Start failed: {started.Message}";
@@ -1020,7 +1020,7 @@ public sealed partial class FleetsViewModel
         switch (await _dialogs.PickFleetExitAsync(prompt))
         {
             case StopFleetChoice.Stop:
-                var stopped = await client.StopFleetAsync(row.Id);
+                var stopped = await _ownActions.RunAsync(row.Id, () => client.StopFleetAsync(row.Id));
                 if (stopped.Ok)
                 {
                     StatusMessage = $"Stopped '{row.Name}' — standing by again.";
@@ -1034,7 +1034,7 @@ public sealed partial class FleetsViewModel
                 }
                 break;
             case StopFleetChoice.Conclude:
-                var concluded = await client.ConcludeFleetAsync(row.Id);
+                var concluded = await _ownActions.RunAsync(row.Id, () => client.ConcludeFleetAsync(row.Id));
                 if (concluded.Ok)
                 {
                     StatusMessage = $"Concluded '{row.Name}'.";

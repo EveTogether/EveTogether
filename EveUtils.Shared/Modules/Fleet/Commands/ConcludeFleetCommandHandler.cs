@@ -1,13 +1,16 @@
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Messaging;
+using EveUtils.Shared.Modules.Fleet.Dtos;
 using EveUtils.Shared.Modules.Fleet.Entities;
+using EveUtils.Shared.Modules.Fleet.Enums;
+using EveUtils.Shared.Modules.Fleet.Events;
 using EveUtils.Shared.Modules.Fleet.Repositories;
 using EveUtils.Shared.Modules.Messaging.Commands;
 using EveUtils.Shared.Modules.Messaging.Entities;
 
 namespace EveUtils.Shared.Modules.Fleet.Commands;
 
-internal sealed class ConcludeFleetCommandHandler(IFleetRepository repository, IDispatcher dispatcher)
+internal sealed class ConcludeFleetCommandHandler(IFleetRepository repository, IDispatcher dispatcher, IEventBus eventBus)
     : ICommandHandler<ConcludeFleetCommand, Result>
 {
     public async Task<Result> Handle(ConcludeFleetCommand command, CancellationToken cancellationToken = default)
@@ -32,6 +35,8 @@ internal sealed class ConcludeFleetCommandHandler(IFleetRepository repository, I
         fleet.Activation = FleetActivation.Concluded;
         fleet.LastActivityAt = DateTimeOffset.UtcNow;
         await repository.UpdateAsync(fleet, cancellationToken);
+        await eventBus.PublishAsync(
+            new FleetChangedEvent(new FleetChangePayload(fleet.Id, FleetChangeKind.Concluded)), EventTarget.Local, cancellationToken);
 
         // Tell each roster member the op is over (the creator pressed Conclude; externals have no inbox/session).
         var members = await repository.ListMembersAsync(fleet.Id, cancellationToken);

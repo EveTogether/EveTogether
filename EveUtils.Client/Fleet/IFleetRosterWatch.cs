@@ -11,9 +11,9 @@ namespace EveUtils.Client.Fleet;
 /// ET-49 and ET-52 in turn — three rounds of the same "and this neighbour too" — so it is one announcement with
 /// however many listeners instead.
 ///
-/// Deliberately NOT the server's <c>fleet.changed</c>: a client-only (local) fleet pushes no such event and never
-/// will, and that is exactly the case the operator hits. <c>fleet.changed</c> is folded IN here (see
-/// <see cref="FleetRosterWatch"/>) so a screen has one subscription covering both origins, not two.
+/// A member change is announced here by the screen that made it. A fleet's lifecycle change is not: the Shared command
+/// handlers raise <c>FleetChangedEvent</c> on the local bus, a client-only fleet's own and a server fleet's push
+/// alike, and <see cref="FleetRosterWatch"/> folds it IN � so a screen has one subscription covering every origin.
 /// </summary>
 public interface IFleetRosterWatch
 {

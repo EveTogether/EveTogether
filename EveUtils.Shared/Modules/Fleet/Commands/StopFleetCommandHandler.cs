@@ -1,14 +1,16 @@
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Messaging;
+using EveUtils.Shared.Modules.Fleet.Dtos;
 using EveUtils.Shared.Modules.Fleet.Entities;
 using EveUtils.Shared.Modules.Fleet.Enums;
+using EveUtils.Shared.Modules.Fleet.Events;
 using EveUtils.Shared.Modules.Fleet.Repositories;
 using EveUtils.Shared.Modules.Messaging.Commands;
 using EveUtils.Shared.Modules.Messaging.Entities;
 
 namespace EveUtils.Shared.Modules.Fleet.Commands;
 
-internal sealed class StopFleetCommandHandler(IFleetRepository repository, IDispatcher dispatcher)
+internal sealed class StopFleetCommandHandler(IFleetRepository repository, IDispatcher dispatcher, IEventBus eventBus)
     : ICommandHandler<StopFleetCommand, Result>
 {
     public async Task<Result> Handle(StopFleetCommand command, CancellationToken cancellationToken = default)
@@ -37,6 +39,9 @@ internal sealed class StopFleetCommandHandler(IFleetRepository repository, IDisp
         await repository.UpdateAsync(fleet, cancellationToken);
 
         var automatic = command.Trigger != FleetStopTrigger.Manual;
+        await eventBus.PublishAsync(
+            new FleetChangedEvent(new FleetChangePayload(fleet.Id, FleetChangeKind.Stopped, automatic ? command.Trigger : null)),
+            EventTarget.Local, cancellationToken);
 
         // Tell each roster member the op is over for now — they keep their seat but are free to fly elsewhere. The
         // creator is skipped (they pressed Stop); external members have no inbox/session.

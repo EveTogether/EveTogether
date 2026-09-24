@@ -36,8 +36,9 @@ public sealed class FleetRosterWatch : IFleetRosterWatch, ISingletonService, IDi
     {
         _participation = participation;
 
-        // A roster change on a SERVER fleet reaches this client as fleet.changed — someone else's join, another of my
-        // clients kicking a pilot, the fleet starting. Same news, other origin: republish it here so no screen has to
+        // A change on a SERVER fleet reaches this client as fleet.changed — someone else's join, another of my
+        // clients kicking a pilot, the fleet starting — and a change on a client-only fleet is raised on the same bus by
+        // the command handler that made it. Same news, other origin: republish it here so no screen has to
         // subscribe twice and reconcile two refresh paths of its own.
         _fleetChangedSubscription = bus.Subscribe<FleetChangedEvent>(
             e => Announce(FleetRosterChange.Reloaded(e.FleetId)));

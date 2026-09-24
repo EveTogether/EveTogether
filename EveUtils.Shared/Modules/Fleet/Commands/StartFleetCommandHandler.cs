@@ -1,13 +1,16 @@
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Messaging;
+using EveUtils.Shared.Modules.Fleet.Dtos;
 using EveUtils.Shared.Modules.Fleet.Entities;
+using EveUtils.Shared.Modules.Fleet.Enums;
+using EveUtils.Shared.Modules.Fleet.Events;
 using EveUtils.Shared.Modules.Fleet.Repositories;
 using EveUtils.Shared.Modules.Messaging.Commands;
 using EveUtils.Shared.Modules.Messaging.Entities;
 
 namespace EveUtils.Shared.Modules.Fleet.Commands;
 
-internal sealed class StartFleetCommandHandler(IFleetRepository repository, IDispatcher dispatcher)
+internal sealed class StartFleetCommandHandler(IFleetRepository repository, IDispatcher dispatcher, IEventBus eventBus)
     : ICommandHandler<StartFleetCommand, Result>
 {
     public async Task<Result> Handle(StartFleetCommand command, CancellationToken cancellationToken = default)
@@ -32,6 +35,8 @@ internal sealed class StartFleetCommandHandler(IFleetRepository repository, IDis
         fleet.ActivatedAt = now; // newest activation → the broadcast tiebreak keeps a conflicted member in their earlier fleet
         fleet.LastActivityAt = now;
         await repository.UpdateAsync(fleet, cancellationToken);
+        await eventBus.PublishAsync(
+            new FleetChangedEvent(new FleetChangePayload(fleet.Id, FleetChangeKind.Activated)), EventTarget.Local, cancellationToken);
 
         // Notify each roster member that the fleet has started. Metrics are shared automatically while you are a
         // connected member — no "enter" step — so the message just announces the start.
