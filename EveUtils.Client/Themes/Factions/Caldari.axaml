@@ -19,6 +19,8 @@
     <SolidColorBrush x:Key="BorderStrongBrush" Color="#994F9BD9"/>
     <SolidColorBrush x:Key="DividerBrush" Color="#1F8FC6F0"/>
     <SolidColorBrush x:Key="GlowBrush" Color="#6B4F9BD9"/>
+    <SolidColorBrush x:Key="StripLossBrush" Color="#FFE5484D"/>
+    <SolidColorBrush x:Key="StripLossBrightBrush" Color="#FFFF7B7B"/>
 
     <SolidColorBrush x:Key="BgRowHoverBrush" Color="#1F4F9BD9"/>
     <SolidColorBrush x:Key="BgRowSelectedBrush" Color="#334F9BD9"/>

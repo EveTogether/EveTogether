@@ -52,18 +52,24 @@ public sealed partial class RunsSummaryCellViewModel(Action<RunsSummaryCellViewM
     [ObservableProperty] private bool _isEmpty = true;
     [ObservableProperty] private bool _isAccent;
     [ObservableProperty] private bool _isBright;
+    [ObservableProperty] private bool _isNeutral;
+    [ObservableProperty] private bool _isLoss;
+    [ObservableProperty] private bool _isLossBright;
     [ObservableProperty] private bool _isClickable;
     [ObservableProperty] private double _fillOpacity = 1;
     [ObservableProperty] private string? _tooltip;
 
-    internal void Show(int level, string tooltip, string label = "", DateOnly date = default, bool isClickable = false)
+    internal void Show(StripLevel level, string tooltip, string label = "", DateOnly date = default, bool isClickable = false)
     {
         Date = date;
         Label = label;
-        IsEmpty = level == 0;
-        IsAccent = level is >= 1 and <= 3;
-        IsBright = level == 4;
-        FillOpacity = RunsStripCellViewModel.LevelOpacity[level];
+        IsEmpty = level.Tone == StripTone.Empty;
+        IsNeutral = level.Tone == StripTone.Neutral;
+        IsAccent = level is { Tone: StripTone.Gain, Step: <= 3 };
+        IsBright = level is { Tone: StripTone.Gain, Step: 4 };
+        IsLoss = level.Tone == StripTone.Loss;
+        IsLossBright = level is { Tone: StripTone.Loss, Step: 4 };
+        FillOpacity = RunsStripCellViewModel.LevelOpacity[level.Step];
         Tooltip = tooltip;
         IsClickable = isClickable && clicked is not null;
     }
@@ -431,7 +437,7 @@ public sealed partial class RunsSummaryViewModel : ObservableObject
     {
         RunsActivityFacts[][] byHour = [.. Enumerable.Range(0, 24)
             .Select(hour => rows.Where(row => row.StartedAtLocal.Hour == hour).ToArray())];
-        Func<decimal, int> levelOf = RunsActivityStripViewModel.LevelScale(
+        Func<decimal, bool, StripLevel> levelOf = RunsActivityStripViewModel.LevelScale(
             byHour.Select(hour => RunsActivityStripViewModel.ValueOf(shade, hour)));
         for (int hour = 0; hour < 24; hour++)
         {
@@ -441,7 +447,7 @@ public sealed partial class RunsSummaryViewModel : ObservableObject
                 ? $"{when} · no runs started"
                 : $"{when} · {RunsActivitySummaryText.ActivitiesCount(started.Length)} started"
                   + (RunsActivitySummaryText.Net(started) is { } net ? $" · {RunsActivitySummaryText.Signed(net)} ISK" : string.Empty);
-            Hours[hour].Show(levelOf(RunsActivityStripViewModel.ValueOf(shade, started)), tooltip);
+            Hours[hour].Show(levelOf(RunsActivityStripViewModel.ValueOf(shade, started), started.Length > 0), tooltip);
         }
 
         HoursSummaryText = rows.Count == 0
@@ -452,7 +458,7 @@ public sealed partial class RunsSummaryViewModel : ObservableObject
     private void _ShowWeekDays(DateOnly weekStart, RunsSummaryInput input)
     {
         DateOnly[] days = [.. Enumerable.Range(0, 7).Select(weekStart.AddDays)];
-        Func<decimal, int> levelOf = RunsActivityStripViewModel.LevelScale(days
+        Func<decimal, bool, StripLevel> levelOf = RunsActivityStripViewModel.LevelScale(days
             .Select(day => input.Days.TryGetValue(day, out IReadOnlyList<RunsActivityFacts>? facts)
                 ? RunsActivityStripViewModel.ValueOf(input.Shade, facts)
                 : 0));
@@ -461,7 +467,7 @@ public sealed partial class RunsSummaryViewModel : ObservableObject
             DateOnly day = days[index];
             input.Days.TryGetValue(day, out IReadOnlyList<RunsActivityFacts>? facts);
             WeekDays[index].Show(
-                facts is null ? 0 : levelOf(RunsActivityStripViewModel.ValueOf(input.Shade, facts)),
+                facts is null ? StripLevel.Empty : levelOf(RunsActivityStripViewModel.ValueOf(input.Shade, facts), facts.Count > 0),
                 RunsActivityStripViewModel.DayTooltip(day, facts),
                 day.ToString("ddd", CultureInfo.InvariantCulture), day, isClickable: day <= input.Today);
         }

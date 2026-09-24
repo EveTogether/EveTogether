@@ -189,13 +189,12 @@ public sealed class RunsVisualCorrectionsTests
             $"the list's own top {listTop} sits above the sticky header's bottom {stickyBottom}");
     }
 
-    /// <summary>ET-290/ET-291's own reproduction: a day picked in the strip scrolls its header to the very top of
-    /// the list and pins it there (<c>RunsWindow._ScrollDayToTop</c>) — the state the screenshot's "TUESDAY 15
-    /// SEPTEMBER" was in. The picked day's own first row must land fully below the pin, never half behind it.
-    /// Counter-proof: the pre-ET-302 overlay left the pinned copy sharing the list's own row, so the first row
-    /// rendered right where the pin also drew and only its bottom few pixels escaped the pin's fill.</summary>
+    /// <summary>ET-385: a day picked in the strip scrolls its own header to the very top of the list
+    /// (<c>RunsWindow._ScrollDayToTop</c>). The pin sits in a row of its own above the list since ET-302, so pinning
+    /// then would draw that header twice; it pins only once the real one has scrolled above the top. Counter-proof:
+    /// pinning on any scroll offset showed the picked day's header both above the list and as its first item.</summary>
     [AvaloniaFact]
-    public async Task StickyDayHeader_TheFirstRowOfAPickedDayLandsFullyBelowIt()
+    public async Task StickyDayHeader_APickedDayShowsItsOwnHeaderAtTheTopAndPinsOnlyOnceItScrollsAway()
     {
         CancellationToken cancellationToken = TestContext.Current.CancellationToken;
         using var instance = TestClientInstance.Create();
@@ -209,8 +208,8 @@ public sealed class RunsVisualCorrectionsTests
         RunsOverviewViewModel viewModel = presented.ViewModel;
         RunsTabViewModel tab = viewModel.Tabs[0];
         // Well below the newest day (the only one expanded by default, ET-199), so picking it is a real scroll,
-        // not a no-op at the top of the list.
-        RunsDayViewModel picked = tab.Days[10];
+        // not a no-op at the top of the list, yet with enough list under it to scroll a header away.
+        RunsDayViewModel picked = tab.Days[6];
         DateOnly pickedDate = DateOnly.FromDateTime(picked.Day);
 
         viewModel.Strip.Cells.Single(cell => cell.Date == pickedDate).ClickCommand.Execute(null);
@@ -225,15 +224,23 @@ public sealed class RunsVisualCorrectionsTests
         Assert.True(picked.IsExpanded);
         var list = _Named<ListBox>(presented, "ActivityList");
         var sticky = _Named<Border>(presented, "StickyDay");
-        Assert.True(sticky.IsVisible, "the picked day's header never pinned — nothing to check against");
-        double stickyBottom = _Rect(presented, sticky).Bottom;
+        var scroll = (ScrollViewer)list.Scroll!;
+        Assert.True(scroll.Offset.Y > 0.5, "the picked day never scrolled — nothing to check against");
+        Control? header = list.ContainerFromItem(picked);
+        Assert.NotNull(header);
+        Assert.False(sticky.IsVisible, "the picked day's header is pinned above its own header at the top of the list");
+        Assert.True(_Rect(presented, header!).Top >= _Rect(presented, list).Top - 0.5,
+            "the picked day's own header is not at the top of the list");
 
-        ActivityOverviewRowViewModel firstRow = picked.Rows[0];
-        Control? container = list.ContainerFromItem(firstRow);
-        Assert.NotNull(container);
-        Rect rowRect = _Rect(presented, container!);
-        Assert.True(rowRect.Top >= stickyBottom - 0.5,
-            $"the picked day's first row {rowRect} starts above the sticky header's bottom {stickyBottom} — clipped under it");
+        scroll.Offset = new Vector(0, scroll.Offset.Y + header!.Bounds.Height + 4);
+        for (int pump = 0; pump < 4; pump++)
+        {
+            Dispatcher.UIThread.RunJobs();
+            presented.Root.UpdateLayout();
+        }
+
+        Assert.True(sticky.IsVisible, "the header scrolled away but nothing pinned");
+        Assert.Same(picked, _Named<ContentControl>(presented, "StickyDayContent").Content);
     }
 
     /// <summary>ET-305: the portrait (CHARACTERS) and the icon (TYPES) in a filter tile centre vertically on the

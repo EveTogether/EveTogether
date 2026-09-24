@@ -91,6 +91,33 @@ public sealed class HomeEarningsTests
         Assert.Equal("1–22 Sep · tracked since 2 Sep", tile.RangeText);
     }
 
+    /// <summary>ET-385: a losing day is a bar hanging below the zero line, not a negative height. The chart splits its
+    /// height between the biggest gain and the biggest loss, so both fit. Counter-proof: scaling by the biggest gain only
+    /// gave the losing day a negative bar height.</summary>
+    [Fact]
+    public void Chart_ALossDayHangsBelowTheZeroLine()
+    {
+        RunsActivityFacts[] activities =
+        [
+            _Activity(new DateTime(2026, 9, 21, 20, 0, 0), 1_000_000_000m),
+            _Activity(new DateTime(2026, 9, 22, 20, 0, 0), -3_000_000_000m)
+        ];
+        var earnings = new HomeEarningsViewModel((_, _) => { });
+
+        earnings.Show(new HomeEarningsInput(activities, Now, DayOfWeek.Monday, new DateOnly(2026, 9, 1)));
+
+        HomeEarningsDayViewModel gain = earnings.Days[^2];
+        HomeEarningsDayViewModel loss = earnings.Days[^1];
+        Assert.True(loss.IsLoss);
+        Assert.False(gain.IsLoss);
+        Assert.Equal(HomeEarningsViewModel.ChartHeight * 3 / 4, loss.BarHeight, 6);
+        Assert.Equal(HomeEarningsViewModel.ChartHeight / 4, gain.BarHeight, 6);
+        Assert.Equal(0, loss.BarMargin.Bottom, 6);
+        Assert.Equal(loss.BarHeight, gain.BarMargin.Bottom, 6);
+        Assert.Equal("1B", earnings.ChartMaxText);
+        Assert.Equal("-3B", earnings.ChartMinText);
+    }
+
     /// <summary>"Today" starts at local midnight (decision, ET-324), read through the real query with its local→UTC
     /// conversion: a run five minutes before midnight is yesterday's, five minutes after is today's. With the boundary
     /// removed, any boundary reads as correct.</summary>

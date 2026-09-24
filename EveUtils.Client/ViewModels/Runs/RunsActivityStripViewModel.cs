@@ -115,7 +115,7 @@ public sealed partial class RunsActivityStripViewModel : ObservableObject
                 ? CultureInfo.InvariantCulture.DateTimeFormat.GetAbbreviatedDayName(order[row])
                 : string.Empty;
 
-        Func<decimal, int> levelOf = LevelScale([.. Enumerable.Range(0, 7 * Weeks)
+        Func<decimal, bool, StripLevel> levelOf = LevelScale([.. Enumerable.Range(0, 7 * Weeks)
             .Select(offset => _ValueOf(input, Start.AddDays(offset)))]);
 
         for (int week = 0; week < Weeks; week++)
@@ -124,8 +124,8 @@ public sealed partial class RunsActivityStripViewModel : ObservableObject
             for (int row = 0; row < 7; row++)
             {
                 DateOnly day = weekStart.AddDays(row);
-                int level = levelOf(_ValueOf(input, day));
                 input.Days.TryGetValue(day, out IReadOnlyList<RunsActivityFacts>? facts);
+                StripLevel level = levelOf(_ValueOf(input, day), facts is { Count: > 0 });
                 Cells[row * Weeks + week].Show(day, level,
                     isFuture: day > input.Today,
                     isUntracked: day <= input.Today && (input.FirstTracked is not { } first || day < first) && facts is null,
@@ -172,16 +172,38 @@ public sealed partial class RunsActivityStripViewModel : ObservableObject
         }
     }
 
-    /// <summary>The five steps a set of cells is shaded in: 0 for nothing, then 1–4 split at the quartiles of the cells
-    /// that have anything to shade, so a quiet stretch still reads as light and heavy against itself instead of all of
-    /// it drowning under one big evening. The summary's HOURS and DAYS (ET-294) step the same way.</summary>
-    internal static Func<decimal, int> LevelScale(IEnumerable<decimal> values)
+    /// <summary>A diverging scale: gains step 1–4 at the quartiles of the gaining cells, so a quiet stretch still reads as
+    /// light and heavy against itself instead of all of it drowning under one big evening, and losses step 1–4 by their
+    /// own rank over |value|, so a lost billion never flattens the small losses beside it. A cell at zero is empty,
+    /// or neutral where something happened that day. The summary's HOURS and DAYS (ET-294) step the same way.</summary>
+    internal static Func<decimal, bool, StripLevel> LevelScale(IEnumerable<decimal> values)
     {
-        decimal[] shaded = [.. values.Where(value => value > 0).Order()];
+        decimal[] all = [.. values];
+        Func<decimal, int> gainStep = _QuartileSteps(all.Where(value => value > 0));
+        Func<decimal, int> lossStep = _RankSteps(all.Where(value => value < 0).Select(value => -value));
+        return (value, hasActivity) => value switch
+        {
+            > 0 => new StripLevel(StripTone.Gain, gainStep(value)),
+            < 0 => new StripLevel(StripTone.Loss, lossStep(-value)),
+            _ => hasActivity ? StripLevel.Neutral : StripLevel.Empty
+        };
+    }
+
+    /// <summary>By cumulative rank, so the biggest loss is always the strongest step: losses are rare, and the quartile
+    /// thresholds above would leave a lone loss, however large, at the faintest step.</summary>
+    private static Func<decimal, int> _RankSteps(IEnumerable<decimal> magnitudes)
+    {
+        decimal[] sorted = [.. magnitudes];
+        return magnitude => Math.Clamp((int)Math.Ceiling(4.0 * sorted.Count(other => other <= magnitude) / sorted.Length), 1, 4);
+    }
+
+    private static Func<decimal, int> _QuartileSteps(IEnumerable<decimal> magnitudes)
+    {
+        decimal[] sorted = [.. magnitudes.Order()];
         decimal Quartile(double fraction) =>
-            shaded.Length == 0 ? 0 : shaded[Math.Min(shaded.Length - 1, (int)Math.Floor(fraction * shaded.Length))];
+            sorted.Length == 0 ? 0 : sorted[Math.Min(sorted.Length - 1, (int)Math.Floor(fraction * sorted.Length))];
         decimal[] thresholds = [Quartile(0.25), Quartile(0.5), Quartile(0.75)];
-        return value => value <= 0 ? 0 : value <= thresholds[0] ? 1 : value <= thresholds[1] ? 2 : value <= thresholds[2] ? 3 : 4;
+        return magnitude => magnitude <= thresholds[0] ? 1 : magnitude <= thresholds[1] ? 2 : magnitude <= thresholds[2] ? 3 : 4;
     }
 
     /// <summary>What a set of activities weighs under a shade: their own share's ISK, or how many there are.</summary>
@@ -233,28 +255,37 @@ public sealed partial class RunsStripCellViewModel(Action<RunsStripCellViewModel
     [ObservableProperty] private bool _isEmpty = true;
     [ObservableProperty] private bool _isAccent;
     [ObservableProperty] private bool _isBright;
+    [ObservableProperty] private bool _isNeutral;
+    [ObservableProperty] private bool _isLoss;
+    [ObservableProperty] private bool _isLossBright;
     [ObservableProperty] private bool _isFuture;
     [ObservableProperty] private bool _isUntracked;
     [ObservableProperty] private bool _isToday;
     [ObservableProperty] private bool _isPicked;
     [ObservableProperty] private bool _isClickable;
     [ObservableProperty] private double _fillOpacity = 1;
+    [ObservableProperty] private double _markOpacity = 1;
     [ObservableProperty] private string? _tooltip;
 
-    internal void Show(DateOnly date, int level, bool isFuture, bool isUntracked, bool isToday, bool isPicked,
+    internal void Show(DateOnly date, StripLevel level, bool isFuture, bool isUntracked, bool isToday, bool isPicked,
         bool isOutsideMonth, string tooltip)
     {
         Date = date;
         IsFuture = isFuture;
         IsUntracked = !isFuture && isUntracked;
         bool shaded = !IsFuture && !IsUntracked;
-        IsEmpty = shaded && level == 0;
-        IsAccent = shaded && level is >= 1 and <= 3;
-        IsBright = shaded && level == 4;
+        IsEmpty = shaded && level.Tone == StripTone.Empty;
+        IsNeutral = shaded && level.Tone == StripTone.Neutral;
+        IsAccent = shaded && level is { Tone: StripTone.Gain, Step: <= 3 };
+        IsBright = shaded && level is { Tone: StripTone.Gain, Step: 4 };
+        IsLoss = shaded && level.Tone == StripTone.Loss;
+        IsLossBright = shaded && level is { Tone: StripTone.Loss, Step: 4 };
         IsToday = isToday;
         IsPicked = isPicked;
         IsClickable = !isFuture;
-        FillOpacity = (shaded ? LevelOpacity[level] : 1) * (isOutsideMonth && shaded ? .35 : 1);
+        double monthDimming = isOutsideMonth && shaded ? .35 : 1;
+        FillOpacity = (shaded ? LevelOpacity[level.Step] : 1) * monthDimming;
+        MarkOpacity = monthDimming;
         Tooltip = IsFuture ? null : IsUntracked ? $"{date.ToString("ddd d MMM", CultureInfo.InvariantCulture).ToUpperInvariant()} · before EVE Together tracked runs" : tooltip;
     }
 
