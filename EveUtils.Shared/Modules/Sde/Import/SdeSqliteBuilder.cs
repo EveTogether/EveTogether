@@ -21,13 +21,14 @@ public sealed class SdeSqliteBuilder
     // Entry names are flat in the zip (verified build 3374020 — no sde/ submap). Order: dependency-light first.
     // archetypes/factions/typeLists are read purely as lookups for the Site rows, so they must precede dungeons.
     // Likewise mapSolarSystems/npcStations/agentTypes are lookups for the Agent rows and must precede
-    // npcCharacters (ET-173); missions and epicArcs carry no such dependency and can come last.
+    // npcCharacters (ET-173); missions and epicArcs carry no such dependency and can come last. mapRegions and
+    // npcCorporations (ET-335) are plain id+name tables with no reader-side lookup dependency of their own.
     private static readonly string[] Datasets =
     [
         "categories.jsonl", "groups.jsonl", "dogmaAttributes.jsonl", "dogmaEffects.jsonl", "types.jsonl", "typeDogma.jsonl",
         "archetypes.jsonl", "factions.jsonl", "typeLists.jsonl", "dungeons.jsonl",
-        "mapSolarSystems.jsonl", "npcStations.jsonl", "agentTypes.jsonl", "npcCharacters.jsonl",
-        "missions.jsonl", "epicArcs.jsonl", "dynamicItemAttributes.jsonl"
+        "mapRegions.jsonl", "mapSolarSystems.jsonl", "npcStations.jsonl", "agentTypes.jsonl", "npcCorporations.jsonl",
+        "npcCharacters.jsonl", "missions.jsonl", "epicArcs.jsonl", "dynamicItemAttributes.jsonl"
     ];
 
     /// <summary>

@@ -34,6 +34,9 @@ internal sealed partial class TableWriters
     private readonly SqliteCommand _agentAlias;
     private readonly SqliteCommand _mission;
     private readonly SqliteCommand _epicArcMission;
+    private readonly SqliteCommand _region;
+    private readonly SqliteCommand _npcCorporation;
+    private readonly SqliteCommand _faction;
     private readonly SqliteCommand _mutaplasmidRange;
     private readonly SqliteCommand _mutaplasmidResultingType;
 
@@ -89,8 +92,9 @@ internal sealed partial class TableWriters
             "INSERT INTO SiteNameAlias (dungeonId, nameKey, locale) VALUES ($dungeonId, $nameKey, $locale);",
             "$dungeonId", "$nameKey", "$locale");
         _solarSystem = Prepare(connection, transaction,
-            "INSERT INTO SolarSystem (solarSystemId, nameEn, securityStatus) VALUES ($solarSystemId, $nameEn, $securityStatus);",
-            "$solarSystemId", "$nameEn", "$securityStatus");
+            "INSERT INTO SolarSystem (solarSystemId, nameEn, securityStatus, regionId) " +
+            "VALUES ($solarSystemId, $nameEn, $securityStatus, $regionId);",
+            "$solarSystemId", "$nameEn", "$securityStatus", "$regionId");
         _agent = Prepare(connection, transaction,
             "INSERT INTO Agent (agentId, nameEn, nameKey, level, agentTypeId, agentTypeName, divisionId, isLocator, corporationId, locationId, solarSystemId) " +
             "VALUES ($agentId, $nameEn, $nameKey, $level, $agentTypeId, $agentTypeName, $divisionId, $isLocator, $corporationId, $locationId, $solarSystemId);",
@@ -106,6 +110,15 @@ internal sealed partial class TableWriters
         _epicArcMission = Prepare(connection, transaction,
             "INSERT INTO EpicArcMission (missionId, arcId) VALUES ($missionId, $arcId);",
             "$missionId", "$arcId");
+        _region = Prepare(connection, transaction,
+            "INSERT INTO Region (regionId, nameEn) VALUES ($regionId, $nameEn);",
+            "$regionId", "$nameEn");
+        _npcCorporation = Prepare(connection, transaction,
+            "INSERT INTO NpcCorporation (corporationId, nameEn) VALUES ($corporationId, $nameEn);",
+            "$corporationId", "$nameEn");
+        _faction = Prepare(connection, transaction,
+            "INSERT INTO Faction (factionId, nameEn) VALUES ($factionId, $nameEn);",
+            "$factionId", "$nameEn");
         _mutaplasmidRange = Prepare(connection, transaction,
             "INSERT INTO MutaplasmidAttributeRange (mutaplasmidTypeId, attributeId, min, max) " +
             "VALUES ($mutaplasmidTypeId, $attributeId, $min, $max);",
@@ -130,9 +143,11 @@ internal sealed partial class TableWriters
             case "factions.jsonl": CollectFaction(element); break;
             case "typeLists.jsonl": CollectTypeList(element); break;
             case "dungeons.jsonl": InsertSite(element); break;
+            case "mapRegions.jsonl": InsertRegion(element); break;
             case "mapSolarSystems.jsonl": InsertSolarSystem(element); break;
             case "npcStations.jsonl": CollectStationSystem(element); break;
             case "agentTypes.jsonl": CollectAgentType(element); break;
+            case "npcCorporations.jsonl": InsertNpcCorporation(element); break;
             case "npcCharacters.jsonl": InsertAgent(element); break;
             case "missions.jsonl": InsertMission(element); break;
             case "epicArcs.jsonl": InsertEpicArcMissions(element); break;
@@ -292,10 +307,18 @@ internal sealed partial class TableWriters
             _archetypeNames[Key(e)] = title;
     }
 
+    // Doubles as the Faction table import (ET-335): the same factions.jsonl pass that denormalises a name onto
+    // each Site row also gives the killmail importer an id -> name lookup of its own.
     private void CollectFaction(JsonElement e)
     {
-        if (NullableEnName(e, "name") is string name && name.Length > 0)
-            _factionNames[Key(e)] = name;
+        if (NullableEnName(e, "name") is not string name || name.Length == 0)
+        {
+            return;
+        }
+        _factionNames[Key(e)] = name;
+        _faction.Parameters["$factionId"].Value = Key(e);
+        _faction.Parameters["$nameEn"].Value = name;
+        _faction.ExecuteNonQuery();
     }
 
     // includedTypeIDs/excludedTypeIDs (ET-232): the individual-hull refinement includedGroupIDs alone cannot express
@@ -391,7 +414,23 @@ internal sealed partial class TableWriters
         _solarSystem.Parameters["$solarSystemId"].Value = Key(e);
         _solarSystem.Parameters["$nameEn"].Value = EnName(e, "name");
         _solarSystem.Parameters["$securityStatus"].Value = Double(e, "securityStatus");
+        _solarSystem.Parameters["$regionId"].Value = Int(e, "regionID");
         _solarSystem.ExecuteNonQuery();
+    }
+
+    // Id + English name only (ET-335) — mapRegions.jsonl/npcCorporations.jsonl carry nothing else this project uses.
+    private void InsertRegion(JsonElement e)
+    {
+        _region.Parameters["$regionId"].Value = Key(e);
+        _region.Parameters["$nameEn"].Value = EnName(e, "name");
+        _region.ExecuteNonQuery();
+    }
+
+    private void InsertNpcCorporation(JsonElement e)
+    {
+        _npcCorporation.Parameters["$corporationId"].Value = Key(e);
+        _npcCorporation.Parameters["$nameEn"].Value = EnName(e, "name");
+        _npcCorporation.ExecuteNonQuery();
     }
 
     private void CollectStationSystem(JsonElement e)

@@ -130,6 +130,15 @@ public interface ISdeAccessor
     /// that id — a stale or out-of-range id from an older build, not treated as an error.</summary>
     SdeSolarSystem? GetSolarSystem(int solarSystemId);
 
+    /// <summary>SDE name for an NPC corporation id (ET-335), for a killmail's attacker/victim corporation. Null
+    /// when the SDE is unavailable or the id belongs to a player rather than an NPC — the importer's signal to
+    /// ask ESI instead.</summary>
+    string? GetNpcCorporationName(int corporationId);
+
+    /// <summary>SDE name for a faction id (ET-335), for a killmail's attacker/victim faction. Null when the SDE is
+    /// unavailable, the killmail carries no faction, or the id is unknown.</summary>
+    string? GetFactionName(int factionId);
+
     /// <summary>Release the store file (drop pooled connections + stop serving queries) so the importer can overwrite
     /// it during the atomic swap — on Windows an open/pooled handle blocks <c>File.Move</c>. Pair with <see cref="Reopen"/>.</summary>
     void Close();

@@ -5,4 +5,6 @@ namespace EveUtils.Shared.Modules.Sde.Dtos;
 /// name and security — bijvangst for ET-127): a destination typed into the escalation dialog resolves here without
 /// ESI, since the SDE already has the id and the security status the Agency window showed.
 /// </summary>
-public sealed record SdeSolarSystem(int SolarSystemId, string Name, double SecurityStatus);
+/// <param name="RegionName">Resolved through the system's <c>regionId</c> (ET-335). Optional and last so existing
+/// three-argument callers keep compiling.</param>
+public sealed record SdeSolarSystem(int SolarSystemId, string Name, double SecurityStatus, string? RegionName = null);

@@ -691,6 +691,15 @@ public sealed class SqliteSdeAccessor : ISdeAccessor
         return reader.Read() ? ReadAgent(reader) : null;
     }
 
+    // Shared by FindSolarSystemByName and GetSolarSystem (ET-335): the region name comes from a join on
+    // regionId, never a lookup dict, so a system with an unrecognised region id still reads with a null name
+    // rather than throwing.
+    private const string SolarSystemSelect =
+        """
+        SELECT s.solarSystemId, s.nameEn, s.securityStatus, r.nameEn
+        FROM SolarSystem s LEFT JOIN Region r ON r.regionId = s.regionId
+        """;
+
     public SdeSolarSystem? FindSolarSystemByName(string name)
     {
         if (string.IsNullOrWhiteSpace(name))
@@ -700,13 +709,10 @@ public sealed class SqliteSdeAccessor : ISdeAccessor
             return null;
         using var command = connection.CreateCommand();
         // No nameKey/alias table on SolarSystem (unlike Type/Site/Agent) — 8490 rows, plain nameEn match is enough.
-        command.CommandText =
-            "SELECT solarSystemId, nameEn, securityStatus FROM SolarSystem WHERE nameEn = $name COLLATE NOCASE;";
+        command.CommandText = SolarSystemSelect + " WHERE s.nameEn = $name COLLATE NOCASE;";
         command.Parameters.AddWithValue("$name", name.Trim());
         using var reader = command.ExecuteReader();
-        return reader.Read()
-            ? new SdeSolarSystem(reader.GetInt32(0), reader.GetString(1), reader.GetDouble(2))
-            : null;
+        return reader.Read() ? ReadSolarSystem(reader) : null;
     }
 
     public SdeSolarSystem? GetSolarSystem(int solarSystemId)
@@ -715,13 +721,37 @@ public sealed class SqliteSdeAccessor : ISdeAccessor
         if (connection is null)
             return null;
         using var command = connection.CreateCommand();
-        command.CommandText =
-            "SELECT solarSystemId, nameEn, securityStatus FROM SolarSystem WHERE solarSystemId = $id;";
+        command.CommandText = SolarSystemSelect + " WHERE s.solarSystemId = $id;";
         command.Parameters.AddWithValue("$id", solarSystemId);
         using var reader = command.ExecuteReader();
-        return reader.Read()
-            ? new SdeSolarSystem(reader.GetInt32(0), reader.GetString(1), reader.GetDouble(2))
-            : null;
+        return reader.Read() ? ReadSolarSystem(reader) : null;
+    }
+
+    private static SdeSolarSystem ReadSolarSystem(SqliteDataReader reader) =>
+        new(
+            reader.GetInt32(0),
+            reader.GetString(1),
+            reader.GetDouble(2),
+            reader.IsDBNull(3) ? null : reader.GetString(3));
+
+    public string? GetNpcCorporationName(int corporationId) => LookupName("NpcCorporation", "corporationId", corporationId);
+
+    public string? GetFactionName(int factionId) => LookupName("Faction", "factionId", factionId);
+
+    // Shared by GetNpcCorporationName/GetFactionName (ET-335): both are a plain id -> nameEn lookup on a table
+    // that carries nothing else, so a NOT EXISTS row correctly resolves to null rather than an exception.
+    private string? LookupName(string table, string idColumn, int id)
+    {
+        using var connection = Open();
+        if (connection is null)
+        {
+            return null;
+        }
+        using var command = connection.CreateCommand();
+        command.CommandText = $"SELECT nameEn FROM {table} WHERE {idColumn} = $id;";
+        command.Parameters.AddWithValue("$id", id);
+        var result = command.ExecuteScalar();
+        return result as string;
     }
 
     private static SdeAgent ReadAgent(SqliteDataReader reader) =>
