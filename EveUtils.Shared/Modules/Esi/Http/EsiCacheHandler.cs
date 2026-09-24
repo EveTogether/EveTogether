@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
@@ -46,7 +47,7 @@ public sealed class EsiCacheHandler(IEsiCacheStore store, IEsiRateLimitMonitor m
         {
             await response.Content.LoadIntoBufferAsync();
             var body = await response.Content.ReadAsStringAsync(cancellationToken);
-            var entry = new EsiCacheEntry(body, StrongETag(response), ComputeExpiry(response, request.RequestUri, now), now);
+            var entry = new EsiCacheEntry(body, StrongETag(response), ComputeExpiry(response, request.RequestUri, now), now, EsiCacheHeaders.ReadPages(response));
             await store.SetAsync(key, entry, cancellationToken);
         }
 
@@ -60,6 +61,10 @@ public sealed class EsiCacheHandler(IEsiCacheStore store, IEsiRateLimitMonitor m
             Content = new StringContent(entry.Body, Encoding.UTF8, "application/json")
         };
         response.Headers.TryAddWithoutValidation(EsiCacheHeaders.FromCache, "1");
+        if (entry.Pages is { } pages)
+        {
+            response.Headers.TryAddWithoutValidation(EsiCacheHeaders.Pages, pages.ToString(CultureInfo.InvariantCulture));
+        }
         if (entry.ExpiresAt is { } expires)
             response.Content.Headers.Expires = expires;
         return response;
@@ -81,8 +86,9 @@ public sealed class EsiCacheHandler(IEsiCacheStore store, IEsiRateLimitMonitor m
         return now + ttl * jitter;
     }
 
-    // Killmails (and statics derived from them) never change → effectively forever (§1, ~356d TTL).
-    private static bool IsImmutable(Uri uri) => uri.AbsolutePath.Contains("/killmails/", StringComparison.Ordinal);
+    // A killmail (/killmails/{id}/{hash}/) never changes → effectively forever (§1, ~356d TTL). A character's
+    // /characters/{id}/killmails/recent/ list does change, so only the root path counts as immutable.
+    private static bool IsImmutable(Uri uri) => uri.AbsolutePath.StartsWith("/killmails/", StringComparison.Ordinal);
 
     // Weak validators (W/) must not be used as strong ETags (§5).
     private static string? StrongETag(HttpResponseMessage response) =>
