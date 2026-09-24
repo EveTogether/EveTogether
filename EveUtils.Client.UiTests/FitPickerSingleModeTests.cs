@@ -176,7 +176,7 @@ public class FitPickerSingleModeTests
 
         var frame = window.CaptureRenderedFrame();
         Assert.NotNull(frame);
-        frame!.Save("/tmp/eveutils-fit-picker-single.png", new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
+        frame!.Save(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "eveutils-fit-picker-single.png"), new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
         window.Close();
     }
 
@@ -197,7 +197,7 @@ public class FitPickerSingleModeTests
 
         var frame = window.CaptureRenderedFrame();
         Assert.NotNull(frame);
-        frame!.Save("/tmp/eveutils-fit-picker-skill-badges.png", new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
+        frame!.Save(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "eveutils-fit-picker-skill-badges.png"), new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
         window.Close();
     }
 }

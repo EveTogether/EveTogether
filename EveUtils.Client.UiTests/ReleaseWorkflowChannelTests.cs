@@ -74,9 +74,12 @@ public class ReleaseWorkflowChannelTests
             declared.Split(' ', StringSplitOptions.RemoveEmptyEntries).Order());
     }
 
+    // Trimmed of a trailing \r: git on a Windows runner checks workflow files out with CRLF line endings, and a
+    // Multiline `$` matches before the \n while `.` still consumes the \r, so an untrimmed capture that ends the
+    // line (like "--channel" here) would carry a stray \r never seen on a LF checkout.
     private static List<string> _Matches(string text, string pattern) =>
     [
-        .. Regex.Matches(text, pattern, RegexOptions.Multiline).Select(match => match.Groups[1].Value),
+        .. Regex.Matches(text, pattern, RegexOptions.Multiline).Select(match => match.Groups[1].Value.TrimEnd('\r')),
     ];
 
     private static string _WorkflowPath()

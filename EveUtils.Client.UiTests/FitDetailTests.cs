@@ -360,8 +360,8 @@ public class FitDetailTests
         var stable = SampleStats();
         var depleting = stable with { CapacitorStable = false, CapacitorDepletesInSeconds = 393 };
 
-        var stableLine = await CapStateLine(fit, stable, "/tmp/eveutils-cap-stable.png");
-        var depletingLine = await CapStateLine(fit, depleting, "/tmp/eveutils-cap-depleting.png");
+        var stableLine = await CapStateLine(fit, stable, System.IO.Path.Combine(System.IO.Path.GetTempPath(), "eveutils-cap-stable.png"));
+        var depletingLine = await CapStateLine(fit, depleting, System.IO.Path.Combine(System.IO.Path.GetTempPath(), "eveutils-cap-depleting.png"));
 
         Assert.StartsWith("Stable", stableLine.Text);
         Assert.StartsWith("Depletes in", depletingLine.Text);
@@ -636,12 +636,12 @@ public class FitDetailTests
         window.Show();
         var frame = window.CaptureRenderedFrame();
         Assert.NotNull(frame);
-        frame!.Save("/tmp/eveutils-skills-required.png", new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
+        frame!.Save(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "eveutils-skills-required.png"), new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
 
         vm.MatchInGameRate = true;   // 1:1-with-in-game comparison rate (~25 SP/min generic baseline)
         var inGameFrame = window.CaptureRenderedFrame();
         Assert.NotNull(inGameFrame);
-        inGameFrame!.Save("/tmp/eveutils-skills-required-ingame.png", new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
+        inGameFrame!.Save(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "eveutils-skills-required-ingame.png"), new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
         window.Close();
     }
 
@@ -662,7 +662,7 @@ public class FitDetailTests
         window.Show();
         var frame = window.CaptureRenderedFrame();
         Assert.NotNull(frame);
-        frame!.Save("/tmp/eveutils-weather-selector.png", new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
+        frame!.Save(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "eveutils-weather-selector.png"), new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
         window.Close();
     }
 
@@ -678,7 +678,7 @@ public class FitDetailTests
         window.Show();
         var frame = window.CaptureRenderedFrame();
         Assert.NotNull(frame);
-        frame!.Save("/tmp/eveutils-fit-detail-metadata.png", new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
+        frame!.Save(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "eveutils-fit-detail-metadata.png"), new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
         window.Close();
     }
 
@@ -1146,7 +1146,7 @@ public class FitDetailTests
         window.Show();
         var frame = window.CaptureRenderedFrame();
         Assert.NotNull(frame);
-        frame!.Save("/tmp/eveutils-storage-panel.png", new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
+        frame!.Save(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "eveutils-storage-panel.png"), new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
         window.Close();
     }
 
@@ -1272,7 +1272,7 @@ public class FitDetailTests
         window.Show();
         var frame = window.CaptureRenderedFrame();
         Assert.NotNull(frame);
-        frame!.Save("/tmp/eveutils-fit-detail.png", new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
+        frame!.Save(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "eveutils-fit-detail.png"), new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
     }
 
     [AvaloniaFact]
@@ -1301,6 +1301,6 @@ public class FitDetailTests
         window.Show();
         var frame = window.CaptureRenderedFrame();
         Assert.NotNull(frame);
-        frame!.Save("/tmp/eveutils-fit-detail-structure.png", new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
+        frame!.Save(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "eveutils-fit-detail-structure.png"), new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
     }
 }

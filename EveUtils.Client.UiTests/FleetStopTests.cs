@@ -339,7 +339,7 @@ public class FleetStopTests
         Assert.DoesNotContain(texts, t => t.Contains("isband", StringComparison.Ordinal));
         Assert.DoesNotContain(texts, t => t.Contains("elete", StringComparison.Ordinal));
 
-        window.CaptureRenderedFrame()?.Save("/tmp/eveutils-et166-stop-dialog.png",
+        window.CaptureRenderedFrame()?.Save(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "eveutils-et166-stop-dialog.png"),
             new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
         window.Close();
     }
@@ -385,7 +385,7 @@ public class FleetStopTests
         UiDispatcher.UIThread.RunJobs();
         window.UpdateLayout();
 
-        window.CaptureRenderedFrame()?.Save("/tmp/eveutils-et166-stop-dialog-quiet.png",
+        window.CaptureRenderedFrame()?.Save(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "eveutils-et166-stop-dialog-quiet.png"),
             new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
 
         var texts = RenderedText.VisibleTexts(window);
@@ -504,7 +504,7 @@ public class FleetStopTests
         Assert.True(dockedStop!.Bounds.Width > 0, "STOP rendered with no width in the docked tab");
         Assert.Contains("accent", dockedStop.Classes);
         Assert.DoesNotContain(RenderedText.VisibleTexts(docked), t => t == "CONCLUDE");
-        docked.CaptureRenderedFrame()?.Save("/tmp/eveutils-et166-roster-docked.png",
+        docked.CaptureRenderedFrame()?.Save(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "eveutils-et166-roster-docked.png"),
             new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
 
         // 3 — the switch back to floating reparents that same content into the module's own window.
@@ -522,7 +522,7 @@ public class FleetStopTests
         Assert.True(floatingStop!.Bounds.Width > 0, "STOP rendered with no width after switching to a floating window");
         Assert.Contains("accent", floatingStop.Classes);
         Assert.DoesNotContain(RenderedText.VisibleTexts(window), t => t == "CONCLUDE");
-        window.CaptureRenderedFrame()?.Save("/tmp/eveutils-et166-roster-floating.png",
+        window.CaptureRenderedFrame()?.Save(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "eveutils-et166-roster-floating.png"),
             new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
 
         window.Close();
