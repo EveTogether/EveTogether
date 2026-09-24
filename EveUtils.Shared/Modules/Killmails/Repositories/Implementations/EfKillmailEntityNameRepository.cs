@@ -24,7 +24,9 @@ internal sealed class EfKillmailEntityNameRepository(IDbContextFactory<SharedDbC
     public async Task UpsertAsync(KillmailEntityName entry, CancellationToken cancellationToken = default)
     {
         if (await _TryUpdateAsync(entry, cancellationToken))
+        {
             return;
+        }
 
         try
         {
@@ -44,7 +46,9 @@ internal sealed class EfKillmailEntityNameRepository(IDbContextFactory<SharedDbC
         await using var db = await contextFactory.CreateDbContextAsync(cancellationToken);
         var existing = await db.Set<KillmailEntityName>().FirstOrDefaultAsync(entity => entity.Id == entry.Id, cancellationToken);
         if (existing is null)
+        {
             return false;
+        }
 
         existing.Kind = entry.Kind;
         existing.Name = entry.Name;
