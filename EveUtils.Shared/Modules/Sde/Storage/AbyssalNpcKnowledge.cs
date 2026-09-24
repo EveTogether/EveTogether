@@ -23,45 +23,15 @@ public enum AbyssalNpcFaction
 /// Mirrors the nine behaviors <see cref="ISdeAccessor.GetNpcEwarProfile"/> reads from the SDE for a typed NPC.</summary>
 public enum NpcEwarKind { Scram, Neut, Web, Damp, TrackingDisrupt, GuidanceDisrupt, Paint, RemoteRepair, Vorton }
 
-/// <summary>One of the two Vigilant Tyrannos ESI agents (Karybdis/Scylla, ids 3019609/3019610) that carry no SDE
-/// type at all — the killmail/enemy collector currently drops them silently for want of a type id. Karybdis flies
-/// a Drifter battleship with no e-war [confirmed, EVE University wiki, "Abyssal Deadspace", retrieved 2026-09-24: it
-/// "does not come with either a Doomsday Weapon or any EWAR abilities"]; "Scylla Tyrannos" is a display name shared
-/// by several different Drifter cruiser hulls, at least one of which scrambles [confirmed, Raymond's own gamelog].
-/// <see cref="KnownEwar"/> lists only what is actually observed, not a range — no range is measured for either agent.</summary>
+/// <summary>A Tyrannos ESI agent without an SDE type. <see cref="KnownEwar"/> contains only observed
+/// effects; no ranges are known. See ET-342 research for sources.</summary>
 public sealed record TyrannosAgent(string Name, AbyssalNpcFaction Faction, IReadOnlySet<NpcEwarKind> KnownEwar);
 
-/// <summary>
-/// The abyssal NPC knowledge the SDE does not carry (ET-367): faction per hull word, the two Vigilant Tyrannos
-/// agents that have no SDE type, and one tactical note per faction. Everything the SDE DOES carry — e-war, EHP,
-/// signature, speed — comes from <see cref="ISdeAccessor.GetNpcEwarProfile"/> instead; this table only fills the
-/// gap, and only with facts, never with a guess (<see cref="Faction"/>).
-///
-/// <para><b>Sources</b> (Raymond, 2026-09-24: SDE first, cheat sheet/web only for what it does not cover, each
-/// fact dated and attributed, anything not confirmed in two sources marked [vermoeden]):</para>
-/// <list type="bullet">
-/// <item>The hull-word table is the ET-342 research (Depot <c>Research/et-342-abyssal-rooms/README.md</c>,
-/// 2026-09-24), which resolved 45 of 48 gamelog-observed names to real SDE types and read the surviving hull word
-/// off each — confirmed against the live SDE directly (ET-367, build 3542233) for every entry used in this file's
-/// own tests.</item>
-/// <item>The Convocation of Empyreans' Abyssal Cheat Sheet (updated 2/28/YC124 2022, "All images, concepts, and
-/// names are property of CCP Games"), via Raymond's own summary of it (ET-342 comment, 2026-09-24) — facts only,
-/// reworded, never its text or images: the Triglavian drone note, the EDENCOM command-ship note, and the Vigilant
-/// Tyrannos "close distance fast" note.</item>
-/// <item>The EVE University wiki, "Abyssal Deadspace" (<c>wiki.eveuniversity.org/Abyssal_Deadspace</c>, retrieved
-/// 2026-09-24) — confirms the Lucid/Devoted/Lucifer/Overmind hull words against the same faction this file already
-/// assigns them, and is the source for the Rogue Drones, Sleepers, Angel, EDENCOM-resist and Drifters/Tyrannos
-/// notes. Confirmed independently against a second, older source (Massively Overpowered, "The expert Gila's guide
-/// to Abyssal Deadspace", 2018) for the Angel resist-weakness and Rogue Drone kiting facts specifically; the rest
-/// rests on the University wiki alone and is marked [vermoeden] below where it is not also plain SDE data.</item>
-/// </list>
-/// </summary>
+/// <summary>Faction, Tyrannos agents and tactical notes absent from the SDE. E-war and defenses come from
+/// <see cref="ISdeAccessor.GetNpcEwarProfile"/>. Sources: ET-342 research in Depot and the ET-367 PR.</summary>
 public static class AbyssalNpcKnowledge
 {
-    // The adjective a Triglavian/Rogue Drone/etc. abyssal NPC is built on top of — the word that carries the faction,
-    // not the hull's role word next to it. ~14-15 entries, measured against the SDE in the ET-342 research; a name
-    // outside this list (e.g. a loot structure like the Triglavian Biocombinative Cache) is deliberately unrecognised
-    // rather than guessed.
+    // Match faction-bearing hull words only; unknown names and loot structures stay unrecognised.
     private static readonly Dictionary<string, AbyssalNpcFaction> FactionByHullWord = new(StringComparer.OrdinalIgnoreCase)
     {
         ["Damavik"] = AbyssalNpcFaction.Triglavian,
@@ -91,10 +61,8 @@ public static class AbyssalNpcKnowledge
             .Select(word => FactionByHullWord.TryGetValue(word, out var faction) ? (AbyssalNpcFaction?)faction : null)
             .FirstOrDefault(faction => faction is not null);
 
-    /// <summary>The faction of a set of enemy names: the one faction they share, or <see cref="AbyssalNpcFaction.Mixed"/>
-    /// when two or more distinct factions are recognised among them. Null when none of the names are recognised.
-    /// Never a guess — a name this table cannot place (an unrecognised hull word, or a non-NPC name) does not count
-    /// either way, so it can neither create nor break a "mixed" reading.</summary>
+    /// <summary>The shared faction, <see cref="AbyssalNpcFaction.Mixed"/> for multiple known factions,
+    /// or null when no name is recognised. Unknown names do not affect the result.</summary>
     public static AbyssalNpcFaction? Faction(IEnumerable<string> names)
     {
         var recognised = names.Select(FactionOf).OfType<AbyssalNpcFaction>().Distinct().ToList();

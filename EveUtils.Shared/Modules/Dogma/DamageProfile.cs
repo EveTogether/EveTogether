@@ -25,17 +25,18 @@ public sealed record DamageProfile(double Em, double Th, double Kin, double Exp)
         return new DamageProfile(Em / sum, Th / sum, Kin / sum, Exp / sum);
     }
 
-    /// <summary>One layer's EHP under this profile: hitPoints / Σ(wᵢ · resonanceᵢ). Zero hit points, or an all-zero
-    /// profile (the "Raw HP" mode), reports the raw buffer HP without a resist adjustment. The one formula behind
-    /// both callers that need it: <c>DerivedStatsCalculator.LayerEhp</c> resolves a fitted ship's resonances through
-    /// skills/modules first, <c>SqliteSdeAccessor.GetNpcEwarProfile</c> (ET-367) reads an NPC's resonances straight
-    /// off the SDE — neither recomputes the math itself.</summary>
+    /// <summary>One layer's EHP: hit points divided by weighted resonance. An all-zero profile returns raw HP;
+    /// both fitted ships and SDE NPCs use this formula.</summary>
     public double WeightedEhp(double hitPoints, double emResonance, double thResonance, double kinResonance, double expResonance)
     {
         if (hitPoints <= 0)
+        {
             return 0;
+        }
         if (Em + Th + Kin + Exp <= 0)
+        {
             return hitPoints;
+        }
         var weightedResonance = Em * emResonance + Th * thResonance + Kin * kinResonance + Exp * expResonance;
         return weightedResonance > 0 ? hitPoints / weightedResonance : 0;
     }
