@@ -13,6 +13,11 @@ taken from the matching `## vX.Y.Z` section below.
 
 ## [Unreleased]
 
+- **Added: rewrite what a run cost you by hand.** A saved activity's CONSUMABLES block has a REWRITE CONSUMABLES BY
+  HAND button for each of your characters, the same box you already use to rewrite loot. Set the filament to 0 when a
+  fleetmate's was used, or add the ammo, drones, boosters and nanite paste you went through. Every line is valued at
+  the cached market price, and CONSUMED, NET, the run's total ISK, the day and week totals and the home screen all
+  take it off once. It stays with the run when you publish it to a server; your fleetmates record their own.
 - **Fixed: an abyssal run's filament now shows up as what it cost.** CONSUMABLES lists the filament like any other
   item, with its icon, name, count and value. In the loot block CONSUMED shows the filament's cost instead of "no
   price", and NET is the loot minus what you spent, the same figure the run's total ISK already used. A saved run is

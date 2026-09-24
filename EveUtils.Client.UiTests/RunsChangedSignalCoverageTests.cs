@@ -215,6 +215,15 @@ public sealed class RunsChangedSignalCoverageTests
                 [_Entry()]), cancellationToken), runId);
         },
 
+        [typeof(SetRunConsumablesManualCommand)] = async (dispatcher, cancellationToken) =>
+        {
+            Guid runId = await _StartAsync(dispatcher, cancellationToken);
+            await dispatcher.Send(new SaveRunCommand(runId, StartedAtUtc.AddMinutes(15), StartedAtUtc.AddMinutes(16),
+                [], [], [], []), cancellationToken);
+            return new Act(async () => await dispatcher.Send(new SetRunConsumablesManualCommand(runId, [_Entry()]),
+                cancellationToken), runId);
+        },
+
         [typeof(SetRunLootStrategyCommand)] = async (dispatcher, cancellationToken) =>
         {
             Guid runId = await _StartAsync(dispatcher, cancellationToken);

@@ -42,8 +42,8 @@ public sealed class RunLootTextEditTests
         await section.RefreshAsync(Token);
         Assert.Equal(6_000m, section.TotalIsk);
 
-        section.LootText = edited;
-        Assert.True(section.CanFinishLootEdit);
+        section.LootEditor.Text = edited;
+        Assert.True(section.LootEditor.CanFinish);
         Assert.True(await section.ReplaceLootWithTextAsync(Token));
 
         Assert.Equal(expectedIsk, section.TotalIsk);
@@ -57,7 +57,7 @@ public sealed class RunLootTextEditTests
         }
 
         // Editing again rewrites the same one row rather than stacking a second written list on the run.
-        section.LootText = "Tritanium\t1";
+        section.LootEditor.Text = "Tritanium\t1";
         Assert.True(await section.ReplaceLootWithTextAsync(Token));
         Assert.Equal(3, section.Captures.Count);
         Assert.Equal(100m, section.TotalIsk);
@@ -76,7 +76,7 @@ public sealed class RunLootTextEditTests
         await _CopyAsync(dispatcher, "AAA", 34, "Tritanium", 10, StartedAtUtc.AddMinutes(1));
         await section.RefreshAsync(Token);
 
-        section.LootText = "Tritanium\t10";
+        section.LootEditor.Text = "Tritanium\t10";
         Assert.True(await section.ReplaceLootWithTextAsync(Token));
         Assert.Equal(1_000m, section.TotalIsk);
 
@@ -104,7 +104,7 @@ public sealed class RunLootTextEditTests
         await _CopyAsync(dispatcher, "BBB", 35, "Pyerite", 20, StartedAtUtc.AddMinutes(2));
         await section.RefreshAsync(Token);
 
-        section.LootText = "Tritanium\t10";
+        section.LootEditor.Text = "Tritanium\t10";
         Assert.True(await section.ReplaceLootWithTextAsync(Token));
 
         Assert.True((await dispatcher.Send(new SaveRunCommand(section.RunId!.Value, StartedAtUtc,

@@ -1,0 +1,29 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vr="using:EveUtils.Client.ViewModels.Runs"
+             x:Class="EveUtils.Client.Views.Runs.InventoryListEditorView"
+             x:DataType="vr:InventoryListEditorViewModel">
+
+    <!-- The box a list is rewritten in by hand, LOOT's and CONSUMABLES' alike (ET-334): the reason it cannot be
+         taken stays beside the text it turns down, and "done" is greyed until it can. -->
+    <UserControl.Styles>
+        <StyleInclude Source="avares://EveUtils.Client/Views/Runs/LootItemStyles.axaml"/>
+    </UserControl.Styles>
+
+    <StackPanel Spacing="4" Margin="0,2,0,6">
+        <TextBox AcceptsReturn="True" MinHeight="90" TextWrapping="NoWrap"
+                 FontFamily="{StaticResource MonoFont}"
+                 PlaceholderText="Name, tab, quantity — one row per line."
+                 Text="{Binding Text, Mode=TwoWay}"/>
+        <TextBlock Classes="note" FontStyle="Normal" Text="{Binding Refusal}"
+                   IsVisible="{Binding Refusal, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+        <StackPanel Orientation="Horizontal" Spacing="8">
+            <Button Classes="rewrite" Content="{Binding FinishText}"
+                    IsEnabled="{Binding CanFinish}"
+                    Command="{Binding SaveCommand}"/>
+            <Button Classes="small ghost" Content="cancel" VerticalAlignment="Center"
+                    IsEnabled="{Binding !IsBusy}"
+                    Command="{Binding CancelCommand}"/>
+        </StackPanel>
+    </StackPanel>
+</UserControl>

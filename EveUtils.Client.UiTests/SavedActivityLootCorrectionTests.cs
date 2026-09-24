@@ -101,7 +101,7 @@ public sealed class SavedActivityLootCorrectionTests
 
         ActivityLootCharacterViewModel second = detail.Loot().LootOverview.Characters[1];
         second.Loot.BeginLootEditCommand.Execute(null);
-        second.Loot.LootText = "Tritanium\t1";
+        second.Loot.LootEditor.Text = "Tritanium\t1";
         Assert.True(await second.Loot.ReplaceLootWithTextAsync(Token));
         Assert.Equal(2, rebuilds.Count);
         Assert.All(rebuilds, rebuild => Assert.NotNull(rebuild.ActivityOfRunId));

@@ -13,5 +13,9 @@ public enum LootCaptureRole
     CargoBefore,
 
     /// <summary>The cargo hold the run ended on. Left unset, the last capture is it.</summary>
-    CargoAfter
+    CargoAfter,
+
+    /// <summary>What the run's own pilot spent besides the filament — ammo, drones, boosters — written out by hand
+    /// (ET-334). Never loot: the tally leaves it out, and CONSUMABLES counts it.</summary>
+    Consumed
 }

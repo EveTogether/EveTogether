@@ -89,4 +89,77 @@
     <Style Selector="Border.badge.repeat > TextBlock">
         <Setter Property="Foreground" Value="{StaticResource MagentaBrush}"/>
     </Style>
+
+    <!-- ── Per character ── the name and subtotal heading every block, LOOT's and CONSUMABLES' alike. -->
+    <Style Selector="TextBlock.charname">
+        <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+        <Setter Property="FontSize" Value="13"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+        <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+    </Style>
+    <Style Selector="TextBlock.subtotal">
+        <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+        <Setter Property="FontSize" Value="13"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+
+    <!-- ── Rewrite by hand ── the note under a list, the button that opens the box and the box's own buttons: one
+         look for LOOT and CONSUMABLES (ET-334). -->
+    <Style Selector="TextBlock.note">
+        <Setter Property="Foreground" Value="{StaticResource LootMetaBrush}"/>
+        <Setter Property="FontSize" Value="10"/>
+        <Setter Property="FontStyle" Value="Italic"/>
+        <Setter Property="TextWrapping" Value="Wrap"/>
+    </Style>
+
+    <!-- ── Buttons ── the mockup's small accent button for the way back in, and the one control Jithran asked to
+         be found without looking: rewrite by hand, plated and bordered in the accent on every character's own
+         header rather than a ghost at the foot of the list (ET-215 feedback). -->
+    <Style Selector="Button.small">
+        <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
+        <Setter Property="Foreground" Value="{DynamicResource TextAccentBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="CornerRadius" Value="3"/>
+        <Setter Property="Padding" Value="8,3"/>
+        <Setter Property="MinHeight" Value="0"/>
+        <Setter Property="FontSize" Value="10"/>
+    </Style>
+    <Style Selector="Button.small:pointerover /template/ ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource BgRowHoverBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}"/>
+        <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+    </Style>
+    <Style Selector="Button.small.ghost">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}"/>
+    </Style>
+    <Style Selector="Button.small:disabled /template/ ContentPresenter">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+    </Style>
+    <Style Selector="Button.rewrite">
+        <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
+        <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="CornerRadius" Value="3"/>
+        <Setter Property="Padding" Value="10,4"/>
+        <Setter Property="MinHeight" Value="0"/>
+        <Setter Property="FontSize" Value="10.5"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="LetterSpacing" Value="1"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+    <Style Selector="Button.rewrite:pointerover /template/ ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource BgRowHoverBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+        <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+    </Style>
+    <Style Selector="Button.rewrite:disabled /template/ ContentPresenter">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+    </Style>
 </Styles>

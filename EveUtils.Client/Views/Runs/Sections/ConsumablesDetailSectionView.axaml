@@ -5,11 +5,37 @@
              xmlns:vw="using:EveUtils.Client.Views.Runs"
              x:Class="EveUtils.Client.Views.Runs.Sections.ConsumablesDetailSectionView"
              x:DataType="vs:ConsumablesDetailSectionViewModel">
+    <UserControl.Styles>
+        <StyleInclude Source="avares://EveUtils.Client/Views/Runs/LootItemStyles.axaml"/>
+    </UserControl.Styles>
+
     <StackPanel>
-        <ItemsControl x:Name="ConsumableList" ItemsSource="{Binding Rows}" IsVisible="{Binding HasConsumables}">
+        <!-- One block per run, headed the way LOOT heads its own (ET-334): who, the way to rewrite it, what it cost.
+             The box opens in place of the lines it rewrites. -->
+        <ItemsControl x:Name="ConsumableList" ItemsSource="{Binding Characters}">
             <ItemsControl.ItemTemplate>
-                <DataTemplate DataType="vr:ActivityLootLineViewModel">
-                    <vw:ActivityLootLineView/>
+                <DataTemplate DataType="vr:ConsumablesCharacterViewModel">
+                    <StackPanel Margin="0,0,0,10">
+                        <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8" Margin="2,4">
+                            <TextBlock Classes="charname" Text="{Binding CharacterText}"/>
+                            <Button Grid.Column="1" Classes="rewrite" Content="✎  REWRITE CONSUMABLES BY HAND"
+                                    IsVisible="{Binding CanOfferEdit}"
+                                    IsEnabled="{Binding CanEdit}"
+                                    Command="{Binding BeginEditCommand}"
+                                    ToolTip.Tip="Replace what this character spent with a list you type or paste. Leave the filament out, or set it to 0, when a fleetmate's was used."/>
+                            <TextBlock Grid.Column="2" Classes="subtotal" Text="{Binding SubtotalText}"/>
+                        </Grid>
+                        <vw:InventoryListEditorView DataContext="{Binding Editor}" IsVisible="{Binding IsOpen}"/>
+                        <ItemsControl ItemsSource="{Binding Lines}" IsVisible="{Binding !Editor.IsOpen}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="vr:ActivityLootLineViewModel">
+                                    <vw:ActivityLootLineView/>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <TextBlock Classes="note" FontStyle="Normal" Margin="2,2,0,0" IsVisible="{Binding IsBusy}"
+                                   Text="Saving the change and counting the totals again…"/>
+                    </StackPanel>
                 </DataTemplate>
             </ItemsControl.ItemTemplate>
         </ItemsControl>

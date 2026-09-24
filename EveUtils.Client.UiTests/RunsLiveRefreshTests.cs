@@ -329,17 +329,17 @@ public sealed class RunsLiveRefreshTests
         ActivityDetailViewModel detail = await _DetailThroughTheRowAsync(instance);
         RunLootViewModel loot = detail.Loot().LootOverview.Characters[0].Loot;
         loot.BeginLootEditCommand.Execute(null);
-        loot.LootText = "Tritanium\t9";
+        loot.LootEditor.Text = "Tritanium\t9";
 
         await dispatcher.Send(new SetRunLootCaptureExclusionCommand(loot.Captures[1].CaptureId, true), Token);
         await ActivityWindowHarness.WaitUntil(() => detail.TotalIskText == $"{300m:N0} ISK");
 
         Assert.Equal($"{300m:N0} ISK", detail.TotalIskText);
-        Assert.True(loot.IsEditingLoot);
-        Assert.Equal("Tritanium\t9", loot.LootText);
+        Assert.True(loot.LootEditor.IsOpen);
+        Assert.Equal("Tritanium\t9", loot.LootEditor.Text);
         Assert.False(loot.Captures[1].IsExcluded);
 
-        loot.CancelLootEditCommand.Execute(null);
+        loot.LootEditor.CancelCommand.Execute(null);
         await ActivityWindowHarness.WaitUntil(() => loot.Captures[1].IsExcluded);
 
         Assert.True(loot.Captures[1].IsExcluded);

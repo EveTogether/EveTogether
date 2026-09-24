@@ -27,8 +27,6 @@
                 <TextBlock Classes="itemname" Text="{Binding Name}"/>
                 <TextBlock Classes="meta" Text="{Binding CaptureCountText}"
                            IsVisible="{Binding CaptureCountText, Converter={x:Static ObjectConverters.IsNotNull}}"/>
-                <TextBlock Classes="meta" Text="{Binding OwnerText}"
-                           IsVisible="{Binding OwnerText, Converter={x:Static ObjectConverters.IsNotNull}}"/>
                 <Border Classes="badge excluded" IsVisible="{Binding IsExcluded}">
                     <TextBlock Text="EXCLUDED"/>
                 </Border>
