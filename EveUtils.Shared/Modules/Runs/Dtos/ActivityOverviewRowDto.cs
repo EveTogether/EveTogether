@@ -91,4 +91,7 @@ public sealed record ActivityOverviewRowDto(
     /// <c>IskByCharacter</c> reads, narrowed to the caller's characters, so the runs summary's BY CHARACTER (ET-294)
     /// adds up to its hero figure without a detail read per activity. Null where no split is stored yet, and when the
     /// caller named no characters.</summary>
-    IReadOnlyDictionary<long, IskBreakdown>? OwnIskByCharacter = null);
+    IReadOnlyDictionary<long, IskBreakdown>? OwnIskByCharacter = null,
+    /// <summary>A ship, not a pod, of this machine's characters was lost in one of its runs (ET-331): derived from the
+    /// linked killmails at every read, never stored, so unlinking the loss takes it away.</summary>
+    bool HasShipLoss = false);

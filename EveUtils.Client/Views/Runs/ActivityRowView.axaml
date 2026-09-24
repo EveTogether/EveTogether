@@ -29,6 +29,10 @@
                                     IsVisible="{Binding HasAutoSavedRun}">
                                 <TextBlock Text="{Binding AutoSavedText}"/>
                             </Border>
+                            <Border DockPanel.Dock="Left" Classes="chip danger" Margin="7,0,0,0"
+                                    IsVisible="{Binding HasShipLoss}">
+                                <TextBlock Text="{Binding ShipLossText}"/>
+                            </Border>
                             <ItemsControl Margin="7,0,0,0" ItemsSource="{Binding Chips}">
                                 <ItemsControl.ItemsPanel>
                                     <ItemsPanelTemplate>
