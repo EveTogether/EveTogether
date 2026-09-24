@@ -65,6 +65,7 @@ public sealed class FleetsGrpcService(
     {
         var character = await AuthenticateAsync(context);
 
+        var wasListed = await fleets.IsOpenAsync(request.FleetId, context.CancellationToken);
         var result = await dispatcher.Send(new EditFleetCommand(
             request.FleetId,
             request.Name,
@@ -75,6 +76,8 @@ public sealed class FleetsGrpcService(
             (FleetOfflineBehavior)request.OfflineBehavior,
             character), context.CancellationToken);
 
+        if (result.IsSuccess)
+            await AnnounceLifecycleAsync(request.FleetId, FleetChangeKind.Edited, wasListed, context.CancellationToken);
         return ToActionReply(result, "Saved.");
     }
 

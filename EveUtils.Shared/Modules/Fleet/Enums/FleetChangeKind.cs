@@ -19,5 +19,10 @@ public enum FleetChangeKind
     /// <summary>A fleet appeared or was disbanded (ET-10) — for a public fleet that is a row arriving in or leaving
     /// every connected client's discovery list. Appended for the same wire reason as <see cref="Stopped"/>.</summary>
     Created,
-    Disbanded
+    Disbanded,
+
+    /// <summary>The fleet's own details were edited (ET-360) — a name, a time or the visibility, so a public fleet made
+    /// invite-only takes its row out of every non-member's list. Appended for the same wire reason as
+    /// <see cref="Stopped"/>.</summary>
+    Edited
 }
