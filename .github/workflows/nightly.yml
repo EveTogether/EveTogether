@@ -51,7 +51,10 @@ jobs:
           # ("main") and would never equal a sha, quietly making this check always say "yes, build". Captured
           # here, before the manual short-circuit below, so the release job can list the commits since it as
           # this nightly's changelog on a scheduled and a hand-fired run alike.
-          published=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/nightly" -q .object.sha 2>/dev/null || echo "")
+          # A failed call (no 'nightly' tag yet, e.g. the very first nightly) must read as "nobody published
+          # one" — gh api writes its error body to stdout even on a 404, so `2>/dev/null || echo ""` alone still
+          # lets that JSON through; the || below discards it on the exit code instead of trusting stdout.
+          published=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/nightly" -q .object.sha 2>/dev/null) || published=""
           echo "previous=$published" >> "$GITHUB_OUTPUT"
           head=$(git rev-parse HEAD)
 
@@ -305,8 +308,13 @@ jobs:
       # raises: what landed in tonight's build. Falls back to the most recent commits when there is no previous
       # nightly to walk from (the very first nightly, or a pruned/rewritten history).
       - name: Compose the release notes
+        env:
+          # Routed through env: and read back quoted ("$PREVIOUS") rather than interpolated into the script
+          # text directly — a job output is untrusted content as far as this step is concerned, and pasting it
+          # into bash source lets whatever it contains (a stray quote, a space) break the script's parsing.
+          PREVIOUS: ${{ needs.changes.outputs.previous }}
         run: |
-          previous="${{ needs.changes.outputs.previous }}"
+          previous="$PREVIOUS"
           {
             echo "Rolling build of \`main\`, replaced whenever main moves. Not a release: things here are expected to break."
             echo
