@@ -111,7 +111,7 @@ public sealed class FittingsGrpcService(
 
     public override async Task<DeleteSharedFitReply> DeleteSharedFit(DeleteSharedFitRequest request, ServerCallContext context)
     {
-        await AuthenticateAsync(context);
+        var session = await AuthenticateAsync(context);
 
         // Needs the fit.manage permission — separate from fit.sync.
         if (!await policy.IsAllowedAsync(principals.Current, FittingsPermissions.Manage, context.CancellationToken))
@@ -121,9 +121,20 @@ public sealed class FittingsGrpcService(
         }
 
         var removed = await repository.RemoveAsync(request.Id, context.CancellationToken);
-        return removed
-            ? new DeleteSharedFitReply { Accepted = true, Message = "Deleted." }
-            : new DeleteSharedFitReply { Accepted = false, Message = "Fit not found on the server." };
+        if (!removed)
+            return new DeleteSharedFitReply { Accepted = false, Message = "Fit not found on the server." };
+
+        var envelope = new EventEnvelope
+        {
+            EventType = "fittings.deleted",
+            EventId = Guid.NewGuid().ToString(),
+            CharacterId = session.SyncedCharacter?.EsiCharacterId ?? 0,
+            Timestamp = DateTimeOffset.UtcNow.ToString("o"),
+            PayloadJson = System.Text.Json.JsonSerializer.Serialize(new FitDeletedPayload(request.Id))
+        };
+        await connectedClients.BroadcastExceptAsync("", envelope, context.CancellationToken);
+
+        return new DeleteSharedFitReply { Accepted = true, Message = "Deleted." };
     }
 
     /// <summary>The validated session, or a <see cref="StatusCode.Unauthenticated"/> <see cref="RpcException"/> —

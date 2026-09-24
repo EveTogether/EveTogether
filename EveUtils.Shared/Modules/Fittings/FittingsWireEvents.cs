@@ -15,5 +15,11 @@ public sealed class FittingsWireEvents : IWireEventCatalog
                           ?? throw new InvalidOperationException("Invalid fittings.shared payload.");
             return new FitSharedEvent(payload, characterId);
         });
+        registry.Register("fittings.deleted", (payloadJson, characterId) =>
+        {
+            var payload = JsonSerializer.Deserialize<FitDeletedPayload>(payloadJson)
+                          ?? throw new InvalidOperationException("Invalid fittings.deleted payload.");
+            return new FitDeletedEvent(payload, characterId);
+        });
     }
 }
