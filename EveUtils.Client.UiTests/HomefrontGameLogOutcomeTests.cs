@@ -93,7 +93,10 @@ public sealed class HomefrontGameLogOutcomeTests
         window.Refresh(DateTime.UtcNow);
         section.Refresh(DateTime.UtcNow);
         Assert.True(section.CanDecide);
-        section.SetOutcomeCommand.Execute(HomefrontOutcome.Failed);
+        // Awaited (ET-375): the write behind this command used to be effectively synchronous, so a fire-and-forget
+        // Execute() was enough. It genuinely runs off the UI thread now (ET-287), so the pick must be awaited to be
+        // certain it is stored before the run's own default outcome gets a chance to write over it.
+        await section.SetOutcomeCommand.ExecuteAsync(HomefrontOutcome.Failed);
 
         await harness.WriteLineAsync(_PaleShadowLine());
         Run run = await _TickUntilAsync(harness, window, section, runId, run => run.HomefrontOutcome is not null, ticks: 30);

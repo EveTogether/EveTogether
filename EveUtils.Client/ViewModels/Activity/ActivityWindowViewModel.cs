@@ -1844,8 +1844,12 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     /// guards its own read (ET-287): a lookup outliving one tick must not be started again by the next.</summary>
     private bool _isNamingActingCharacter;
 
-    /// <summary>Guards the unstarted-fleet lookup in <see cref="RefreshFleetCommandAsync"/> the same way (ET-287).</summary>
-    private bool _isCheckingUnstartedFleet;
+    /// <summary>Guards the unstarted-fleet lookup in <see cref="RefreshFleetCommandAsync"/> the same way (ET-287):
+    /// a lookup outliving one tick is not started again by the next. Holds the in-flight task itself, not just a
+    /// flag — a caller who awaits <see cref="RefreshFleetCommandAsync"/> joins an already-running lookup instead of
+    /// seeing the throttle interval still open and moving on with a stale, unsettled notice; the tick that started
+    /// the lookup fires it fire-and-forget, so an explicit awaiter has no other way to catch up with it.</summary>
+    private Task<(string? Name, int FormingCount)>? _unstartedFleetCheck;
 
     /// <summary>
     /// Offer what this run has looted to the fleet. Clock-driven like the rest of the window, and it only ever hands
@@ -2378,20 +2382,27 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             _unstartedFleetNoticeCheckedAtUtc = null;
         }
         // A text hint can wait briefly: checking every clock tick wastes work, but checking only once hides new fleets.
-        else if (_runCharacterId is not null && !_isCheckingUnstartedFleet
-                 && (_unstartedFleetNoticeCheckedAtUtc is null
+        // A caller who awaits this method joins a lookup already under way rather than only checking the throttle
+        // interval: the tick that starts a lookup does so fire-and-forget, so an explicit awaiter arriving before it
+        // lands (a start right after a run begins, here in the same instant) needs a way to catch up with the same
+        // result instead of seeing "not due yet" and moving on with the notice unset.
+        else if (_runCharacterId is not null
+                 && (_unstartedFleetCheck is not null || _unstartedFleetNoticeCheckedAtUtc is null
                      || nowUtc - _unstartedFleetNoticeCheckedAtUtc >= UnstartedFleetNoticeRefreshInterval))
         {
-            _unstartedFleetNoticeCheckedAtUtc = nowUtc;
-            _isCheckingUnstartedFleet = true;
+            if (_unstartedFleetCheck is null)
+            {
+                _unstartedFleetNoticeCheckedAtUtc = nowUtc;
+                // Off the UI thread (ET-287) — see _RefreshParticipantsAsync.
+                _unstartedFleetCheck = Task.Run(() => _UnstartedFleetNameAsync());
+            }
             try
             {
-                // Off the UI thread (ET-287) — see _RefreshParticipantsAsync.
-                (UnstartedFleetName, FormingFleetCount) = await Task.Run(() => _UnstartedFleetNameAsync());
+                (UnstartedFleetName, FormingFleetCount) = await _unstartedFleetCheck;
             }
             finally
             {
-                _isCheckingUnstartedFleet = false;
+                _unstartedFleetCheck = null;
             }
         }
     }
