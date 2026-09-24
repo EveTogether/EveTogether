@@ -32,6 +32,9 @@ entries under `[Unreleased]` below that were not there yet at the previous night
   server is never asked for its fleets there, so those fleets used to be missing without a word. The fleet list now
   shows one line per server, such as "Catbank is not connected to <server> — its fleets are not shown here", naming
   every character in that position. The line disappears as soon as they are all connected.
+- **Added: e-war, EHP, signature and speed data for abyssal deadspace enemies**, read from EVE's own data plus a
+  small table for what it does not cover (faction, and the two Vigilant Tyrannos agents that have no game data id
+  at all). Groundwork for an upcoming abyssal room and target overview — nothing changes in the app yet.
 - **Changed: compositions update live in every open window.** Creating, editing or deleting a composition now refreshes
   the COMPOSITIONS list straight away, for your local library and for a server's shared one — including changes other
   pilots make. An open composition editor quietly picks up changes made elsewhere as long as you have not edited
