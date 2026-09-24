@@ -1,36 +1,25 @@
 using System.Globalization;
 using System.Text.RegularExpressions;
+using EveUtils.Shared.Modules.Gamelog.Languages;
 using EveUtils.Shared.Modules.Gamelog.Models;
 
 namespace EveUtils.Shared.Modules.Gamelog.Parsing;
 
-/// <summary>Parses EVE gamelog lines into <see cref="GameLogEvent"/>s. Folded from the EVE-Utils demo (own code).</summary>
+/// <summary>
+/// Parses EVE gamelog lines into <see cref="GameLogEvent"/>s. Folded from the EVE-Utils demo (own code). The words of a
+/// line come from the language table of the file's client language (<see cref="GamelogGrammar"/>); the framing — the
+/// timestamp, the category, the markup — is the same in every language.
+/// </summary>
 public static partial class LogLineParser
 {
     private const string TimestampFormat = "yyyy.MM.dd HH:mm:ss";
+    private const string ModuleSeparator = " - ";
 
     [GeneratedRegex(@"<[^>]*>")]
     private static partial Regex HtmlTag();
 
     [GeneratedRegex(@"^\[ (?<ts>\d{4}\.\d{2}\.\d{2} \d{2}:\d{2}:\d{2}) \] \((?<cat>\w+)\) (?<body>.*)$")]
     private static partial Regex LinePrefix();
-
-    [GeneratedRegex(@"^(?<amount>\d+) (?<dir>to|from) (?<target>.+)$")]
-    private static partial Regex DamageHead();
-
-    // Only true reps (armor/shield/hull) — NOT "remote capacitor transmitted", which is cap warfare, not a heal, and
-    // must never count toward repaired HP. Cap transfer has its own event (CapTransfer below).
-    [GeneratedRegex(@"^(?<amt>\d+) remote (?<kind>armor|shield|hull) (?:repaired|boosted) (?<dir>to|by) (?<rest>.+)$")]
-    private static partial Regex RemoteRep();
-
-    // Remote capacitor transmitted — cap support. Direction from to/by (you transmit "to" / cap transmitted "by" someone).
-    [GeneratedRegex(@"^(?<amt>\d+) remote capacitor transmitted (?<dir>to|by) (?<rest>.+)$")]
-    private static partial Regex CapTransfer();
-
-    // Energy neutralizer (no to/from in the text — direction comes from the line's lead colour). After StripTags:
-    // "{amt} GJ energy neutralized {target} - {module}". Distinct from "energy drained" (nosferatu), which we don't parse.
-    [GeneratedRegex(@"^(?<amt>\d+) GJ energy neutralized (?<rest>.+)$")]
-    private static partial Regex EnergyNeut();
 
     // The line's leading colour tag (the amount's colour) — EVE encodes energy-warfare direction here, not in the text.
     [GeneratedRegex(@"^<color=0x(?<hex>[0-9a-fA-F]{8})>")]
@@ -41,28 +30,10 @@ public static partial class LogLineParser
     // 0xff7fffff. Any other colour on an "energy neutralized" line is treated as outgoing (only these two are emitted).
     private const string IncomingNeutColor = "ffe57f7f";
 
-    [GeneratedRegex(@"^You mined (?<units>\d+) units of (?<ore>.+)$")]
-    private static partial Regex Mined();
-
-    [GeneratedRegex(@"^Critical mining success! You mined an additional (?<units>\d+) units of (?<ore>.+)$")]
-    private static partial Regex CriticalMined();
-
-    // The real residue line (ET-229, measured against Jithran's own 2026-06-14 and 2026-08-28/29 gamelogs): its own
-    // line in the (mining) category, carrying no ore name at all. The form the old regex above expected inline
-    // ("with a lost residue of N units") never occurs in a real log file.
-    [GeneratedRegex(@"^Additional (?<units>\d+) units depleted from asteroid as residue$")]
-    private static partial Regex MiningResidue();
-
-    [GeneratedRegex(@"^Jumping from .+? to (?<sys>.+)$")]
-    private static partial Regex Jumping();
-
-    [GeneratedRegex(@"^Undocking from .+ to (?<sys>.+?) solar system\.?$")]
-    private static partial Regex Undocking();
-
-    // EVE groups the thousands in the client's own language — "67,500 ISK" (en) and "67.500 ISK" (de/nl) are the same
-    // payout — so both separators group, and a trailing 1-2 digit fraction is a decimal that whole-ISK totals drop.
-    [GeneratedRegex(@"^(?<isk>\d{1,3}(?:[.,]\d{3})*|\d+)(?:[.,]\d{1,2})? ISK added to next bounty payout$")]
-    private static partial Regex Bounty();
+    // Damage lines carry their direction in the colour too: 0xff00ffff going out, 0xffcc0000 coming in. It only
+    // decides for a language that words both directions alike (Japanese "から" for to and from).
+    private const string OutgoingDamageColor = "ff00ffff";
+    private const string IncomingDamageColor = "ffcc0000";
 
     public static LogCategory ParseCategory(string raw) => raw.ToLowerInvariant() switch
     {
@@ -80,192 +51,225 @@ public static partial class LogLineParser
 
     public static string StripTags(string text) => HtmlTag().Replace(text, string.Empty).Trim();
 
-    public static GameLogEvent? Parse(string line)
+    public static GameLogEvent? Parse(string line) => Parse(line, GamelogLanguage.English);
+
+    /// <summary>Parses one line of a gamelog written in <paramref name="language"/>; a language without templates
+    /// (<see cref="GamelogLanguage.Unknown"/>) reads nothing.</summary>
+    public static GameLogEvent? Parse(string line, GamelogLanguage language)
     {
-        var prefix = LinePrefix().Match(line);
-        if (!prefix.Success)
+        if (GamelogGrammar.For(language) is not { } grammar)
+        {
             return null;
+        }
+
+        Match prefix = LinePrefix().Match(line);
+        if (!prefix.Success)
+        {
+            return null;
+        }
 
         if (!DateTime.TryParseExact(prefix.Groups["ts"].Value, TimestampFormat,
-                CultureInfo.InvariantCulture, DateTimeStyles.None, out var timestamp))
+                CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime timestamp))
+        {
             return null;
+        }
 
-        var category = ParseCategory(prefix.Groups["cat"].Value);
-        var body = StripTags(prefix.Groups["body"].Value);
+        LogCategory category = ParseCategory(prefix.Groups["cat"].Value);
+        string body = StripTags(prefix.Groups["body"].Value);
 
         return category switch
         {
-            LogCategory.Combat => ParseCombat(timestamp, body, prefix.Groups["body"].Value),
-            LogCategory.Mining => ParseMining(timestamp, body),
-            LogCategory.None => ParseLocation(timestamp, body),
-            LogCategory.Bounty => ParseBounty(timestamp, body),
-            LogCategory.Notify or LogCategory.Warning => ParseNotify(timestamp, body),
+            LogCategory.Combat => _ParseCombat(grammar, timestamp, body, prefix.Groups["body"].Value),
+            LogCategory.Mining => _ParseMining(grammar, timestamp, body),
+            LogCategory.None => _ParseLocation(grammar, timestamp, body),
+            LogCategory.Bounty => _ParseBounty(grammar, timestamp, body),
+            LogCategory.Notify or LogCategory.Warning => _ParseNotify(timestamp, body, language),
             _ => null
         };
     }
 
-    private static GameLogEvent? ParseLocation(DateTime timestamp, string body)
+    private static GameLogEvent? _ParseLocation(GamelogGrammar grammar, DateTime timestamp, string body)
     {
-        var jump = Jumping().Match(body);
+        Match jump = grammar.Jumping.Match(body);
         if (jump.Success)
-            return new LocationEvent(timestamp, jump.Groups["sys"].Value.Trim());
+        {
+            return new LocationEvent(timestamp, jump.Groups["system"].Value.Trim());
+        }
 
-        var undock = Undocking().Match(body);
-        if (undock.Success)
-            return new LocationEvent(timestamp, undock.Groups["sys"].Value.Trim());
-
-        return null;
+        Match undock = grammar.Undocking.Match(body);
+        return undock.Success ? new LocationEvent(timestamp, undock.Groups["system"].Value.Trim()) : null;
     }
 
-    private static GameLogEvent? ParseBounty(DateTime timestamp, string body)
+    private static GameLogEvent? _ParseBounty(GamelogGrammar grammar, DateTime timestamp, string body)
     {
-        var m = Bounty().Match(body);
-        if (!m.Success)
+        Match match = grammar.Bounty.Match(body);
+        if (!match.Success)
+        {
             return null;
+        }
 
-        var raw = m.Groups["isk"].Value.Replace(",", string.Empty).Replace(".", string.Empty);
-        return long.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var isk)
+        return long.TryParse(_Digits(match.Groups["isk"].Value), NumberStyles.Integer, CultureInfo.InvariantCulture, out long isk)
             ? new BountyEvent(timestamp, isk)
             : null;
     }
 
-    private static GameLogEvent? ParseNotify(DateTime timestamp, string body) =>
-        string.IsNullOrWhiteSpace(body) ? null : new NotifyEvent(timestamp, body);
+    private static GameLogEvent? _ParseNotify(DateTime timestamp, string body, GamelogLanguage language) =>
+        string.IsNullOrWhiteSpace(body) ? null : new NotifyEvent(timestamp, body, language);
 
-    private static GameLogEvent? ParseCombat(DateTime timestamp, string body, string rawBody)
+    private static GameLogEvent? _ParseCombat(GamelogGrammar grammar, DateTime timestamp, string body, string rawBody)
     {
-        if (body.Contains(" misses ", StringComparison.Ordinal))
-            return ParseMiss(timestamp, body);
+        if (_ParseMiss(grammar, timestamp, body) is { } miss)
+        {
+            return miss;
+        }
 
-        var rep = RemoteRep().Match(body);
-        if (rep.Success)
+        if (_FirstMatch(grammar.Repairs, body) is { } repair && _ParseAmount(repair.Match.Groups["amount"].Value) is { } repAmount)
         {
             // "rest" is "<counterparty> - <module>"; the counterparty (ship, tickers, fit title) can itself contain
             // " - ", so anchor on the module at the end instead of splitting at the first separator (ET-321).
-            var rest = rep.Groups["rest"].Value.Trim();
-            var moduleSeparator = rest.LastIndexOf(" - ", StringComparison.Ordinal);
-            var counterparty = moduleSeparator < 0 ? rest : rest[..moduleSeparator];
-            return new RemoteRepEvent(
-                timestamp,
-                rep.Groups["dir"].Value == "to",
-                int.Parse(rep.Groups["amt"].Value, CultureInfo.InvariantCulture),
-                rep.Groups["kind"].Value,
-                counterparty);
+            string rest = repair.Match.Groups["rest"].Value.Trim();
+            int moduleSeparator = rest.LastIndexOf(ModuleSeparator, StringComparison.Ordinal);
+            string counterparty = moduleSeparator < 0 ? rest : rest[..moduleSeparator];
+            return new RemoteRepEvent(timestamp, repair.Pattern.Direction == LineDirection.Outgoing, repAmount,
+                repair.Pattern.Kind ?? string.Empty, counterparty);
         }
 
-        var cap = CapTransfer().Match(body);
-        if (cap.Success)
+        if (_FirstMatch(grammar.CapTransfers, body) is { } cap && _ParseAmount(cap.Match.Groups["amount"].Value) is { } capAmount)
         {
-            return new CapTransferEvent(
-                timestamp,
-                cap.Groups["dir"].Value == "to",
-                int.Parse(cap.Groups["amt"].Value, CultureInfo.InvariantCulture),
-                cap.Groups["rest"].Value.Trim());
+            return new CapTransferEvent(timestamp, cap.Pattern.Direction == LineDirection.Outgoing, capAmount,
+                cap.Match.Groups["rest"].Value.Trim());
         }
 
-        var neut = EnergyNeut().Match(body);
-        if (neut.Success)
+        if (_FirstMatch(grammar.Neutralizers, body) is { } neut && _ParseAmount(neut.Match.Groups["amount"].Value) is { } neutAmount)
         {
-            // No to/from token — direction is the lead colour (incoming = 0xffe57f7f, outgoing = 0xff7fffff).
-            var lead = LeadColor().Match(rawBody);
-            var incoming = lead.Success && string.Equals(lead.Groups["hex"].Value, IncomingNeutColor, StringComparison.OrdinalIgnoreCase);
-            return new NeutEvent(
-                timestamp,
-                Outgoing: !incoming,
-                int.Parse(neut.Groups["amt"].Value, CultureInfo.InvariantCulture),
-                neut.Groups["rest"].Value.Trim());
+            // Where the words don't tell the direction, the lead colour does (incoming = 0xffe57f7f, outgoing =
+            // 0xff7fffff).
+            bool outgoing = neut.Pattern.Direction == LineDirection.ByColour
+                ? !string.Equals(_LeadColor(rawBody), IncomingNeutColor, StringComparison.OrdinalIgnoreCase)
+                : neut.Pattern.Direction == LineDirection.Outgoing;
+            return new NeutEvent(timestamp, outgoing, neutAmount, neut.Match.Groups["rest"].Value.Trim());
         }
 
-        // "<amount> to|from <target> [- <weapon>] - <quality>"
-        var segments = body.Split(" - ");
-        if (segments.Length < 2)
-            return null;
-
-        var head = DamageHead().Match(segments[0]);
-        if (!head.Success)
-            return null;
-
-        if (!TryParseQuality(segments[^1], out var quality))
-            return null;
-
-        var weapon = segments.Length >= 3 ? segments[^2] : null;
-        var direction = head.Groups["dir"].Value == "to" ? DamageDirection.Outgoing : DamageDirection.Incoming;
-
-        return new CombatEvent(
-            timestamp,
-            direction,
-            int.Parse(head.Groups["amount"].Value, CultureInfo.InvariantCulture),
-            head.Groups["target"].Value,
-            weapon,
-            quality);
+        return _ParseDamage(grammar, timestamp, body, rawBody);
     }
 
-    private static CombatEvent ParseMiss(DateTime timestamp, string body)
+    // "<amount> to|from <target> [- <weapon>] - <quality>"
+    private static CombatEvent? _ParseDamage(GamelogGrammar grammar, DateTime timestamp, string body, string rawBody)
+    {
+        string[] segments = body.Split(ModuleSeparator);
+        if (segments.Length < 2)
+        {
+            return null;
+        }
+
+        Match head = grammar.DamageHead.Match(segments[0]);
+        if (!head.Success || _ParseAmount(head.Groups["amount"].Value) is not { } amount)
+        {
+            return null;
+        }
+
+        if (!grammar.Qualities.TryGetValue(segments[^1], out HitQuality quality))
+        {
+            return null;
+        }
+
+        DamageDirection? direction = grammar.DirectionByColour
+            ? _DirectionFromColor(_LeadColor(rawBody))
+            : head.Groups["to"].Success ? DamageDirection.Outgoing : DamageDirection.Incoming;
+        if (direction is null)
+        {
+            return null;
+        }
+
+        string? weapon = segments.Length >= 3 ? segments[^2] : null;
+        return new CombatEvent(timestamp, direction.Value, amount, head.Groups["target"].Value, weapon, quality);
+    }
+
+    private static CombatEvent? _ParseMiss(GamelogGrammar grammar, DateTime timestamp, string body)
     {
         // Outgoing: "Your <weapon> misses <target> completely - <weapon>"
-        // Incoming: "<target> misses you completely"
-        if (body.StartsWith("Your ", StringComparison.Ordinal))
+        // Incoming: "<source> misses you completely"
+        foreach (Regex regex in grammar.OutgoingMisses)
         {
-            var weapon = body.Split(" - ").Length >= 2 ? body.Split(" - ")[^1] : null;
-            var target = ExtractMissTarget(body, "misses ", " completely");
-            return new CombatEvent(timestamp, DamageDirection.Outgoing, 0, target, weapon, HitQuality.Misses);
+            Match match = regex.Match(body);
+            if (match.Success)
+            {
+                string? weapon = match.Groups["tail"].Success ? _LastSegment(match.Groups["tail"].Value) : null;
+                return new CombatEvent(timestamp, DamageDirection.Outgoing, 0, match.Groups["target"].Value.Trim(), weapon, HitQuality.Misses);
+            }
         }
 
-        var source = body.Replace(" misses you completely", string.Empty, StringComparison.Ordinal).Trim();
-        return new CombatEvent(timestamp, DamageDirection.Incoming, 0, source, null, HitQuality.Misses);
+        foreach (Regex regex in grammar.IncomingMisses)
+        {
+            Match match = regex.Match(body);
+            if (match.Success)
+            {
+                Group who = match.Groups["source"].Success ? match.Groups["source"] : match.Groups["owner"];
+                string source = (who.Value + match.Groups["tail"].Value).Trim();
+                return new CombatEvent(timestamp, DamageDirection.Incoming, 0, source, null, HitQuality.Misses);
+            }
+        }
+
+        return null;
     }
 
-    private static string ExtractMissTarget(string body, string after, string before)
+    private static GameLogEvent? _ParseMining(GamelogGrammar grammar, DateTime timestamp, string body)
     {
-        var start = body.IndexOf(after, StringComparison.Ordinal);
-        if (start < 0)
-            return string.Empty;
-        start += after.Length;
-        var end = body.IndexOf(before, start, StringComparison.Ordinal);
-        return end < 0 ? body[start..].Trim() : body[start..end].Trim();
-    }
-
-    private static GameLogEvent? ParseMining(DateTime timestamp, string body)
-    {
-        var critical = CriticalMined().Match(body);
+        Match critical = grammar.CriticalMined.Match(body);
         if (critical.Success)
         {
-            return new MiningEvent(
-                timestamp,
-                int.Parse(critical.Groups["units"].Value, CultureInfo.InvariantCulture),
-                critical.Groups["ore"].Value.Trim(),
-                IsCritical: true,
-                LostResidue: 0);
+            return _ParseAmount(critical.Groups["amount"].Value) is { } units
+                ? new MiningEvent(timestamp, units, critical.Groups["ore"].Value.Trim(), IsCritical: true, LostResidue: 0)
+                : null;
         }
 
-        var mined = Mined().Match(body);
+        Match mined = grammar.Mined.Match(body);
         if (mined.Success)
-            return new MiningEvent(
-                timestamp,
-                int.Parse(mined.Groups["units"].Value, CultureInfo.InvariantCulture),
-                mined.Groups["ore"].Value.Trim(),
-                IsCritical: false,
-                LostResidue: 0);
-
-        var residue = MiningResidue().Match(body);
-        if (!residue.Success)
-            return null;
-
-        return new MiningResidueEvent(timestamp, int.Parse(residue.Groups["units"].Value, CultureInfo.InvariantCulture));
-    }
-
-    private static bool TryParseQuality(string text, out HitQuality quality)
-    {
-        quality = text switch
         {
-            "Hits" => HitQuality.Hits,
-            "Penetrates" => HitQuality.Penetrates,
-            "Grazes" => HitQuality.Grazes,
-            "Smashes" => HitQuality.Smashes,
-            "Glances Off" => HitQuality.Glances,
-            "Wrecks" => HitQuality.Wrecks,
-            _ => HitQuality.Misses
-        };
-        return text is "Hits" or "Penetrates" or "Grazes" or "Smashes" or "Glances Off" or "Wrecks";
+            return _ParseAmount(mined.Groups["amount"].Value) is { } units
+                ? new MiningEvent(timestamp, units, mined.Groups["ore"].Value.Trim(), IsCritical: false, LostResidue: 0)
+                : null;
+        }
+
+        Match residue = grammar.MiningResidue.Match(body);
+        return residue.Success && _ParseAmount(residue.Groups["amount"].Value) is { } lost
+            ? new MiningResidueEvent(timestamp, lost)
+            : null;
     }
+
+    private static PatternMatch? _FirstMatch(IReadOnlyList<DirectedPattern> patterns, string body)
+    {
+        foreach (DirectedPattern pattern in patterns)
+        {
+            Match match = pattern.Regex.Match(body);
+            if (match.Success)
+            {
+                return new PatternMatch(pattern, match);
+            }
+        }
+
+        return null;
+    }
+
+    private sealed record PatternMatch(DirectedPattern Pattern, Match Match);
+
+    private static string _LeadColor(string rawBody)
+    {
+        Match lead = LeadColor().Match(rawBody);
+        return lead.Success ? lead.Groups["hex"].Value : string.Empty;
+    }
+
+    private static DamageDirection? _DirectionFromColor(string hex) => hex.ToLowerInvariant() switch
+    {
+        OutgoingDamageColor => DamageDirection.Outgoing,
+        IncomingDamageColor => DamageDirection.Incoming,
+        _ => null
+    };
+
+    private static string _LastSegment(string tail) => tail.Split(ModuleSeparator)[^1].Trim();
+
+    private static int? _ParseAmount(string text) =>
+        int.TryParse(_Digits(text), NumberStyles.Integer, CultureInfo.InvariantCulture, out int amount) ? amount : null;
+
+    private static string _Digits(string text) => new([.. text.Where(char.IsAsciiDigit)]);
 }

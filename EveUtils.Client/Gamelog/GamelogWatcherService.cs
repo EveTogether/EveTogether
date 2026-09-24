@@ -3,6 +3,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
+using EveUtils.Client.Notifications;
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Modules.Gamelog.Aggregation;
 using EveUtils.Shared.Modules.Gamelog.Models;
@@ -37,6 +38,7 @@ public sealed class GamelogWatcherService : ISingletonService
     private readonly Channel<Parsed> _events = Channel.CreateUnbounded<Parsed>(new UnboundedChannelOptions { SingleReader = true });
     private readonly Lock _gate = new();
     private readonly HashSet<string> _observed = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _languageWarned = new(StringComparer.OrdinalIgnoreCase);
 
     // Read and written only from PumpAsync, which drains _events on a single reader, so this needs no lock of its own.
     private readonly MiningResidueCorrelator _miningResidue = new();
@@ -103,6 +105,7 @@ public sealed class GamelogWatcherService : ISingletonService
             var watcher = new GameLogWatcher(directory);
             watcher.EventParsed += OnEventParsed;
             watcher.CharacterDetected += OnCharacterDetected;
+            watcher.LanguageNotSupported += OnLanguageNotSupported;
             watcher.Start();
 
             _watcher = watcher;
@@ -116,6 +119,26 @@ public sealed class GamelogWatcherService : ISingletonService
         _events.Writer.TryWrite(new Parsed(e.CharacterName, e.LogEvent));
 
     private void OnCharacterDetected(object? sender, string characterName) => _Observe(characterName);
+
+    // Once per character per run of the app: a pilot who logs in again on the same client would otherwise be told with
+    // every new log file.
+    private void OnLanguageNotSupported(object? sender, string characterName)
+    {
+        lock (_gate)
+        {
+            if (!_languageWarned.Add(characterName))
+            {
+                return;
+            }
+        }
+
+        var readable = string.Join(", ", Enum.GetValues<GamelogLanguage>().Where(language => language != GamelogLanguage.Unknown));
+        _services.GetService<IToastService>()?.Show(
+            "Game log language not supported yet",
+            $"{characterName}'s game log is written in a language EVE Together cannot read yet, so its combat, mining and location lines are skipped. Supported: {readable}.",
+            ToastKind.Warning,
+            TimeSpan.FromSeconds(20));
+    }
 
     // One place that both remembers the name and announces it: a raise that skipped the set would leave a pilot out
     // of every window opened after them, which is the very gap the set exists to close.
@@ -173,7 +196,7 @@ public sealed class GamelogWatcherService : ISingletonService
                             _Observe(item.Character);
                             break;
                         case NotifyEvent n:
-                            _gamelog.AddNotify(item.Character, n.Timestamp, n.Message);
+                            _gamelog.AddNotify(item.Character, n.Timestamp, n.Message, n.Language);
                             break;
                     }
                 }
