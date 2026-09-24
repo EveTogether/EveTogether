@@ -9,15 +9,18 @@ using Avalonia.Threading;
 using EveUtils.Client.Clipboard;
 using EveUtils.Client.Dialogs;
 using EveUtils.Client.Notifications;
+using EveUtils.Client.ViewModels.Runs;
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Data;
 using EveUtils.Shared.Identity;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Market.Entities;
 using EveUtils.Shared.Modules.Market.Repositories;
+using EveUtils.Shared.Modules.Market.Services;
 using EveUtils.Shared.Modules.Runs.Commands;
 using EveUtils.Shared.Modules.Runs.Entities;
 using EveUtils.Shared.Modules.Runs.Enums;
+using EveUtils.Shared.Modules.Sde;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -313,6 +316,62 @@ public sealed class ClipboardLootCaptureTests
         Assert.Equal(0.30m, summary.LootVolume);
     }
 
+    /// <summary>
+    /// ET-384, Raymond's own reproduction (2026-09-24): paste a starting hold, then an ending hold, into the run
+    /// window's two fields — the AbyssalTracker model — while the clipboard watch is on, exactly as it always is
+    /// during a real run. The same text that goes into a field was also just copied in EVE, so the watch sees it
+    /// too and stores its own, separate Snapshot capture alongside the field's CargoBefore/CargoAfter one — a real
+    /// duplicate, not a hypothetical one, from a code path (<see cref="ClipboardLootCapture"/>) that never touches
+    /// the role the field's write sets. Counter-proof: make <c>LootTally.Ends</c> ignore role and sum every
+    /// unexcluded capture instead, and this total inflates to the full stock on both sides instead of the 5 Gravid
+    /// Mutaplasmid actually picked up.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task BeforeAndAfterPastedWhileTheWatchIsOn_CountsOnlyTheDifference()
+    {
+        const string beforeText =
+            "Charges\t123,45 ISK\tNanite Repair Paste\t0,01 m3\t100\t\r\n"
+            + "Salvage Materials\t50.000,00 ISK\tTripped Power Circuit\t0,10 m3\t1\t";
+        const string afterText =
+            "Charges\t123,45 ISK\tNanite Repair Paste\t0,01 m3\t100\t\r\n"
+            + "Salvage Materials\t50.000,00 ISK\tTripped Power Circuit\t0,10 m3\t1\t\r\n"
+            + "Mutaplasmids\t10.000,00 ISK\tGravid Mutaplasmid\t0,01 m3\t2\t\r\n"
+            + "Mutaplasmids\t10.000,00 ISK\tGravid Mutaplasmid\t0,01 m3\t3\t";
+
+        using var env = await Env.StartAsync(
+            sde: new FakeSdeAccessor()
+                .Add(28668, "Nanite Repair Paste", 285, 7)
+                .Add(33999, "Tripped Power Circuit", 448, 25)
+                .Add(47740, "Gravid Mutaplasmid", 1945, 35),
+            prices: new Dictionary<int, double> { [47740] = 3_000_000 });
+        await env.StartRunAsync();
+        env.Dialogs.ActivityWindowRunId = env.RunId;
+
+        var section = new RunLootViewModel(env.Instance.Services.GetRequiredService<CqrsDispatcher>(),
+            env.Instance.Services.GetRequiredService<IAppraisalProvider>(),
+            env.Instance.Services.GetRequiredService<ISdeAccessor>())
+        {
+            RunId = env.RunId,
+            IsCargoDiffShown = true
+        };
+        await section.RefreshAsync(TestContext.Current.CancellationToken);
+
+        // Each field is pasted from a copy the watch also just saw — the real sequence, not a simplification.
+        await env.CopyAsync(beforeText);
+        section.CargoBeforeText = beforeText;
+        await section.LastCargoWrite;
+
+        await env.CopyAsync(afterText);
+        section.CargoAfterText = afterText;
+        await section.LastCargoWrite;
+
+        Assert.Equal(4, section.Captures.Count);   // the 2 stray watch Snapshots plus the 2 named holds
+        ActivityLootLineViewModel line = Assert.Single(section.ItemRows, row => !row.IsExcluded);
+        Assert.Equal(47740, line.ItemTypeId);
+        Assert.Equal(5L, line.Quantity);
+        Assert.Equal(15_000_000m, section.LootIsk);
+    }
+
     /// <summary>The special-status card's buttons round-trip through the real dispatcher, not just a local flag:
     /// "Exclude" flips its stored flag, and "Include" on a repeat's card flips it back.</summary>
     [AvaloniaFact]
@@ -535,7 +594,14 @@ public sealed class ClipboardLootCaptureTests
 
         private Guid _runId;
 
+        public Guid RunId => _runId;
+
         public RecordingToastService Toasts { get; } = new();
+
+        /// <summary>Lets a test build a <see cref="RunLootViewModel"/> against the same dispatcher and database
+        /// this watcher writes to — the "before/after pasted while the watcher is also on" reproduction needs both
+        /// on one run.</summary>
+        public TestClientInstance Instance => _instance;
 
         /// <summary>The dialog service <see cref="ClipboardLootCapture"/> itself was built with — separate from the
         /// one <see cref="ClipboardWatchService"/> uses, so a test can drive/inspect the ET-211 "whose loot is this?"
