@@ -291,9 +291,13 @@ jobs:
           # Full history so the changelog can walk from the previous nightly's commit to this one.
           fetch-depth: 0
 
+      # Scoped to the nightly-* uploads (build-windows/linux/macos) — an unfiltered download also picks up
+      # whatever else the run's artifact pool holds, such as docker/build-push-action's own build-record
+      # upload from the sibling publish-server-image job, and dist/* would then attach it to the release.
       - uses: actions/download-artifact@v8
         with:
           path: dist
+          pattern: nightly-*
           merge-multiple: true
 
       - name: Resolve the nightly version

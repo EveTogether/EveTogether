@@ -98,7 +98,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
-          name: windows
+          name: release-windows
           path: artifacts-velopack/*
 
   build-linux:
@@ -168,7 +168,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
-          name: linux
+          name: release-linux
           path: artifacts-velopack/*
 
   build-macos:
@@ -260,7 +260,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
-          name: macos-${{ matrix.rid }}
+          name: release-macos-${{ matrix.rid }}
           path: artifacts-velopack/*
 
   publish-assets:
@@ -271,10 +271,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      # Scoped to the release-* uploads (build-windows/linux/macos) — an unfiltered download also picks up
+      # whatever else the run's artifact pool holds, such as docker/build-push-action's own build-record
+      # upload from the sibling publish-server-image job, which has no needs: gate and can finish first.
       - name: Download artifacts
         uses: actions/download-artifact@v8
         with:
           path: dist
+          pattern: release-*
           merge-multiple: true
 
       # The one failure in this pipeline that is otherwise completely silent. An installed copy asks its feed
