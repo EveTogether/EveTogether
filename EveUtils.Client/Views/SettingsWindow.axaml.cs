@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Shapes;
 using Avalonia.Input;
 using Avalonia.Interactivity;
@@ -17,6 +18,7 @@ using EveUtils.Client.Clipboard;
 using EveUtils.Client.Dialogs;
 using EveUtils.Client.Input;
 using EveUtils.Client.LocalApi;
+using EveUtils.Client.Updates;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace EveUtils.Client.Views;
@@ -35,6 +37,12 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
     private readonly ILocalApiServer? _localApi;
     private readonly ClipboardWatchService? _clipboardWatch;
     private readonly Func<SettingsResult, Task>? _onApply;
+    private readonly IUpdateService? _updates;
+
+    // The channel actually in force when this window opened (ET-339) — what "Check now" asks about. It follows
+    // Save/Cancel's own rule: nothing the operator has not saved yet takes effect, so a pending, unsaved flip of
+    // the segmented control does not change what Check now checks.
+    private readonly UpdateChannel _effectiveChannel;
 
     // Cached at construction (the instances survive the module host re-parenting; FindControl on the window would
     // return null once the content is stolen for a docked tab).
@@ -47,10 +55,13 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
     private CheckBox _openFleetRunWindowBox = null!;
     private CheckBox? _autoPublishFleetRunsBox;
     private CheckBox _checkUpdatesOnStartupBox = null!, _watchClipboardBox = null!;
-    private CheckBox? _includeNightlyBuildsBox;
+    private ToggleButton? _channelStableButton, _channelNightlyButton;
+    private TextBlock? _channelExplanationBlock, _installVersionBlock, _installBuildInfoBlock, _checkNowResultBlock;
+    private Button? _checkNowButton;
+    private StackPanel? _updatesPanel;
 
     // Set once the initial value has been applied, so reacting to that initial set does not itself count as the
-    // operator choosing a channel (ET-339) — only a later Checked/Unchecked does.
+    // operator choosing a channel (ET-339) — only a later click on the segmented control does.
     private bool _channelTouched;
     private CheckBox _autoStartMissionsBox = null!, _autoStartSitesBox = null!;
     private TextBlock _clipboardConsumersBlock = null!, _clipboardUnsupportedBlock = null!;
@@ -91,7 +102,7 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
     public const int PrivacyCategory = 2;
 
     /// <summary>Index of the Keyboard shortcuts entry in <c>CategoryNav</c>.</summary>
-    public const int KeyboardShortcutsCategory = 4;
+    public const int KeyboardShortcutsCategory = 5;
 
     public SettingsWindow()
     {
@@ -99,12 +110,14 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
     }
 
     public SettingsWindow(string currentDirectory, string detectedDefault, bool shareLocation, bool shareBounty, bool shareCombat, bool loadTypeImages, Theming.FactionTheme currentFaction, string sdeVersionLabel, bool openFitDetailAfterImport = true, Notifications.ToastPosition toastPosition = Notifications.ToastPosition.TopRight, bool enableLocalApi = false, int localApiPort = LocalApi.LocalApiServer.DefaultPort, string localApiStatusLabel = "", ILocalApiServer? localApiServer = null, bool checkUpdatesOnStartup = true, ClipboardWatchService? clipboardWatch = null, Func<SettingsResult, Task>? onApply = null,
-        int initialCategory = 0, bool openFleetRunWindowImmediately = false, bool autoPublishFleetRuns = true, bool shareLoot = false, bool shareMining = false, bool autoStartMissions = true, bool autoStartSites = true, DayOfWeek weekStartsOn = DayOfWeek.Monday, bool includeNightlyBuilds = false) : this()
+        int initialCategory = 0, bool openFleetRunWindowImmediately = false, bool autoPublishFleetRuns = true, bool shareLoot = false, bool shareMining = false, bool autoStartMissions = true, bool autoStartSites = true, DayOfWeek weekStartsOn = DayOfWeek.Monday, bool includeNightlyBuilds = false, IUpdateService? updates = null) : this()
     {
         _detectedDefault = detectedDefault;
         _localApi = localApiServer;
         _clipboardWatch = clipboardWatch;
         _onApply = onApply;
+        _updates = updates;
+        _effectiveChannel = includeNightlyBuilds ? UpdateChannel.Nightly : UpdateChannel.Stable;
 
         _gamelogDirBox = this.FindControl<TextBox>("GamelogDirBox")!;
         _hintBlock = this.FindControl<TextBlock>("HintBlock")!;
@@ -115,7 +128,14 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
         _openFitDetailAfterImportBox = this.FindControl<CheckBox>("OpenFitDetailAfterImportBox")!;
         _openFleetRunWindowBox = this.FindControl<CheckBox>("OpenFleetRunWindowBox")!;
         _checkUpdatesOnStartupBox = this.FindControl<CheckBox>("CheckUpdatesOnStartupBox")!;
-        _includeNightlyBuildsBox = this.FindControl<CheckBox>("IncludeNightlyBuildsBox");
+        _channelStableButton = this.FindControl<ToggleButton>("ChannelStableButton");
+        _channelNightlyButton = this.FindControl<ToggleButton>("ChannelNightlyButton");
+        _channelExplanationBlock = this.FindControl<TextBlock>("ChannelExplanationBlock");
+        _installVersionBlock = this.FindControl<TextBlock>("InstallVersionBlock");
+        _installBuildInfoBlock = this.FindControl<TextBlock>("InstallBuildInfoBlock");
+        _checkNowResultBlock = this.FindControl<TextBlock>("CheckNowResultBlock");
+        _checkNowButton = this.FindControl<Button>("CheckNowButton");
+        _updatesPanel = this.FindControl<StackPanel>("UpdatesPanel");
         _watchClipboardBox = this.FindControl<CheckBox>("WatchClipboardBox")!;
         _autoStartMissionsBox = this.FindControl<CheckBox>("AutoStartMissionsBox")!;
         _autoStartSitesBox = this.FindControl<CheckBox>("AutoStartSitesBox")!;
@@ -168,12 +188,26 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
             _autoPublishFleetRunsBox.IsChecked = autoPublishFleetRuns;
         _checkUpdatesOnStartupBox.IsChecked = checkUpdatesOnStartup;
 
-        // Set before wiring the handler below, so applying the resolved default does not itself mark the
-        // channel as touched (ET-339) — only an actual click on this box does.
-        if (_includeNightlyBuildsBox is not null)
+        // Set before wiring the click handler below, so applying the resolved default does not itself mark the
+        // channel as touched (ET-339) — only an actual click on the segmented control does.
+        if (_channelStableButton is not null && _channelNightlyButton is not null)
         {
-            _includeNightlyBuildsBox.IsChecked = includeNightlyBuilds;
-            _includeNightlyBuildsBox.IsCheckedChanged += (_, _) => _channelTouched = true;
+            _channelStableButton.IsChecked = !includeNightlyBuilds;
+            _channelNightlyButton.IsChecked = includeNightlyBuilds;
+            UpdateChannelExplanation();
+        }
+
+        if (_installVersionBlock is not null)
+            _installVersionBlock.Text = $"Version {EveUtils.Shared.App.AppInfo.Version}";
+        if (_installBuildInfoBlock is not null)
+        {
+            var built = EveUtils.Shared.App.AppInfo.BuildDate is { } date
+                ? date.ToString("yyyy-MM-dd")
+                : "build date unknown";
+            var channel = BuildChannel.FromVersion(EveUtils.Shared.App.AppInfo.Version) == UpdateChannel.Nightly
+                ? "nightly channel"
+                : "stable channel";
+            _installBuildInfoBlock.Text = $"Built {built} · {channel}";
         }
 
         _autoStartMissionsBox.IsChecked = autoStartMissions;
@@ -219,6 +253,8 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
         _interfacePanel.IsVisible = index == 1;
         _privacyPanel.IsVisible = index == 2;
         _integrationsPanel.IsVisible = index == 3;
+        if (_updatesPanel is not null)
+            _updatesPanel.IsVisible = index == 4;
         _keyboardShortcutsPanel.IsVisible = index == KeyboardShortcutsCategory;
     }
 
@@ -276,6 +312,65 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
 
         var port = int.TryParse(_localApiPortBox.Text, out var p) && p is > 0 and <= 65535 ? p : LocalApiServer.DefaultPort;
         await _localApi.ApplyAsync(enabled: true, port);
+    }
+
+    // The segmented control stands in for a single-choice picker: force exactly one of the pair checked rather
+    // than letting a ToggleButton's own click toggle it off, then mark the choice as touched (ET-339) so BuildResult
+    // persists it — the same "only an actual pick freezes the default" rule the checkbox it replaced followed.
+    private void OnChannelSegmentClicked(object? sender, RoutedEventArgs e)
+    {
+        if (_channelStableButton is null || _channelNightlyButton is null) return;
+
+        var toNightly = ReferenceEquals(sender, _channelNightlyButton);
+        _channelStableButton.IsChecked = !toNightly;
+        _channelNightlyButton.IsChecked = toNightly;
+        _channelTouched = true;
+        UpdateChannelExplanation();
+    }
+
+    private void UpdateChannelExplanation()
+    {
+        if (_channelExplanationBlock is null) return;
+
+        _channelExplanationBlock.Text = _channelNightlyButton?.IsChecked == true
+            ? "A nightly is a rolling build of the latest commits, replaced every night — expect things to break. Nightly builds are ahead of the next stable release, so switching back to stable does not undo one: you stay on it until a newer stable version is published."
+            : "Tagged releases only. This is the one to be on unless you are testing EVE Together itself.";
+    }
+
+    // Asks the same feed the startup check and About do, for the channel actually in force (not a pending, unsaved
+    // flip of the segmented control above). Never an uncaught exception: CheckAsync itself reports failure through
+    // Result, but the feed call is still a network call, so an unexpected throw is caught and shown like any other
+    // failed check rather than crashing the window.
+    private async void OnCheckNowUpdate(object? sender, RoutedEventArgs e)
+    {
+        if (_updates is null || _checkNowResultBlock is null) return;
+
+        if (_checkNowButton is not null) _checkNowButton.IsEnabled = false;
+        _checkNowResultBlock.IsVisible = true;
+        _checkNowResultBlock.Text = "Checking…";
+
+        try
+        {
+            var check = await _updates.CheckAsync(_effectiveChannel);
+            _checkNowResultBlock.Text = UpdateNotice.Classify(check) switch
+            {
+                UpdateNoticeKind.Available =>
+                    $"Update available: v{check.Value!.Version}. Open About to download it.",
+                UpdateNoticeKind.UpToDate =>
+                    $"Up to date (v{EveUtils.Shared.App.AppInfo.Version}).",
+                UpdateNoticeKind.NotInstalled =>
+                    "This copy updates manually — see About for details.",
+                _ => UpdateNotice.Reason(check),
+            };
+        }
+        catch (Exception ex)
+        {
+            _checkNowResultBlock.Text = $"Couldn't check for updates: {ex.Message}";
+        }
+        finally
+        {
+            if (_checkNowButton is not null) _checkNowButton.IsEnabled = true;
+        }
     }
 
     // The list of features is read from the watcher's live subscribers rather than written out here, so the
@@ -540,7 +635,7 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
         var autoStartMissions = _autoStartMissionsBox.IsChecked ?? true;
         var autoStartSites = _autoStartSitesBox.IsChecked ?? true;
         var weekStartsOn = _weekStartsOnBox.SelectedIndex == 1 ? DayOfWeek.Sunday : DayOfWeek.Monday;
-        var includeNightlyBuilds = _includeNightlyBuildsBox?.IsChecked ?? false;
+        var includeNightlyBuilds = _channelNightlyButton?.IsChecked ?? false;
         return new SettingsResult(dir, shareLocation, shareBounty, shareCombat, loadTypeImages, SelectedFaction(), reimportSde, openFitDetailAfterImport, toastPosition, enableLocalApi, localApiPort, checkUpdatesOnStartup, openFleetRunWindowImmediately, autoPublishFleetRuns, shareLoot, shareMining, autoStartMissions, autoStartSites, weekStartsOn, includeNightlyBuilds, _channelTouched);
     }
 }

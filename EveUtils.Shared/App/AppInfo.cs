@@ -1,3 +1,5 @@
+using System;
+using System.IO;
 using System.Reflection;
 using EveUtils.Shared.Runtime;
 
@@ -23,6 +25,13 @@ public static class AppInfo
     /// <summary>Running build version (e.g. "0.1.0-alpha"), without a leading "v".</summary>
     public static string Version { get; } = _ResolveVersion();
 
+    /// <summary>
+    /// When the entry assembly's file was written — the publish step's timestamp for a CI build, a local
+    /// dev build's own compile time otherwise (ET-339). Null when the entry assembly has no path to read
+    /// (e.g. a test host), so a display never fabricates a date it does not have.
+    /// </summary>
+    public static DateOnly? BuildDate { get; } = _ResolveBuildDate();
+
     /// <summary>Descriptive ESI/HTTP User-Agent tagged with the host that sent the call.</summary>
     public static string UserAgent(ExecutionHost host) => $"{Name} ({host})/{Version} ({Contact})";
 
@@ -37,5 +46,14 @@ public static class AppInfo
         }
 
         return assembly.GetName().Version?.ToString(3) ?? "0.0.0";
+    }
+
+    private static DateOnly? _ResolveBuildDate()
+    {
+        var location = (Assembly.GetEntryAssembly() ?? typeof(AppInfo).Assembly).Location;
+        if (string.IsNullOrEmpty(location) || !File.Exists(location))
+            return null;
+
+        return DateOnly.FromDateTime(File.GetLastWriteTimeUtc(location));
     }
 }
