@@ -12,8 +12,8 @@ server as a Docker image to `ghcr.io/evetogether/eve-together-server` — tagged
 taken from the matching `## vX.Y.Z` section below.
 
 A separate nightly pipeline (`.github/workflows/nightly.yml`) publishes a rolling pre-release
-build of `main` on its own schedule, replacing itself each time; its own commit list is its
-release notes, not this file.
+build of `main` on its own schedule, replacing itself each time. Its release notes are the
+entries under `[Unreleased]` below that were not there yet at the previous nightly.
 
 ## [Unreleased]
 
@@ -43,6 +43,14 @@ release notes, not this file.
   change yet — groundwork for the upcoming kill/loss overview. A name is looked up from public ESI (or, for NPC
   corporations and factions, your own local database) only once per month by default, and always shows the
   corporation and alliance from the moment of the kill, never a character's corporation today.
+- **Fixed: the update screen now shows what changed.** It used to say "This release ships without notes." for every
+  update. Nightly builds list the changes added since the previous nightly, and a stable release shows its own section
+  of this changelog, as plain text without the formatting marks.
+- **Added: each fleet can join runs automatically or never, whatever the general setting says.** A new AUTO-JOIN chip
+  beside a fleet's name in the Fleets window cycles between default, always and never, and the auto-open setting in
+  Settings now describes that default. An automatic join goes through the same steps as pressing "Join run" — including
+  the choice of character when you have several — and confirms with a "Joined fleet run" toast. A prepared fleet run
+  followed straight away by its real start no longer joins twice.
 - **Fixed: a fit's stats no longer count a ship skill your character has not trained as level I.** With a
   character's own skills selected, an untrained hull skill still gave its first level of bonus (a Ferox without Caldari
   Battlecruiser showed 304.8 instead of 290.3 DPS); it now gives none, the same as a skill at level 0.
