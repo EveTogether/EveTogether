@@ -40,8 +40,9 @@ public sealed class ProvisionalKillmailImporter(ISdeAccessor sde, ICharacterRegi
 
         IReadOnlyList<Character> characters = await registry.GetAllAsync(cancellationToken);
         List<int> ownCharacterIds = [.. characters
-            .Where(character => character.EsiCharacterId is not null && involvedNames.Contains(character.Name))
-            .Select(character => character.EsiCharacterId!.Value)];
+            .Where(character => involvedNames.Contains(character.Name))
+            .Select(character => character.EsiCharacterId)
+            .OfType<int>()];
         if (ownCharacterIds.Count == 0)
         {
             return new ProvisionalKillmailImportResult(ProvisionalKillmailImportStatus.NoOwnCharacter, 0,

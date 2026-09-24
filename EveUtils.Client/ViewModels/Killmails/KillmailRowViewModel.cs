@@ -70,6 +70,11 @@ public sealed partial class KillmailRowViewModel : ObservableObject
         ShipName = shipName;
         SystemName = string.Empty;
         IsAbyssal = false;
+        // ponytail: ProvisionalKillmail stores only the victim's name, not who this own character actually is on
+        // the mail (victim or attacker) or the killer's name — so a provisional row for the pilot's own loss shows
+        // their own name here rather than the attacker who killed them. Upgrade path is storing an IsLoss flag +
+        // final-blow name if this reads confusingly in practice; the real mail replaces the row with the correct
+        // counterparty within one feed cycle regardless.
         CounterpartyName = provisional.VictimName;
         Isk = null;
 
