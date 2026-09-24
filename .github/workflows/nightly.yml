@@ -7,7 +7,7 @@ name: Nightly
 # It does not run on every push. It runs at night, and only when something actually changed since the last one —
 # a nightly that is byte-for-byte yesterday's is noise — or whenever you fire it by hand from the Actions tab.
 #
-# The internal package version is 0.0.0-nightly.<run>; the visible build identity is
+# The internal package version is 0.0.1-nightly.<run>; the visible build identity is
 # nightly-<UTC date>.<commit hash>.<run>. Neither is tied to a stable release tag.
 on:
   schedule:
@@ -132,7 +132,7 @@ jobs:
       - name: Set package version and build identity
         shell: bash
         run: |
-          echo "VERSION=0.0.0-nightly.${{ github.run_number }}" >> "$GITHUB_ENV"
+          echo "VERSION=0.0.1-nightly.${{ github.run_number }}" >> "$GITHUB_ENV"
           echo "${{ needs.changes.outputs.display }}" > nightly-build.md
 
       - name: Publish (self-contained)
@@ -195,7 +195,7 @@ jobs:
 
       - name: Set package version and build identity
         run: |
-          echo "VERSION=0.0.0-nightly.${{ github.run_number }}" >> "$GITHUB_ENV"
+          echo "VERSION=0.0.1-nightly.${{ github.run_number }}" >> "$GITHUB_ENV"
           echo "${{ needs.changes.outputs.display }}" > nightly-build.md
 
       - name: Publish (self-contained)
@@ -261,7 +261,7 @@ jobs:
 
       - name: Set package version and build identity
         run: |
-          echo "VERSION=0.0.0-nightly.${{ github.run_number }}" >> "$GITHUB_ENV"
+          echo "VERSION=0.0.1-nightly.${{ github.run_number }}" >> "$GITHUB_ENV"
           echo "${{ needs.changes.outputs.display }}" > nightly-build.md
 
       - name: Publish (self-contained)
@@ -359,7 +359,7 @@ jobs:
             echo
             echo "Build: \`${{ needs.changes.outputs.display }}\`"
             echo
-            echo "Installed an earlier nightly such as 0.2.1-nightly.4? Download this nightly's installer for your platform and install it once manually. The internal package version is lower, so older nightlies cannot update themselves. Your data stays outside the installation folder; later nightlies update normally."
+            echo "Installed an earlier nightly such as 0.2.1-nightly.4? Download this nightly's installer for your platform and install it once manually. Its internal package version is 0.0.1-nightly.${{ github.run_number }}, so older nightlies cannot update themselves. Your data stays outside the installation folder; later nightlies update normally."
             echo
             echo "### Changes since the previous nightly"
             echo

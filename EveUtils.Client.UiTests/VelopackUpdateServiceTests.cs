@@ -131,7 +131,7 @@ public class VelopackUpdateServiceTests : IDisposable
     {
         Result<AppRelease?> result = await VelopackUpdateService.CheckAsync(
             UpdateChannel.Nightly,
-            new Feed(_Package("0.0.0-nightly.5")),
+            new Feed(_Package("0.0.1-nightly.5")),
             new TestVelopackLocator(PackageId, "0.2.1-nightly.4", _packages),
             TimeSpan.FromSeconds(5),
             NullLogger.Instance,
@@ -145,7 +145,7 @@ public class VelopackUpdateServiceTests : IDisposable
     public async Task CheckAsync_WithANightlyOffer_UsesItsBuildIdentityAndRollingReleasePage()
     {
         Result<AppRelease?> result = await _CheckAsync(
-            new Feed(_Package("0.0.0-nightly.6", "nightly-20260924.a1b2c3d.6")),
+            new Feed(_Package("0.0.1-nightly.6", "nightly-20260924.a1b2c3d.6")),
             UpdateChannel.Nightly);
 
         Assert.True(result.IsSuccess);
