@@ -21,7 +21,12 @@ public partial class CharacterWindow : ChromedWindow
     {
         DataContext = viewModel;
         Title = string.IsNullOrWhiteSpace(viewModel.Name) ? "Character" : viewModel.Name;
-        Closed += (_, _) => viewModel.Dispose();
+        viewModel.CloseRequested += Close;
+        Closed += (_, _) =>
+        {
+            viewModel.CloseRequested -= Close;
+            viewModel.Dispose();
+        };
     }
 
     private void OnClose(object? sender, RoutedEventArgs e) => Close();

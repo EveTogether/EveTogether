@@ -140,8 +140,11 @@
         <Setter Property="Background" Value="#08FFFFFF"/>
         <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
     </Style>
-    <!-- Destructive / terminal action (e.g. CONCLUDE) — red so it stands out from neutral/accent buttons. -->
+    <!-- Destructive / terminal action (e.g. CONCLUDE) — red so it stands out from neutral/accent buttons. No wash
+         behind it: the red label on the shared #22FFFFFF button fill measured 4.0–4.4:1 in every theme, under the
+         4.5 floor; on the bare window or panel it clears it (RemoveCharacterContrastTests, ET-345). -->
     <Style Selector="Button.danger">
+        <Setter Property="Background" Value="Transparent"/>
         <Setter Property="Foreground" Value="{StaticResource RedBrush}"/>
         <Setter Property="BorderBrush" Value="{StaticResource RedBrush}"/>
     </Style>
