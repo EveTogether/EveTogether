@@ -182,10 +182,11 @@ public static class SdeSchema
         // missionId -> arcId only (ET-173 AC-6, minimal by design); the nextMissions chain graph is a read
         // concern (ET-131), not an import concern.
         "CREATE TABLE EpicArcMission (missionId INTEGER PRIMARY KEY, arcId INTEGER NOT NULL) WITHOUT ROWID;",
-        // Id + English name only (ET-335) — the killmail importer's own tables. A killmail's attacker/victim
-        // corporation or faction id resolves here when it belongs to an NPC; a miss means the id is a player's
-        // and must go to ESI instead (see ISdeAccessor.GetNpcCorporationName/GetFactionName).
+        // Id + English name only (ET-335), resolved through SolarSystem.regionId above.
         "CREATE TABLE Region (regionId INTEGER PRIMARY KEY, nameEn TEXT NOT NULL) WITHOUT ROWID;",
+        // Id + English name only (ET-335) — a killmail's attacker/victim corporation or faction id resolves here
+        // when it belongs to an NPC; a miss means the id is a player's and must go to ESI instead (see
+        // ISdeAccessor.GetNpcCorporationName/GetFactionName).
         "CREATE TABLE NpcCorporation (corporationId INTEGER PRIMARY KEY, nameEn TEXT NOT NULL) WITHOUT ROWID;",
         "CREATE TABLE Faction (factionId INTEGER PRIMARY KEY, nameEn TEXT NOT NULL) WITHOUT ROWID;",
         // dynamicItemAttributes.jsonl (ET-146 deel D): one row per (mutaplasmid, rollable attribute). The min/max
