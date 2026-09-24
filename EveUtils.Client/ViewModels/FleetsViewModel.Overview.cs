@@ -10,11 +10,13 @@ using CommunityToolkit.Mvvm.Input;
 using EveUtils.Client.Dialogs;
 using EveUtils.Client.Fleet;
 using EveUtils.Client.Notifications;
+using EveUtils.Client.Runs;
 using EveUtils.Client.ViewModels.Fleets;
 using EveUtils.Client.ViewModels.Runs;
 using EveUtils.Shared.Identity;
 using EveUtils.Shared.Modules.Fleet.Entities;
 using EveUtils.Shared.Modules.Fleet.Metrics;
+using EveUtils.Shared.Modules.Settings.Commands;
 using EveUtils.Shared.Modules.Settings.Queries;
 using Microsoft.Extensions.DependencyInjection;
 using CqrsDispatcher = EveUtils.Shared.Cqrs.IDispatcher;
@@ -59,6 +61,12 @@ public sealed partial class FleetsViewModel
     private DispatcherTimer? _clock;
     private double _contentWidth = FleetOverviewLayout.WideBreakpoint;
     private MetricShareSnapshot _sharing = new(new Dictionary<string, string>(StringComparer.Ordinal));
+
+    /// <summary>
+    /// The same read <see cref="LoadSharingAsync"/> feeds into <see cref="_sharing"/>, kept raw as well so the
+    /// AUTO-JOIN chip can read the central default and this fleet's override without a second round trip.
+    /// </summary>
+    private IReadOnlyDictionary<string, string> _settingValues = new Dictionary<string, string>(StringComparer.Ordinal);
 
     /// <summary>The link rule as of the last rebuild — which started fleet each pilot counts for. Kept rather than
     /// recomputed because the acts that came with ET-168 all start from it: the start dialog's collision line, the
@@ -602,6 +610,7 @@ public sealed partial class FleetsViewModel
             row.IsWide = Layout.IsWide;
             row.ActionsWidth = Layout.ActionsWidth;
             BuildOverflow(row);
+            _ApplyAutoJoinChip(row);
         }
 
         foreach (var lane in Lanes)
@@ -667,6 +676,69 @@ public sealed partial class FleetsViewModel
         if (row.CanRequest && !row.ShowRequest)
             row.OverflowItems.Add(new("REQUEST FOR ANOTHER CHARACTER", row.JoinEnabled ? new AsyncRelayCommand(() => Request(row)) : null, row.JoinHint));
         row.OverflowChanged();
+    }
+
+    /// <summary>
+    /// The AUTO-JOIN chip beside the fleet name (ET-323), visible to any participant — deliberately outside the
+    /// actions cell: an item that is always present there would always cost the "⋯" icon's width, which is exactly
+    /// what pushed JOIN off a quiet row in <c>FleetRowActionWidthTests</c> before this moved here. DEFAULT stays
+    /// dim so a row with no exception does not compete for attention with one that has an override.
+    /// </summary>
+    private void _ApplyAutoJoinChip(FleetViewModel row)
+    {
+        bool inFleet = row.IsMine || row.IsParticipating;
+        row.ShowAutoJoinChip = inFleet && !row.IsFinished;
+        if (!row.ShowAutoJoinChip)
+        {
+            return;
+        }
+
+        string key = FleetRunWindowPresenter.PerFleetAutoOpenSettingKey(row.Id);
+        string? current = _settingValues.GetValueOrDefault(key);
+        bool centralOn = string.Equals(
+            _settingValues.GetValueOrDefault(FleetRunWindowPresenter.AutoOpenSettingKey), "true", StringComparison.OrdinalIgnoreCase);
+
+        (row.AutoJoinChipLabel, row.AutoJoinChipTooltip, row.AutoJoinChipTone) = current switch
+        {
+            "true" => ("AUTO: ALWAYS",
+                "Always auto-joins this fleet's runs, regardless of the general setting.", FleetChipTone.Ok),
+            "false" => ("AUTO: NEVER",
+                "Never auto-joins this fleet's runs, regardless of the general setting.", FleetChipTone.Warn),
+            _ => ("AUTO: DEFAULT", centralOn
+                ? "Follows the general auto-join setting, which is currently on."
+                : "Follows the general auto-join setting, which is currently off.", FleetChipTone.Dim)
+        };
+    }
+
+    /// <summary>
+    /// DEFAULT → ALWAYS → NEVER → DEFAULT. DEFAULT deletes the key rather than writing it, so a fleet with no
+    /// override reads exactly the same as a fleet nobody ever touched this chip on.
+    /// </summary>
+    [RelayCommand]
+    private async Task CycleAutoJoinAsync(FleetViewModel? row)
+    {
+        if (row is null)
+        {
+            return;
+        }
+
+        string key = FleetRunWindowPresenter.PerFleetAutoOpenSettingKey(row.Id);
+        string? current = _settingValues.GetValueOrDefault(key);
+        var dispatcher = _services.GetRequiredService<CqrsDispatcher>();
+        switch (current)
+        {
+            case "true":
+                await dispatcher.Send(new SetSettingCommand(key, "false"));
+                break;
+            case "false":
+                await dispatcher.Send(new DeleteSettingCommand(key));
+                break;
+            default:
+                await dispatcher.Send(new SetSettingCommand(key, "true"));
+                break;
+        }
+
+        await _ReloadEverythingAsync();
     }
 
     // ── The clock ───────────────────────────────────────────────────────────────────────────────────────────────
@@ -1099,7 +1171,8 @@ public sealed partial class FleetsViewModel
         {
             using var scope = _services.CreateScope();
             var settings = await scope.ServiceProvider.GetRequiredService<EveUtils.Shared.Cqrs.IDispatcher>().Query(new GetSettingsQuery());
-            _sharing = new MetricShareSnapshot(settings.ToDictionary(s => s.Key, s => s.Value, StringComparer.Ordinal));
+            _settingValues = settings.ToDictionary(s => s.Key, s => s.Value, StringComparer.Ordinal);
+            _sharing = new MetricShareSnapshot(_settingValues);
         }
         catch (Exception)
         {

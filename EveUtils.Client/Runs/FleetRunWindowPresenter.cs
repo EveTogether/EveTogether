@@ -1,3 +1,4 @@
+using System.Globalization;
 using Avalonia.Threading;
 using EveUtils.Client.Dialogs;
 using EveUtils.Client.Notifications;
@@ -12,6 +13,7 @@ using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Settings.Entities;
 using EveUtils.Shared.Modules.Settings.Repositories;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace EveUtils.Client.Runs;
 
@@ -20,10 +22,11 @@ namespace EveUtils.Client.Runs;
 /// joining — it carries the commander's group code, so the member's run is filed under the same group — which means
 /// declining has to leave nothing at all behind, and it does: no window is built and no run row is created.
 ///
-/// Two shapes, the member's choice (<see cref="AutoOpenSettingKey"/>), differing only in WHEN the window opens:
-/// an offer they accept (default), or the window straight away as it behaved before. Either way this is the only
-/// caller that passes <see cref="RunWindowOpenTrigger.RemoteFleetCommander"/>: the one path where a window appears
-/// because somebody else acted, and it must not take the keyboard from a pilot who is mid-fight in EVE.
+/// Two shapes, the member's choice (<see cref="AutoOpenSettingKey"/>, or a per-fleet override): the pilot answers an
+/// offer toast (default), or the same "Join run" path the toast's button calls runs immediately, closed off with a
+/// confirmation toast so an unattended join still leaves a trace. Either way this is the only caller that passes
+/// <see cref="RunWindowOpenTrigger.RemoteFleetCommander"/>: the one path where a window appears because somebody
+/// else acted, and it must not take the keyboard from a pilot who is mid-fight in EVE.
 ///
 /// The offer stays up until the pilot answers it — a toast carrying buttons never auto-expires — and nothing else
 /// takes it away, not even the commander ending the run. A card that removes itself is a card the pilot can miss,
@@ -36,8 +39,22 @@ namespace EveUtils.Client.Runs;
 /// </summary>
 public sealed class FleetRunWindowPresenter : ISingletonService, IDisposable
 {
-    /// <summary>"true" opens the window the moment the commander starts, as it did before the offer. Default off.</summary>
+    /// <summary>
+    /// The central default: "true" auto-joins the moment the commander starts. Default off.
+    /// </summary>
     public const string AutoOpenSettingKey = "fleet.run-window.auto-open";
+
+    /// <summary>
+    /// Prefix for a per-fleet override of <see cref="AutoOpenSettingKey"/>. No key for a fleet means it follows the
+    /// central default; "true"/"false" pins it to always or never regardless of that default.
+    /// </summary>
+    public const string PerFleetAutoOpenSettingKeyPrefix = AutoOpenSettingKey + ".";
+
+    /// <summary>
+    /// This fleet's override key, so the AUTO-JOIN chip and tests can read and write it directly.
+    /// </summary>
+    public static string PerFleetAutoOpenSettingKey(long fleetId) =>
+        PerFleetAutoOpenSettingKeyPrefix + fleetId.ToString(CultureInfo.InvariantCulture);
 
     private readonly IDialogService _dialogs;
     private readonly IServiceProvider _services;
@@ -47,6 +64,10 @@ public sealed class FleetRunWindowPresenter : ISingletonService, IDisposable
     private readonly HashSet<string> _endedGroupCodes = new(StringComparer.Ordinal);
     // The group codes whose card on screen is still the prepared one — the only cards a call-off takes down.
     private readonly HashSet<string> _preparedOffers = new(StringComparer.Ordinal);
+    // The group codes an auto-join is currently working through (picker included) — a prepared offer (ET-246)
+    // and the real start it turns into share a group code, so without this a second auto-eligible event for the
+    // same run opens a second picker while the first is still waiting on an answer.
+    private readonly HashSet<string> _autoAccepting = new(StringComparer.Ordinal);
     private readonly object _gate = new();
 
     public FleetRunWindowPresenter(IEventBus eventBus, IDialogService dialogs, IServiceProvider services)
@@ -81,16 +102,66 @@ public sealed class FleetRunWindowPresenter : ISingletonService, IDisposable
         if (announcedBy is { } sender && await _IsOwnCharacterAsync(sender, cancellationToken))
             return;
 
-        if (await _AutoOpensAsync(cancellationToken))
+        // A window already up is the commander's own client, or a member already in a run: there is nothing to
+        // offer and nothing to auto-join, which is the same answer RunWindowPresentation gives that case. Checked
+        // once, ahead of both branches, so neither can open a second window onto an already-occupied screen.
+        if (_dialogs.IsActivityWindowOpen)
         {
-            _Open(offer);
             return;
         }
 
-        // A window already up is the commander's own client, or a member already in a run: there is nothing to
-        // offer, which is the same answer RunWindowPresentation gives that case.
-        if (!_dialogs.IsActivityWindowOpen)
+        if (await _AutoJoinsAsync(offer.Start.FleetId, cancellationToken))
+        {
+            _AutoAccept(offer);
+        }
+        else
+        {
             _Offer(offer);
+        }
+    }
+
+    /// <summary>
+    /// Starts an auto-join, unless one for this same group code is already working through the picker — the
+    /// guard is held for the whole <see cref="_Accept"/> chain, not just this call, so it has to be released from
+    /// inside the awaited task rather than here.
+    /// </summary>
+    private void _AutoAccept(Offer offer)
+    {
+        lock (_gate)
+        {
+            if (!_autoAccepting.Add(offer.Start.GroupCode))
+            {
+                return;
+            }
+        }
+
+        _ = _AutoAcceptAsync(offer);
+    }
+
+    /// <summary>
+    /// Not awaited from <see cref="_OnCommanderOfferAsync"/>: <see cref="InProcessEventBus"/> awaits every
+    /// subscriber in turn, so blocking here on a human answering the multi-pilot picker would freeze delivery
+    /// of every other event in the app for as long as the picker stays open. Caught and logged instead of left
+    /// to fault the discarded task, the same background-work pattern <see cref="FleetRunAutoPublisher"/> uses.
+    /// </summary>
+    private async Task _AutoAcceptAsync(Offer offer)
+    {
+        try
+        {
+            await _Accept(offer, announceJoin: true);
+        }
+        catch (Exception exception)
+        {
+            _services.GetService<ILogger<FleetRunWindowPresenter>>()?.LogError(
+                exception, "Auto-join failed for group code {GroupCode}", offer.Start.GroupCode);
+        }
+        finally
+        {
+            lock (_gate)
+            {
+                _autoAccepting.Remove(offer.Start.GroupCode);
+            }
+        }
     }
 
     private Task _OnFleetRunEndedAsync(FleetRunDiscardedEvent integrationEvent, CancellationToken cancellationToken)
@@ -112,16 +183,40 @@ public sealed class FleetRunWindowPresenter : ISingletonService, IDisposable
         _services.GetService<ICharacterRegistry>() is { } registry
         && (await registry.GetAllAsync(cancellationToken)).Any(character => character.EsiCharacterId == characterId);
 
-    private async Task<bool> _AutoOpensAsync(CancellationToken cancellationToken)
+    /// <summary>
+    /// The effective choice for this fleet: its own override if set, else the central default.
+    /// </summary>
+    private async Task<bool> _AutoJoinsAsync(long fleetId, CancellationToken cancellationToken)
     {
         if (_services.GetService<ISettingRepository>() is not { } settings)
+        {
             return false;
+        }
 
+        string fleetKey = PerFleetAutoOpenSettingKey(fleetId);
+        string? central = null;
+        string? perFleet = null;
         foreach (ClientSetting setting in await settings.ListAsync(cancellationToken))
-            if (setting.Key == AutoOpenSettingKey)
-                return string.Equals(setting.Value, "true", StringComparison.OrdinalIgnoreCase);
-        return false;
+        {
+            if (setting.Key == fleetKey)
+            {
+                perFleet = setting.Value;
+            }
+            else if (setting.Key == AutoOpenSettingKey)
+            {
+                central = setting.Value;
+            }
+        }
+
+        return _AsBool(perFleet) ?? _AsBool(central) ?? false;
     }
+
+    private static bool? _AsBool(string? value) => value switch
+    {
+        { } v when string.Equals(v, "true", StringComparison.OrdinalIgnoreCase) => true,
+        { } v when string.Equals(v, "false", StringComparison.OrdinalIgnoreCase) => false,
+        _ => null
+    };
 
     private void _Offer(Offer offer)
     {
@@ -141,7 +236,12 @@ public sealed class FleetRunWindowPresenter : ISingletonService, IDisposable
 
     private static string _OfferKey(string groupCode) => $"fleet-run-offer:{groupCode}";
 
-    private void _Accept(Offer offer)
+    /// <summary>
+    /// The one path that actually joins a run, whether the pilot clicked "Join run" or auto-join chose it for them.
+    /// <paramref name="announceJoin"/> is the only difference: a click already told the pilot they just joined, an
+    /// auto-join did not, so that path alone drops a confirmation toast once the window is up.
+    /// </summary>
+    private Task _Accept(Offer offer, bool announceJoin = false)
     {
         bool ended;
         lock (_gate)
@@ -151,10 +251,10 @@ public sealed class FleetRunWindowPresenter : ISingletonService, IDisposable
         {
             _services.GetService<IToastService>()?.Show("Fleet run already ended",
                 $"{_Where(offer.Start)} — the commander ended it before you joined.", ToastKind.Information);
-            return;
+            return Task.CompletedTask;
         }
 
-        _ = _AcceptAsync(offer);
+        return _AcceptAsync(offer, announceJoin);
     }
 
     /// <summary>
@@ -167,12 +267,12 @@ public sealed class FleetRunWindowPresenter : ISingletonService, IDisposable
     /// (Wayland, an unsupported platform) degrades to: the window opens as before and the pilot is asked at START
     /// by <c>_ResolveCharacterAsync</c>, over every character rather than only the flying ones.
     /// </summary>
-    private async Task _AcceptAsync(Offer offer)
+    private async Task _AcceptAsync(Offer offer, bool announceJoin)
     {
         IReadOnlyList<Character> flying = await _FlyingCharactersAsync();
         if (flying.Count < 2)
         {
-            _Open(offer);
+            _Open(offer, announceJoin: announceJoin);
             return;
         }
 
@@ -190,7 +290,7 @@ public sealed class FleetRunWindowPresenter : ISingletonService, IDisposable
         Character pilot = flying.First(character => character.EsiCharacterId == picked[0]);
         IReadOnlyList<Character> additional =
             [.. flying.Where(character => character.EsiCharacterId is { } id && picked.Skip(1).Contains(id))];
-        _Open(offer, pilot, additional);
+        _Open(offer, pilot, additional, announceJoin);
     }
 
     /// <summary>
@@ -204,7 +304,8 @@ public sealed class FleetRunWindowPresenter : ISingletonService, IDisposable
             ? []
             : InGameCharacters.Among(await registry.GetAllAsync(), _services.GetService<ILocalCharacterPresence>());
 
-    private void _Open(Offer offer, Character? pilot = null, IReadOnlyList<Character>? additional = null)
+    private void _Open(Offer offer, Character? pilot = null, IReadOnlyList<Character>? additional = null,
+        bool announceJoin = false)
     {
         Dispatcher.UIThread.Post(() =>
         {
@@ -222,6 +323,14 @@ public sealed class FleetRunWindowPresenter : ISingletonService, IDisposable
                     [.. additional.Select(character => (character.EsiCharacterId!.Value, character.Name))]);
             window.JoinFleetRun(offer.Start);
             _dialogs.ShowActivityWindow(window, RunWindowOpenTrigger.RemoteFleetCommander);
+
+            // A click already told the pilot they joined; an auto-join happened with nobody watching, so this is
+            // the only proof left that it worked at all.
+            if (announceJoin)
+            {
+                _services.GetService<IToastService>()?.Show(
+                    "Joined fleet run", _Where(offer.Start), ToastKind.Information);
+            }
         });
     }
 
