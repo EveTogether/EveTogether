@@ -78,10 +78,15 @@ public sealed partial class KillmailsOverviewViewModel : ViewModelBase, IRefresh
         _clock = services.GetService<TimeProvider>() ?? TimeProvider.System;
         _faces = new CharacterFaceCache(services.GetService<ICharacterPortraitProvider>());
 
-        Dictionary<int, string> ownNames = characters
-            .Where(character => character.EsiCharacterId is > 0)
-            .GroupBy(character => character.EsiCharacterId!.Value)
-            .ToDictionary(group => group.Key, group => group.First().Name);
+        Dictionary<int, string> ownNames = [];
+        foreach (Character character in characters)
+        {
+            if (character.EsiCharacterId is { } id && id > 0 && !ownNames.ContainsKey(id))
+            {
+                ownNames[id] = character.Name;
+            }
+        }
+
         _names = new KillmailNames(ownNames, services.GetService<IExternalCharacterLookup>(),
             services.GetRequiredService<IEsiAffiliationResolver>(), _sde,
             services.GetRequiredService<IKillmailEntityNameRepository>(), services.GetRequiredService<ISettingRepository>(),
@@ -144,9 +149,19 @@ public sealed partial class KillmailsOverviewViewModel : ViewModelBase, IRefresh
 
     private async Task _RefreshCharactersAndReadAsync()
     {
-        if (_services.GetService<ICharacterRegistry>() is { } registry)
+        // RefreshModule is fire-and-forget by IRefreshableModule's own contract, so a failure here has to end up in
+        // StatusMessage rather than an unobserved exception — the read below catches its own, but the registry call
+        // happens before that try starts.
+        try
         {
-            _RebuildCharacterTiles(await registry.GetAllAsync());
+            if (_services.GetService<ICharacterRegistry>() is { } registry)
+            {
+                _RebuildCharacterTiles(await registry.GetAllAsync());
+            }
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            StatusMessage = $"The character list could not be refreshed: {exception.Message}";
         }
 
         await _ReadAsync();
@@ -159,10 +174,13 @@ public sealed partial class KillmailsOverviewViewModel : ViewModelBase, IRefresh
     {
         int? selectedCharacterId = SelectedCharacter?.CharacterId;
         Characters.Clear();
-        foreach (Character character in characters.Where(character => character.EsiCharacterId is > 0)
-                     .OrderBy(character => character.Name, StringComparer.OrdinalIgnoreCase))
+        foreach (Character character in characters.OrderBy(character => character.Name, StringComparer.OrdinalIgnoreCase))
         {
-            int characterId = character.EsiCharacterId!.Value;
+            if (character.EsiCharacterId is not { } characterId || characterId <= 0)
+            {
+                continue;
+            }
+
             Characters.Add(new KillmailCharacterOptionViewModel(characterId, character.Name,
                 _faces.FaceOf(characterId, character.Name), !character.HasScope(KillmailsScopeCatalog.ReadKillmails),
                 _SelectCharacter, id => _allowScope(id, KillmailsScopeCatalog.ReadKillmails)));
@@ -260,6 +278,19 @@ public sealed partial class KillmailsOverviewViewModel : ViewModelBase, IRefresh
             character.Count = _allRows.Count;
             _RefreshTotals();
             _ApplyFilter();
+        }
+        // Both RefreshModule and a tile's SelectCommand fire this off without awaiting it (RefreshModule is void by
+        // IRefreshableModule's own contract), so an exception with nobody to catch it would otherwise go unobserved —
+        // this is the module's one chance to say so instead of silently doing nothing.
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            if (version == _readVersion)
+            {
+                StatusMessage = $"The killmails could not be read: {exception.Message}";
+                _allRows = [];
+                character.Count = 0;
+                _ShowEmpty();
+            }
         }
         finally
         {
