@@ -6,7 +6,7 @@ using EveUtils.Shared.Modules.Fleet.Repositories;
 namespace EveUtils.Server.Grpc;
 
 /// <summary>
-/// Pushes a fleet's lifecycle change — created, started, stopped (by hand or by the auto-stop), concluded, disbanded —
+/// Pushes a fleet's lifecycle change — created, edited, started, stopped (by hand or by the auto-stop), concluded, disbanded —
 /// to whoever has that fleet on screen (ET-10). For a fleet the discovery list shows, that is every connected
 /// character: the fleet list is where a non-member watches a public fleet, and before this they saw its old status
 /// until they pressed Refresh. Any other fleet stays on its roster audience, because broadcasting it would announce a
