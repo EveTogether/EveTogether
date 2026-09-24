@@ -6,10 +6,8 @@ using EveUtils.Shared.Modules.Skills.Entities;
 namespace EveUtils.Shared.Modules.Skills;
 
 /// <summary>
-/// Folds a character's attribute implants into the base attributes to get the effective training attributes.
-/// The base allocation comes from ESI <c>/attributes/</c> (without implants); each attribute-enhancer implant
-/// carries its +stat on an "xxxBonus" attribute (175-179) which maps to a character attribute (164-168) — read
-/// data-driven from the SDE. This is what makes the SP/min rate match in-game once a character has +stat implants.
+/// ESI <c>/attributes/</c> already includes attribute-implant bonuses, so its values are effective training attributes.
+/// For remapping, the base allocation is recovered by subtracting implant bonuses read from the SDE.
 /// </summary>
 public sealed class CharacterAttributeResolver(IDogmaDataAccessor dogma)
 {
@@ -25,16 +23,21 @@ public sealed class CharacterAttributeResolver(IDogmaDataAccessor dogma)
         (DogmaAttributeIds.WillpowerBonus, DogmaAttributeIds.Willpower)
     ];
 
-    /// <summary>The effective attributes = base allocation + the sum of the implant bonuses for each attribute.</summary>
-    public CharacterAttributeSet Resolve(CharacterAttributes baseAttributes, IReadOnlyList<int> implantTypeIds)
+    /// <summary>The effective training attributes reported by ESI, including implants.</summary>
+    public CharacterAttributeSet Resolve(CharacterAttributes esiAttributes, IReadOnlyList<int> _) => new(
+        esiAttributes.Charisma, esiAttributes.Intelligence, esiAttributes.Memory,
+        esiAttributes.Perception, esiAttributes.Willpower);
+
+    /// <summary>The base allocation, with SDE attribute-implant bonuses removed from the ESI values.</summary>
+    public CharacterAttributeSet Base(CharacterAttributes esiAttributes, IReadOnlyList<int> implantTypeIds)
     {
         var totals = new Dictionary<int, double>
         {
-            [DogmaAttributeIds.Charisma] = baseAttributes.Charisma,
-            [DogmaAttributeIds.Intelligence] = baseAttributes.Intelligence,
-            [DogmaAttributeIds.Memory] = baseAttributes.Memory,
-            [DogmaAttributeIds.Perception] = baseAttributes.Perception,
-            [DogmaAttributeIds.Willpower] = baseAttributes.Willpower
+            [DogmaAttributeIds.Charisma] = esiAttributes.Charisma,
+            [DogmaAttributeIds.Intelligence] = esiAttributes.Intelligence,
+            [DogmaAttributeIds.Memory] = esiAttributes.Memory,
+            [DogmaAttributeIds.Perception] = esiAttributes.Perception,
+            [DogmaAttributeIds.Willpower] = esiAttributes.Willpower
         };
 
         foreach (var implantTypeId in implantTypeIds)
@@ -44,7 +47,9 @@ public sealed class CharacterAttributeResolver(IDogmaDataAccessor dogma)
             {
                 var bonus = attributes.FirstOrDefault(attribute => attribute.AttributeId == bonusAttributeId);
                 if (bonus is not null)
-                    totals[characterAttributeId] += bonus.Value;
+                {
+                    totals[characterAttributeId] -= bonus.Value;
+                }
             }
         }
 
