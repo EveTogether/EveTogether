@@ -66,6 +66,9 @@
                          Text="{Binding RunLoot.CargoAfterText, Mode=TwoWay}"/>
                 <TextBlock Classes="hint" Margin="0" Text="{Binding RunLoot.CargoAfterStatus}"/>
             </StackPanel>
+            <!-- The AbyssalTracker model, said plainly beside the two fields it names (Raymond, ET-384,
+                 2026-09-24): what a starting and an ending hold, set against each other, come out to. -->
+            <TextBlock FontWeight="Bold" Text="LOOT = AFTER − BEFORE"/>
         </StackPanel>
 
         <!-- An editable section says until when; a fixed one says it is fixed. Never nothing. -->

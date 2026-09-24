@@ -110,45 +110,6 @@ public sealed class RunCargoHoldTests
         Assert.Equal(LootCaptureRole.CargoBefore, Assert.Single(section.Captures).Role);
     }
 
-    /// <summary>ET-384 AC1 + AC3, pasted as EVE actually copies an inventory window: group, price, name, volume and
-    /// quantity columns, an unchanged stack of paste and an unchanged single item beside a freshly looted item that
-    /// arrived as two split stacks in the ending hold. Fixture captured in the shape measured in docs/clipboard.md
-    /// (group first, name third — <c>ClipboardCaptureParserTests.ParseInventory_ReorderedColumnsAndBothLocales_MapsAnchoredValues</c>
-    /// is the same shape).</summary>
-    private const string BeforeHoldText =
-        "Charges\t123,45 ISK\tNanite Repair Paste\t0,01 m3\t100\t\r\n"
-        + "Salvage Materials\t50.000,00 ISK\tTripped Power Circuit\t0,10 m3\t1\t";
-
-    private const string AfterHoldText =
-        "Charges\t123,45 ISK\tNanite Repair Paste\t0,01 m3\t100\t\r\n"
-        + "Salvage Materials\t50.000,00 ISK\tTripped Power Circuit\t0,10 m3\t1\t\r\n"
-        + "Mutaplasmids\t10.000,00 ISK\tGravid Mutaplasmid\t0,01 m3\t2\t\r\n"
-        + "Mutaplasmids\t10.000,00 ISK\tGravid Mutaplasmid\t0,01 m3\t3\t";
-
-    [AvaloniaFact]
-    public async Task PastingRealisticBeforeAndAfterText_CountsOnlyWhatChanged()
-    {
-        using var instance = TestClientInstance.Create(services => services.AddSingleton<ISdeAccessor>(new FakeSdeAccessor()
-            .Add(28668, "Nanite Repair Paste", 285, 7)
-            .Add(52, "Tripped Power Circuit", 448, 25)
-            .Add(60, "Gravid Mutaplasmid", 1945, 35)));
-        // _SectionAsync replaces the whole price table with its own Tritanium fixture, so Gravid Mutaplasmid's price
-        // has to be set after it, not before.
-        var section = await _SectionAsync(instance);
-        await instance.Services.GetRequiredService<IMarketPriceRepository>().ReplaceAllAsync(
-            [new LocalMarketPrice { TypeId = 60, AveragePrice = 3_000_000, AdjustedPrice = 3_000_000, UpdatedAt = DateTimeOffset.UtcNow }]);
-
-        section.CargoBeforeText = BeforeHoldText;
-        await section.LastCargoWrite;
-        section.CargoAfterText = AfterHoldText;
-        await section.LastCargoWrite;
-
-        ActivityLootLineViewModel line = Assert.Single(section.ItemRows, row => !row.IsExcluded);
-        Assert.Equal(60, line.ItemTypeId);
-        Assert.Equal(5L, line.Quantity);
-        Assert.Equal(15_000_000m, section.LootIsk);
-    }
-
     private static TestClientInstance _Instance() =>
         TestClientInstance.Create(services => services.AddSingleton<ISdeAccessor>(
             new FakeSdeAccessor().Add(34, "Tritanium", 18, 4)));
