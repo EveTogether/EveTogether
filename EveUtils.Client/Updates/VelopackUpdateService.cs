@@ -175,13 +175,25 @@ internal sealed class VelopackUpdateService(ILogger<VelopackUpdateService> logge
         string version = release.Version.ToFullString();
         if (version.Contains("-nightly.", StringComparison.Ordinal))
         {
-            string identity = release.NotesMarkdown?.Trim() is { } notes &&
-                notes.StartsWith("nightly-", StringComparison.Ordinal) ? notes : "nightly";
+            (string identity, string notes) = _SplitNightlyNotes(release.NotesMarkdown);
 
-            return new AppRelease(identity, string.Empty, $"{RepositoryUrl}/releases/tag/nightly", release.Size);
+            return new AppRelease(identity, notes, $"{RepositoryUrl}/releases/tag/nightly", release.Size);
         }
 
         return new AppRelease(
             version, release.NotesMarkdown ?? string.Empty, $"{RepositoryUrl}/releases/tag/v{version}", release.Size);
+    }
+
+    // The nightly workflow writes the build label on the first line and the notes below it. A feed without that
+    // label (an older nightly) still shows what it carries, under a plain "nightly".
+    private static (string Identity, string Notes) _SplitNightlyNotes(string? notesMarkdown)
+    {
+        string text = notesMarkdown?.Trim() ?? string.Empty;
+        int lineEnd = text.IndexOf('\n');
+        string firstLine = (lineEnd < 0 ? text : text[..lineEnd]).Trim();
+
+        return firstLine.StartsWith("nightly-", StringComparison.Ordinal)
+            ? (firstLine, lineEnd < 0 ? string.Empty : text[lineEnd..].Trim())
+            : ("nightly", text);
     }
 }

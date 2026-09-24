@@ -32,7 +32,28 @@ env:
   CHANNELS: win-x64-stable linux-x64-stable osx-arm64-stable osx-x64-stable
 
 jobs:
+  # What the update screen shows for this release: the CHANGELOG section of the tag, read once, before anything is
+  # built. A tag with no section fails here, so a release cannot go out reading "ships without notes" — and the
+  # section has to be split off by hand when the release is cut. A dispatch build has no tag and takes [Unreleased].
+  notes:
+    runs-on: ubuntu-latest
+    outputs:
+      notes: ${{ steps.extract.outputs.notes }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - id: extract
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          bash scripts/changelog-notes.sh release CHANGELOG.md "${TAG:-[Unreleased]}" > release-notes.md
+
+          delimiter="notes_$(openssl rand -hex 8)"
+          { echo "notes<<$delimiter"; cat release-notes.md; echo "$delimiter"; } >> "$GITHUB_OUTPUT"
+
   build-windows:
+    needs: notes
     runs-on: windows-latest
     env:
       RUNTIME_ID: win-x64
@@ -83,6 +104,12 @@ jobs:
         shell: bash
         run: dotnet tool install -g vpk --version ${{ env.VPK_VERSION }}
 
+      - name: Write the release notes
+        shell: bash
+        env:
+          NOTES: ${{ needs.notes.outputs.notes }}
+        run: printf '%s\n' "$NOTES" > release-notes.md
+
       # Signing is deliberately absent: it has not been decided on yet, and every artifact here ships unsigned,
       # which the release notes say out loud. When it is decided, it arrives as --signTemplate (or --signParams)
       # on this call and a secret on the workflow — no other step changes.
@@ -96,6 +123,7 @@ jobs:
           --packDir ${{ env.OUTPUT_DIR }}
           --mainExe ${{ env.APP_NAME }}.exe
           --icon ${{ env.ICON_ICO }}
+          --releaseNotes release-notes.md
           --channel ${{ env.RUNTIME_ID }}-stable
           --outputDir artifacts-velopack
 
@@ -106,6 +134,7 @@ jobs:
           path: artifacts-velopack/*
 
   build-linux:
+    needs: notes
     runs-on: ubuntu-latest
     env:
       RUNTIME_ID: linux-x64
@@ -151,6 +180,12 @@ jobs:
       - name: Install vpk
         run: dotnet tool install -g vpk --version ${{ env.VPK_VERSION }}
 
+      - name: Write the release notes
+        shell: bash
+        env:
+          NOTES: ${{ needs.notes.outputs.notes }}
+        run: printf '%s\n' "$NOTES" > release-notes.md
+
       # An AppImage is Velopack's only Linux format — there is no installer, and this AppImage is the
       # self-updating one, which is why the hand-built AppDir/appimagetool leg that used to live here is gone.
       # Two near-identically named AppImages, one of which silently never updates, is a trap for whoever picks
@@ -165,6 +200,7 @@ jobs:
           --packDir ${{ env.OUTPUT_DIR }}
           --mainExe ${{ env.APP_NAME }}
           --icon ${{ env.ICON_PNG }}
+          --releaseNotes release-notes.md
           --channel ${{ env.RUNTIME_ID }}-stable
           --categories "Utility;Game"
           --outputDir artifacts-velopack
@@ -176,6 +212,7 @@ jobs:
           path: artifacts-velopack/*
 
   build-macos:
+    needs: notes
     runs-on: macos-latest
     strategy:
       matrix:
@@ -243,6 +280,12 @@ jobs:
       - name: Install vpk
         run: dotnet tool install -g vpk --version ${{ env.VPK_VERSION }}
 
+      - name: Write the release notes
+        shell: bash
+        env:
+          NOTES: ${{ needs.notes.outputs.notes }}
+        run: printf '%s\n' "$NOTES" > release-notes.md
+
       # Two architectures, two channels, two feeds — an Apple Silicon install asks for releases.osx-arm64.json
       # and finds only arm64 builds in it. vpk builds the .app bundle itself from this plain publish directory,
       # which is why the hand-assembled bundle and its Info.plist that used to live here are gone: two bundles
@@ -258,6 +301,7 @@ jobs:
           --packDir ${{ env.OUTPUT_DIR }}
           --mainExe ${{ env.APP_NAME }}
           --icon eve-together.icns
+          --releaseNotes release-notes.md
           --channel ${{ env.RUNTIME_ID }}-stable
           --outputDir artifacts-velopack
 
@@ -315,19 +359,9 @@ jobs:
           [ "$missing" = 0 ]
 
       - name: Extract release notes from CHANGELOG.md
-        run: |
-          TAG="${{ github.event.release.tag_name }}"
-          : > RELEASE_NOTES.md
-          if [ -f CHANGELOG.md ]; then
-            awk -v tag="$TAG" '
-              index($0, "## ") == 1 && index($0, tag) > 0 { flag=1; next }
-              flag && index($0, "## ") == 1 { flag=0 }
-              flag { print }
-            ' CHANGELOG.md > RELEASE_NOTES.md || true
-          fi
-          if [ ! -s RELEASE_NOTES.md ]; then
-            echo "See [CHANGELOG.md](CHANGELOG.md) for details." > RELEASE_NOTES.md
-          fi
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: bash scripts/changelog-notes.sh section CHANGELOG.md "$TAG" > RELEASE_NOTES.md
 
       # A release page now carries the update feed as well as the downloads, and the two look alike to anyone
       # scrolling it. Nothing here is code-signed either, and each platform refuses an unsigned download in its

@@ -35,8 +35,8 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       build: ${{ steps.decide.outputs.build }}
-      previous: ${{ steps.decide.outputs.previous }}
       display: ${{ steps.decide.outputs.display }}
+      notes: ${{ steps.notes.outputs.notes }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -48,8 +48,8 @@ jobs:
         run: |
           # The commit the nightly tag points at — not the release's targetCommitish, which reports the branch
           # ("main") and would never equal a sha, quietly making this check always say "yes, build". Captured
-          # here, before the manual short-circuit below, so the release job can list the commits since it as
-          # this nightly's changelog on a scheduled and a hand-fired run alike.
+          # here, before the manual short-circuit below, so the notes step can diff the changelog against it on a
+          # scheduled and a hand-fired run alike.
           # A failed call (no 'nightly' tag yet, e.g. the very first nightly) must read as "nobody published
           # one" — gh api writes its error body to stdout even on a 404, so `2>/dev/null || echo ""` alone still
           # lets that JSON through; the || below discards it on the exit code instead of trusting stdout.
@@ -71,6 +71,25 @@ jobs:
             echo "main moved since the last nightly (was '$published', now '$head')."
             echo "build=true" >> "$GITHUB_OUTPUT"
           fi
+
+      # The one source of this nightly's notes: the build label, then the [Unreleased] changelog entries that were
+      # not there at the previous nightly. The build jobs hand this to Velopack, which is what the update screen
+      # shows, and the release page below repeats it. Without a previous nightly to compare against, the script
+      # falls back to the top entries.
+      - id: notes
+        if: steps.decide.outputs.build == 'true'
+        env:
+          PREVIOUS: ${{ steps.decide.outputs.previous }}
+          DISPLAY_NAME: ${{ steps.decide.outputs.display }}
+        run: |
+          previous_changelog=()
+          if [ -n "$PREVIOUS" ] && git show "$PREVIOUS:CHANGELOG.md" > previous-changelog.md 2>/dev/null; then
+            previous_changelog=(previous-changelog.md)
+          fi
+          bash scripts/changelog-notes.sh nightly "$DISPLAY_NAME" CHANGELOG.md "${previous_changelog[@]}" > nightly-build.md
+
+          delimiter="notes_$(openssl rand -hex 8)"
+          { echo "notes<<$delimiter"; cat nightly-build.md; echo "$delimiter"; } >> "$GITHUB_OUTPUT"
 
   tests:
     needs: changes
@@ -131,9 +150,11 @@ jobs:
 
       - name: Set package version and build identity
         shell: bash
+        env:
+          NOTES: ${{ needs.changes.outputs.notes }}
         run: |
           echo "VERSION=0.0.1-nightly.${{ github.run_number }}" >> "$GITHUB_ENV"
-          echo "${{ needs.changes.outputs.display }}" > nightly-build.md
+          printf '%s\n' "$NOTES" > nightly-build.md
 
       - name: Publish (self-contained)
         run: >
@@ -198,9 +219,11 @@ jobs:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
       - name: Set package version and build identity
+        env:
+          NOTES: ${{ needs.changes.outputs.notes }}
         run: |
           echo "VERSION=0.0.1-nightly.${{ github.run_number }}" >> "$GITHUB_ENV"
-          echo "${{ needs.changes.outputs.display }}" > nightly-build.md
+          printf '%s\n' "$NOTES" > nightly-build.md
 
       - name: Publish (self-contained)
         run: >
@@ -264,9 +287,11 @@ jobs:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
       - name: Set package version and build identity
+        env:
+          NOTES: ${{ needs.changes.outputs.notes }}
         run: |
           echo "VERSION=0.0.1-nightly.${{ github.run_number }}" >> "$GITHUB_ENV"
-          echo "${{ needs.changes.outputs.display }}" > nightly-build.md
+          printf '%s\n' "$NOTES" > nightly-build.md
 
       - name: Publish (self-contained)
         run: >
@@ -334,9 +359,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-        with:
-          # Full history so the changelog can walk from the previous nightly's commit to this one.
-          fetch-depth: 0
 
       # Scoped to the nightly-* uploads (build-windows/linux/macos) — an unfiltered download also picks up
       # whatever else the run's artifact pool holds, such as docker/build-push-action's own build-record
@@ -347,17 +369,16 @@ jobs:
           pattern: nightly-*
           merge-multiple: true
 
-      # The changelog is the commits since the previous nightly — the question a rolling pre-release actually
-      # raises: what landed in tonight's build. Falls back to the most recent commits when there is no previous
-      # nightly to walk from (the very first nightly, or a pruned/rewritten history).
+      # The page repeats the notes the update screen shows — what landed in tonight's build — under the standing
+      # explanation of what a nightly is. The first two lines of the notes are the build label and a blank line,
+      # which the page already carries as its own "Build:" line.
       - name: Compose the release notes
         env:
-          # Routed through env: and read back quoted ("$PREVIOUS") rather than interpolated into the script
-          # text directly — a job output is untrusted content as far as this step is concerned, and pasting it
-          # into bash source lets whatever it contains (a stray quote, a space) break the script's parsing.
-          PREVIOUS: ${{ needs.changes.outputs.previous }}
+          # Routed through env: and read back quoted rather than interpolated into the script text directly — a
+          # job output is untrusted content as far as this step is concerned, and pasting it into bash source
+          # lets whatever it contains (a stray quote, a space) break the script's parsing.
+          NOTES: ${{ needs.changes.outputs.notes }}
         run: |
-          previous="$PREVIOUS"
           {
             echo "Rolling build of \`main\`, replaced whenever main moves. Not a release: things here are expected to break."
             echo
@@ -367,13 +388,7 @@ jobs:
             echo
             echo "### Changes since the previous nightly"
             echo
-            if [ -n "$previous" ] && git cat-file -e "${previous}^{commit}" 2>/dev/null; then
-              git log --format='- %s' "${previous}..HEAD"
-            else
-              echo "_No previous nightly in history — the most recent commits:_"
-              echo
-              git log --format='- %s' -n 20
-            fi
+            printf '%s\n' "$NOTES" | awk 'NR > 2'
           } > nightly-notes.md
 
       # Delete and recreate rather than update: an existing release keeps its old tag, so 'nightly' would keep

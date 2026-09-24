@@ -153,6 +153,44 @@ public class VelopackUpdateServiceTests : IDisposable
         Assert.Equal("https://github.com/EveTogether/EveTogether/releases/tag/nightly", result.Value?.Url);
     }
 
+    [Fact]
+    public async Task CheckAsync_WithANightlyOffer_ShowsTheBulletsBelowTheBuildLabelAsNotes()
+    {
+        Result<AppRelease?> result = await _CheckAsync(
+            new Feed(_Package(
+                "0.0.0-nightly.6",
+                "nightly-20260924.a1b2c3d.6\n\n- Added: delta. A new entry.\n- Fixed: echo. Another one.\n")),
+            UpdateChannel.Nightly);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("nightly-20260924.a1b2c3d.6", result.Value?.Version);
+        Assert.Equal("- Added: delta. A new entry.\n- Fixed: echo. Another one.", result.Value?.Notes);
+    }
+
+    [Fact]
+    public async Task CheckAsync_WithANightlyOfferWithoutABuildLabel_KeepsTheWholeTextAsNotes()
+    {
+        Result<AppRelease?> result = await _CheckAsync(
+            new Feed(_Package("0.0.0-nightly.6", "- Added: delta. A new entry.")),
+            UpdateChannel.Nightly);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("nightly", result.Value?.Version);
+        Assert.Equal("- Added: delta. A new entry.", result.Value?.Notes);
+    }
+
+    [Fact]
+    public async Task CheckAsync_WithANightlyOfferThatIsOnlyABuildLabel_HasNoNotes()
+    {
+        Result<AppRelease?> result = await _CheckAsync(
+            new Feed(_Package("0.0.0-nightly.6", "nightly-20260924.a1b2c3d.6")),
+            UpdateChannel.Nightly);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("nightly-20260924.a1b2c3d.6", result.Value?.Version);
+        Assert.Equal(string.Empty, result.Value?.Notes);
+    }
+
     /// <summary>
     /// The channel that reaches the feed is what keeps a Windows install away from the macOS package in the same
     /// release, and a stable install away from a nightly asset (ET-339).
