@@ -111,8 +111,12 @@ public partial class CharacterPickerWindow : ChromedWindow
     {
         FilteredOptions.Clear();
         foreach (var option in Options)
+        {
             if (CharacterPickerSearch.Matches(option, SearchText))
+            {
                 FilteredOptions.Add(option);
+            }
+        }
     }
 
     protected override void OnOpened(EventArgs e)

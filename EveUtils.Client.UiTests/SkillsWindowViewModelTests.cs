@@ -28,7 +28,9 @@ public sealed class SkillsWindowViewModelTests
     {
         var registry = instance.Services.GetRequiredService<ICharacterRegistry>();
         foreach (var (id, name) in characters)
+        {
             await registry.AddOrUpdateAsync(new Character(name, id), Ct);
+        }
     }
 
     /// <summary>Criterion 1. Red if the search field shows below the threshold, or stays hidden at or above it.</summary>
@@ -57,8 +59,10 @@ public sealed class SkillsWindowViewModelTests
         using var instance = TestClientInstance.Create();
         await _SeedCharactersAsync(instance, (10, "First"), (20, "Second"), (30, "Third"));
         if (rememberedCharacterId is { } remembered)
+        {
             await instance.Services.GetRequiredService<ISettingRepository>()
                 .UpsertAsync(SkillsWindowViewModel.LastCharacterSettingKey, remembered.ToString(CultureInfo.InvariantCulture), Ct);
+        }
         var viewModel = new SkillsWindowViewModel(instance.Services, startingCharacterId);
 
         await viewModel.LoadAsync(Ct);

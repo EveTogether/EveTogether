@@ -14,6 +14,7 @@ using EveUtils.Shared.Modules.Settings.Repositories;
 using EveUtils.Shared.Modules.Skills.Entities;
 using EveUtils.Shared.Modules.Skills.Repositories;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using SkillQueueStanding = EveUtils.Client.ViewModels.Home.SkillQueueStanding;
 
 namespace EveUtils.Client.ViewModels.Skills;
@@ -33,6 +34,7 @@ public sealed partial class SkillsWindowViewModel : ObservableObject, IRefreshab
     private readonly ISdeAccessor _sde;
     private readonly ISettingRepository? _settings;
     private readonly ICharacterPortraitProvider? _portraits;
+    private readonly ILogger<SkillsWindowViewModel>? _logger;
     private readonly int? _startingCharacterId;
 
     private IReadOnlyList<Character> _characters = [];
@@ -77,6 +79,7 @@ public sealed partial class SkillsWindowViewModel : ObservableObject, IRefreshab
         _sde = services.GetRequiredService<ISdeAccessor>();
         _settings = services.GetService<ISettingRepository>();
         _portraits = services.GetService<ICharacterPortraitProvider>();
+        _logger = services.GetService<ILogger<SkillsWindowViewModel>>();
         _startingCharacterId = startingCharacterId;
     }
 
@@ -111,13 +114,18 @@ public sealed partial class SkillsWindowViewModel : ObservableObject, IRefreshab
     {
         FilteredCharacterOptions.Clear();
         foreach (var option in CharacterOptions)
+        {
             if (CharacterPickerSearch.Matches(option, value))
+            {
                 FilteredCharacterOptions.Add(option);
-        // The current pick stays listed even if the filter would hide it — a ComboBox clears SelectedItem the
-        // moment it drops out of ItemsSource, which would silently desync the dropdown's own radio mark from what
-        // the header actually shows.
+            }
+        }
+        // Keep the current pick listed even if the filter would hide it, or the ComboBox clears SelectedItem the
+        // moment it drops out of ItemsSource — desyncing the dropdown's radio mark from the header.
         if (SelectedCharacterOption is { } selected && !FilteredCharacterOptions.Contains(selected))
+        {
             FilteredCharacterOptions.Insert(0, selected);
+        }
     }
 
     // The header ComboBox's own selection (a real Avalonia ComboBox, D-point: "closes on selection, that's what a
@@ -125,7 +133,9 @@ public sealed partial class SkillsWindowViewModel : ObservableObject, IRefreshab
     partial void OnSelectedCharacterOptionChanged(CharacterPickRowViewModel? value)
     {
         if (_suppressSelectionApply || value is null || value.CharacterId == SelectedCharacterId)
+        {
             return;
+        }
         _ = _SelectCharacterAsync(value.CharacterId, CancellationToken.None);
     }
 
@@ -151,7 +161,9 @@ public sealed partial class SkillsWindowViewModel : ObservableObject, IRefreshab
             // Best-effort, same as every other CharacterPickRowViewModel consumer (CharacterPickerWindow,
             // FleetInviteWindow): a portrait that never loads just leaves the row on its initial-glyph fallback.
             if (_portraits is not null)
+            {
                 _ = row.LoadPortraitAsync(_portraits, cancellationToken);
+            }
         }
         OnCharacterSearchTextChanged(CharacterSearchText); // (re)builds FilteredCharacterOptions
         OnPropertyChanged(nameof(ShowCharacterSearch));
@@ -161,7 +173,9 @@ public sealed partial class SkillsWindowViewModel : ObservableObject, IRefreshab
     private async Task<int> _ResolveStartingCharacterIdAsync(CancellationToken cancellationToken)
     {
         if (_startingCharacterId is { } given && _characters.Any(c => c.EsiCharacterId == given))
+        {
             return given;
+        }
 
         if (_settings is not null)
         {
@@ -169,26 +183,28 @@ public sealed partial class SkillsWindowViewModel : ObservableObject, IRefreshab
                 .FirstOrDefault(s => s.Key == LastCharacterSettingKey)?.Value;
             if (remembered is not null && int.TryParse(remembered, NumberStyles.Integer, CultureInfo.InvariantCulture, out var lastId)
                 && _characters.Any(c => c.EsiCharacterId == lastId))
+            {
                 return lastId;
+            }
         }
 
         return _characters[0].EsiCharacterId ?? 0;
     }
 
+    // Reachable close together from a header pick, a RefreshModule reload and an explicit GoToCharacterAsync (ET-48
+    // "route to existing"); the version stamp below discards a superseded read, the same rule KillmailsOverviewViewModel
+    // holds itself to for a fast character switch (ET-332).
     private async Task _SelectCharacterAsync(int characterId, CancellationToken cancellationToken)
     {
-        // A header pick, a RefreshModule reload and an explicit GoToCharacterAsync (ET-48 "route to existing") can
-        // all reach here for the same instance close together. Every read below is off the UI thread and takes
-        // real time, so two calls can overlap; the one whose version this method still owns when it is done is the
-        // one that gets to apply its result — the same "a read version stamp discards a superseded result" rule
-        // KillmailsOverviewViewModel holds itself to for a fast character switch (ET-332).
         int version = ++_selectionVersion;
         IsLoading = true;
         try
         {
             var character = _characters.FirstOrDefault(c => c.EsiCharacterId == characterId);
             if (character is null)
+            {
                 return;
+            }
 
             var snapshot = await _BuildSnapshotAsync(characterId, cancellationToken);
             // The SDE reads inside both view-models are synchronous SQLite queries — off the UI thread, the same
@@ -197,7 +213,9 @@ public sealed partial class SkillsWindowViewModel : ObservableObject, IRefreshab
                 (new SkillsCatalogueViewModel(snapshot), new SkillsQueueViewModel(snapshot)), cancellationToken);
 
             if (version != _selectionVersion)
+            {
                 return; // superseded while reading — the newer call's result is what the screen should show
+            }
 
             SelectedCharacterId = characterId;
             SelectedCharacterName = character.Name;
@@ -206,7 +224,9 @@ public sealed partial class SkillsWindowViewModel : ObservableObject, IRefreshab
 
             _suppressSelectionApply = true;
             foreach (var option in CharacterOptions)
+            {
                 option.IsSelected = option.CharacterId == characterId;
+            }
             SelectedCharacterOption = CharacterOptions.FirstOrDefault(o => o.CharacterId == characterId);
             _suppressSelectionApply = false;
 
@@ -218,7 +238,17 @@ public sealed partial class SkillsWindowViewModel : ObservableObject, IRefreshab
             StatusMessage = null;
 
             if (_settings is not null)
+            {
                 await _settings.UpsertAsync(LastCharacterSettingKey, characterId.ToString(CultureInfo.InvariantCulture), cancellationToken);
+            }
+        }
+        // OnSelectedCharacterOptionChanged and GoToCharacterAsync's rail caller both fire this off without
+        // awaiting it, so an exception with nobody to catch it would otherwise go unobserved (ET-365's own reason
+        // for wrapping its fire-and-forget image load) — surfaced here instead of silently doing nothing.
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            StatusMessage = $"This character's skills could not be read: {exception.Message}";
+            _logger?.LogError(exception, "SKILLS could not read character {CharacterId}.", characterId);
         }
         finally
         {

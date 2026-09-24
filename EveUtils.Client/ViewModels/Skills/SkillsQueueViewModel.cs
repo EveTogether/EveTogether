@@ -42,11 +42,13 @@ public sealed partial class SkillsQueueViewModel : ObservableObject
         _snapshot = snapshot;
 
         foreach (var group in snapshot.Sde.GetGroupsByCategory(16))
+        {
             foreach (var skill in snapshot.Sde.GetSkillsInGroup(group.GroupId))
             {
                 _skillsById[skill.TypeId] = skill;
                 _groupNameBySkill[skill.TypeId] = group.Name;
             }
+        }
 
         // AC3: a row whose FinishDate has already passed is never shown — a finished row belongs to Levels
         // (EsiSkillImporter merges it there) and staying in the raw queue store is a stale leftover, not a fact to
@@ -73,7 +75,9 @@ public sealed partial class SkillsQueueViewModel : ObservableObject
         {
             position++;
             if (!_skillsById.TryGetValue(entry.SkillTypeId, out var skill))
+            {
                 continue;
+            }
 
             long levelSp = (long)(SkillPointMath.SkillPointsForLevel(skill.Rank, entry.FinishedLevel)
                                  - SkillPointMath.SkillPointsForLevel(skill.Rank, entry.FinishedLevel - 1));
@@ -111,7 +115,9 @@ public sealed partial class SkillsQueueViewModel : ObservableObject
     partial void OnSelectedRowChanged(SkillQueueRowViewModel? value)
     {
         foreach (var r in Rows)
+        {
             r.IsSelected = r == value;
+        }
 
         if (value is null || !_skillsById.TryGetValue(value.SkillTypeId, out var skill))
         {

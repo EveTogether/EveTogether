@@ -73,6 +73,7 @@ using EveUtils.Shared.Modules.Ships.Dtos;
 using EveUtils.Shared.Modules.Ships.Events;
 using EveUtils.Shared.Modules.Ships.Queries;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace EveUtils.Client.ViewModels;
 
@@ -93,6 +94,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
     private readonly IThemeService? _theme;
     private readonly Calendar.IWeekStartService? _weekStart;
     private readonly IDialogService? _dialogs;
+    private readonly ILogger<MainWindowViewModel>? _logger;
     private readonly IEsiAvailabilityState? _availability;
     private readonly IEsiScopeRegistry? _scopeRegistry;
     private readonly ServerFitShareClient? _fitShare;
@@ -431,6 +433,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         _registry = services.GetRequiredService<ICharacterRegistry>();
         _dialogs = services.GetRequiredService<IDialogService>();
         _dialogs.ModuleClosed += OnModuleClosed;   // ET-209: Ctrl+Shift+T reopens the last eligible one
+        _logger = services.GetService<ILogger<MainWindowViewModel>>();
         _scopeRegistry = services.GetRequiredService<IEsiScopeRegistry>();
         _fitShare = services.GetRequiredService<ServerFitShareClient>();
         _fitExportActions = services.GetRequiredService<IFitExportActions>();
@@ -651,12 +654,25 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
     private async Task OpenSkillsAsync(int? startingCharacterId = null)
     {
         if (_services is null || _dialogs is null)
+        {
             return;
+        }
 
-        var fresh = new SkillsWindowViewModel(_services, startingCharacterId);
-        var shown = _dialogs.ShowSkills(fresh);
-        if (startingCharacterId is { } characterId && !ReferenceEquals(shown, fresh))
-            await shown.GoToCharacterAsync(characterId);
+        // Fired fire-and-forget from a pilot row's TRAINING cell (HomeNavigation.OpenSkills is an Action<int>) —
+        // an exception here would otherwise go unobserved, the same reason ET-365 wraps killmail image loading.
+        try
+        {
+            var fresh = new SkillsWindowViewModel(_services, startingCharacterId);
+            var shown = _dialogs.ShowSkills(fresh);
+            if (startingCharacterId is { } characterId && !ReferenceEquals(shown, fresh))
+            {
+                await shown.GoToCharacterAsync(characterId);
+            }
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            _logger?.LogError(exception, "SKILLS could not be opened for character {CharacterId}.", startingCharacterId);
+        }
     }
 
     /// <summary>Opens the message inbox — non-modal so deliveries keep arriving while it is open.</summary>

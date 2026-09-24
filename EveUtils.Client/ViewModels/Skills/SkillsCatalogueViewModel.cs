@@ -46,11 +46,15 @@ public sealed partial class SkillsCatalogueViewModel : ObservableObject
         {
             var skills = snapshot.Sde.GetSkillsInGroup(group.GroupId);
             if (skills.Count == 0)
+            {
                 continue; // nothing to click into
+            }
 
             _groupsById[group.GroupId] = group;
             foreach (var skill in skills)
+            {
                 _skillsById[skill.TypeId] = skill;
+            }
 
             int injectedInGroup = skills.Count(s => snapshot.LevelOf(s.TypeId) > 0);
             totalSkills += skills.Count;
@@ -68,22 +72,30 @@ public sealed partial class SkillsCatalogueViewModel : ObservableObject
     partial void OnSelectedGroupChanged(SkillGroupTileViewModel? value)
     {
         foreach (var g in Groups)
+        {
             g.IsSelected = g == value;
+        }
 
         Skills.Clear();
         SelectedSkillRow = null;
         if (value is null)
+        {
             return;
+        }
 
         foreach (var skill in _snapshot.Sde.GetSkillsInGroup(value.GroupId).OrderBy(s => s.Name))
+        {
             Skills.Add(new SkillRowViewModel(skill.TypeId, skill.Name, _snapshot.LevelOf(skill.TypeId), _StatusText(skill)));
+        }
     }
 
     /// <summary>Builds the detail pane for the picked skill (shared shape with TRAINING QUEUE).</summary>
     partial void OnSelectedSkillRowChanged(SkillRowViewModel? value)
     {
         foreach (var s in Skills)
+        {
             s.IsSelected = s == value;
+        }
 
         if (value is null || !_skillsById.TryGetValue(value.SkillTypeId, out var skill))
         {
@@ -103,7 +115,9 @@ public sealed partial class SkillsCatalogueViewModel : ObservableObject
     {
         int level = _snapshot.LevelOf(skill.TypeId);
         if (level >= 5)
+        {
             return "✓";
+        }
 
         // A queue entry beyond the trained level, if any — the earliest one not yet trained. Already-past entries
         // never reach here: they are already reflected in Levels (EsiSkillImporter merges a finished queue row into
@@ -113,11 +127,15 @@ public sealed partial class SkillsCatalogueViewModel : ObservableObject
             .OrderBy(e => e.FinishedLevel)
             .FirstOrDefault();
         if (queued is not null)
+        {
             return $"QUEUE → {RomanLevel.Text(queued.FinishedLevel)} {SkillQueueStanding.Until(_TimeLeft(queued))}";
+        }
 
         double rate = _snapshot.SpPerMinute(skill.PrimaryAttributeId, skill.SecondaryAttributeId);
         if (rate <= 0)
+        {
             return "—";
+        }
 
         double levelSp = SkillPointMath.SkillPointsForLevel(skill.Rank, level + 1)
                         - SkillPointMath.SkillPointsForLevel(skill.Rank, level);

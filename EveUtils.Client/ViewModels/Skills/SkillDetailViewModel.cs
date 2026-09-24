@@ -57,13 +57,19 @@ public sealed class SkillDetailViewModel
 
             string status;
             if (trained)
+            {
                 status = "✓";
+            }
             else if (queueEntry is not null)
+            {
                 status = queueEntry.FinishDate is { } finish
                     ? $"{(_IsCurrentlyTraining(queueEntry, now) ? "training" : "queued")} · {finish.ToLocalTime():ddd d MMM HH:mm}"
                     : "queue paused";
+            }
             else
+            {
                 status = spPerMinute > 0 ? SkillQueueStanding.Until(TimeSpan.FromMinutes(levelSp / spPerMinute)) : "—";
+            }
 
             levels.Add(new SkillLevelRowViewModel(level, RomanLevel.Text(level), totalSp, trained, status));
         }
