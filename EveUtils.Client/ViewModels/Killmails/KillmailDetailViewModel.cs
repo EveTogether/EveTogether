@@ -101,10 +101,14 @@ public sealed partial class KillmailDetailViewModel : ViewModelBase
     {
         IReadOnlyList<Character> characters =
             await _services.GetRequiredService<ICharacterRegistry>().GetAllAsync(cancellationToken);
-        Dictionary<int, string> ownCharacterNames = characters
-            .Where(character => character.EsiCharacterId is > 0)
-            .GroupBy(character => character.EsiCharacterId!.Value)
-            .ToDictionary(group => group.Key, group => group.First().Name);
+        Dictionary<int, string> ownCharacterNames = [];
+        foreach (Character character in characters)
+        {
+            if (character.EsiCharacterId is { } id && id > 0 && !ownCharacterNames.ContainsKey(id))
+            {
+                ownCharacterNames[id] = character.Name;
+            }
+        }
         var names = new KillmailNames(ownCharacterNames, _services.GetService<IExternalCharacterLookup>(),
             _services.GetRequiredService<IEsiAffiliationResolver>(), _sde,
             _services.GetRequiredService<IKillmailEntityNameRepository>(), _services.GetRequiredService<ISettingRepository>(),
@@ -358,7 +362,7 @@ public sealed partial class KillmailDetailViewModel : ViewModelBase
 
     private static decimal? _SumKnown(IEnumerable<decimal?> values)
     {
-        List<decimal> known = [.. values.Where(value => value is not null).Select(value => value!.Value)];
+        List<decimal> known = [.. values.OfType<decimal>()];
         return known.Count == 0 ? null : known.Sum();
     }
 

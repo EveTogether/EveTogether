@@ -3,8 +3,10 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using EveUtils.Client.Dialogs;
+using EveUtils.Client.ViewModels.FitBrowser;
 using EveUtils.Client.ViewModels.Killmails;
 using EveUtils.Client.ViewModels.Runs;
+using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Data;
 using EveUtils.Shared.Identity;
 using EveUtils.Shared.Messaging;
@@ -138,8 +140,9 @@ public sealed class KillmailDetailTests
 
         await viewModel.OpenFitCommand.ExecuteAsync(null);
 
-        Assert.NotNull(dialogs.LastFitDetail);
-        Assert.Equal("fit-detail:esi:-1", dialogs.LastFitDetail!.ModuleId); // no local id: read-only
+        FitDetailWindowViewModel? lastFitDetail = dialogs.LastFitDetail;
+        Assert.NotNull(lastFitDetail);
+        Assert.Equal("fit-detail:esi:-1", lastFitDetail.ModuleId); // no local id: read-only
         Assert.Equal(before, (await fittings.ListAllAsync(Ct)).Count);
     }
 
@@ -185,7 +188,10 @@ public sealed class KillmailDetailTests
         ActivitySummary expected = groupCode is null
             ? await db.Set<ActivitySummary>().SingleAsync(summary => summary.RunId == started.Value, Ct)
             : await db.Set<ActivitySummary>().SingleAsync(summary => summary.GroupCode == groupCode, Ct);
-        Assert.Equal(expected.Id, result.Value!.LinkedRun!.ActivitySummaryId);
+        KillmailDetailDto? detail = result.Value;
+        Assert.NotNull(detail);
+        Assert.NotNull(detail.LinkedRun);
+        Assert.Equal(expected.Id, detail.LinkedRun.ActivitySummaryId);
     }
 
     /// <summary>Criterion 7. Red if two ids give the same module id, or the same ids give two different ones — either
@@ -198,7 +204,9 @@ public sealed class KillmailDetailTests
         IServiceProvider services = new ServiceCollection()
             .AddSingleton<EveUtils.Shared.Modules.Sde.ISdeAccessor>(new FakeSdeAccessor())
             .BuildServiceProvider();
-        var viewModel = new KillmailDetailViewModel(dispatcher: null!, dialogs: null!, services, characterId, killmailId);
+        // ModuleId is built from the constructor's own arguments alone, so neither dependency is ever called here —
+        // a throwing stub proves that instead of asserting it away with null!.
+        var viewModel = new KillmailDetailViewModel(new _UnusedDispatcher(), new RecordingDialogService(), services, characterId, killmailId);
 
         Assert.Equal(expected, viewModel.ModuleId);
     }
@@ -247,7 +255,9 @@ public sealed class KillmailDetailTests
             (Func<Task<bool>>)(() =>
             {
                 bool opened = false;
-                var linkedLoss = new LinkedLossViewModel(dispatcher: null!, Pilot, 1, [], () => Task.CompletedTask, () => opened = true)
+                // OpenKillmailCommand never touches the dispatcher (only LinkToOtherRunCommand/UnlinkCommand do) —
+                // a throwing stub proves that instead of asserting it away with null!.
+                var linkedLoss = new LinkedLossViewModel(new _UnusedDispatcher(), Pilot, 1, [], () => Task.CompletedTask, () => opened = true)
                 {
                     ShipText = "Gila", FitText = "fit", TimeText = "t", FinalBlowText = "fb", ReasonText = "r"
                 };
@@ -355,5 +365,18 @@ public sealed class KillmailDetailTests
 
         public Task<string?> ResolveAllianceNameAsync(int allianceId, CancellationToken cancellationToken = default) =>
             Task.FromResult<string?>(null);
+    }
+
+    /// <summary>A dispatcher for a scenario that never calls one, proving it with a throw instead of a null!.</summary>
+    private sealed class _UnusedDispatcher : IDispatcher
+    {
+        public Task<TResult> Query<TResult>(IQuery<TResult> query, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task Send(ICommand command, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<TResult> Send<TResult>(ICommand<TResult> command, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
     }
 }
