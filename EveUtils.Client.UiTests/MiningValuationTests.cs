@@ -109,6 +109,8 @@ public sealed class MiningValuationTests
         HasLoot = false,
         ConsumableIskCost = null,
         HasConsumables = false,
+        ShipLossIskCost = null,
+        HasShipLoss = false,
         MiningIskValue = miningIskValue,
         HasMining = hasMining,
         Parameters = [],

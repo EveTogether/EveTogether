@@ -4,18 +4,22 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Modules.Esi.Http;
 using EveUtils.Shared.Modules.Killmails;
+using EveUtils.Shared.Modules.Killmails.Commands;
 using EveUtils.Shared.Modules.Killmails.Entities;
 using EveUtils.Shared.Modules.Killmails.Repositories;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace EveUtils.Client.Killmails;
 
 /// <summary>
 /// Imports a character's kills and losses: walks <c>/characters/{id}/killmails/recent/</c> until a page holds only
 /// known ids, then adds each new mail from <c>/killmails/{id}/{hash}/</c> with its items and attackers, ids only.
+/// Every successful import then links the character's unlinked losses to their runs (ET-331).
 /// </summary>
-public sealed class EsiKillmailImporter(IEsiClient esi, ILocalKillmailRepository repository)
+public sealed class EsiKillmailImporter(IEsiClient esi, ILocalKillmailRepository repository, IServiceScopeFactory scopes)
 {
     // One import per character at a time, shared across instances, so two callers never add the same mail twice.
     private static readonly ConcurrentDictionary<int, SemaphoreSlim> _importGates = new();
@@ -65,6 +69,13 @@ public sealed class EsiKillmailImporter(IEsiClient esi, ILocalKillmailRepository
             }
 
             await repository.AddMissingAsync(characterId, killmails, cancellationToken);
+            // Also without new mails: a loss nothing fitted before may fit a run stopped or fitted since.
+            await using (AsyncServiceScope scope = scopes.CreateAsyncScope())
+            {
+                await scope.ServiceProvider.GetRequiredService<IDispatcher>()
+                    .Send(new LinkKillmailsToRunsCommand(characterId), cancellationToken);
+            }
+
             return KillmailImportResult.Ok(killmails.Count);
         }
         finally

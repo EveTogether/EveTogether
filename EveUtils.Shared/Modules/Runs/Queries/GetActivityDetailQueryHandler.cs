@@ -2,6 +2,7 @@ using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Data;
 using EveUtils.Shared.DependencyInjection;
 using EveUtils.Shared.Messaging;
+using EveUtils.Shared.Modules.Killmails.Entities;
 using EveUtils.Shared.Modules.Market.Repositories;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Entities;
@@ -87,8 +88,9 @@ internal sealed class GetActivityDetailQueryHandler(
                 run.MiningEntries.Add(entry);
         }
         MiningOreTypes ores = RunIskFactsReader.OresOf(runs, sde);
+        ILookup<Guid, LocalKillmail> lossesByRun = await RunIskFactsReader.LinkedLossesAsync(db, runIds, cancellationToken);
         IReadOnlyDictionary<int, double> prices = await marketPrices.GetAveragePricesAsync(
-            [.. RunIskFactsReader.PricedTypeIds(runs, parameters, ores)], cancellationToken);
+            [.. RunIskFactsReader.PricedTypeIds(runs, parameters, ores, lossesByRun.SelectMany(group => group))], cancellationToken);
         DateTime nowUtc = DateTime.UtcNow;
         // The summary's own split, not a second one priced here and now (ET-296): FLEET's rows are what TOTAL ISK
         // above them is the sum of, and two valuations taken minutes apart would not add up to it. A summary built
@@ -97,7 +99,7 @@ internal sealed class GetActivityDetailQueryHandler(
             StoredIskBreakdown.ReadByCharacter(summary.IskContributionsByCharacter)
             ?? IskContributors.BreakdownByCharacter([.. runs
                 .OrderBy(run => run.StartedAtUtc).ThenBy(run => run.Id)
-                .Select(run => RunIskFactsReader.From(run, parametersByRun[run.Id], prices, ores))], nowUtc);
+                .Select(run => RunIskFactsReader.From(run, parametersByRun[run.Id], prices, ores, lossesByRun[run.Id]))], nowUtc);
 
         return Result<ActivityDetailDto>.Success(ActivityDetails.ToDto(summary, runs, bountyEntries, enemyObservations,
             parameters, miningEntries, attendance, fleetId, iskByCharacter));

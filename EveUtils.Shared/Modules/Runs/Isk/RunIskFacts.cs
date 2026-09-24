@@ -28,6 +28,13 @@ public sealed record RunIskFacts
     /// charge".</summary>
     public required bool HasConsumables { get; init; }
 
+    /// <summary>What the run's linked losses cost (ET-331): each hull and every item destroyed or dropped, a positive
+    /// cost contributed as negative ISK. Null when none of it has a price yet.</summary>
+    public required decimal? ShipLossIskCost { get; init; }
+
+    /// <summary>Whether a loss is linked to the run at all, priced or not.</summary>
+    public required bool HasShipLoss { get; init; }
+
     /// <summary>Priced mining, valued through the price source — Mutanite at its fixed NPC price, everything else at
     /// the market's (ET-229). Null when there is mining but nothing on it can be priced yet.</summary>
     public required decimal? MiningIskValue { get; init; }

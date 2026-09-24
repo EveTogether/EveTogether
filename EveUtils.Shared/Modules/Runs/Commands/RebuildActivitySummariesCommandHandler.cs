@@ -2,6 +2,7 @@ using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Data;
 using EveUtils.Shared.DependencyInjection;
 using EveUtils.Shared.Messaging;
+using EveUtils.Shared.Modules.Killmails.Entities;
 using EveUtils.Shared.Modules.Market.Repositories;
 using EveUtils.Shared.Modules.Runs.Entities;
 using EveUtils.Shared.Modules.Runs.Enums;
@@ -82,8 +83,11 @@ internal sealed class RebuildActivitySummariesCommandHandler(
         // Valuation always goes through ET's own type-id lookup (the LocalMarketPrice cache), never the clipboard's
         // own ISK column — the same rule RunLootViewModel._LoadPricesAsync follows for the running run.
         MiningOreTypes ores = RunIskFactsReader.OresOf(runs, sde);
+        ILookup<Guid, LocalKillmail> lossesByRun = await RunIskFactsReader.LinkedLossesAsync(db,
+            [.. runs.Select(run => run.Id)], cancellationToken);
         IReadOnlyDictionary<int, double> prices = await marketPrices.GetAveragePricesAsync(
-            [.. RunIskFactsReader.PricedTypeIds(runs, parametersByRun.SelectMany(group => group), ores)], cancellationToken);
+            [.. RunIskFactsReader.PricedTypeIds(runs, parametersByRun.SelectMany(group => group), ores,
+                lossesByRun.SelectMany(group => group))], cancellationToken);
 
         // Updated in place rather than deleted and re-added, so an activity keeps its summary id across rebuilds and a
         // screen that opened it by that id — the detail screen, an overview row — still finds it after a save or a
@@ -95,7 +99,8 @@ internal sealed class RebuildActivitySummariesCommandHandler(
             .ToDictionary(group => group.Key, group => group.First());
         foreach (IGrouping<string, Run> activity in runs.GroupBy(run => run.GroupCode ?? run.Id.ToString()))
         {
-            ActivitySummary built = ActivitySummaryBuilder.Build(activity.Key, activity.ToArray(), parametersByRun, prices, ores);
+            ActivitySummary built = ActivitySummaryBuilder.Build(activity.Key, activity.ToArray(), parametersByRun, prices, ores,
+                lossesByRun);
             if (existing.Remove(activity.Key, out ActivitySummary? kept))
             {
                 built.Id = kept.Id;
