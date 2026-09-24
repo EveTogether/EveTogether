@@ -339,3 +339,48 @@ jobs:
             --title "Nightly ${{ steps.version.outputs.version }} (${{ steps.version.outputs.sha }})" \
             --notes-file nightly-notes.md \
             dist/*
+
+  # Mirrors release.yml's publish-server-image job (same Dockerfile, same registry/login/platform), on the same
+  # changes-poort as the client builds above. Two tags, both unambiguously nightly: the rolling 'nightly' tag
+  # (mirrors the client's own rolling GitHub-release tag) and an immutable '<base>-nightly.<run>' tag in the same
+  # version form the client build uses — never 'latest' and never a bare vX.Y.Z, so a nightly image can never be
+  # mistaken for, or accidentally pulled as, a stable one.
+  publish-server-image:
+    name: Publish nightly server image to GHCR
+    needs: changes
+    if: needs.changes.outputs.build == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve image tags
+        id: tags
+        shell: bash
+        run: |
+          IMAGE=ghcr.io/evetogether/eve-together-server
+          base=$(git tag -l --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n1 | sed 's/^v//')
+          base="${base:-0.0.1}"
+          VERSION="${base}-nightly.${{ github.run_number }}"
+          echo "tags=$IMAGE:nightly,$IMAGE:$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push server image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ${{ steps.tags.outputs.tags }}
