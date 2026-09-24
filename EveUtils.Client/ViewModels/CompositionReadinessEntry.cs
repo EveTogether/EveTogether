@@ -30,14 +30,19 @@ public sealed partial class CompositionReadinessEntry : ObservableObject
     public string HullName { get; }
     public int CharacterCount => _characters.Count;
     public string CharactersLabel => $"YOUR {CharacterCount} CHARACTERS";
+    public string DetailCharactersLabel => $"YOUR CHARACTERS · {CharacterCount}";
+    public string SearchPlaceholder => $"Search {CharacterCount} characters…";
     public string AllLabel => $"ALL {CharacterCount} ›";
     public bool HasSearch => CharacterCount >= 9;
     public int ReadyCount => _characters.Count(character => character.Status == CompositionReadinessStatus.Ready);
     public int FliesCount => _characters.Count(character => character.Status == CompositionReadinessStatus.Flies);
     public int NotYetCount => _characters.Count(character => character.Status == CompositionReadinessStatus.NotYet);
     public int UnknownCount => _characters.Count(character => character.Status == CompositionReadinessStatus.Unknown);
-    public string CountsLabel => $"✓ {ReadyCount} ready · {FliesCount} flies · {NotYetCount} not yet" +
-                                 (UnknownCount > 0 ? $" · {UnknownCount} unknown" : "");
+    public string ReadyLabel => $"✓ {ReadyCount} ready";
+    public string FliesLabel => $"{FliesCount} flies";
+    public string NotYetLabel => $"{NotYetCount} not yet";
+    public string UnknownLabel => $"{UnknownCount} unknown";
+    public bool HasUnknown => UnknownCount > 0;
     public string NextToFlyLabel => _characters.FirstOrDefault(character =>
         character.Status == CompositionReadinessStatus.NotYet && character.ToFly is not null) is { } next
         ? $"next to fly: {next.Name} in {next.ToFlyLabel}"
