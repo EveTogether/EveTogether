@@ -771,6 +771,8 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
             if (tab is not null) await tab.ReloadAsync();
         }
         _refreshServerFitBrowserTab = RefreshServerTabAsync;
+        _serverFitLiveRefresh?.Dispose();
+        _serverFitLiveRefresh = new ServerFitLiveRefresh(_services.GetRequiredService<IEventBus>(), RefreshServerTabAsync);
 
         async Task ReloadLocalAsync() => localTab.SetRows(await BuildLocalFitRowsAsync(names, EditFitMetadataAsync, DeleteFitAsync, RefreshServerTabAsync));
         async Task EditFitMetadataAsync(int localFitId) => await EditLocalFitMetadataAsync(localFitId, ReloadLocalAsync);
@@ -849,6 +851,9 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
     // Set when the fit-browser opens; lets the detail window's own "Share to server…" refresh the matching server
     // tab too, the same way a per-row share in the browser grid does.
     private Func<string, Task>? _refreshServerFitBrowserTab;
+
+    // Reloads a server tab when another member shares or deletes a fit there; replaced each time the browser is built.
+    private ServerFitLiveRefresh? _serverFitLiveRefresh;
 
     private const string SkillModeSettingKey = "fit-detail.skill-mode";   // remembered selector mode ("all:5"/"char:42")
     private const string ImplantModeSettingKey = "fit-detail.implant-mode";   // remembered implant source ("fit"/"char:42")

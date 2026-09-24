@@ -88,11 +88,11 @@ public partial class FitBrowserTabViewModel : ObservableObject
     public bool CanNext => CurrentPage < PageCount;
     public string PageInfo => $"page {CurrentPage} / {PageCount} · {_filtered.Count} fit(s)";
 
-    /// <summary>Replaces the tab's full row set (after a load) and re-applies search + order + paging.</summary>
+    /// <summary>Replaces the tab's full row set (after a load) and re-applies search + order + paging. The page the
+    /// reader is on stays (Refresh clamps it when the set shrank), so a live reload does not throw them back to page 1.</summary>
     public void SetRows(IEnumerable<FitRowViewModel> rows)
     {
         _allRows = rows.ToList();
-        CurrentPage = 1;
         Refresh();
         // A tab whose rows have just arrived is appearing anyway, so it shows them straight away and re-orders once
         // when the prices catch up, rather than staying blank until they do.

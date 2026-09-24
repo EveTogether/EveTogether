@@ -6,11 +6,14 @@ namespace EveUtils.Shared.Modules.Fittings.Events;
 /// <summary>
 /// Published when a client shares a fitting to the server.
 /// Route: client → EventTarget.Both → server event-bus gate checks fit.sync → stores + re-routes.
-/// The <see cref="RequiresPermissionAttribute"/> is enforced by the server event-bus gate.
+/// The <see cref="RequiresPermissionAttribute"/> is enforced by the server event-bus gate. Server-sourced on the way
+/// back: the receiving connection stamps the server it came from, so a client can refresh that server's fit list.
 /// </summary>
 [RequiresPermission(FittingsPermissions.Sync)]
 public sealed class FitSharedEvent(FitSharedPayload data, int? characterId = null)
-    : IntegrationEvent<FitSharedPayload>(data, characterId)
+    : IntegrationEvent<FitSharedPayload>(data, characterId), IServerSourcedEvent
 {
     public override string EventType => "fittings.shared";
+
+    public string? SourceServerAddress { get; set; }
 }

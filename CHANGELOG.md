@@ -17,6 +17,7 @@ entries under `[Unreleased]` below that were not there yet at the previous night
 
 ## [Unreleased]
 
+- **Fixed: the server tab in FITS now updates live when someone shares or deletes a fit.** A fit shared by another member used to appear only after you reloaded the tab by hand, and a deleted one kept showing. Both now show up on their own, only on the tab of the server they happened on, and your search and page stay where they were. The FITS block on Home follows deletes too. Deleting needs the server updated as well; against an older server you still reload by hand.
 - **Fixed: killmail details now show their images.** The victim's ship, attacker portraits or ships, and fit item icons appear when images are enabled; an unlinked run message appears only once.
 - **Added: FLEETS tells you when a character is not connected to a server.** A character with no connection to a
   server is never asked for its fleets there, so those fleets used to be missing without a word. The fleet list now

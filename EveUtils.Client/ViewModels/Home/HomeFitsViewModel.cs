@@ -35,6 +35,7 @@ public sealed partial class HomeFitsViewModel : ObservableObject, IDisposable
     private readonly HomeNavigation _navigation;
     private readonly INotifyCollectionChanged? _library;
     private readonly IDisposable? _sharedSubscription;
+    private readonly IDisposable? _deletedSubscription;
     private bool _isLibraryReadPosted;
 
     /// <param name="library">The shell's own fit list: it changes on every import, and the library line follows it.</param>
@@ -45,7 +46,9 @@ public sealed partial class HomeFitsViewModel : ObservableObject, IDisposable
         _library = library;
         if (_library is not null)
             _library.CollectionChanged += _OnLibraryChanged;
-        _sharedSubscription = services?.GetService<IEventBus>()?.Subscribe<FitSharedEvent>(_OnFitShared);
+        IEventBus? bus = services?.GetService<IEventBus>();
+        _sharedSubscription = bus?.Subscribe<FitSharedEvent>(_OnFitShared);
+        _deletedSubscription = bus?.Subscribe<FitDeletedEvent>(_OnFitDeleted);
     }
 
     public ObservableCollection<HomeFitViewModel> Latest { get; } = [];
@@ -100,6 +103,8 @@ public sealed partial class HomeFitsViewModel : ObservableObject, IDisposable
 
     private void _OnFitShared(FitSharedEvent shared) => Dispatcher.UIThread.Post(() => _ = ReadSharedAsync());
 
+    private void _OnFitDeleted(FitDeletedEvent deleted) => Dispatcher.UIThread.Post(() => _ = ReadSharedAsync());
+
     /// <summary>The shell's list changes an item at a time on a reload: one read after the last of them.</summary>
     private void _OnLibraryChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
@@ -146,6 +151,7 @@ public sealed partial class HomeFitsViewModel : ObservableObject, IDisposable
     public void Dispose()
     {
         _sharedSubscription?.Dispose();
+        _deletedSubscription?.Dispose();
         if (_library is not null)
             _library.CollectionChanged -= _OnLibraryChanged;
     }
