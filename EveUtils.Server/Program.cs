@@ -6,7 +6,6 @@ using EveUtils.Server.Backup;
 using EveUtils.Server.Checks;
 using EveUtils.Server.Components;
 using EveUtils.Shared.Modules.Fittings.Repositories;
-using EveUtils.Server.Contracts;
 using EveUtils.Server.Data;
 using EveUtils.Server.Esi;
 using EveUtils.Server.Fittings;
@@ -41,8 +40,6 @@ using EveUtils.Shared.Modules.ServerAuth;
 using EveUtils.Shared.Modules.ServerAuth.Entities;
 using EveUtils.Shared.Modules.ServerAuth.Repositories;
 using EveUtils.Shared.Modules.ServerAuth.Services;
-using EveUtils.Shared.Modules.Ships.Commands;
-using EveUtils.Shared.Modules.Ships.Queries;
 using EveUtils.Shared.Modules.Sync.Commands;
 using EveUtils.Shared.Modules.Sync.Queries;
 using EveUtils.Shared.Runtime;
@@ -645,22 +642,6 @@ app.MapGet("/status", () => Results.Ok(new
     provider,
     message = "EVE Together server"
 }));
-
-// Shared module (Ships)
-app.MapGet("/ships", (IDispatcher dispatcher, CancellationToken ct) =>
-    dispatcher.Query(new GetShipsQuery(), ct));
-
-app.MapPost("/ships", async (CreateShipRequest request, IDispatcher dispatcher, CancellationToken ct) =>
-{
-    var result = await dispatcher.Send(new AddShipCommand(request.Name, request.Class, request.Mass), ct);
-    return result.IsSuccess
-        ? Results.Created($"/ships/{result.Value}", new { id = result.Value })
-        : Results.BadRequest(result.Messages);
-});
-
-// Server-only module (Sync)
-app.MapGet("/sync-logs", (IDispatcher dispatcher, CancellationToken ct) =>
-    dispatcher.Query(new GetSyncLogsQuery(), ct));
 
 // Mode B SSO callback: EVE redirects the browser here (the server has its own ESI app + callback).
 // The server completes the token exchange itself; the client just polls ClaimPairing.

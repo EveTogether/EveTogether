@@ -58,25 +58,30 @@ public sealed class SyncedCharacterReleaser(
         }
     }
 
-    private async Task _RevokeReleasedAsync(SyncedCharacter released, CancellationToken cancellationToken)
+    /// <summary>Decrypts the token of a character row that is already deleted and revokes it at CCP, best effort.</summary>
+    public async Task RevokeStoredTokenAsync(SyncedCharacter deleted, CancellationToken cancellationToken = default)
     {
-        logger.LogInformation(
-            "Released {Name} ({Id}): no session is coupled to it any more, so its stored EVE token was deleted.",
-            released.CharacterName, released.EsiCharacterId);
-
         string refreshToken;
         try
         {
-            refreshToken = protector.Unprotect(new EncryptedToken(released.RefreshTokenCipher, released.RefreshTokenNonce, released.RefreshTokenTag));
+            refreshToken = protector.Unprotect(new EncryptedToken(deleted.RefreshTokenCipher, deleted.RefreshTokenNonce, deleted.RefreshTokenTag));
         }
         catch (Exception ex)
         {
             logger.LogWarning(ex,
                 "The stored EVE token of {Name} ({Id}) could not be decrypted, so it was deleted without a revoke at CCP.",
-                released.CharacterName, released.EsiCharacterId);
+                deleted.CharacterName, deleted.EsiCharacterId);
             return;
         }
 
-        await RevokeAtCcpAsync(refreshToken, released.CharacterName, released.EsiCharacterId, cancellationToken);
+        await RevokeAtCcpAsync(refreshToken, deleted.CharacterName, deleted.EsiCharacterId, cancellationToken);
+    }
+
+    private async Task _RevokeReleasedAsync(SyncedCharacter released, CancellationToken cancellationToken)
+    {
+        logger.LogInformation(
+            "Released {Name} ({Id}): no session is coupled to it any more, so its stored EVE token was deleted.",
+            released.CharacterName, released.EsiCharacterId);
+        await RevokeStoredTokenAsync(released, cancellationToken);
     }
 }
