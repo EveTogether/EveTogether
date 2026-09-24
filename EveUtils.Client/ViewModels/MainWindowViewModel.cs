@@ -720,7 +720,9 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
     private async Task OpenKillmailsAsync()
     {
         if (_dialogs is null || _services is null)
+        {
             return;
+        }
 
         IReadOnlyList<Character> characters = await _services.GetRequiredService<ICharacterRegistry>().GetAllAsync();
         _dialogs.ShowKillmails(new KillmailsOverviewViewModel(
