@@ -117,5 +117,12 @@ public sealed class FleetWireEvents : IWireEventCatalog
                           ?? throw new InvalidOperationException("Invalid fleet.changed payload.");
             return new FleetChangedEvent(payload, characterId);
         });
+
+        registry.Register("composition.changed", (payloadJson, characterId) =>
+        {
+            var payload = JsonSerializer.Deserialize<CompositionChangePayload>(payloadJson)
+                          ?? throw new InvalidOperationException("Invalid composition.changed payload.");
+            return new CompositionChangedEvent(payload, characterId);
+        });
     }
 }

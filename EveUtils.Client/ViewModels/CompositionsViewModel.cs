@@ -4,12 +4,15 @@ using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
+using Avalonia.Threading;
 using CommunityToolkit.Mvvm.Input;
 using EveUtils.Client.Dialogs;
 using EveUtils.Client.Fleet;
 using EveUtils.Client.Messaging;
 using EveUtils.Client.Transport;
 using EveUtils.Shared.Identity;
+using EveUtils.Shared.Messaging;
+using EveUtils.Shared.Modules.Fleet.Events;
 using EveUtils.Shared.Modules.Fleet.Composition.Repositories;
 using EveUtils.Client.Imaging;
 using EveUtils.Shared.Transport;
@@ -24,8 +27,9 @@ namespace EveUtils.Client.ViewModels;
 /// disconnected or empty server reads clearly instead of silently. Drives create / open (editor) / delete and the
 /// push-to-server / download-to-local transfer, the composition analogue of fit sharing.
 /// </summary>
-public sealed partial class CompositionsViewModel : ObservableObject, IRefreshableModule
+public sealed partial class CompositionsViewModel : ObservableObject, IRefreshableModule, IDisposable
 {
+    private readonly IDisposable _changeSubscription;
     private readonly IServiceProvider _services;
     private readonly ClientFleetService _localFleets;
     private readonly IFleetCompositionRepository _compositionRepository;
@@ -46,8 +50,20 @@ public sealed partial class CompositionsViewModel : ObservableObject, IRefreshab
         _transport = services.GetRequiredService<IFleetTransportClient>();
         _dialogs = services.GetRequiredService<IDialogService>();
 
+        _changeSubscription = services.GetRequiredService<IEventBus>().Subscribe<CompositionChangedEvent>(_OnCompositionChanged);
+
         _ = _EnsureInitializedAsync();
     }
+
+    public void Dispose() => _changeSubscription.Dispose();
+
+    // Local changes and server pushes both arrive here; the bus can call from any thread and the tabs are bound.
+    private void _OnCompositionChanged(CompositionChangedEvent change) =>
+        Dispatcher.UIThread.Post(() =>
+        {
+            foreach (var tab in Tabs.Where(t => t.Shows(change)))
+                _ = tab.RefreshAfterChangeAsync();
+        });
 
     /// <summary>Local library first, then one tab per coupled server.</summary>
     public ObservableCollection<CompositionTabViewModel> Tabs { get; } = [];
