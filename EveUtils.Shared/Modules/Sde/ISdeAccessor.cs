@@ -89,6 +89,12 @@ public interface ISdeAccessor
     /// no positive damage attributes.</summary>
     DamageProfile? GetNpcDamageProfile(int typeId);
 
+    /// <summary>Builds an <see cref="NpcEwarProfile"/> from the NPC behavior dogma effects and their
+    /// <c>behavior*Range</c> attributes (ET-367): scramble, energy neutralizer, webifier, sensor dampener,
+    /// tracking/guidance disruptor, target painter, remote armor repairer and vorton chain lightning — plus EHP,
+    /// signature radius and max velocity. Returns null when the type does not exist or is not category 11.</summary>
+    NpcEwarProfile? GetNpcEwarProfile(int typeId);
+
     /// <summary>The site/dungeon catalogue, ordered by name. Every argument is an optional narrowing: a null or blank
     /// <paramref name="nameQuery"/> matches every name (case-insensitive substring), a null
     /// <paramref name="archetypeId"/> or <paramref name="factionId"/> does not filter on that axis. Empty when the

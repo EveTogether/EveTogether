@@ -805,25 +805,16 @@ public sealed class DerivedStatsCalculator(DogmaEvaluator evaluator, IDogmaDataA
         return (armorRep, shieldRep, hullRep, capTransfer, armorRange, shieldRange, hullRange, capRange);
     }
 
-    // EHP for one layer under a damage profile: HP / Σ(wᵢ · resonanceᵢ).
+    // EHP for one layer under a damage profile: resolves the layer's HP and its four resonances through the
+    // evaluator (skills, modules, patches), then hands off to DamageProfile.WeightedEhp — the one formula also
+    // used by SqliteSdeAccessor.GetNpcEwarProfile (ET-367) for an NPC's resonances read straight off the SDE.
     // resonanceAttributes is ordered [EM, Th, Kin, Exp] — matches DogmaAttributeIds.*Resonance arrays.
-    // With DamageProfile.Uniform (0.25 each) this is mathematically identical to the old mean-resonance formula.
-    // An all-zero profile (0/0/0/0) is the "Raw HP" mode: resists are ignored so the layer reports its raw buffer HP,
-    // an NPC-independent baseline.
-    private double LayerEhp(DogmaItem ship, int hitPointsAttribute, int[] resonanceAttributes, DamageProfile profile)
-    {
-        var hitPoints = evaluator.Resolve(ship, hitPointsAttribute);
-        if (hitPoints <= 0)
-            return 0;
-        if (profile.Em + profile.Th + profile.Kin + profile.Exp <= 0)
-            return hitPoints;
-        var weightedResonance =
-            profile.Em  * evaluator.Resolve(ship, resonanceAttributes[0]) +
-            profile.Th  * evaluator.Resolve(ship, resonanceAttributes[1]) +
-            profile.Kin * evaluator.Resolve(ship, resonanceAttributes[2]) +
-            profile.Exp * evaluator.Resolve(ship, resonanceAttributes[3]);
-        return weightedResonance > 0 ? hitPoints / weightedResonance : 0;
-    }
+    private double LayerEhp(DogmaItem ship, int hitPointsAttribute, int[] resonanceAttributes, DamageProfile profile) =>
+        profile.WeightedEhp(evaluator.Resolve(ship, hitPointsAttribute),
+            evaluator.Resolve(ship, resonanceAttributes[0]),
+            evaluator.Resolve(ship, resonanceAttributes[1]),
+            evaluator.Resolve(ship, resonanceAttributes[2]),
+            evaluator.Resolve(ship, resonanceAttributes[3]));
 
     private static double Round2(double value) => Math.Round(value, 2);
 }
