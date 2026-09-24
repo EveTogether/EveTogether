@@ -24,6 +24,10 @@ release notes, not this file.
   still going is stopped first. A character that commands an active fleet can't be removed until you hand the fleet
   over or stop it. If a server can't be reached, the character is removed anyway and that server is told the next time
   it connects. Signing in with the character again adds it back.
+- **Fixed: public fleets in the fleet list now update live even when you're not in them.** When a commander started,
+  stopped or concluded a public fleet, or created or disbanded one, only its members saw it change; everyone else kept
+  seeing the old status until they pressed Refresh. That includes a fleet the server stands down on its own after it
+  empties or goes quiet. Invite-only fleets stay private: only their members are told about them, as before.
 - **Changed: red buttons such as Conclude and Remove read better.** Their red label sat on a light wash that left it
   just under the contrast the rest of the app keeps to; the wash is gone, the red outline stays.
 - **Changed: nightly builds now show their build date, commit and run number instead of a release number.** If you installed an
