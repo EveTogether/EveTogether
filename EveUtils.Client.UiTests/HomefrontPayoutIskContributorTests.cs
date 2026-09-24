@@ -85,6 +85,8 @@ public sealed class HomefrontPayoutIskContributorTests
         HasLoot = false,
         ConsumableIskCost = null,
         HasConsumables = false,
+        ShipLossIskCost = null,
+        HasShipLoss = false,
         MiningIskValue = null,
         HasMining = false,
         Parameters = parameters ?? [],

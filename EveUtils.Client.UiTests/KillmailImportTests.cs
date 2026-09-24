@@ -33,6 +33,7 @@ public sealed class KillmailImportTests : IDisposable
     private readonly Dictionary<string, Func<HttpResponseMessage>> _routes = [];
 
     private ILocalKillmailRepository Repository => _instance.Services.GetRequiredService<ILocalKillmailRepository>();
+    private IServiceScopeFactory Scopes => _instance.Services.GetRequiredService<IServiceScopeFactory>();
 
     [Theory]
     [InlineData("/characters/77/killmails/recent/", false)]
@@ -59,7 +60,7 @@ public sealed class KillmailImportTests : IDisposable
         _routes["/killmails/1/hash1/"] = () => Json(200, _Killmail(1));
         var (client, _, stub) = _Pipeline(EsiAuthorization.Authorized("token"));
 
-        var result = await new EsiKillmailImporter(client, Repository).ImportAsync(CharacterId, TestContext.Current.CancellationToken);
+        var result = await new EsiKillmailImporter(client, Repository, Scopes).ImportAsync(CharacterId, TestContext.Current.CancellationToken);
 
         Assert.Equal(1, result.ImportedCount);
         Assert.Equal([Page1, Page2, "/killmails/1/hash1/"], stub.Captured.Select(request => new Uri(request.Uri).PathAndQuery));
@@ -73,7 +74,7 @@ public sealed class KillmailImportTests : IDisposable
         _routes["/killmails/1/hash1/"] = () => Json(200, _Killmail(1));
         var (client, _, _) = _Pipeline(EsiAuthorization.Authorized("token"));
 
-        await new EsiKillmailImporter(client, Repository).ImportAsync(CharacterId, TestContext.Current.CancellationToken);
+        await new EsiKillmailImporter(client, Repository, Scopes).ImportAsync(CharacterId, TestContext.Current.CancellationToken);
 
         var stored = await Repository.GetForCharacterAsync(CharacterId, TestContext.Current.CancellationToken);
         Assert.Equal([1, 2], stored.Select(killmail => killmail.KillmailId).Order());
@@ -93,7 +94,7 @@ public sealed class KillmailImportTests : IDisposable
             """);
         var (client, _, _) = _Pipeline(EsiAuthorization.Authorized("token"));
 
-        await new EsiKillmailImporter(client, Repository).ImportAsync(CharacterId, TestContext.Current.CancellationToken);
+        await new EsiKillmailImporter(client, Repository, Scopes).ImportAsync(CharacterId, TestContext.Current.CancellationToken);
 
         var killmail = Assert.Single(await Repository.GetForCharacterAsync(CharacterId, TestContext.Current.CancellationToken));
         Assert.Equal(expectedLoss, killmail.IsLoss);
@@ -106,7 +107,7 @@ public sealed class KillmailImportTests : IDisposable
         _routes[Page1] = () => _RecentPage(1, 1);
         var (client, _, stub) = _Pipeline(EsiAuthorization.ScopeMissing("esi-killmails.read_killmails.v1"));
 
-        var result = await new EsiKillmailImporter(client, Repository).ImportAsync(CharacterId, TestContext.Current.CancellationToken);
+        var result = await new EsiKillmailImporter(client, Repository, Scopes).ImportAsync(CharacterId, TestContext.Current.CancellationToken);
 
         Assert.Equal(KillmailImportStatus.ScopeMissing, result.Status);
         Assert.Equal(0, stub.Calls);
@@ -128,7 +129,7 @@ public sealed class KillmailImportTests : IDisposable
             """);
         var (client, _, _) = _Pipeline(EsiAuthorization.Authorized("token"));
 
-        await new EsiKillmailImporter(client, Repository).ImportAsync(CharacterId, TestContext.Current.CancellationToken);
+        await new EsiKillmailImporter(client, Repository, Scopes).ImportAsync(CharacterId, TestContext.Current.CancellationToken);
 
         var killmail = Assert.Single(await Repository.GetForCharacterAsync(CharacterId, TestContext.Current.CancellationToken));
         (int, int, bool, long, long)[] expected =
@@ -155,7 +156,7 @@ public sealed class KillmailImportTests : IDisposable
             """);
         var (client, _, _) = _Pipeline(EsiAuthorization.Authorized("token"));
 
-        await new EsiKillmailImporter(client, Repository).ImportAsync(CharacterId, TestContext.Current.CancellationToken);
+        await new EsiKillmailImporter(client, Repository, Scopes).ImportAsync(CharacterId, TestContext.Current.CancellationToken);
 
         var killmail = Assert.Single(await Repository.GetForCharacterAsync(CharacterId, TestContext.Current.CancellationToken));
         (int, int?, int?, int?, int?, int?, int?, int, bool)[] expected =
@@ -180,7 +181,7 @@ public sealed class KillmailImportTests : IDisposable
         _routes["/killmails/1/hash1/"] = () => Json(200, _Killmail(1));
         _routes["/killmails/2/hash2/"] = () => Json(200, _Killmail(2));
         var (client, _, stub) = _Pipeline(EsiAuthorization.Authorized("token"));
-        var importer = new EsiKillmailImporter(client, Repository);
+        var importer = new EsiKillmailImporter(client, Repository, Scopes);
         await importer.ImportAsync(CharacterId, TestContext.Current.CancellationToken);
         _routes[Page2] = () => _RecentPage(2, 2);
 

@@ -3,6 +3,7 @@ using EveUtils.Shared.Data;
 using EveUtils.Shared.DependencyInjection;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Gamelog.Aggregation;
+using EveUtils.Shared.Modules.Killmails.Entities;
 using EveUtils.Shared.Modules.Market.Repositories;
 using EveUtils.Shared.Modules.Runs.Commands;
 using EveUtils.Shared.Modules.Runs.Dtos;
@@ -50,8 +51,10 @@ internal sealed class GetServerActivityOverviewQueryHandler(
 
         ILookup<Guid, RunParameter> parametersByRun = runs.SelectMany(run => run.Parameters).ToLookup(parameter => parameter.RunId);
         MiningOreTypes ores = RunIskFactsReader.OresOf(runs, sde);
+        // A loss never travels with a run (ET-331), so a server's copy is added up without one.
+        ILookup<Guid, LocalKillmail> noLosses = Array.Empty<LocalKillmail>().ToLookup(loss => loss.RunId.GetValueOrDefault());
         IReadOnlyDictionary<int, double> prices = await marketPrices.GetAveragePricesAsync(
-            [.. RunIskFactsReader.PricedTypeIds(runs, parametersByRun.SelectMany(group => group), ores)], cancellationToken);
+            [.. RunIskFactsReader.PricedTypeIds(runs, parametersByRun.SelectMany(group => group), ores, [])], cancellationToken);
         HashSet<long>? ownCharacterIds = query.OwnCharacterIds is { } own ? [.. own] : null;
         ActivityServerSyncDto[] onThisServer = [new ActivityServerSyncDto(query.ServerAddress, IsPending: false)];
 
@@ -60,7 +63,7 @@ internal sealed class GetServerActivityOverviewQueryHandler(
                      .OrderByDescending(activity => activity.Min(run => run.StartedAtUtc)))
         {
             Run[] members = [.. activity];
-            ActivitySummary summary = ActivitySummaryBuilder.Build(activity.Key, members, parametersByRun, prices, ores);
+            ActivitySummary summary = ActivitySummaryBuilder.Build(activity.Key, members, parametersByRun, prices, ores, noLosses);
             ActivityOverviewRowDto row = ActivityOverviewRows.ToDto(summary, members.SelectMany(run => run.Parameters),
                 members.Select(run => (run.CharacterId, run.CharacterNameSnapshot)),
                 members.Any(run => run.AutoSavedAtUtc.HasValue), onThisServer, ownCharacterIds);

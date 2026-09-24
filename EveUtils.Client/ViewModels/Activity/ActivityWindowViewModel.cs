@@ -3658,6 +3658,10 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
                         HasLoot = loot?.HasCaptures ?? false,
                         ConsumableIskCost = cost,
                         HasConsumables = has,
+                        // ponytail: the open window reads no killmails, so a linked loss counts from UNFINISHED and
+                        // the saved activity on (ET-331); read LinkedLossesAsync here if the window must show it too.
+                        ShipLossIskCost = null,
+                        HasShipLoss = false,
                         MiningIskValue = miningValue,
                         HasMining = hasMining,
                         Parameters = _WithTypedPayout(parameters, homefront, participant.CharacterId),
@@ -3701,6 +3705,8 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             HasLoot = RunLoot?.HasCaptures ?? false,
             ConsumableIskCost = cost,
             HasConsumables = has,
+            ShipLossIskCost = null,
+            HasShipLoss = false,
             MiningIskValue = miningValue,
             HasMining = hasMining,
             Parameters = _WithTypedPayout(parameters, homefront, characterId),

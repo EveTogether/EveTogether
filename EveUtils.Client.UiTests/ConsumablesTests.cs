@@ -107,6 +107,8 @@ public sealed class ConsumablesTests
         HasLoot = false,
         ConsumableIskCost = cost,
         HasConsumables = hasConsumables,
+        ShipLossIskCost = null,
+        HasShipLoss = false,
         MiningIskValue = null,
         HasMining = false,
         Parameters = [],
@@ -368,7 +370,7 @@ public sealed class ConsumablesTests
 
         RunIskFacts facts = RunIskFactsReader.From(received, received.Parameters,
             new Dictionary<int, double> { [34] = 10_000_000, [60000] = 5_000_000, [2488] = 100_000 },
-            RunIskFactsReader.OresOf([received], _Sde()));
+            RunIskFactsReader.OresOf([received], _Sde()), []);
         Assert.Equal(5_500_000m, facts.ConsumableIskCost);
         Assert.Equal(30_000_000m, facts.LootIskNet);
     }

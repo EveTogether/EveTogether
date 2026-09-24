@@ -1,19 +1,23 @@
+using EveUtils.Shared.Data;
+using EveUtils.Shared.Modules.Killmails.Entities;
 using EveUtils.Shared.Modules.Runs.Entities;
 using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Runs.Tally;
 using EveUtils.Shared.Modules.Sde;
+using Microsoft.EntityFrameworkCore;
 
 namespace EveUtils.Shared.Modules.Runs.Isk;
 
 /// <summary>A stored run's facts, read the same way for a saved activity (<c>RebuildActivitySummariesCommandHandler</c>)
 /// and an unfinished run (<c>GetUnfinishedRunsQueryHandler</c>). The run must come with its loot captures and their
-/// entries, its bounty entries and its mining entries loaded; its parameters are handed in, since a caller reading
-/// many runs at once reads those apart.</summary>
+/// entries, its bounty entries and its mining entries loaded; its parameters and linked losses are handed in, since a
+/// caller reading many runs at once reads those apart.</summary>
 internal static class RunIskFactsReader
 {
     public static RunIskFacts From(Run run, IEnumerable<RunParameter> parameters, IReadOnlyDictionary<int, double> prices,
-        MiningOreTypes ores)
+        MiningOreTypes ores, IEnumerable<LocalKillmail> losses)
     {
+        IReadOnlyList<LootTallyLine> lostInLosses = LossLines(losses);
         RunParameter[] all = [.. parameters];
         IReadOnlyList<LootTallyLine> loot = LootTally.Count(Tally(run));
         decimal? gained = KnownLootValue(loot, LootKind.Gained, prices);
@@ -36,6 +40,8 @@ internal static class RunIskFactsReader
             HasLoot = loot.Count > 0,
             ConsumableIskCost = consumableCost,
             HasConsumables = filamentCount is > 0 || spent.Count > 0,
+            ShipLossIskCost = KnownLootValue(lostInLosses, LootKind.Lost, prices),
+            HasShipLoss = lostInLosses.Count > 0,
             MiningIskValue = MiningValue(run.MiningEntries, ores, prices),
             HasMining = run.MiningEntries.Count > 0,
             Parameters = [.. all.Select(parameter => new RunIskParameter(
@@ -47,8 +53,10 @@ internal static class RunIskFactsReader
 
     /// <summary>Every type a set of runs needs a price for — loot kept in the tally, each run's resolved filament
     /// (ET-249) and each ore resolved by its exact SDE name, never guessed (ET-229) — so one price read serves them
-    /// all, and the stored summary and the detail screen's per-character figures price the same way.</summary>
-    public static IReadOnlyList<int> PricedTypeIds(IEnumerable<Run> runs, IEnumerable<RunParameter> parameters, MiningOreTypes ores)
+    /// all, and the stored summary and the detail screen's per-character figures price the same way. Linked losses add
+    /// their hulls and items (ET-331).</summary>
+    public static IReadOnlyList<int> PricedTypeIds(IEnumerable<Run> runs, IEnumerable<RunParameter> parameters, MiningOreTypes ores,
+        IEnumerable<LocalKillmail> losses)
     {
         IEnumerable<int> loot = runs
             .SelectMany(run => run.LootCaptures)
@@ -59,8 +67,27 @@ internal static class RunIskFactsReader
             .GroupBy(parameter => parameter.RunId)
             .Select(FilamentTypeId)
             .OfType<int>();
-        return [.. loot.Concat(filaments).Concat(ores.TypeIds).Distinct()];
+        return [.. loot.Concat(filaments).Concat(ores.TypeIds)
+            .Concat(LossLines(losses).Select(line => line.ItemTypeId)).Distinct()];
     }
+
+    /// <summary>The own losses linked to these runs (ET-331), items included, by run. Only a client store has them; a
+    /// run read back from a server never carries one.</summary>
+    public static async Task<ILookup<Guid, LocalKillmail>> LinkedLossesAsync(ClientDbContext db, IReadOnlyCollection<Guid> runIds,
+        CancellationToken cancellationToken) =>
+        (await db.Set<LocalKillmail>()
+            .AsNoTracking()
+            .Include(killmail => killmail.Items)
+            .Where(killmail => killmail.IsLoss && killmail.RunId != null && runIds.Contains(killmail.RunId.Value))
+            .ToListAsync(cancellationToken))
+        .ToLookup(killmail => killmail.RunId.GetValueOrDefault());
+
+    /// <summary>Everything a loss cost, as lost lines priced like loot: the hull once, and every item whether it was
+    /// destroyed or dropped, since a drop in the abyss is gone as well.</summary>
+    public static IReadOnlyList<LootTallyLine> LossLines(IEnumerable<LocalKillmail> losses) =>
+        [.. losses.SelectMany(loss => loss.Items
+            .Select(item => new LootTallyLine(item.TypeId, item.QuantityDestroyed + item.QuantityDropped, null, LootKind.Lost))
+            .Prepend(new LootTallyLine(loss.VictimShipTypeId, 1, null, LootKind.Lost)))];
 
     /// <summary>Every ore the runs mined, each looked up in the SDE once for the whole read.</summary>
     public static MiningOreTypes OresOf(IEnumerable<Run> runs, ISdeAccessor sde) =>

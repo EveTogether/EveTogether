@@ -42,7 +42,7 @@ internal static class ActivityOverviewRows
     public static ActivityOverviewRowDto ToDto(
         ActivitySummary summary, IEnumerable<RunParameter> rewardRows,
         IEnumerable<(long CharacterId, string? CharacterNameSnapshot)> crew, bool hasAutoSavedRun,
-        IEnumerable<ActivityServerSyncDto> serverSyncStates, IReadOnlySet<long>? ownCharacterIds)
+        IEnumerable<ActivityServerSyncDto> serverSyncStates, IReadOnlySet<long>? ownCharacterIds, bool hasShipLoss = false)
     {
         (long CharacterId, string? CharacterNameSnapshot)[] flewIt = [.. crew];
         RunParameter[] all = [.. rewardRows];
@@ -94,7 +94,8 @@ internal static class ActivityOverviewRows
             ownCharacterIds is null || flewIt.Any(member => ownCharacterIds.Contains(member.CharacterId)),
             _OtherEarnersOf(summary, ownCharacterIds, members),
             abyssalFilamentText,
-            _OwnShareByCharacterOf(summary, ownCharacterIds));
+            _OwnShareByCharacterOf(summary, ownCharacterIds),
+            hasShipLoss);
     }
 
     private static IReadOnlyDictionary<long, IskBreakdown>? _OwnShareByCharacterOf(

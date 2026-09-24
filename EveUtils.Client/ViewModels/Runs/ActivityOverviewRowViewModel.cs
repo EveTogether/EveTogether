@@ -168,6 +168,9 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase, IRunsA
             // number, never an activity without a fight.
             : "no enemies counted";
         HasAutoSavedRun = row.HasAutoSavedRun;
+        HasShipLoss = row.HasShipLoss;
+        // A loss ends an abyssal run; a site or mission often goes on and is finished by the fleet (ET-326, point 4).
+        ShipLossText = row.ActivityKind is ActivityKind.Abyssal ? "FAILED" : "SHIP LOST";
         // Unlike a fit, which keeps no trace of having been shared, a run records where it stands towards a server —
         // so the row says it rather than making the reader open the server tab to find out.
         IsQueuedForServer = row.ServerSyncStates.Any(state => state.IsPending);
@@ -296,6 +299,11 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase, IRunsA
     public bool HasAutoSavedRun { get; }
 
     public string AutoSavedText => "auto-saved";
+
+    /// <summary>A ship of one of this machine's characters was lost in it, by a linked killmail (ET-331).</summary>
+    public bool HasShipLoss { get; }
+
+    public string ShipLossText { get; }
 
     /// <summary>On a server, and unchanged since it went there.</summary>
     public bool IsOnServer { get; }

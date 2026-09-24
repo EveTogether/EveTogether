@@ -1,0 +1,51 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vs="using:EveUtils.Client.ViewModels.Runs.Sections"
+             xmlns:vr="using:EveUtils.Client.ViewModels.Runs"
+             x:Class="EveUtils.Client.Views.Runs.Sections.LossDetailSectionView"
+             x:DataType="vs:LossDetailSectionViewModel">
+    <StackPanel>
+        <ItemsControl ItemsSource="{Binding Losses}">
+            <ItemsControl.ItemTemplate>
+                <DataTemplate DataType="vr:LinkedLossViewModel">
+                    <StackPanel Margin="0,0,0,8">
+                        <Grid Classes="kv" ColumnDefinitions="Auto,*">
+                            <TextBlock Text="SHIP"/>
+                            <TextBlock Grid.Column="1" Text="{Binding ShipText}"/>
+                        </Grid>
+                        <Grid Classes="kv" ColumnDefinitions="Auto,*">
+                            <TextBlock Text="FIT"/>
+                            <TextBlock Grid.Column="1" Text="{Binding FitText}"/>
+                        </Grid>
+                        <Grid Classes="kv" ColumnDefinitions="Auto,*">
+                            <TextBlock Text="LOST AT"/>
+                            <TextBlock Grid.Column="1" Text="{Binding TimeText}"/>
+                        </Grid>
+                        <Grid Classes="kv" ColumnDefinitions="Auto,*">
+                            <TextBlock Text="FINAL BLOW"/>
+                            <TextBlock Grid.Column="1" Text="{Binding FinalBlowText}"/>
+                        </Grid>
+                        <Grid Classes="kv" ColumnDefinitions="Auto,*">
+                            <TextBlock Text="LINKED"/>
+                            <TextBlock Grid.Column="1" Text="{Binding ReasonText}"/>
+                        </Grid>
+                        <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,4,0,0">
+                            <ComboBox MinWidth="200" ItemsSource="{Binding OtherRuns}"
+                                      SelectedItem="{Binding SelectedRun}" IsVisible="{Binding HasOtherRuns}"
+                                      PlaceholderText="another run of this pilot…"/>
+                            <Button Classes="rowaction" Content="LINK TO OTHER RUN…"
+                                    IsVisible="{Binding HasOtherRuns}" Command="{Binding LinkToOtherRunCommand}"/>
+                            <Button Classes="rowaction" Content="UNLINK" Command="{Binding UnlinkCommand}"/>
+                        </StackPanel>
+                        <TextBlock Classes="hint" TextWrapping="Wrap" Margin="0"
+                                   IsVisible="{Binding ErrorText, Converter={x:Static ObjectConverters.IsNotNull}}"
+                                   Text="{Binding ErrorText}"/>
+                    </StackPanel>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+        <TextBlock Classes="hint" TextWrapping="Wrap"
+                   IsVisible="{Binding EmptyText, Converter={x:Static ObjectConverters.IsNotNull}}"
+                   Text="{Binding EmptyText}"/>
+    </StackPanel>
+</UserControl>

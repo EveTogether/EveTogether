@@ -16,7 +16,8 @@ public static class IskContributors
         new RewardIskContributor(),
         new ConsumableIskContributor(),
         new MiningIskContributor(),
-        new HomefrontPayoutIskContributor()
+        new HomefrontPayoutIskContributor(),
+        new ShipLossIskContributor()
     ];
 
     /// <summary>Which sources a stored breakdown was built by, and by which revision of the rules. A summary built by

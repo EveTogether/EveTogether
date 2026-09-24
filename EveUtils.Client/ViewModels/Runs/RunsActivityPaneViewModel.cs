@@ -231,6 +231,10 @@ public sealed partial class RunsActivityPaneViewModel : ViewModelBase
         // as a wrong total. Named as its own line with the minus it carries, and the sum stays the sum (ET-256).
         if (row.Isk.Of(IskSource.Consumables) is { Certainty: not IskCertainty.Unknown, Amount: not 0 } consumables)
             parts.Add(new RunsIskPartViewModel("CONSUMABLES", null, IskFormat.Whole(consumables.Amount)));
+        if (row.Isk.Of(IskSource.ShipLoss) is { Certainty: not IskCertainty.Unknown, Amount: not 0 } shipLoss)
+        {
+            parts.Add(new RunsIskPartViewModel("SHIP LOSS", null, IskFormat.Whole(shipLoss.Amount)));
+        }
 
         IskParts.ReconcileTo(parts);
         HasIskParts = parts.Count > 0;

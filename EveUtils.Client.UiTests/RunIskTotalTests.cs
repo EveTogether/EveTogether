@@ -497,6 +497,8 @@ public sealed class RunIskTotalTests
         HasLoot = hasLoot || lootNet is not null,
         ConsumableIskCost = consumableIskCost,
         HasConsumables = hasConsumables || consumableIskCost is not null,
+        ShipLossIskCost = null,
+        HasShipLoss = false,
         MiningIskValue = miningIskValue,
         HasMining = hasMining || miningIskValue is not null,
         Parameters = parameters ?? [],

@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using EveUtils.Shared.Modules.Killmails.Entities;
 using EveUtils.Shared.Modules.Runs.Entities;
 using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Runs.Isk;
@@ -20,7 +21,8 @@ internal static class ActivitySummaryBuilder
         new(SHA256.HashData(Encoding.UTF8.GetBytes($"activity-summary:{activityKey}")).AsSpan(0, 16));
 
     public static ActivitySummary Build(string activityKey, IReadOnlyList<Run> runs,
-        ILookup<Guid, RunParameter> parametersByRun, IReadOnlyDictionary<int, double> prices, MiningOreTypes ores)
+        ILookup<Guid, RunParameter> parametersByRun, IReadOnlyDictionary<int, double> prices, MiningOreTypes ores,
+        ILookup<Guid, LocalKillmail> lossesByRun)
     {
         Run source = runs.OrderBy(run => run.StartedAtUtc).ThenBy(run => run.Id).First();
         DateTime startedAtUtc = runs.Min(run => run.StartedAtUtc);
@@ -37,7 +39,7 @@ internal static class ActivitySummaryBuilder
         DateTime nowUtc = DateTime.UtcNow;
         RunIskFacts[] facts = [.. runs
             .OrderBy(run => run.StartedAtUtc).ThenBy(run => run.Id)
-            .Select(run => RunIskFactsReader.From(run, parametersByRun[run.Id], prices, ores))];
+            .Select(run => RunIskFactsReader.From(run, parametersByRun[run.Id], prices, ores, lossesByRun[run.Id]))];
         IskBreakdown isk = IskContributors.Breakdown(facts, nowUtc);
         // The same facts once more, split by character rather than summed — no extra query, and per source it adds
         // up to the activity's own breakdown (ET-296).

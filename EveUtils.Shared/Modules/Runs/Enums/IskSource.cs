@@ -12,5 +12,8 @@ public enum IskSource
 
     /// <summary>A homefront's fixed payout per character in the site (ET-231) — the table's figure, or the one the
     /// pilot typed over it as a <see cref="RunParameterKey.FixedPayout"/> row (ET-271), never both for one run.</summary>
-    HomefrontPayout = 5
+    HomefrontPayout = 5,
+
+    /// <summary>The ship, and the pod with its implants, a run lost as its linked killmails tell it (ET-331) — a cost.</summary>
+    ShipLoss = 6
 }

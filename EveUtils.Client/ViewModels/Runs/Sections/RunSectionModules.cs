@@ -72,6 +72,9 @@ public static class RunSectionModules
             context => new ConsumablesWindowSectionViewModel(context),
             services => new ConsumablesDetailSectionViewModel(services),
             IskSource.Consumables),
+        // Detail only, like ESCALATION: a loss arrives by killmail minutes after the fact, never while the run window
+        // is open. Claimed by abyssal, where a loss ends the run; any other type shows it once one is linked (ET-331).
+        new(RunSectionId.Loss, null, services => new LossDetailSectionViewModel(services), IskSource.ShipLoss),
         new(RunSectionId.Escalation, null, services => new EscalationDetailSectionViewModel(services))
     ];
 }

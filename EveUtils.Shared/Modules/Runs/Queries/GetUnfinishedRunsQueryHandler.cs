@@ -2,6 +2,7 @@ using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Data;
 using EveUtils.Shared.DependencyInjection;
 using EveUtils.Shared.Messaging;
+using EveUtils.Shared.Modules.Killmails.Entities;
 using EveUtils.Shared.Modules.Market.Repositories;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Entities;
@@ -54,14 +55,19 @@ internal sealed class GetUnfinishedRunsQueryHandler(
         // MINING prices through the same cache, keyed by each ore's own resolved type (ET-229) — Mutanite's fixed
         // NPC price never needs it (MiningValuation).
         MiningOreTypes ores = RunIskFactsReader.OresOf(runs, sde);
-        List<int> priceTypeIds = [.. lootTypeIds.Concat(filamentTypeIds).Concat(ores.TypeIds).Distinct()];
+        // SHIP LOSS prices a linked loss's hull and items through the same cache (ET-331).
+        ILookup<Guid, LocalKillmail> lossesByRun = await RunIskFactsReader.LinkedLossesAsync(db,
+            [.. runs.Select(run => run.Id)], cancellationToken);
+        List<int> priceTypeIds = [.. lootTypeIds.Concat(filamentTypeIds).Concat(ores.TypeIds)
+            .Concat(RunIskFactsReader.LossLines(lossesByRun.SelectMany(group => group)).Select(line => line.ItemTypeId))
+            .Distinct()];
         IReadOnlyDictionary<int, double> prices = priceTypeIds.Count == 0
             ? new Dictionary<int, double>()
             : await marketPrices.GetAveragePricesAsync(priceTypeIds, cancellationToken);
 
         List<UnfinishedRunDto> dtos = [.. runs.Select(run =>
         {
-            (decimal total, bool unknown) = _TotalIsk(run, prices, ores);
+            (decimal total, bool unknown) = _TotalIsk(run, prices, ores, lossesByRun[run.Id]);
             return new UnfinishedRunDto(
                 run.Id, run.CharacterId, run.ActivityKind, run.SiteName, run.SignatureGroupSnapshot, run.SiteTypeId,
                 run.StartedAtUtc, run.StoppedAtUtc, total, unknown);
@@ -75,9 +81,10 @@ internal sealed class GetUnfinishedRunsQueryHandler(
     // and a merged figure would not match what either button actually commits or discards.
     // Unknown only when loot is the sole reason nothing can be said: bounty and rewards are read straight off storage,
     // never priced, so either one being there already makes the total a real (if possibly loot-incomplete) figure.
-    private static (decimal Total, bool Unknown) _TotalIsk(Run run, IReadOnlyDictionary<int, double> prices, MiningOreTypes ores)
+    private static (decimal Total, bool Unknown) _TotalIsk(Run run, IReadOnlyDictionary<int, double> prices, MiningOreTypes ores,
+        IEnumerable<LocalKillmail> losses)
     {
-        IskBreakdown isk = IskContributors.Breakdown([RunIskFactsReader.From(run, run.Parameters, prices, ores)], DateTime.UtcNow);
+        IskBreakdown isk = IskContributors.Breakdown([RunIskFactsReader.From(run, run.Parameters, prices, ores, losses)], DateTime.UtcNow);
         return (isk.Total, isk.IsUnvalued);
     }
 }

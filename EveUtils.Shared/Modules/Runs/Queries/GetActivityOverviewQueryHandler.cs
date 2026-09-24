@@ -2,6 +2,8 @@ using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Data;
 using EveUtils.Shared.DependencyInjection;
 using EveUtils.Shared.Messaging;
+using EveUtils.Shared.Modules.Killmails;
+using EveUtils.Shared.Modules.Killmails.Entities;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Entities;
 using EveUtils.Shared.Modules.Runs.Enums;
@@ -84,6 +86,16 @@ internal sealed class GetActivityOverviewQueryHandler(IDbContextFactory<ClientDb
                 group.Any(entry => entry.SyncState == RunSyncState.Outdated))))
             .ToLookup(entry => entry.Activity, entry => entry.Sync);
 
+        // FAILED / SHIP LOST (ET-331): read from the linked losses each time, so an unlink takes it away with it.
+        var linkedLosses = await db.Set<LocalKillmail>()
+            .AsNoTracking()
+            .Where(killmail => killmail.IsLoss && killmail.RunId != null && memberRunIds.Contains(killmail.RunId.Value))
+            .Select(killmail => new { killmail.RunId, killmail.VictimShipTypeId })
+            .ToListAsync(cancellationToken);
+        HashSet<string> shipLostActivities = [.. linkedLosses
+            .Where(loss => !KillmailRunLinker.IsCapsule(loss.VictimShipTypeId))
+            .Select(loss => activityKeyByRunId[loss.RunId.GetValueOrDefault()])];
+
         // The own share is worked out here rather than in the view model: this is where the stored per-character
         // split is, and the whole read already runs off the UI thread (ET-287).
         HashSet<long>? ownCharacterIds = query.OwnCharacterIds is { } own ? [.. own] : null;
@@ -92,7 +104,8 @@ internal sealed class GetActivityOverviewQueryHandler(IDbContextFactory<ClientDb
             {
                 string activity = summary.GroupCode ?? summary.RunId!.Value.ToString();
                 return ActivityOverviewRows.ToDto(summary, rewardsByActivity[activity], crewByActivity[activity],
-                    autoSavedActivities.Contains(activity), syncByActivity[activity], ownCharacterIds);
+                    autoSavedActivities.Contains(activity), syncByActivity[activity], ownCharacterIds,
+                    shipLostActivities.Contains(activity));
             })]);
     }
 }

@@ -78,6 +78,7 @@ public sealed partial class FleetCharacterRowViewModel(long characterId, Func<Fl
         _Add(figures, "ore", isk.Of(IskSource.Mining));
         _Add(figures, "payout", isk.Of(IskSource.HomefrontPayout));
         _Add(figures, "costs", isk.Of(IskSource.Consumables));
+        _Add(figures, "lost", isk.Of(IskSource.ShipLoss));
         return figures.Count > 0 ? figures : [new FleetFigure("nothing", string.Empty, IsQuiet: true)];
     }
 

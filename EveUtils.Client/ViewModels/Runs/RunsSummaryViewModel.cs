@@ -360,6 +360,10 @@ public sealed partial class RunsSummaryViewModel : ObservableObject
         // Spent, not earned: its own line with its minus, never a part of the bar (ET-256).
         if (Isk.Of(IskSource.Consumables) is { Certainty: not IskCertainty.Unknown, Amount: not 0 } consumables)
             parts.Add(new RunsIskPartViewModel("CONSUMABLES", null, IskFormat.Compact(consumables.Amount)));
+        if (Isk.Of(IskSource.ShipLoss) is { Certainty: not IskCertainty.Unknown, Amount: not 0 } shipLoss)
+        {
+            parts.Add(new RunsIskPartViewModel("SHIP LOSS", null, IskFormat.Compact(shipLoss.Amount)));
+        }
         IskParts.ReconcileTo(_Reuse(IskParts, parts));
     }
 

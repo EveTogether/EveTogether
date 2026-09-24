@@ -19,5 +19,8 @@ public enum RunSectionId
     Mining,
 
     /// <summary>A homefront's attendance list — who was in the site at completion (ET-230).</summary>
-    Homefront
+    Homefront,
+
+    /// <summary>The own losses linked to the activity's runs (ET-331).</summary>
+    Loss
 }
