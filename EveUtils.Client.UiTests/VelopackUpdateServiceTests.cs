@@ -131,7 +131,7 @@ public class VelopackUpdateServiceTests : IDisposable
     {
         Result<AppRelease?> result = await VelopackUpdateService.CheckAsync(
             UpdateChannel.Nightly,
-            new Feed(_Package("0.0.1-nightly.5")),
+            new Feed(_Package("0.2.0-nightly.5")),
             new TestVelopackLocator(PackageId, "0.2.1-nightly.4", _packages),
             TimeSpan.FromSeconds(5),
             NullLogger.Instance,
@@ -142,14 +142,14 @@ public class VelopackUpdateServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task CheckAsync_WithANightlyOffer_UsesItsBuildIdentityAndRollingReleasePage()
+    public async Task CheckAsync_WithANightlyOffer_UsesItsPackageVersionAndRollingReleasePage()
     {
         Result<AppRelease?> result = await _CheckAsync(
-            new Feed(_Package("0.0.1-nightly.6", "nightly-20260924.a1b2c3d.6")),
+            new Feed(_Package("0.2.0-nightly.6", "Build: 20260924.a1b2c3d")),
             UpdateChannel.Nightly);
 
         Assert.True(result.IsSuccess);
-        Assert.Equal("nightly-20260924.a1b2c3d.6", result.Value?.Version);
+        Assert.Equal("0.2.0-nightly.6", result.Value?.Version);
         Assert.Equal("https://github.com/EveTogether/EveTogether/releases/tag/nightly", result.Value?.Url);
     }
 
@@ -158,37 +158,37 @@ public class VelopackUpdateServiceTests : IDisposable
     {
         Result<AppRelease?> result = await _CheckAsync(
             new Feed(_Package(
-                "0.0.0-nightly.6",
-                "nightly-20260924.a1b2c3d.6\n\n- Added: delta. A new entry.\n- Fixed: echo. Another one.\n")),
+                "0.2.0-nightly.6",
+                "Build: 20260924.a1b2c3d\n\n- Added: delta. A new entry.\n- Fixed: echo. Another one.\n")),
             UpdateChannel.Nightly);
 
         Assert.True(result.IsSuccess);
-        Assert.Equal("nightly-20260924.a1b2c3d.6", result.Value?.Version);
-        Assert.Equal("- Added: delta. A new entry.\n- Fixed: echo. Another one.", result.Value?.Notes);
+        Assert.Equal("0.2.0-nightly.6", result.Value?.Version);
+        Assert.Equal("Build: 20260924.a1b2c3d\n\n- Added: delta. A new entry.\n- Fixed: echo. Another one.", result.Value?.Notes);
     }
 
     [Fact]
-    public async Task CheckAsync_WithANightlyOfferWithoutABuildLabel_KeepsTheWholeTextAsNotes()
+    public async Task CheckAsync_WithANightlyOfferWithoutBuildDetails_KeepsTheWholeTextAsNotes()
     {
         Result<AppRelease?> result = await _CheckAsync(
-            new Feed(_Package("0.0.0-nightly.6", "- Added: delta. A new entry.")),
+            new Feed(_Package("0.2.0-nightly.6", "- Added: delta. A new entry.")),
             UpdateChannel.Nightly);
 
         Assert.True(result.IsSuccess);
-        Assert.Equal("nightly", result.Value?.Version);
+        Assert.Equal("0.2.0-nightly.6", result.Value?.Version);
         Assert.Equal("- Added: delta. A new entry.", result.Value?.Notes);
     }
 
     [Fact]
-    public async Task CheckAsync_WithANightlyOfferThatIsOnlyABuildLabel_HasNoNotes()
+    public async Task CheckAsync_WithANightlyOfferThatHasOnlyBuildDetails_ShowsThoseDetails()
     {
         Result<AppRelease?> result = await _CheckAsync(
-            new Feed(_Package("0.0.0-nightly.6", "nightly-20260924.a1b2c3d.6")),
+            new Feed(_Package("0.2.0-nightly.6", "Build: 20260924.a1b2c3d")),
             UpdateChannel.Nightly);
 
         Assert.True(result.IsSuccess);
-        Assert.Equal("nightly-20260924.a1b2c3d.6", result.Value?.Version);
-        Assert.Equal(string.Empty, result.Value?.Notes);
+        Assert.Equal("0.2.0-nightly.6", result.Value?.Version);
+        Assert.Equal("Build: 20260924.a1b2c3d", result.Value?.Notes);
     }
 
     /// <summary>

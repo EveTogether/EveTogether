@@ -8,5 +8,5 @@ namespace EveUtils.Client.Updates;
 /// </summary>
 public sealed record AppRelease(string Version, string Notes, string Url, long SizeBytes = 0)
 {
-    public string DisplayVersion => Version.StartsWith("nightly", StringComparison.Ordinal) ? Version : $"v{Version}";
+    public string DisplayVersion => Version.Contains("-nightly.", StringComparison.Ordinal) ? Version : $"v{Version}";
 }
