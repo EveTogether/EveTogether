@@ -35,6 +35,9 @@
                             <Border DockPanel.Dock="Left" Classes="chip dim" Margin="7,0,0,0" IsVisible="{Binding ShowLinkedChip}">
                                 <TextBlock Text="LINKED"/>
                             </Border>
+                            <Border DockPanel.Dock="Left" Classes="chip warn" Margin="7,0,0,0" IsVisible="{Binding ShowProvisionalChip}">
+                                <TextBlock Text="{Binding ProvisionalChipText}"/>
+                            </Border>
                             <TextBlock DockPanel.Dock="Left" Classes="rowline" Margin="7,0,0,0" Text="{Binding AttackerCountText}"/>
                         </DockPanel>
                     </StackPanel>

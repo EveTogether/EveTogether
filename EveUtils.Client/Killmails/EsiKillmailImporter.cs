@@ -79,6 +79,11 @@ public sealed class EsiKillmailImporter(IEsiClient esi, ILocalKillmailReader kil
                     stored.Messages.FirstOrDefault()?.Text ?? "Storing the killmails failed.");
             }
 
+            if (fetched.Count > 0)
+            {
+                await _ReplaceProvisionalAsync(characterId, fetched, cancellationToken);
+            }
+
             // Also without new mails: a loss nothing fitted before may fit a run stopped or fitted since.
             Result<int> linked = await dispatcher.Send(new LinkKillmailsToRunsCommand(characterId), cancellationToken);
             return linked.IsSuccess
@@ -132,10 +137,11 @@ public sealed class EsiKillmailImporter(IEsiClient esi, ILocalKillmailReader kil
         {
             SemaphoreSlim gate = _importGates.GetOrAdd(characterId, _ => new SemaphoreSlim(1, 1));
             await gate.WaitAsync(cancellationToken);
+            LocalKillmail entity = _ToEntity(characterId, hash, killmail);
             try
             {
                 Result result = await scope.ServiceProvider.GetRequiredService<IDispatcher>()
-                    .Send(new StoreKillmailsCommand(characterId, [_ToEntity(characterId, hash, killmail)]), cancellationToken);
+                    .Send(new StoreKillmailsCommand(characterId, [entity]), cancellationToken);
                 if (!result.IsSuccess)
                 {
                     return new KillmailImportResult(KillmailImportStatus.Failed, stored,
@@ -148,9 +154,49 @@ public sealed class EsiKillmailImporter(IEsiClient esi, ILocalKillmailReader kil
             {
                 gate.Release();
             }
+
+            await _ReplaceProvisionalAsync(characterId, [entity], cancellationToken);
         }
 
         return KillmailImportResult.Ok(stored);
+    }
+
+    // ET-340: a provisional row parsed from clipboard text carries no killmail id/hash, so it is matched against a
+    // real mail on time (to the second) + victim + ship instead. The victim's name is resolved locally only, never
+    // a fresh ESI call from this method: the own-character registry first (a loss), then the ET-336 entity-name
+    // cache (a kill, where the victim is some other pilot) — that cache is only ever filled by a KILLMAILS overview
+    // read (KillmailNames.HydrateAsync), not by this importer, so a victim nobody has read yet stays unresolved
+    // here. ponytail: when neither source knows the name, the provisional row is left standing rather than chasing
+    // ESI for it — the ticket's own "Komt de echte mail nooit" ceiling already accepts a lingering provisional row;
+    // upgrade path is a KillmailNames-driven resolve if this turns out to matter in practice.
+    private async Task _ReplaceProvisionalAsync(int characterId, IReadOnlyList<LocalKillmail> killmails, CancellationToken cancellationToken)
+    {
+        await using AsyncServiceScope scope = scopes.CreateAsyncScope();
+        IReadOnlyList<Character> characters = await scope.ServiceProvider.GetRequiredService<ICharacterRegistry>().GetAllAsync(cancellationToken);
+        IKillmailEntityNameRepository names = scope.ServiceProvider.GetRequiredService<IKillmailEntityNameRepository>();
+        IProvisionalKillmailRepository provisional = scope.ServiceProvider.GetRequiredService<IProvisionalKillmailRepository>();
+
+        List<int> victimIds = [.. killmails.Select(killmail => killmail.VictimCharacterId).OfType<int>().Distinct()];
+        IReadOnlyDictionary<long, KillmailEntityName> cachedNames = victimIds.Count > 0
+            ? await names.GetManyAsync([.. victimIds.Select(id => (long)id)], cancellationToken)
+            : new Dictionary<long, KillmailEntityName>();
+
+        foreach (LocalKillmail killmail in killmails)
+        {
+            if (killmail.VictimCharacterId is not { } victimId)
+            {
+                continue;
+            }
+
+            string? victimName = characters.FirstOrDefault(character => character.EsiCharacterId == victimId)?.Name
+                ?? (cachedNames.TryGetValue(victimId, out KillmailEntityName? cached) ? cached.Name : null);
+            if (victimName is null)
+            {
+                continue;
+            }
+
+            await provisional.RemoveMatchingAsync(characterId, killmail.KillmailTimeUtc, killmail.VictimShipTypeId, victimName, cancellationToken);
+        }
     }
 
     private static LocalKillmail _ToEntity(int characterId, string hash, EsiKillmail killmail) => new()

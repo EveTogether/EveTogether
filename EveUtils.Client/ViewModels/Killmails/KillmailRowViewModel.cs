@@ -4,6 +4,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EveUtils.Client.Formatting;
 using EveUtils.Shared.Modules.Killmails.Dtos;
+using EveUtils.Shared.Modules.Killmails.Entities;
 
 namespace EveUtils.Client.ViewModels.Killmails;
 
@@ -51,6 +52,38 @@ public sealed partial class KillmailRowViewModel : ObservableObject
         IskText = Isk is { } signed ? IskFormat.Compact(signed) : "no price";
     }
 
+    /// <summary>ET-340: a killmail parsed from pasted clipboard text, not yet confirmed by the real ESI mail —
+    /// shown marked "FROM CLIPBOARD · WAITING FOR ESI", never linked to a run and never counted in a day's or the
+    /// overview's kill/loss counts or ISK totals (all of those already read only real rows via <see cref="IsLoss"/>
+    /// and <see cref="Isk"/>, both left at their default/null here).</summary>
+    public KillmailRowViewModel(ProvisionalKillmail provisional, string shipName, TimeZoneInfo timeZone)
+    {
+        _openDetail = _ => Task.CompletedTask; // nothing to open yet — RawText has no detail screen (ET-340)
+        CharacterId = provisional.CharacterId;
+        KillmailId = 0;
+        IsLoss = false;
+        KillmailTimeUtc = provisional.KillmailTimeUtc;
+        IsProvisional = true;
+        AttackerCount = 0;
+        RunId = null;
+        NotLinkedCandidateCount = 0;
+        ShipName = shipName;
+        SystemName = string.Empty;
+        IsAbyssal = false;
+        CounterpartyName = provisional.VictimName;
+        Isk = null;
+
+        DateTime local = TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(provisional.KillmailTimeUtc, DateTimeKind.Utc), timeZone);
+        Day = DateOnly.FromDateTime(local);
+        TimeText = local.ToString("HH:mm");
+        KindGlyph = string.Empty;
+        ShipText = shipName;
+        SystemLineText = "—";
+        SecurityText = "—";
+        AttackerCountText = string.Empty;
+        IskText = "no price";
+    }
+
     public int CharacterId { get; }
 
     public int KillmailId { get; }
@@ -58,6 +91,9 @@ public sealed partial class KillmailRowViewModel : ObservableObject
     public bool IsLoss { get; }
 
     public DateTime KillmailTimeUtc { get; }
+
+    /// <summary>ET-340: true for a row parsed from clipboard text, still waiting for the real ESI mail.</summary>
+    public bool IsProvisional { get; }
 
     /// <summary>The local calendar day this row groups under (ET-332 AC5) — never UTC, so a mail just after local
     /// midnight does not fall under the previous UTC day's header.</summary>
@@ -90,6 +126,10 @@ public sealed partial class KillmailRowViewModel : ObservableObject
     public bool ShowLinkedChip => IsLoss && RunId is not null;
 
     public string NotLinkedChipText => $"NOT LINKED · {NotLinkedCandidateCount} runs match";
+
+    public bool ShowProvisionalChip => IsProvisional;
+
+    public string ProvisionalChipText => "FROM CLIPBOARD · WAITING FOR ESI";
 
     public string CounterpartyName { get; }
 
