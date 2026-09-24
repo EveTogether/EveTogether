@@ -4,6 +4,7 @@ using EveUtils.Client.Theming;
 using EveUtils.Client.ViewModels;
 using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Client.ViewModels.FitBrowser;
+using EveUtils.Client.ViewModels.Killmails;
 using EveUtils.Client.ViewModels.Runs;
 using EveUtils.Shared.Modules.Esi;
 using EveUtils.Shared.Modules.Fittings.Dtos;
@@ -265,6 +266,11 @@ public interface IDialogService
     /// other feature modules. One screen, not one per pilot: the running band already holds a lane each. Returns the
     /// screen now showing — the one already open, when it was.</summary>
     RunsOverviewViewModel ShowRuns(RunsOverviewViewModel viewModel);
+
+    /// <summary>Opens the KILLMAILS overview (ET-332) as a hosted module — a docked tab or a floating window, like
+    /// RUNS. One screen for the whole app, not one per character: it reads a single selected character at a time.
+    /// Returns the screen now showing — the one already open, when it was.</summary>
+    KillmailsOverviewViewModel ShowKillmails(KillmailsOverviewViewModel viewModel);
 
     /// <summary>Save-a-preset dialog (ET-61): pick what goes in, name it, write it to one portable file. Modal — the
     /// file picker inside it belongs to the window, so the view-model never sees a path it did not ask for.</summary>

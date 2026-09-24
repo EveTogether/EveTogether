@@ -17,6 +17,11 @@ release notes, not this file.
 
 ## [Unreleased]
 
+- **Added: a KILLMAILS window with your own kills and losses.** Reached from the rail like RUNS, it can dock as a tab
+  or float as its own window. Pick a character, filter to All, Kills, Losses or Not linked to a run, or search by
+  ship, pilot or system; totals show kills, losses, ISK destroyed, ISK lost and efficiency. Mails are grouped per day,
+  newest first, with the linked run shown on a loss and a NOT LINKED chip when more than one run could match. A
+  character that has not shared its killmails yet shows GRANT ACCESS instead of an empty list.
 - **Added: a lost ship is linked to the run you lost it in.** When a loss comes in, EVE Together looks for the one run
   of that character that was going at the time, in the same system (any abyssal run for a loss in the abyss) and with
   the same ship as the run's fit, and links the two; a pod lost within a minute follows its ship. When more than one

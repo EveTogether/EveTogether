@@ -18,6 +18,7 @@ using EveUtils.Client.Notifications;
 using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Client.ViewModels.FitBrowser;
 using EveUtils.Client.ViewModels.Home;
+using EveUtils.Client.ViewModels.Killmails;
 using EveUtils.Client.ViewModels.Runs;
 using EveUtils.Client.Esi;
 using EveUtils.Client.EveSettings;
@@ -275,6 +276,8 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
     /// detail opened from a row is still the same place in the shell.</summary>
     public bool IsRunsActive => ActiveModule == "runs";
 
+    public bool IsKillmailsActive => ActiveModule == "killmails";
+
     partial void OnIsFloatingChanged(bool value)
     {
         OnPropertyChanged(nameof(DockModeLabel));
@@ -340,6 +343,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
             case "appraisal": OpenAppraisal(); break;
             case "runs": await OpenRunsAsync(); break;
             case "runs-start": await OpenManualRunStartAsync(); break;
+            case "killmails": await OpenKillmailsAsync(); break;
             case "inbox": OpenInbox(); break;
             case "logs": OpenLogs(); break;
             case "settings": await OpenSettings(); break;
@@ -708,6 +712,22 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
             _services.GetRequiredService<IDispatcher>(), _dialogs, _services, characters));
         if (then is not null)
             await then(shown);
+    }
+
+    /// <summary>Opens the KILLMAILS overview (ET-332) — one character's own kills and losses at a time. A character
+    /// missing the killmails scope re-authenticates through the same scope-selection popup every other scope gap
+    /// uses, pre-ticking what is already granted plus the one scope this screen needs.</summary>
+    private async Task OpenKillmailsAsync()
+    {
+        if (_dialogs is null || _services is null)
+        {
+            return;
+        }
+
+        IReadOnlyList<Character> characters = await _services.GetRequiredService<ICharacterRegistry>().GetAllAsync();
+        _dialogs.ShowKillmails(new KillmailsOverviewViewModel(
+            _services.GetRequiredService<IDispatcher>(), _services, characters,
+            (characterId, scope) => ReAuthenticateAsync(characterId, [scope])));
     }
 
     /// <summary>Opens the manual run-start dialog (ET-163) — modal, and closed again by START. A fresh view-model

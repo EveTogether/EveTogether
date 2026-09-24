@@ -1,0 +1,265 @@
+<v:ChromedWindow xmlns="https://github.com/avaloniaui" xmlns:v="using:EveUtils.Client.Views"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vk="using:EveUtils.Client.ViewModels.Killmails"
+        xmlns:vw="using:EveUtils.Client.Views.Killmails"
+        xmlns:ctl="using:EveUtils.Client.Controls"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="980" d:DesignHeight="640"
+        x:Class="EveUtils.Client.Views.KillmailsWindow"
+        x:DataType="vk:KillmailsOverviewViewModel"
+        Width="980" Height="640" MinWidth="640" MinHeight="360"
+        WindowStartupLocation="CenterOwner"
+        Title="Killmails">
+
+    <!-- KILLMAILS (ET-332): a character's own kills and losses, one character at a time — a hosted module like RUNS
+         (DialogService.ShowKillmails), docking as a tab or floating as its own window. No detail pane, unlike RUNS:
+         double-clicking a row hands off to ET-333's own dialog, so this content root is a single scrollable column. -->
+    <Grid x:Name="KillmailsRoot">
+        <Grid.Styles>
+            <!-- The row itself (rowtime/rowsite/rowline/rowfigure/activityrow/rowspine) is genuinely shared with
+                 RUNS. The day-head and tile styles below are not: they live inline in RunsWindow.axaml's own
+                 Grid.Styles, bundled with RUNS' drawer/breakpoint machinery this single-pane window has no use for,
+                 so they are copied here rather than pulled in whole. -->
+            <StyleInclude Source="avares://EveUtils.Client/Views/Runs/RunRowStyles.axaml"/>
+
+            <Style Selector="Border.dayhead">
+                <Setter Property="Background" Value="{DynamicResource BgDayHeadBrush}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+                <Setter Property="BorderThickness" Value="0,1,0,1"/>
+                <Setter Property="Margin" Value="0,3,0,0"/>
+                <Setter Property="Height" Value="28"/>
+            </Style>
+            <Style Selector="TextBlock.dayweek">
+                <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+                <Setter Property="FontSize" Value="10"/>
+                <Setter Property="LetterSpacing" Value="1.8"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+            </Style>
+            <Style Selector="TextBlock.daydate">
+                <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+                <Setter Property="FontSize" Value="10"/>
+                <Setter Property="LetterSpacing" Value="1.8"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+                <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+            </Style>
+            <Style Selector="TextBlock.daysum">
+                <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+                <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+                <Setter Property="FontSize" Value="11"/>
+                <Setter Property="TextAlignment" Value="Right"/>
+                <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+            </Style>
+            <Style Selector="TextBlock.daysum.loss">
+                <Setter Property="Foreground" Value="{StaticResource RedBrush}"/>
+            </Style>
+
+            <!-- One tile: a face or nothing, the name, and a count — CHARACTER and SHOW share the same shape. -->
+            <Style Selector="Button.tile">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="BorderThickness" Value="0"/>
+                <Setter Property="Padding" Value="0"/>
+                <Setter Property="MinHeight" Value="0"/>
+                <Setter Property="MinWidth" Value="0"/>
+                <Setter Property="CornerRadius" Value="0"/>
+                <Setter Property="Cursor" Value="Hand"/>
+                <Setter Property="Template">
+                    <ControlTemplate>
+                        <ContentPresenter x:Name="PART_ContentPresenter" Background="Transparent"
+                                          Content="{TemplateBinding Content}"/>
+                    </ControlTemplate>
+                </Setter>
+            </Style>
+            <Style Selector="Border.tilefill">
+                <Setter Property="Background" Value="#04FFFFFF"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}"/>
+                <Setter Property="BorderThickness" Value="1"/>
+            </Style>
+            <Style Selector="Button.tile.on Border.tilefill">
+                <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+            </Style>
+            <Style Selector="Button.tile:pointerover Border.tilefill">
+                <Setter Property="Background" Value="{DynamicResource BgRowHoverBrush}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}"/>
+            </Style>
+            <Style Selector="Border.tileaccent">
+                <Setter Property="Width" Value="2"/>
+                <Setter Property="HorizontalAlignment" Value="Left"/>
+                <Setter Property="Background" Value="{DynamicResource AccentBrightBrush}"/>
+            </Style>
+            <Style Selector="TextBlock.tilename">
+                <Setter Property="FontSize" Value="12"/>
+                <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+                <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+            </Style>
+            <Style Selector="Button.tile.on TextBlock.tilename, Button.tile:pointerover TextBlock.tilename">
+                <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+            </Style>
+            <Style Selector="TextBlock.tilecount">
+                <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+                <Setter Property="FontSize" Value="11"/>
+                <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+            </Style>
+            <Style Selector="Button.tile.on TextBlock.tilecount">
+                <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+            </Style>
+
+            <Style Selector="TextBlock.totalfig">
+                <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+                <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+                <Setter Property="FontSize" Value="15"/>
+            </Style>
+        </Grid.Styles>
+
+        <DockPanel>
+            <!-- ══ Header ══ -->
+            <Border DockPanel.Dock="Top" Padding="14,12" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource BorderBrush}">
+                <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto" ColumnSpacing="8">
+                    <TextBlock Grid.Column="0" Classes="panel-title" FontSize="13" Text="KILLMAILS"/>
+                    <Border Grid.Column="1" Classes="chip dim">
+                        <TextBlock Text="Local · last 90 days (ESI)"/>
+                    </Border>
+                    <TextBlock Grid.Column="3" Classes="hint" Margin="0" VerticalAlignment="Center"
+                               IsVisible="{Binding StatusMessage, Converter={x:Static ObjectConverters.IsNotNull}}"
+                               Text="{Binding StatusMessage}"/>
+                    <Button Grid.Column="4" Content="REFRESH" Command="{Binding RefreshCommand}" IsEnabled="{Binding !IsBusy}"/>
+                </Grid>
+            </Border>
+
+            <!-- ══ Character band ══ -->
+            <Border DockPanel.Dock="Top" Padding="14,10" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource BorderBrush}">
+                <StackPanel Orientation="Horizontal" Spacing="10">
+                    <TextBlock Classes="label" Text="CHARACTER" VerticalAlignment="Center"/>
+                    <ItemsControl ItemsSource="{Binding Characters}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate><StackPanel Orientation="Horizontal" Spacing="8"/></ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="vk:KillmailCharacterOptionViewModel">
+                                <Button Classes="tile" Classes.on="{Binding IsSelected}" Command="{Binding SelectCommand}">
+                                    <Panel>
+                                        <Border Classes="tilefill"/>
+                                        <Border Classes="tileaccent" IsVisible="{Binding IsSelected}"/>
+                                        <StackPanel Orientation="Horizontal" Spacing="6" Margin="8,5">
+                                            <ctl:HexPortrait Size="18" Source="{Binding Face.Portrait}" Initial="{Binding Face.Initial}"/>
+                                            <TextBlock Classes="tilename" Text="{Binding Name}"/>
+                                            <TextBlock Classes="tilecount" Text="{Binding Count}" IsVisible="{Binding !NeedsAccess}"/>
+                                            <Border Classes="chip warn" IsVisible="{Binding NeedsAccess}">
+                                                <TextBlock Text="GRANT ACCESS"/>
+                                            </Border>
+                                        </StackPanel>
+                                    </Panel>
+                                </Button>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </Border>
+
+            <!-- ══ SHOW filter + search ══ -->
+            <Border DockPanel.Dock="Top" Padding="14,10" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource BorderBrush}">
+                <Grid ColumnDefinitions="Auto,*,220">
+                    <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8">
+                        <TextBlock Classes="label" Text="SHOW" VerticalAlignment="Center"/>
+                        <ItemsControl ItemsSource="{Binding Filters}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate><StackPanel Orientation="Horizontal" Spacing="8"/></ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="vk:KillmailShowFilterTileViewModel">
+                                    <Button Classes="tile" Classes.on="{Binding IsOn}" Command="{Binding SelectCommand}">
+                                        <Panel>
+                                            <Border Classes="tilefill"/>
+                                            <Border Classes="tileaccent" IsVisible="{Binding IsOn}"/>
+                                            <StackPanel Orientation="Horizontal" Spacing="6" Margin="8,5">
+                                                <TextBlock Classes="tilename" Text="{Binding Name}"/>
+                                                <TextBlock Classes="tilecount" Text="{Binding Count}"/>
+                                            </StackPanel>
+                                        </Panel>
+                                    </Button>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                    <TextBox Grid.Column="2" VerticalAlignment="Center" FontSize="11"
+                              PlaceholderText="Search ship, pilot, system…" Text="{Binding SearchText}"/>
+                </Grid>
+            </Border>
+
+            <!-- ══ Totals ══ -->
+            <Border DockPanel.Dock="Top" Padding="14,10" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource BorderBrush}"
+                    IsVisible="{Binding !NeedsAccess}">
+                <StackPanel Orientation="Horizontal" Spacing="22">
+                    <StackPanel Spacing="2">
+                        <TextBlock Classes="label" Text="KILLS"/>
+                        <TextBlock Classes="totalfig" Foreground="{StaticResource GreenBrush}" Text="{Binding KillsCount}"/>
+                    </StackPanel>
+                    <StackPanel Spacing="2">
+                        <TextBlock Classes="label" Text="LOSSES"/>
+                        <TextBlock Classes="totalfig" Foreground="{StaticResource RedBrush}" Text="{Binding LossesCount}"/>
+                    </StackPanel>
+                    <StackPanel Spacing="2">
+                        <TextBlock Classes="label" Text="ISK DESTROYED"/>
+                        <TextBlock Classes="totalfig" Text="{Binding IskDestroyedText}"/>
+                    </StackPanel>
+                    <StackPanel Spacing="2">
+                        <TextBlock Classes="label" Text="ISK LOST"/>
+                        <TextBlock Classes="totalfig" Foreground="{StaticResource RedBrush}" Text="{Binding IskLostText}"/>
+                    </StackPanel>
+                    <StackPanel Spacing="2">
+                        <TextBlock Classes="label" Text="EFFICIENCY"/>
+                        <TextBlock Classes="totalfig" Text="{Binding EfficiencyText}"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- ══ Needs-access empty state ══ -->
+            <StackPanel DockPanel.Dock="Top" IsVisible="{Binding NeedsAccess}" Spacing="10" Margin="24">
+                <TextBlock Classes="hint" Margin="0" TextWrapping="Wrap"
+                           Text="This character has not shared its killmails yet. Grant esi-killmails.read_killmails.v1 to see its kills and losses here."/>
+                <Button Classes="accent" HorizontalAlignment="Left" Content="GRANT ACCESS"
+                        Command="{Binding SelectedCharacter.GrantAccessCommand}"/>
+            </StackPanel>
+
+            <!-- ══ Killmails, one day at a time ══ -->
+            <ScrollViewer IsVisible="{Binding !NeedsAccess}">
+                <StackPanel>
+                    <TextBlock Classes="hint" Margin="14,10" IsVisible="{Binding !Days.Count}"
+                               Text="No killmails match this view."/>
+                    <ItemsControl ItemsSource="{Binding Days}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="vk:KillmailDayViewModel">
+                                <StackPanel>
+                                    <Border Classes="dayhead">
+                                        <Grid ColumnDefinitions="18,*,88,88,100" ColumnSpacing="8" Margin="14,0">
+                                            <TextBlock Grid.Column="0" Classes="caret" Text="&#x25bc;"/>
+                                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                                                <TextBlock Classes="dayweek" Text="{Binding WeekdayText}"/>
+                                                <TextBlock Classes="daydate" Text="{Binding DateText}"/>
+                                            </StackPanel>
+                                            <TextBlock Grid.Column="2" Classes="daysum" Text="{Binding KillCountText}"/>
+                                            <TextBlock Grid.Column="3" Classes="daysum" Text="{Binding LossCountText}"/>
+                                            <TextBlock Grid.Column="4" Classes="daysum" Classes.loss="{Binding NetIskIsLoss}"
+                                                       Text="{Binding NetIskText}"/>
+                                        </Grid>
+                                    </Border>
+                                    <ItemsControl ItemsSource="{Binding Rows}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate DataType="vk:KillmailRowViewModel">
+                                                <vw:KillmailRowView/>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </ScrollViewer>
+        </DockPanel>
+    </Grid>
+</v:ChromedWindow>
