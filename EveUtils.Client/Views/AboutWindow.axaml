@@ -39,6 +39,9 @@
                                        Foreground="{DynamicResource AccentBrightBrush}"/>
                         </Border>
                     </StackPanel>
+                    <TextBlock Text="{Binding BuildDetails}" FontSize="10" Opacity="0.65"
+                               HorizontalAlignment="Center"
+                               IsVisible="{Binding BuildDetails, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
                     <TextBlock Text="{Binding Tagline}" FontSize="12" Opacity="0.75" TextWrapping="Wrap"
                                TextAlignment="Center" MaxWidth="340"/>
                 </StackPanel>

@@ -69,9 +69,10 @@ entries under `[Unreleased]` below that were not there yet at the previous night
   empties or goes quiet. Invite-only fleets stay private: only their members are told about them, as before.
 - **Changed: red buttons such as Conclude and Remove read better.** Their red label sat on a light wash that left it
   just under the contrast the rest of the app keeps to; the wash is gone, the red outline stays.
-- **Changed: nightly builds now show their build date, commit and run number instead of a release number.** If you installed an
-  earlier nightly, reinstall once from the nightly release page; later nightly updates will work as usual. Stable builds
-  keep their regular version.
+- **Changed: nightlies now use the current release version followed by their nightly run number.** The same number appears
+  in the app, update prompt, download packages and server image. Build date and commit remain in the details. If you
+  installed an earlier nightly such as 0.2.1-nightly.4, reinstall once from the nightly release page; later nightly
+  updates will work as usual.
 - **Changed: the local EVE database now includes skill details and item descriptions.** It downloads fresh the next
   time you start the app so the upcoming skill catalogue can use EVE's own data.
 - **Fixed: the server no longer answers unauthenticated requests to the old test endpoints.** `GET`/`POST /ships` and

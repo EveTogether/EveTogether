@@ -1,5 +1,4 @@
 using System;
-using System.IO;
 using System.Reflection;
 using EveUtils.Shared.Runtime;
 
@@ -8,8 +7,7 @@ namespace EveUtils.Shared.App;
 /// <summary>
 /// Application identity shared across the client and server hosts: product name, the contact info ESI
 /// requires in a User-Agent, and the running build's version. The version is read from the entry
-/// assembly. Nightly builds carry a separate display identity in the informational version's build metadata;
-/// dev builds fall back to the assembly default in <c>Directory.Build.props</c>.
+/// assembly. Dev builds fall back to the assembly default in <c>Directory.Build.props</c>.
 /// </summary>
 public static class AppInfo
 {
@@ -27,12 +25,7 @@ public static class AppInfo
 
     public static string DisplayVersion { get; } = _ResolveDisplayVersion();
 
-    /// <summary>
-    /// When the entry assembly's file was written — the publish step's timestamp for a CI build, a local
-    /// dev build's own compile time otherwise (ET-339). Null when the entry assembly has no path to read
-    /// (e.g. a test host), so a display never fabricates a date it does not have.
-    /// </summary>
-    public static DateOnly? BuildDate { get; } = _ResolveBuildDate();
+    public static string? BuildDetails { get; } = _ResolveBuildDetails();
 
     /// <summary>Descriptive ESI/HTTP User-Agent tagged with the host that sent the call.</summary>
     public static string UserAgent(ExecutionHost host) => $"{Name} ({host})/{Version} ({Contact})";
@@ -63,20 +56,17 @@ public static class AppInfo
     internal static string DisplayVersionFromInformational(string informational)
     {
         int plus = informational.IndexOf('+');
-        if (plus >= 0 && informational[(plus + 1)..].StartsWith("nightly-", StringComparison.Ordinal))
-        {
-            return informational[(plus + 1)..];
-        }
-
-        return $"v{(plus >= 0 ? informational[..plus] : informational)}";
+        string version = plus >= 0 ? informational[..plus] : informational;
+        return version.Contains("-nightly.", StringComparison.Ordinal) ? version : $"v{version}";
     }
 
-    private static DateOnly? _ResolveBuildDate()
+    private static string? _ResolveBuildDetails()
     {
-        var location = (Assembly.GetEntryAssembly() ?? typeof(AppInfo).Assembly).Location;
-        if (string.IsNullOrEmpty(location) || !File.Exists(location))
-            return null;
-
-        return DateOnly.FromDateTime(File.GetLastWriteTimeUtc(location));
+        Assembly assembly = Assembly.GetEntryAssembly() ?? typeof(AppInfo).Assembly;
+        string? informational = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
+        int plus = informational?.IndexOf('+') ?? -1;
+        return plus >= 0 && informational is not null && informational[..plus].Contains("-nightly.", StringComparison.Ordinal)
+            ? $"Build: {informational[(plus + 1)..]}"
+            : null;
     }
 }

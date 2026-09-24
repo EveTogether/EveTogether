@@ -7,8 +7,7 @@ name: Nightly
 # It does not run on every push. It runs at night, and only when something actually changed since the last one —
 # a nightly that is byte-for-byte yesterday's is noise — or whenever you fire it by hand from the Actions tab.
 #
-# The internal package version is 0.0.1-nightly.<run>; the visible build identity is
-# nightly-<UTC date>.<commit hash>.<run>. Neither is tied to a stable release tag.
+# Nightlies use the current release version, followed by -nightly.<run>.
 on:
   schedule:
     # 03:17 UTC — deliberately not Cockpit's 02:43, so the two projects' nightlies never queue for the same
@@ -35,7 +34,8 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       build: ${{ steps.decide.outputs.build }}
-      display: ${{ steps.decide.outputs.display }}
+      version: ${{ steps.decide.outputs.version }}
+      build_details: ${{ steps.decide.outputs.build_details }}
       notes: ${{ steps.notes.outputs.notes }}
     steps:
       - uses: actions/checkout@v6
@@ -56,7 +56,11 @@ jobs:
           published=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/nightly" -q .object.sha 2>/dev/null) || published=""
           echo "previous=$published" >> "$GITHUB_OUTPUT"
           head=$(git rev-parse HEAD)
-          echo "display=nightly-$(date -u +%Y%m%d).$(git rev-parse --short=7 HEAD).${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+          release=$(git tag -l | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$' | grep -v -- '-nightly' | sort -V | tail -n 1) || true
+          release=${release#v}
+          release=${release%%-*}
+          echo "version=${release:-0.0.1}-nightly.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+          echo "build_details=$(date -u +%Y%m%d).$(git rev-parse --short=7 HEAD)" >> "$GITHUB_OUTPUT"
 
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "Manual run — building this commit."
@@ -72,7 +76,7 @@ jobs:
             echo "build=true" >> "$GITHUB_OUTPUT"
           fi
 
-      # The one source of this nightly's notes: the build label, then the [Unreleased] changelog entries that were
+      # The one source of this nightly's notes: build details, then the [Unreleased] changelog entries that were
       # not there at the previous nightly. The build jobs hand this to Velopack, which is what the update screen
       # shows, and the release page below repeats it. Without a previous nightly to compare against, the script
       # falls back to the top entries.
@@ -80,13 +84,13 @@ jobs:
         if: steps.decide.outputs.build == 'true'
         env:
           PREVIOUS: ${{ steps.decide.outputs.previous }}
-          DISPLAY_NAME: ${{ steps.decide.outputs.display }}
+          BUILD_DETAILS: ${{ steps.decide.outputs.build_details }}
         run: |
           previous_changelog=()
           if [ -n "$PREVIOUS" ] && git show "$PREVIOUS:CHANGELOG.md" > previous-changelog.md 2>/dev/null; then
             previous_changelog=(previous-changelog.md)
           fi
-          bash scripts/changelog-notes.sh nightly "$DISPLAY_NAME" CHANGELOG.md "${previous_changelog[@]}" > nightly-build.md
+          bash scripts/changelog-notes.sh nightly "Build: $BUILD_DETAILS" CHANGELOG.md "${previous_changelog[@]}" > nightly-build.md
 
           delimiter="notes_$(openssl rand -hex 8)"
           { echo "notes<<$delimiter"; cat nightly-build.md; echo "$delimiter"; } >> "$GITHUB_OUTPUT"
@@ -148,12 +152,12 @@ jobs:
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
-      - name: Set package version and build identity
+      - name: Set package version and build details
         shell: bash
         env:
           NOTES: ${{ needs.changes.outputs.notes }}
         run: |
-          echo "VERSION=0.0.1-nightly.${{ github.run_number }}" >> "$GITHUB_ENV"
+          echo "VERSION=${{ needs.changes.outputs.version }}" >> "$GITHUB_ENV"
           printf '%s\n' "$NOTES" > nightly-build.md
 
       - name: Publish (self-contained)
@@ -164,7 +168,7 @@ jobs:
           --self-contained true
           -p:DebugType=none
           -p:Version=${{ env.VERSION }}
-          -p:InformationalVersion=${{ env.VERSION }}+${{ needs.changes.outputs.display }}
+          -p:InformationalVersion=${{ env.VERSION }}+${{ needs.changes.outputs.build_details }}
           -p:IncludeSourceRevisionInInformationalVersion=false
           -o ${{ env.OUTPUT_DIR }}
 
@@ -218,11 +222,11 @@ jobs:
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
-      - name: Set package version and build identity
+      - name: Set package version and build details
         env:
           NOTES: ${{ needs.changes.outputs.notes }}
         run: |
-          echo "VERSION=0.0.1-nightly.${{ github.run_number }}" >> "$GITHUB_ENV"
+          echo "VERSION=${{ needs.changes.outputs.version }}" >> "$GITHUB_ENV"
           printf '%s\n' "$NOTES" > nightly-build.md
 
       - name: Publish (self-contained)
@@ -233,7 +237,7 @@ jobs:
           --self-contained true
           -p:DebugType=none
           -p:Version=${{ env.VERSION }}
-          -p:InformationalVersion=${{ env.VERSION }}+${{ needs.changes.outputs.display }}
+          -p:InformationalVersion=${{ env.VERSION }}+${{ needs.changes.outputs.build_details }}
           -p:IncludeSourceRevisionInInformationalVersion=false
           -o ${{ env.OUTPUT_DIR }}
 
@@ -286,11 +290,11 @@ jobs:
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
-      - name: Set package version and build identity
+      - name: Set package version and build details
         env:
           NOTES: ${{ needs.changes.outputs.notes }}
         run: |
-          echo "VERSION=0.0.1-nightly.${{ github.run_number }}" >> "$GITHUB_ENV"
+          echo "VERSION=${{ needs.changes.outputs.version }}" >> "$GITHUB_ENV"
           printf '%s\n' "$NOTES" > nightly-build.md
 
       - name: Publish (self-contained)
@@ -301,7 +305,7 @@ jobs:
           --self-contained true
           -p:DebugType=none
           -p:Version=${{ env.VERSION }}
-          -p:InformationalVersion=${{ env.VERSION }}+${{ needs.changes.outputs.display }}
+          -p:InformationalVersion=${{ env.VERSION }}+${{ needs.changes.outputs.build_details }}
           -p:IncludeSourceRevisionInInformationalVersion=false
           -o ${{ env.OUTPUT_DIR }}
 
@@ -370,8 +374,7 @@ jobs:
           merge-multiple: true
 
       # The page repeats the notes the update screen shows — what landed in tonight's build — under the standing
-      # explanation of what a nightly is. The first two lines of the notes are the build label and a blank line,
-      # which the page already carries as its own "Build:" line.
+      # explanation of what a nightly is. The notes include the build date and commit.
       - name: Compose the release notes
         env:
           # Routed through env: and read back quoted rather than interpolated into the script text directly — a
@@ -382,13 +385,13 @@ jobs:
           {
             echo "Rolling build of \`main\`, replaced whenever main moves. Not a release: things here are expected to break."
             echo
-            echo "Build: \`${{ needs.changes.outputs.display }}\`"
+            echo "Version: \`${{ needs.changes.outputs.version }}\`"
             echo
-            echo "Installed an earlier nightly such as 0.2.1-nightly.4? Download this nightly's installer for your platform and install it once manually. Its internal package version is 0.0.1-nightly.${{ github.run_number }}, so older nightlies cannot update themselves. Your data stays outside the installation folder; later nightlies update normally."
+            echo "Installed an earlier nightly such as 0.2.1-nightly.4? Download this nightly's installer for your platform and install it once manually. Its version is ${{ needs.changes.outputs.version }}, so that earlier installation cannot update itself. Your data stays outside the installation folder; later nightlies update normally."
             echo
             echo "### Changes since the previous nightly"
             echo
-            printf '%s\n' "$NOTES" | awk 'NR > 2'
+            printf '%s\n' "$NOTES"
           } > nightly-notes.md
 
       # Delete and recreate rather than update: an existing release keeps its old tag, so 'nightly' would keep
@@ -404,13 +407,13 @@ jobs:
           gh release create nightly \
             --target "${GITHUB_SHA}" \
             --prerelease \
-            --title "${{ needs.changes.outputs.display }}" \
+            --title "${{ needs.changes.outputs.version }}" \
             --notes-file nightly-notes.md \
             dist/*
 
   # Mirrors release.yml's publish-server-image job (same Dockerfile, same registry/login/platform), on the same
   # changes-poort as the client builds above. Two tags, both unambiguously nightly: the rolling 'nightly' tag
-  # (mirrors the client's own rolling GitHub-release tag) and an immutable build-identity tag. Never 'latest'
+  # (mirrors the client's own rolling GitHub-release tag) and a versioned nightly tag. Never 'latest'
   # and never a stable version tag, so a nightly image can never be
   # mistaken for, or accidentally pulled as, a stable one.
   publish-server-image:
@@ -440,7 +443,7 @@ jobs:
         shell: bash
         run: |
           IMAGE=ghcr.io/evetogether/eve-together-server
-          echo "tags=$IMAGE:nightly,$IMAGE:${{ needs.changes.outputs.display }}" >> "$GITHUB_OUTPUT"
+          echo "tags=$IMAGE:nightly,$IMAGE:${{ needs.changes.outputs.version }}" >> "$GITHUB_OUTPUT"
 
       - name: Build and push server image
         uses: docker/build-push-action@v7

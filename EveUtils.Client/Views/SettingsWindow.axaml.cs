@@ -203,13 +203,10 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
         }
         if (_installBuildInfoBlock is not null)
         {
-            var built = EveUtils.Shared.App.AppInfo.BuildDate is { } date
-                ? date.ToString("yyyy-MM-dd")
-                : "build date unknown";
-            var channel = BuildChannel.FromVersion(EveUtils.Shared.App.AppInfo.Version) == UpdateChannel.Nightly
+            string channel = BuildChannel.FromVersion(EveUtils.Shared.App.AppInfo.Version) == UpdateChannel.Nightly
                 ? "nightly channel"
                 : "stable channel";
-            _installBuildInfoBlock.Text = $"Built {built} · {channel}";
+            _installBuildInfoBlock.Text = channel;
         }
 
         _autoStartMissionsBox.IsChecked = autoStartMissions;

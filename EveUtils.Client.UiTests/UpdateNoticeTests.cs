@@ -67,7 +67,7 @@ public class UpdateNoticeTests
 
     [Theory]
     [InlineData("0.3.0", "Update available: v0.3.0")]
-    [InlineData("nightly-20260924.a1b2c3d.6", "Update available: nightly-20260924.a1b2c3d.6")]
+    [InlineData("0.2.0-nightly.6", "Update available: 0.2.0-nightly.6")]
     public void StartupStatus_NamesTheOfferedVersion(string version, string expected) =>
         Assert.Equal(expected, UpdateNotice.StartupStatus(Offer(version), Installed));
 

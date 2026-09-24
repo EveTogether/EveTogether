@@ -27,6 +27,7 @@ public sealed partial class AboutViewModel : ViewModelBase
 
     public string AppName => "EVE Together";
     public string Version { get; }
+    public string? BuildDetails => AppInfo.BuildDetails;
     public string Tagline => "A local-first, open-source tooling suite for EVE Online.";
 
     public string RepositoryUrl => "https://github.com/EveTogether/EveTogether";
