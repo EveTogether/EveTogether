@@ -13,4 +13,10 @@ public interface IEsiAffiliationResolver
     /// (404 / unreachable); corp and alliance are best-effort, so their fields may be null on a partial result.
     /// </summary>
     Task<EsiCharacterAffiliation?> ResolveAsync(int characterId, CancellationToken cancellationToken = default);
+
+    /// <summary>The corporation's public name, or null when the id does not resolve (404 / unreachable).</summary>
+    Task<string?> ResolveCorporationNameAsync(int corporationId, CancellationToken cancellationToken = default);
+
+    /// <summary>The alliance's public name, or null when the id does not resolve (404 / unreachable).</summary>
+    Task<string?> ResolveAllianceNameAsync(int allianceId, CancellationToken cancellationToken = default);
 }

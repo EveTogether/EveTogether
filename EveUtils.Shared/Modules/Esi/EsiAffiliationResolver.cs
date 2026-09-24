@@ -22,22 +22,41 @@ public sealed class EsiAffiliationResolver(IEsiClient esi) : IEsiAffiliationReso
         if (character is not { IsSuccess: true, Value: not null })
             return null;
 
-        var corp = character.Value.CorporationId > 0
-            ? await esi.GetAsync<EsiCorporationPublic>(
-                $"/corporations/{character.Value.CorporationId}/", cancellationToken: cancellationToken)
-            : null;
-        var alliance = character.Value.AllianceId is > 0
-            ? await esi.GetAsync<EsiAlliancePublic>(
-                $"/alliances/{character.Value.AllianceId}/", cancellationToken: cancellationToken)
-            : null;
-
-        var corpValue = corp is { IsSuccess: true, Value: not null } ? corp.Value : null;
-        var allyValue = alliance is { IsSuccess: true, Value: not null } ? alliance.Value : null;
+        var corp = await _FetchCorporationAsync(character.Value.CorporationId, cancellationToken);
+        var alliance = await _FetchAllianceAsync(character.Value.AllianceId ?? 0, cancellationToken);
 
         return new EsiCharacterAffiliation(
             NullIfEmpty(character.Value.Name),
-            corpValue?.Name, NullIfEmpty(corpValue?.Ticker),
-            allyValue?.Name, NullIfEmpty(allyValue?.Ticker));
+            corp?.Name, NullIfEmpty(corp?.Ticker),
+            alliance?.Name, NullIfEmpty(alliance?.Ticker));
+    }
+
+    public async Task<string?> ResolveCorporationNameAsync(int corporationId, CancellationToken cancellationToken = default) =>
+        NullIfEmpty((await _FetchCorporationAsync(corporationId, cancellationToken))?.Name);
+
+    public async Task<string?> ResolveAllianceNameAsync(int allianceId, CancellationToken cancellationToken = default) =>
+        NullIfEmpty((await _FetchAllianceAsync(allianceId, cancellationToken))?.Name);
+
+    // Shared by ResolveAsync and the two name-only methods above, so resolving a killmail's corp/alliance id never
+    // doubles the ESI call ResolveAsync already makes for a character's own affiliation.
+    private async Task<EsiCorporationPublic?> _FetchCorporationAsync(int corporationId, CancellationToken cancellationToken)
+    {
+        if (corporationId <= 0)
+        {
+            return null;
+        }
+        var result = await esi.GetAsync<EsiCorporationPublic>($"/corporations/{corporationId}/", cancellationToken: cancellationToken);
+        return result is { IsSuccess: true, Value: not null } ? result.Value : null;
+    }
+
+    private async Task<EsiAlliancePublic?> _FetchAllianceAsync(int allianceId, CancellationToken cancellationToken)
+    {
+        if (allianceId <= 0)
+        {
+            return null;
+        }
+        var result = await esi.GetAsync<EsiAlliancePublic>($"/alliances/{allianceId}/", cancellationToken: cancellationToken);
+        return result is { IsSuccess: true, Value: not null } ? result.Value : null;
     }
 
     private static string? NullIfEmpty(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;

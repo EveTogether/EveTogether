@@ -563,6 +563,25 @@ namespace EveUtils.Migrations.Client.Sqlite.Migrations
                     b.ToTable("CharacterImplant");
                 });
 
+            modelBuilder.Entity("EveUtils.Shared.Modules.Killmails.Entities.KillmailEntityName", b =>
+                {
+                    b.Property<long>("Id")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Name")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("RefreshedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("KillmailEntityName");
+                });
+
             modelBuilder.Entity("EveUtils.Shared.Modules.Killmails.Entities.LocalKillmail", b =>
                 {
                     b.Property<int>("CharacterId")

@@ -21,6 +21,10 @@ taken from the matching `## vX.Y.Z` section below.
   abyssal run shows FAILED, any other run SHIP LOST. A new LINKED LOSS block on the detail screen shows the ship, fit,
   final blow and why it was linked, and lets you move the loss to another run or unlink it; your choice is never
   undone. The loss stays on your computer and is not sent along when you publish a run to a server.
+- **Changed: killmail character, corporation and alliance names are now resolved and cached locally.** No visible
+  change yet — groundwork for the upcoming kill/loss overview. A name is looked up from public ESI (or, for NPC
+  corporations and factions, your own local database) only once per month by default, and always shows the
+  corporation and alliance from the moment of the kill, never a character's corporation today.
 - **Changed: the local EVE database now also carries regions, NPC corporations and factions.** No visible change
   yet — this is groundwork for the upcoming kill/loss overview, so a killmail's system, region and NPC attacker
   resolve from your own machine instead of another lookup to CCP's servers. Because the database format changed,
