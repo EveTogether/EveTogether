@@ -1,12 +1,9 @@
 using EveUtils.Shared.Cqrs;
-using EveUtils.Shared.Messaging;
-using EveUtils.Shared.Messaging.Wire;
 using EveUtils.Shared.Modules.Fleet.Cleanup;
 using EveUtils.Shared.Modules.Fleet.Commands;
 using EveUtils.Shared.Modules.Fleet.Dtos;
 using EveUtils.Shared.Modules.Fleet.Entities;
 using EveUtils.Shared.Modules.Fleet.Enums;
-using EveUtils.Shared.Modules.Fleet.Events;
 using EveUtils.Shared.Modules.Fleet.Repositories;
 using Microsoft.Extensions.Logging;
 
@@ -35,7 +32,7 @@ namespace EveUtils.Server.Grpc;
 public sealed class FleetAutoStopRunner(
     IFleetRepository repository,
     IDispatcher dispatcher,
-    ConnectedClients connectedClients,
+    FleetChangeAnnouncer announcer,
     ILogger<FleetAutoStopRunner> logger)
 {
     public async Task<SweepResult> SweepAsync(
@@ -89,20 +86,19 @@ public sealed class FleetAutoStopRunner(
     /// The same live push <c>FleetsGrpcService</c> sends after a pressed STOP, so an open roster or fleet list
     /// re-reads instead of showing a fleet that is no longer running. The owner is addressed explicitly as well as
     /// the roster: they need not be a member of their own fleet, and on an empty roster they are the only audience
-    /// there is.
+    /// there is. A public fleet reaches every connected client, the way <see cref="FleetChangeAnnouncer"/> decides.
     /// </summary>
-    private async Task AnnounceAsync(
+    private Task AnnounceAsync(
         long fleetId,
         int ownerCharacterId,
         IReadOnlyList<FleetMember> members,
         FleetStopTrigger trigger,
-        CancellationToken cancellationToken)
-    {
-        var envelope = WireEnvelopeFactory.ToEnvelope(
-            new FleetChangedEvent(new FleetChangePayload(fleetId, FleetChangeKind.Stopped, trigger)));
-        var recipients = members.Select(m => m.CharacterId).Append(ownerCharacterId).Distinct();
-        await connectedClients.SendToCharactersAsync(recipients, envelope, cancellationToken);
-    }
+        CancellationToken cancellationToken) =>
+        announcer.AnnounceAsync(
+            new FleetChangePayload(fleetId, FleetChangeKind.Stopped, trigger),
+            members.Select(m => m.CharacterId).Append(ownerCharacterId),
+            listedBeforeChange: false,
+            cancellationToken);
 
     public readonly record struct SweepResult(int RosterEmpty, int AllOffline)
     {
