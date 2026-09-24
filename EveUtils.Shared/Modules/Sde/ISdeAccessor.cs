@@ -23,6 +23,10 @@ public interface ISdeAccessor
     /// <summary>Case-insensitive name -> typeId (the EFT-import hot path; backed by the lowercased nameKey index).</summary>
     bool TryGetTypeId(string name, out int typeId);
 
+    /// <summary>Every type carrying this name in any locale, ordered by type id. For callers that know which group
+    /// they expect and must not let <see cref="TryGetTypeId"/> pick another type with the same name.</summary>
+    IReadOnlyList<int> FindTypeIdsByName(string name);
+
     SdeType? GetType(int typeId);
 
     /// <summary>True when the type is a mutated (abyssal) module or drone: metaGroupId 15 in category Module (7)

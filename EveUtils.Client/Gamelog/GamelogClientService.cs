@@ -118,6 +118,11 @@ public sealed class GamelogClientService : IFleetMetricSource, ISingletonService
     /// </summary>
     public event Action<int, string, DateTime, DamageDirection>? CombatObserved;
 
+    /// <summary>The same shape as <see cref="CombatObserved"/> for remote rep, capacitor transfer and neut lines
+    /// (ET-348): the other end of the line, without its module. Some homefront objects only ever show up here — the
+    /// dreadnought you cap, the arrays you neut, the structure you rep.</summary>
+    public event Action<int, string, DateTime, DamageDirection>? CounterpartyObserved;
+
     /// <summary>Character name and the payout line, at the gamelog's own time — same rule as
     /// <see cref="CombatObserved"/>. The name is the key because that is what a gamelog line carries; a pilot with no
     /// ESI id still earns bounties.</summary>
@@ -654,6 +659,7 @@ public sealed class GamelogClientService : IFleetMetricSource, ISingletonService
         {
             Rate(_repInRate, name).Add(at, amount, counterparty);
         }
+        RaiseCounterparty(name, counterparty, at, outgoing);
         MetricsChanged?.Invoke();
     }
 
@@ -661,6 +667,15 @@ public sealed class GamelogClientService : IFleetMetricSource, ISingletonService
     {
         if (_idByName.TryGetValue(name, out var characterId))
             ContributionObserved?.Invoke(characterId, contribution, amount, occurredAt ?? DateTime.UtcNow);
+    }
+
+    private void RaiseCounterparty(string name, string? counterparty, DateTime at, bool outgoing)
+    {
+        if (string.IsNullOrWhiteSpace(counterparty) || !_idByName.TryGetValue(name, out var characterId))
+            return;
+
+        CounterpartyObserved?.Invoke(characterId, counterparty, at,
+            outgoing ? DamageDirection.Outgoing : DamageDirection.Incoming);
     }
 
     /// <summary>Record an energy-neutralizer hit (cap warfare); session-only. Feeds the directional cumulative
@@ -671,6 +686,8 @@ public sealed class GamelogClientService : IFleetMetricSource, ISingletonService
         var at = occurredAt ?? DateTime.UtcNow;   // log-line time, not read time (smooth, not spiky)
         Metrics(name).RecordNeut(outgoing, amount);
         Rate(outgoing ? _neutOutRate : _neutInRate, name).Add(at, amount, source);
+        if (source is not null)
+            RaiseCounterparty(name, LogLineParser.CounterpartyOf(source), at, outgoing);
         MetricsChanged?.Invoke();
     }
 
@@ -679,9 +696,12 @@ public sealed class GamelogClientService : IFleetMetricSource, ISingletonService
     public void AddCapTransfer(string characterName, bool outgoing, int amount, DateTime? occurredAt = null, string? source = null)
     {
         var name = Resolve(characterName);
-        Rate(outgoing ? _capOutRate : _capInRate, name).Add(occurredAt ?? DateTime.UtcNow, amount, source);   // log-line time, not read time
+        var at = occurredAt ?? DateTime.UtcNow;   // log-line time, not read time
+        Rate(outgoing ? _capOutRate : _capInRate, name).Add(at, amount, source);
         if (outgoing)
             RaiseContribution(name, SiteContribution.RemoteCapacitor, amount, occurredAt);
+        if (source is not null)
+            RaiseCounterparty(name, LogLineParser.CounterpartyOf(source), at, outgoing);
         MetricsChanged?.Invoke();
     }
 

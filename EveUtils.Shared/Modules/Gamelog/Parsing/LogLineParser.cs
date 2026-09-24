@@ -51,6 +51,15 @@ public static partial class LogLineParser
 
     public static string StripTags(string text) => HtmlTag().Replace(text, string.Empty).Trim();
 
+    /// <summary>The other end of a rep, cap or neut line, from its "&lt;counterparty&gt; - &lt;module&gt;" rest. The
+    /// counterparty (ship, tickers, fit title) can itself contain " - ", so this anchors on the module at the end
+    /// instead of splitting at the first separator (ET-321).</summary>
+    public static string CounterpartyOf(string rest)
+    {
+        int moduleSeparator = rest.LastIndexOf(ModuleSeparator, StringComparison.Ordinal);
+        return moduleSeparator < 0 ? rest : rest[..moduleSeparator];
+    }
+
     public static GameLogEvent? Parse(string line) => Parse(line, GamelogLanguage.English);
 
     /// <summary>Parses one line of a gamelog written in <paramref name="language"/>; a language without templates
@@ -125,13 +134,8 @@ public static partial class LogLineParser
 
         if (_FirstMatch(grammar.Repairs, body) is { } repair && _ParseAmount(repair.Match.Groups["amount"].Value) is { } repAmount)
         {
-            // "rest" is "<counterparty> - <module>"; the counterparty (ship, tickers, fit title) can itself contain
-            // " - ", so anchor on the module at the end instead of splitting at the first separator (ET-321).
-            string rest = repair.Match.Groups["rest"].Value.Trim();
-            int moduleSeparator = rest.LastIndexOf(ModuleSeparator, StringComparison.Ordinal);
-            string counterparty = moduleSeparator < 0 ? rest : rest[..moduleSeparator];
             return new RemoteRepEvent(timestamp, repair.Pattern.Direction == LineDirection.Outgoing, repAmount,
-                repair.Pattern.Kind ?? string.Empty, counterparty);
+                repair.Pattern.Kind ?? string.Empty, CounterpartyOf(repair.Match.Groups["rest"].Value.Trim()));
         }
 
         if (_FirstMatch(grammar.CapTransfers, body) is { } cap && _ParseAmount(cap.Match.Groups["amount"].Value) is { } capAmount)

@@ -212,6 +212,9 @@
                              is on location. Abyssal starts on jump-in (ET-246) and has no toggle here. -->
                         <CheckBox x:Name="AutoStartMissionsBox" Content="Start automatically when copied — missions" Margin="0,6,0,0"/>
                         <CheckBox x:Name="AutoStartSitesBox" Content="Start automatically when copied — combat sites"/>
+                        <!-- ET-348: reads the game log, not the clipboard, but it is the other way a site run starts
+                             without the pilot opening a window, so it sits beside the two above. -->
+                        <CheckBox x:Name="OfferHomefrontRunsBox" Content="Offer homefront runs from enemies seen"/>
                     </StackPanel>
                 </StackPanel>
 
