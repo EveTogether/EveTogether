@@ -18,14 +18,30 @@ public partial class UpdateAvailableWindow : ChromedWindow
 
     public UpdateAvailableWindow(string installedVersion, AppRelease release) : this()
     {
-        this.FindControl<TextBlock>("InstalledBlock")!.Text = installedVersion;
-        this.FindControl<TextBlock>("AvailableBlock")!.Text = release.DisplayVersion;
-        this.FindControl<SelectableTextBlock>("NotesBlock")!.Text =
-            string.IsNullOrWhiteSpace(release.Notes) ? "This release ships without notes." : release.Notes.Trim();
+        if (this.FindControl<TextBlock>("InstalledBlock") is { } installedBlock)
+        {
+            installedBlock.Text = installedVersion;
+        }
+        if (this.FindControl<TextBlock>("AvailableBlock") is { } availableBlock)
+        {
+            availableBlock.Text = release.DisplayVersion;
+        }
+        if (this.FindControl<SelectableTextBlock>("NotesBlock") is { } notesBlock)
+        {
+            notesBlock.Text = string.IsNullOrWhiteSpace(release.Notes)
+                ? "This release ships without notes."
+                : release.Notes.Trim();
+        }
 
         // A feed that reports no size would otherwise show "0 MB", which reads as a fact rather than a gap.
-        this.FindControl<StackPanel>("DownloadSizePanel")!.IsVisible = release.SizeBytes > 0;
-        this.FindControl<TextBlock>("SizeBlock")!.Text = UpdateDownloadSize.Format(release.SizeBytes);
+        if (this.FindControl<StackPanel>("DownloadSizePanel") is { } downloadSizePanel)
+        {
+            downloadSizePanel.IsVisible = release.SizeBytes > 0;
+        }
+        if (this.FindControl<TextBlock>("SizeBlock") is { } sizeBlock)
+        {
+            sizeBlock.Text = UpdateDownloadSize.Format(release.SizeBytes);
+        }
     }
 
     private void OnLater(object? sender, RoutedEventArgs e) => Close(false);

@@ -64,7 +64,9 @@ public static class AppInfo
     {
         int plus = informational.IndexOf('+');
         if (plus >= 0 && informational[(plus + 1)..].StartsWith("nightly-", StringComparison.Ordinal))
+        {
             return informational[(plus + 1)..];
+        }
 
         return $"v{(plus >= 0 ? informational[..plus] : informational)}";
     }
