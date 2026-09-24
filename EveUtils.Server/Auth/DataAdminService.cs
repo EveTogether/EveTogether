@@ -4,10 +4,12 @@ using EveUtils.Server.Runs;
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Data;
 using EveUtils.Shared.DependencyInjection;
+using EveUtils.Shared.Modules.Fittings.Commands;
 using EveUtils.Shared.Modules.Fittings.Entities;
 using EveUtils.Shared.Modules.Fittings.Repositories;
 using EveUtils.Shared.Modules.Fleet.Commands;
 using EveUtils.Shared.Modules.Fleet.Composition;
+using EveUtils.Shared.Modules.Fleet.Composition.Commands;
 using EveUtils.Shared.Modules.Fleet.Composition.Repositories;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.AdminAuth.Permissions;
@@ -21,27 +23,29 @@ using Microsoft.EntityFrameworkCore;
 namespace EveUtils.Server.Auth;
 
 /// <summary>
-/// Server data overview + delete for the panel. Reuses the existing delete seams where there is one
-/// (SharedFit / ServerSession / FleetComposition), soft-deletes fleets via the lifecycle command (with a raw
-/// "purge now" option), and falls back to raw removal for entities without a seam. Token-holding entities are
-/// only ever shown as metadata (Iron Law #8) — the UI never surfaces token values.
+/// Server data overview + delete for the panel. Shared fits, fleets and compositions are deleted through their module's
+/// commands, so the change signal reaches the connected clients like any other delete (ET-383): a fleet is disbanded
+/// (soft) or purged (hard), a composition is deleted as its owner. Sessions and paired characters have no signal (no
+/// client lists them) and go through the ServerAuth store. Token-holding entities are only ever shown as metadata
+/// (Iron Law #8) — the UI never surfaces token values.
 /// Every delete takes the acting admin and refuses without <see cref="PanelPermissions.DataDelete"/> itself: a
 /// disabled or hidden button only decides what the page offers, not what a crafted circuit event can reach.
 /// </summary>
 public sealed class DataAdminService(
     IDbContextFactory<ServerDbContext> contextFactory,
-    ISharedFitRepository sharedFits,
+    ISharedFitReader sharedFits,
     IServerAuthRepository serverAuth,
-    IFleetCompositionRepository compositions,
+    IFleetCompositionReader compositions,
     IDispatcher dispatcher,
     SyncedCharacterReleaser releaser) : IScopedService
 {
-    // ── Shared fittings (seam: ISharedFitRepository) ──────────────────────────────────────────────
+    // ── Shared fittings ───────────────────────────────────────────────────────────────────────────
+    /// <summary>Deleted as no character: the panel's own Data · Delete is the gate, not <c>fit.manage</c>.</summary>
     public async Task<Result> DeleteSharedFitAsync(ClaimsPrincipal actor, int id, CancellationToken ct = default)
     {
         if (!_MayDelete(actor))
             return _Denied();
-        return await sharedFits.RemoveAsync(id, ct) ? Result.Success() : _NotFound("shared fit");
+        return await dispatcher.Send(new DeleteSharedFitCommand(id, ActingCharacterId: null), ct);
     }
 
     // ── Fleets (soft-disband via command default; raw purge optional) ─────────────────────────────
@@ -160,30 +164,26 @@ public sealed class DataAdminService(
         return await dispatcher.Send(new DisbandFleetCommand(id, fleet.CreatorCharacterId), ct);
     }
 
-    /// <summary>Hard purge — raw removal; child FKs (wings/squads/members/invites) cascade.</summary>
+    /// <summary>Hard purge; child FKs (wings/squads/members/invites) cascade.</summary>
     public async Task<Result> PurgeFleetAsync(ClaimsPrincipal actor, long id, CancellationToken ct = default)
     {
         if (!_MayDelete(actor))
             return _Denied();
-        await using var db = await contextFactory.CreateDbContextAsync(ct);
-        var fleet = await db.Set<Fleet>().FirstOrDefaultAsync(f => f.Id == id, ct);
-        if (fleet is null)
-            return _NotFound("fleet");
-        db.Remove(fleet);
-        await db.SaveChangesAsync(ct);
-        return Result.Success();
+        return await dispatcher.Send(new DeleteFleetCommand(id), ct);
     }
 
-    // ── Fleet compositions (shared doctrines; seam: IFleetCompositionRepository) ───────────────────
-    /// <summary>Hard-deletes a shared composition via the repository seam; its roles and fit-entries cascade (FK).
-    /// The panel's own DataDelete RBAC is the gate here (like the shared-fit delete), so this bypasses the
-    /// per-character owner-or-manage check the client mutations use.</summary>
+    // ── Fleet compositions (shared doctrines) ──────────────────────────────────────────────────────
+    /// <summary>Hard-deletes a shared composition; its roles and fit-entries cascade (FK). The panel's own Data · Delete
+    /// is the gate here (like the shared-fit delete), so the command is dispatched as the composition's owner, the same
+    /// way <see cref="DisbandFleetAsync"/> acts as the fleet's creator.</summary>
     public async Task<Result> DeleteFleetCompositionAsync(ClaimsPrincipal actor, long id, CancellationToken ct = default)
     {
         if (!_MayDelete(actor))
             return _Denied();
-        await compositions.DeleteAsync(id, ct);
-        return Result.Success();
+        var composition = await compositions.GetAsync(id, ct);
+        if (composition is null)
+            return _NotFound("composition");
+        return await dispatcher.Send(new DeleteFleetCompositionCommand(id, composition.OwnerCharacterId), ct);
     }
 
     // ── Paired characters (metadata only; raw delete — no seam, orphan-aware) ──────────────────────

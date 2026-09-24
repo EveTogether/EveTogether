@@ -15,7 +15,7 @@ namespace EveUtils.Shared.Modules.Killmails.Queries;
 
 [ClientOnly]
 internal sealed class GetKillmailsOverviewQueryHandler(
-    IDbContextFactory<ClientDbContext> contextFactory, IMarketPriceRepository marketPrices, IFittingRepository fittings)
+    IDbContextFactory<ClientDbContext> contextFactory, IMarketPriceRepository marketPrices, IFittingReader fittings)
     : IQueryHandler<GetKillmailsOverviewQuery, Result<IReadOnlyList<KillmailOverviewRowDto>>>
 {
     public async Task<Result<IReadOnlyList<KillmailOverviewRowDto>>> Handle(

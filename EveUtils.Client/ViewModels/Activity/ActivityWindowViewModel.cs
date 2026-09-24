@@ -2152,7 +2152,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         if (_services.GetService<IShipFitDetectionService>()?.GetReading(characterId).SelectedFit is not { } selected)
             return (null, null);
 
-        string? contentHash = _services.GetService<IFittingRepository>() is { } fittings
+        string? contentHash = _services.GetService<IFittingReader>() is { } fittings
             ? (await fittings.FindByIdAsync(selected.Id))?.ContentHash
             : null;
         return (contentHash, selected.Name);
@@ -2459,7 +2459,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             return (null, 0);
 
         using IServiceScope scope = _services.CreateScope();
-        IFleetRepository repository = scope.ServiceProvider.GetRequiredService<IFleetRepository>();
+        IFleetReader repository = scope.ServiceProvider.GetRequiredService<IFleetReader>();
         IReadOnlyList<FleetEntity> fleets = await repository.ListForParticipantAsync(characterId);
         List<FleetEntity> forming = [];
         foreach (FleetEntity fleet in fleets.Where(fleet => fleet.Activation == FleetActivation.Forming))

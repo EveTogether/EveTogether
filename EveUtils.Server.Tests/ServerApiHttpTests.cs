@@ -131,9 +131,9 @@ public class ServerApiHttpTests : IAsyncLifetime
         WebApplicationBuilder builder = WebApplication.CreateBuilder();
         builder.Logging.ClearProviders();
 
-        builder.Services.AddSingleton<IFleetRepository>(new FleetRepository(_factory));
-        builder.Services.AddSingleton<IFleetCompositionRepository>(new FleetCompositionRepository(_factory));
-        builder.Services.AddSingleton<ISharedFitRepository>(fits);
+        builder.Services.AddSingleton<IFleetReader>(new FleetRepository(_factory));
+        builder.Services.AddSingleton<IFleetCompositionReader>(new FleetCompositionRepository(_factory));
+        builder.Services.AddSingleton<ISharedFitReader>(fits);
         builder.Services.AddSingleton<IServerAuthRepository>(serverAuth);
         builder.Services.AddSingleton<ICharacterMetricStateRepository>(metrics);
         builder.Services.AddSingleton<IApiKeyRepository>(keys);

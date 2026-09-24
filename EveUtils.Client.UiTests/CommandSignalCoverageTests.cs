@@ -7,6 +7,7 @@ using EveUtils.Shared.Modules.Fittings.Commands;
 using EveUtils.Shared.Modules.Fittings.Dtos;
 using EveUtils.Shared.Modules.Fittings.Enums;
 using EveUtils.Shared.Modules.Fittings.Events;
+using EveUtils.Shared.Modules.Fittings.Queries;
 using EveUtils.Shared.Modules.Fleet.Commands;
 using EveUtils.Shared.Modules.Fleet.Composition;
 using EveUtils.Shared.Modules.Fleet.Composition.Commands;
@@ -16,6 +17,9 @@ using EveUtils.Shared.Modules.Fleet.Events;
 using EveUtils.Shared.Modules.Fleet.Queries;
 using EveUtils.Shared.Modules.Gamelog.Commands;
 using EveUtils.Shared.Modules.Killmails.Commands;
+using EveUtils.Shared.Modules.Killmails.Entities;
+using EveUtils.Shared.Modules.Killmails.Enums;
+using EveUtils.Shared.Modules.Killmails.Events;
 using EveUtils.Shared.Modules.Messaging.Commands;
 using EveUtils.Shared.Modules.Runs.Commands;
 using EveUtils.Shared.Modules.Runs.Events;
@@ -54,6 +58,7 @@ public sealed class CommandSignalCoverageTests
         ["Fleet"] = typeof(FleetChangedEvent),
         ["Fleet.Composition"] = typeof(CompositionChangedEvent),
         ["Fittings"] = typeof(FittingsChangedEvent),
+        ["Killmails"] = typeof(KillmailsChangedEvent),
         ["Ships"] = typeof(ShipAddedEvent)
     };
 
@@ -140,7 +145,14 @@ public sealed class CommandSignalCoverageTests
         [typeof(LinkKillmailsToRunsCommand)] = "needs a stored loss and a run to link it to, which the shared harness "
             + "seeds through the importer's repository; proven in KillmailRunLinkTests",
         [typeof(SetKillmailRunLinkCommand)] = "needs a stored loss to link, which the shared harness seeds through the "
-            + "importer's repository; proven in KillmailRunLinkTests and, through the open screen, KillmailsOverviewTests"
+            + "importer's repository; proven in KillmailRunLinkTests and, through the open screen, KillmailsOverviewTests",
+        // ET-383: the shared fit library exists on a server only; the client harness has no table for it. Both raise
+        // FittingsChangedEvent, which SharedFitChangeRelay turns into the push every client listens for; proven over the
+        // relay in SharedFitLibraryBroadcastTests and, from the control panel, in AdminDeleteBroadcastTests.
+        [typeof(StoreSharedFitCommand)] = "writes the server's shared fit library, which the client harness has no store "
+            + "for; proven through the server relay in SharedFitLibraryBroadcastTests",
+        [typeof(DeleteSharedFitCommand)] = "writes the server's shared fit library, which the client harness has no store "
+            + "for; proven through the server relay in SharedFitLibraryBroadcastTests and AdminDeleteBroadcastTests"
     };
 
     /// <summary>Commands measured by ET-379 to publish no signal, each against the ticket that closes it. This list
@@ -155,6 +167,48 @@ public sealed class CommandSignalCoverageTests
     /// name.</summary>
     private static readonly IReadOnlyDictionary<Type, Arrange> Scenarios = new Dictionary<Type, Arrange>
     {
+        [typeof(ArchiveFleetCommand)] = async (dispatcher, cancellationToken) =>
+        {
+            long fleetId = await _CreateAsync(dispatcher, cancellationToken);
+            return new Act(() => dispatcher.Send(new ArchiveFleetCommand(fleetId, DateTimeOffset.UtcNow), cancellationToken),
+                _Names(fleetId));
+        },
+
+        [typeof(DeleteFleetCommand)] = async (dispatcher, cancellationToken) =>
+        {
+            long fleetId = await _CreateAsync(dispatcher, cancellationToken);
+            return new Act(() => dispatcher.Send(new DeleteFleetCommand(fleetId), cancellationToken), _Names(fleetId));
+        },
+
+        [typeof(AddLocalCharacterCommand)] = async (dispatcher, cancellationToken) =>
+        {
+            long fleetId = await _CreateAsync(dispatcher, cancellationToken);
+            return new Act(async () => await dispatcher.Send(new AddLocalCharacterCommand(fleetId, Other, Owner), cancellationToken),
+                _Names(fleetId));
+        },
+
+        [typeof(DownloadSharedFitCommand)] = (dispatcher, cancellationToken) => Task.FromResult(new Act(
+            async () => await dispatcher.Send(new DownloadSharedFitCommand(_SharedFit()), cancellationToken),
+            _NamesFittings(FittingsChangeKind.Imported, fitId: null))),
+
+        [typeof(DeleteLocalFittingCommand)] = async (dispatcher, cancellationToken) =>
+        {
+            int fitId = await _LocalFitAsync(dispatcher, cancellationToken);
+            return new Act(() => dispatcher.Send(new DeleteLocalFittingCommand(fitId), cancellationToken),
+                _NamesFittings(FittingsChangeKind.Removed, fitId));
+        },
+
+        [typeof(EditFittingMetadataCommand)] = async (dispatcher, cancellationToken) =>
+        {
+            int fitId = await _LocalFitAsync(dispatcher, cancellationToken);
+            return new Act(() => dispatcher.Send(new EditFittingMetadataCommand(fitId, "Renamed", "Notes", "pve"), cancellationToken),
+                _NamesFittings(FittingsChangeKind.Edited, fitId));
+        },
+
+        [typeof(StoreKillmailsCommand)] = (dispatcher, cancellationToken) => Task.FromResult(new Act(
+            () => dispatcher.Send(new StoreKillmailsCommand(Owner, [_Killmail()]), cancellationToken),
+            published => published is KillmailsChangedEvent { Data: { CharacterId: Owner, Kind: KillmailsChangeKind.Imported } })),
+
         [typeof(CreateFleetCommand)] = (dispatcher, cancellationToken) =>
         {
             long? fleetId = null;
@@ -572,6 +626,31 @@ public sealed class CommandSignalCoverageTests
 
     private static Predicate<IIntegrationEvent> _Names(long fleetId) =>
         published => published is FleetChangedEvent changed && changed.FleetId == fleetId;
+
+    private static Predicate<IIntegrationEvent> _NamesFittings(FittingsChangeKind kind, int? fitId) =>
+        published => published is FittingsChangedEvent changed && changed.Data.Kind == kind
+                                                              && (fitId is null || changed.Data.FitId == fitId);
+
+    private static FitSharedPayload _SharedFit() =>
+        new(7, "Signal Guardian", 11987, """{"ship_type_id":11987,"items":[]}""", "Signal FC");
+
+    private static async Task<int> _LocalFitAsync(IDispatcher dispatcher, CancellationToken cancellationToken)
+    {
+        await dispatcher.Send(new DownloadSharedFitCommand(_SharedFit()), cancellationToken);
+        return (await dispatcher.Query(new GetFittingsQuery(), cancellationToken)).Single().Id;
+    }
+
+    private static LocalKillmail _Killmail() => new()
+    {
+        CharacterId = Owner,
+        KillmailId = 1,
+        Hash = "signal",
+        KillmailTimeUtc = DateTime.UtcNow,
+        SolarSystemId = 30000142,
+        VictimShipTypeId = 11987,
+        LinkSource = KillmailLinkSource.None,
+        ImportedAtUtc = DateTime.UtcNow
+    };
 
     private static Predicate<IIntegrationEvent> _NamesComposition(long compositionId) =>
         published => published is CompositionChangedEvent changed && changed.Data.CompositionId == compositionId;

@@ -69,7 +69,7 @@ public sealed class FitExportActions(IServiceProvider services) : IFitExportActi
         }
 
         // Need the raw ESI JSON to share — look the fit up by id (owner-independent).
-        var repo = services.GetRequiredService<IFittingRepository>();
+        var repo = services.GetRequiredService<IFittingReader>();
         var local = await repo.FindByIdAsync(request.FitId);
         if (local is null) { Report("Fit not found locally."); return; }
 
@@ -180,7 +180,7 @@ public sealed class FitExportActions(IServiceProvider services) : IFitExportActi
     /// <summary>Loads + deserializes the stored fit; reports a status and returns null on a missing/unreadable fit.</summary>
     private async Task<EsiFitting?> LoadFitModelAsync(FitExportRequest request)
     {
-        var local = await services.GetRequiredService<IFittingRepository>().FindByIdAsync(request.FitId);
+        var local = await services.GetRequiredService<IFittingReader>().FindByIdAsync(request.FitId);
         if (local is null) { request.ReportStatus("Fit not found."); return null; }
 
         EsiFitting? esiFit;

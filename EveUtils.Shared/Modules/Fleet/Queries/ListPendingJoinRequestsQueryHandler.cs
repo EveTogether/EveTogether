@@ -4,7 +4,7 @@ using EveUtils.Shared.Modules.Fleet.Repositories;
 
 namespace EveUtils.Shared.Modules.Fleet.Queries;
 
-internal sealed class ListPendingJoinRequestsQueryHandler(IFleetRepository repository)
+internal sealed class ListPendingJoinRequestsQueryHandler(IFleetReader repository)
     : IQueryHandler<ListPendingJoinRequestsQuery, IReadOnlyList<FleetJoinRequest>>
 {
     public Task<IReadOnlyList<FleetJoinRequest>> Handle(ListPendingJoinRequestsQuery query, CancellationToken cancellationToken = default)

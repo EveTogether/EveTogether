@@ -4,7 +4,7 @@ using EveUtils.Shared.Modules.Fleet.Repositories;
 
 namespace EveUtils.Shared.Modules.Fleet.Queries;
 
-internal sealed class ListMembersActiveElsewhereQueryHandler(IFleetRepository repository)
+internal sealed class ListMembersActiveElsewhereQueryHandler(IFleetReader repository)
     : IQueryHandler<ListMembersActiveElsewhereQuery, IReadOnlyList<FleetMemberElsewhereInfo>>
 {
     public async Task<IReadOnlyList<FleetMemberElsewhereInfo>> Handle(

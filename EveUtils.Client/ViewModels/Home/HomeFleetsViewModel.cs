@@ -325,9 +325,9 @@ internal static class HomeFleetsReader
             services.GetService<IExternalCharacterLookup>());
         IFleetTransportClient transport = services.GetRequiredService<IFleetTransportClient>();
         ClientFleetService localFleets = services.GetRequiredService<ClientFleetService>();
-        IFleetRepository repository = services.GetRequiredService<IFleetRepository>();
+        IFleetReader repository = services.GetRequiredService<IFleetReader>();
         ICharacterRegistry registry = services.GetRequiredService<ICharacterRegistry>();
-        IFleetCompositionRepository compositions = services.GetRequiredService<IFleetCompositionRepository>();
+        IFleetCompositionReader compositions = services.GetRequiredService<IFleetCompositionReader>();
 
         List<HomeFleetFacts> fleets = [];
         HashSet<string> unreachable = [];

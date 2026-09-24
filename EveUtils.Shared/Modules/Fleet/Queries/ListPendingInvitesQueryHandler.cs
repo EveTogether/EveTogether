@@ -4,7 +4,7 @@ using EveUtils.Shared.Modules.Fleet.Repositories;
 
 namespace EveUtils.Shared.Modules.Fleet.Queries;
 
-internal sealed class ListPendingInvitesQueryHandler(IFleetRepository repository)
+internal sealed class ListPendingInvitesQueryHandler(IFleetReader repository)
     : IQueryHandler<ListPendingInvitesQuery, IReadOnlyList<FleetInvite>>
 {
     public Task<IReadOnlyList<FleetInvite>> Handle(ListPendingInvitesQuery query, CancellationToken cancellationToken = default)

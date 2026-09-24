@@ -122,8 +122,8 @@ public sealed class KillmailsOverviewTests
     }
 
     /// <summary>ET-363 AC3. Red if a killmail the background refresh finds while KILLMAILS is open sits invisible
-    /// until the pilot reopens it: <see cref="EsiKillmailImporter.KillmailsImported"/> is the same seam AC1's
-    /// RegistryChanged fix already listens on — reused rather than a second refresh path.</summary>
+    /// until the pilot reopens it. The import stores through <see cref="StoreKillmailsCommand"/>, whose signal reaches the
+    /// screen on the same feed a run link does (ET-383).</summary>
     [AvaloniaFact]
     public async Task NewKillmailFoundInTheBackground_AppearsWithoutReopening()
     {

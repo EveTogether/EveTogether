@@ -9,12 +9,12 @@ namespace EveUtils.Client.Fleet;
 
 /// <summary>
 /// <see cref="IFleetCompositionClient"/> for a client-only composition library: reads straight from the local
-/// <see cref="IFleetCompositionRepository"/> and routes mutations through <see cref="ClientFleetService"/> (the SAME
+/// <see cref="IFleetCompositionReader"/> and routes mutations through <see cref="ClientFleetService"/> (the SAME
 /// Shared CQRS composition handlers), with no server or gRPC. A sibling of <see cref="LocalFleetClient"/>. New
 /// compositions are client-only (<c>isClientOnly = true</c>) and owner-only by construction.
 /// </summary>
 public sealed class LocalFleetCompositionClient(
-    ClientFleetService local, IFleetCompositionRepository repository, int ownerCharacterId) : IFleetCompositionClient
+    ClientFleetService local, IFleetCompositionReader repository, int ownerCharacterId) : IFleetCompositionClient
 {
     public bool SharesFitsToServer => false;
 

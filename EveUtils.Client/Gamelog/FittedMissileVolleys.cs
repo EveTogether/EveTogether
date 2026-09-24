@@ -61,7 +61,7 @@ public sealed class FittedMissileVolleys(IServiceProvider services) : ISingleton
         try
         {
             var data = services.GetRequiredService<IDogmaDataAccessor>();
-            var fitting = await services.GetRequiredService<IFittingRepository>().FindByIdAsync(key.FittingId);
+            var fitting = await services.GetRequiredService<IFittingReader>().FindByIdAsync(key.FittingId);
             if (fitting is null || JsonSerializer.Deserialize<EsiFitting>(fitting.RawJson) is not { } esi)
                 return null;
             var levels = await services.GetRequiredService<ICharacterSkillRepository>().GetLevelsAsync(key.CharacterId);

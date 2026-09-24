@@ -102,7 +102,7 @@ public sealed partial class LocalApiQueries(IServiceProvider rootServices)
     {
         var names = FitNameResolverFactory.For(rootServices);
         await using var scope = rootServices.CreateAsyncScope();
-        var fits = await scope.ServiceProvider.GetRequiredService<IFittingRepository>().ListAllAsync(cancellationToken);
+        var fits = await scope.ServiceProvider.GetRequiredService<IFittingReader>().ListAllAsync(cancellationToken);
 
         return fits.Select(f => new FitSummaryDto(
             f.Id, f.Name, f.ShipTypeId, names.TypeName(f.ShipTypeId), names.GroupName(f.ShipTypeId),
@@ -151,7 +151,7 @@ public sealed partial class LocalApiQueries(IServiceProvider rootServices)
         {
             LocalFitting? fit;
             await using (var scope = rootServices.CreateAsyncScope())
-                fit = await scope.ServiceProvider.GetRequiredService<IFittingRepository>().FindByIdAsync(id, cancellationToken);
+                fit = await scope.ServiceProvider.GetRequiredService<IFittingReader>().FindByIdAsync(id, cancellationToken);
             if (fit is null) return null;
             return await _BuildFitDetailAsync(_TryParse(fit.RawJson), fit.Id, fit.Name, fit.Description ?? string.Empty,
                 fit.ShipTypeId, "local", null, null, includeStats, names, cancellationToken);

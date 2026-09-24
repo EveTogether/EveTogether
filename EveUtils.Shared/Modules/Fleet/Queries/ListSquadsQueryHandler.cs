@@ -4,7 +4,7 @@ using EveUtils.Shared.Modules.Fleet.Repositories;
 
 namespace EveUtils.Shared.Modules.Fleet.Queries;
 
-internal sealed class ListSquadsQueryHandler(IFleetRepository repository)
+internal sealed class ListSquadsQueryHandler(IFleetReader repository)
     : IQueryHandler<ListSquadsQuery, IReadOnlyList<FleetSquad>>
 {
     public Task<IReadOnlyList<FleetSquad>> Handle(ListSquadsQuery query, CancellationToken cancellationToken = default)

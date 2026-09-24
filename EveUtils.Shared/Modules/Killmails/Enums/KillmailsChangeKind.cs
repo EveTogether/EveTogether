@@ -4,5 +4,8 @@ namespace EveUtils.Shared.Modules.Killmails.Enums;
 /// be added freely.</summary>
 public enum KillmailsChangeKind
 {
-    RunLinkChanged
+    RunLinkChanged,
+
+    /// <summary>New killmails were stored for the character (ET-383).</summary>
+    Imported
 }

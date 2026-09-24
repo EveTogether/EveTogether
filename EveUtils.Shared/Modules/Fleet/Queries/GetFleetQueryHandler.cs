@@ -4,7 +4,7 @@ using FleetEntity = EveUtils.Shared.Modules.Fleet.Entities.Fleet;
 
 namespace EveUtils.Shared.Modules.Fleet.Queries;
 
-internal sealed class GetFleetQueryHandler(IFleetRepository repository)
+internal sealed class GetFleetQueryHandler(IFleetReader repository)
     : IQueryHandler<GetFleetQuery, FleetEntity?>
 {
     public Task<FleetEntity?> Handle(GetFleetQuery query, CancellationToken cancellationToken = default)

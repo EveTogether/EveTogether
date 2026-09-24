@@ -4,7 +4,7 @@ using EveUtils.Shared.Modules.Fittings.Repositories;
 
 namespace EveUtils.Shared.Modules.Fittings.Queries;
 
-internal sealed class GetSharedFittingsQueryHandler(ISharedFitRepository repository)
+internal sealed class GetSharedFittingsQueryHandler(ISharedFitReader repository)
     : IQueryHandler<GetSharedFittingsQuery, IReadOnlyList<SharedFit>>
 {
     public Task<IReadOnlyList<SharedFit>> Handle(GetSharedFittingsQuery query, CancellationToken cancellationToken = default) =>

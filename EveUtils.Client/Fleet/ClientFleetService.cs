@@ -26,11 +26,11 @@ namespace EveUtils.Client.Fleet;
 ///
 /// Anti-splintering: there is no separate fleet model. This service is a thin orchestration over the SAME Shared
 /// CQRS handlers (<see cref="CreateFleetCommand"/>/<see cref="CreateWingCommand"/>/<see cref="CreateSquadCommand"/>/
-/// <see cref="MoveMemberCommand"/>/<see cref="AddExternalMemberCommand"/>) — dispatched through the client's local
-/// <see cref="IDispatcher"/> — over the SAME <see cref="IFleetRepository"/>, which the client DI binds to the
-/// client DbContext. The only client-specific touches are (1) stamping the <see cref="Fleet.IsClientOnly"/>
-/// marker via the repository after creation and (2) adding the owner's own local characters as ordinary (non-
-/// external) members on trust (there is no remote session to join from). No gRPC, no messaging, no publish.
+/// <see cref="MoveMemberCommand"/>/<see cref="AddExternalMemberCommand"/>/<see cref="AddLocalCharacterCommand"/>) —
+/// dispatched through the client's local <see cref="IDispatcher"/> — over the SAME fleet repository, which the client
+/// DI binds to the client DbContext. The only client-specific touches are the <see cref="Fleet.IsClientOnly"/> marker
+/// on creation and adding the owner's own local characters as ordinary (non-external) members on trust (there is no
+/// remote session to join from). No gRPC, no messaging; the commands' own signal is the only publish.
 ///
 /// The dispatcher + repository are scoped, so each operation runs inside its own service scope (this service is
 /// a host singleton, like the rest of the client's fleet services).
@@ -40,42 +40,24 @@ public sealed class ClientFleetService(IServiceScopeFactory scopeFactory) : ISin
     /// <summary>
     /// Creates a client-only fleet owned by <c>ownerCharacterId</c> (a local toon). Reuses the
     /// Shared <see cref="CreateFleetCommand"/> — which already seeds the default Wing 1 + Squad 1 and adds the
-    /// owner as Fleet Commander — then flips the local <see cref="Fleet.IsClientOnly"/> marker. Visibility is
+    /// owner as Fleet Commander — marked <see cref="Fleet.IsClientOnly"/>. Visibility is
     /// forced <see cref="FleetVisibility.InviteOnly"/> since a client-only fleet is never discoverable.
     /// </summary>
     /// <summary>Counts how many local fleets are coupled to each of the given compositions, for the
-    /// library's "N fleets" pill. Resolves the same local <see cref="IFleetRepository"/> the mutations use.</summary>
+    /// library's "N fleets" pill, from the same local store the mutations write.</summary>
     public async Task<IReadOnlyDictionary<long, int>> CountFleetsByCompositionIdsAsync(
         IReadOnlyCollection<long> compositionIds, CancellationToken cancellationToken = default)
     {
         using var scope = scopeFactory.CreateScope();
-        var repository = scope.ServiceProvider.GetRequiredService<IFleetRepository>();
-        return await repository.CountFleetsByCompositionIdsAsync(compositionIds, cancellationToken);
+        return await scope.ServiceProvider.GetRequiredService<IFleetReader>()
+            .CountFleetsByCompositionIdsAsync(compositionIds, cancellationToken);
     }
 
-    public async Task<Result<long>> CreateLocalFleetAsync(
+    public Task<Result<long>> CreateLocalFleetAsync(
         string name, string? description, int ownerCharacterId, CancellationToken cancellationToken = default)
-    {
-        using var scope = scopeFactory.CreateScope();
-        var dispatcher = scope.ServiceProvider.GetRequiredService<IDispatcher>();
-        var repository = scope.ServiceProvider.GetRequiredService<IFleetRepository>();
-
-        var created = await dispatcher.Send(new CreateFleetCommand(
+        => DispatchAsync(d => d.Send(new CreateFleetCommand(
             name, description, FleetVisibility.InviteOnly, FromTime: null, ToTime: null,
-            FleetOfflineBehavior.StayOffline, ownerCharacterId), cancellationToken);
-        if (!created.IsSuccess)
-            return created;
-
-        var fleetId = created.Value;
-        var fleet = await repository.GetAsync(fleetId, cancellationToken);
-        if (fleet is not null)
-        {
-            fleet.IsClientOnly = true; // client-only marker — never published to a server.
-            await repository.UpdateAsync(fleet, cancellationToken);
-        }
-
-        return created;
-    }
+            FleetOfflineBehavior.StayOffline, ownerCharacterId, IsClientOnly: true), cancellationToken));
 
     /// <summary>Adds a wing to a client-only fleet via the Shared <see cref="CreateWingCommand"/>.</summary>
     public Task<Result<long>> AddWingAsync(long fleetId, string name, int ownerCharacterId, CancellationToken cancellationToken = default)
@@ -195,61 +177,11 @@ public sealed class ClientFleetService(IServiceScopeFactory scopeFactory) : ISin
         => DispatchAsync(d => d.Send(
             new SetFleetEsiAutomationCommand(fleetId, ownerCharacterId, autoApplyStructure, autoInviteMembers), cancellationToken));
 
-    /// <summary>
-    /// Adds one of the owner's own local characters to a client-only fleet as an ordinary (non-external) roster
-    /// member, dropped into the first squad with room (EVE parity). The owner vouches for their own toon — there
-    /// is no remote client session to join from — so this writes the roster row directly via the repository
-    /// (the same seam the Shared handlers use), guarded for the owned/active fleet and idempotent on membership.
-    /// </summary>
-    public async Task<Result<long>> AddLocalCharacterAsync(
+    /// <summary>Adds one of the owner's own local characters to a client-only fleet via the Shared
+    /// <see cref="AddLocalCharacterCommand"/>.</summary>
+    public Task<Result<long>> AddLocalCharacterAsync(
         long fleetId, int characterId, int ownerCharacterId, CancellationToken cancellationToken = default)
-    {
-        if (characterId <= 0)
-            return Result<long>.Failure(new ResultMessage(
-                MessageSeverity.Error, MessageCodes.ValidationFailed, "A valid character is required.", "Fleet"));
-
-        using var scope = scopeFactory.CreateScope();
-        var repository = scope.ServiceProvider.GetRequiredService<IFleetRepository>();
-
-        // Owned + active guard (mirrors the Shared FleetStructureGuard, which is internal to the module): the
-        // owner may only add toons to their own, still-active client-only fleet.
-        var fleet = await repository.GetAsync(fleetId, cancellationToken);
-        if (fleet is null)
-            return Result<long>.Failure(new ResultMessage(
-                MessageSeverity.Error, MessageCodes.NotFound, "Fleet not found.", "Fleet"));
-        if (fleet.State == FleetState.Archived)
-            return Result<long>.Failure(new ResultMessage(
-                MessageSeverity.Error, MessageCodes.ValidationFailed, "Cannot modify an archived fleet.", "Fleet"));
-        if (fleet.CreatorCharacterId != ownerCharacterId)
-            return Result<long>.Failure(new ResultMessage(
-                MessageSeverity.Error, MessageCodes.PermissionDenied, "Only the fleet's creator can manage it.", "Fleet"));
-
-        if (await repository.IsMemberAsync(fleetId, characterId, cancellationToken))
-            return Result<long>.Failure(new ResultMessage(
-                MessageSeverity.Error, MessageCodes.ValidationFailed, "That character is already a member.", "Fleet"));
-
-        var members = await repository.ListMembersAsync(fleetId, cancellationToken);
-        if (members.Count >= FleetStructureLimits.MaxFleetSize)
-            return Result<long>.Failure(new ResultMessage(
-                MessageSeverity.Error, MessageCodes.ValidationFailed, "Fleet is full.", "Fleet"));
-
-        var (wingId, squadId) = await ResolveFirstOpenSquadAsync(repository, fleetId, members, cancellationToken);
-
-        var now = DateTimeOffset.UtcNow;
-        var memberId = await repository.AddMemberAsync(new FleetMember
-        {
-            FleetId = fleetId,
-            CharacterId = characterId,
-            Role = FleetRole.SquadMember,
-            WingId = wingId,
-            SquadId = squadId,
-            JoinTime = now,
-            IsExternal = false // a real local toon, not a vouched-for external.
-        }, cancellationToken);
-
-        await repository.TouchActivityAsync(fleetId, now, cancellationToken);
-        return Result<long>.Success(memberId);
-    }
+        => DispatchAsync(d => d.Send(new AddLocalCharacterCommand(fleetId, characterId, ownerCharacterId), cancellationToken));
 
     // --- Fleet Compositions. Client-only library: thin orchestration over the SAME Shared CQRS
     // composition handlers via the local dispatcher. Reads are served straight from the repository by the facade. ---
@@ -291,23 +223,5 @@ public sealed class ClientFleetService(IServiceScopeFactory scopeFactory) : ISin
     {
         using var scope = scopeFactory.CreateScope();
         return await operation(scope.ServiceProvider.GetRequiredService<IDispatcher>());
-    }
-
-    private static async Task<(long WingId, long SquadId)> ResolveFirstOpenSquadAsync(
-        IFleetRepository repository, long fleetId, IReadOnlyList<FleetMember> roster, CancellationToken cancellationToken)
-    {
-        var wings = await repository.ListWingsAsync(fleetId, cancellationToken); // Id-ordered
-        foreach (var wing in wings)
-        {
-            var squads = await repository.ListSquadsAsync(wing.Id, cancellationToken); // Id-ordered
-            foreach (var squad in squads)
-            {
-                var occupancy = roster.Count(m => m.SquadId == squad.Id);
-                if (occupancy < FleetStructureLimits.MaxMembersPerSquad)
-                    return (wing.Id, squad.Id);
-            }
-        }
-
-        return (-1, -1); // ESI "unassigned" sentinel — leave the owner to place them manually.
     }
 }

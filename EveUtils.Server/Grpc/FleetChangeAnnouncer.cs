@@ -15,8 +15,8 @@ namespace EveUtils.Server.Grpc;
 /// watches a public fleet. Listed before the change counts as much as listed after it (ET-360): a conclude, a disband or
 /// an edit to invite-only takes the row out of discovery, and the non-members still have to see it go. Every other
 /// change, and any change to a fleet discovery hides, stays with the fleet's own audience: its roster, its owner, the
-/// character who acted — the echo rule, so a requester or a member who just left hears their own change back — and a
-/// member the change took off the roster.</para>
+/// character who acted — the echo rule, so a requester or a member who just left hears their own change back — a
+/// member the change took off the roster, and the whole former roster of a fleet the change deleted (ET-383).</para>
 ///
 /// <para>The payload is the fleet id, the kind and a stop trigger — nothing the discovery list does not already show,
 /// no roster, no member ids — so one envelope serves both audiences and each connection receives it once.</para>
@@ -61,7 +61,7 @@ public sealed class FleetChangeAnnouncer(
         try
         {
             using var scope = scopes.CreateScope();
-            var repository = scope.ServiceProvider.GetRequiredService<IFleetRepository>();
+            var repository = scope.ServiceProvider.GetRequiredService<IFleetReader>();
             var recipients = await _AudienceAsync(repository, change, cancellationToken);
             await connectedClients.SendToCharactersAsync(recipients, WireEnvelopeFactory.ToEnvelope(change), cancellationToken);
         }
@@ -73,7 +73,7 @@ public sealed class FleetChangeAnnouncer(
     }
 
     private async Task<IEnumerable<int>> _AudienceAsync(
-        IFleetRepository repository, FleetChangedEvent change, CancellationToken cancellationToken)
+        IFleetReader repository, FleetChangedEvent change, CancellationToken cancellationToken)
     {
         if (LifecycleKinds.Contains(change.Data.Kind)
             && (change.WasListed || await repository.IsOpenAsync(change.FleetId, cancellationToken)))
@@ -82,6 +82,9 @@ public sealed class FleetChangeAnnouncer(
         var members = await repository.ListMembersAsync(change.FleetId, cancellationToken);
         var fleet = await repository.GetAsync(change.FleetId, cancellationToken);
         int?[] alsoConcerned = [fleet?.CreatorCharacterId, change.ActingCharacterId, change.FormerMemberCharacterId];
-        return members.Select(m => m.CharacterId).Concat(alsoConcerned.OfType<int>()).Distinct();
+        return members.Select(m => m.CharacterId)
+            .Concat(alsoConcerned.OfType<int>())
+            .Concat(change.FormerRosterCharacterIds)
+            .Distinct();
     }
 }

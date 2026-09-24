@@ -144,6 +144,7 @@ public sealed class FleetSignalRelayTests : IDisposable
             sessions, _Dispatcher(), clients, services.GetRequiredService<IFleetRepository>(),
             services.GetRequiredService<IFleetCompositionRepository>(),
             services.GetRequiredService<FleetCompositionAuthorizer>(),
+            new FleetActivityTracker(services),
             authRepository);
         return (service, new HeadersOnlyCallContext(new Metadata { { "authorization", $"Bearer {issued.AccessToken}" } }));
     }

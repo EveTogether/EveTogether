@@ -190,6 +190,7 @@ builder.Services.AddHostedService<EventBusKeepaliveService>(); // liveness ping 
 builder.Services.AddScoped<FleetBroadcastResolver>();       // Live broadcast set = roster members ∩ presence
 builder.Services.AddHostedService<FleetChangeAnnouncer>();  // fleet signal relay: listed lifecycle → every connected client, else the fleet's own audience
 builder.Services.AddHostedService<CompositionChangeRelay>(); // composition signal relay: every connected client
+builder.Services.AddHostedService<SharedFitChangeRelay>();  // shared fit library relay: fittings.shared / fittings.deleted to every connection
 builder.Services.AddScoped<FleetCleanupRunner>();           // one cleanup sweep (archive/hard-delete)
 builder.Services.AddScoped<FleetAutoStopRunner>();          // one auto-stop sweep (emptied/gone-quiet fleet → standing by)
 builder.Services.AddHostedService<FleetCleanupService>();   // periodic fleet pass: auto-stop, then cleanup

@@ -135,6 +135,7 @@ public sealed class FleetEditPushTests : IDisposable
             sessions, services.GetRequiredService<IDispatcher>(), clients, services.GetRequiredService<IFleetRepository>(),
             services.GetRequiredService<IFleetCompositionRepository>(),
             services.GetRequiredService<FleetCompositionAuthorizer>(),
+            new FleetActivityTracker(services),
             authRepository);
         return (service, new HeadersOnlyCallContext(new Metadata { { "authorization", $"Bearer {issued.AccessToken}" } }));
     }

@@ -3,7 +3,7 @@ using EveUtils.Shared.Modules.Fleet.Repositories;
 
 namespace EveUtils.Shared.Modules.Fleet.Queries;
 
-internal sealed class IsFleetMemberQueryHandler(IFleetRepository repository)
+internal sealed class IsFleetMemberQueryHandler(IFleetReader repository)
     : IQueryHandler<IsFleetMemberQuery, bool>
 {
     public Task<bool> Handle(IsFleetMemberQuery query, CancellationToken cancellationToken = default)

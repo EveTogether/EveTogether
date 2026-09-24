@@ -51,7 +51,7 @@ public sealed class FleetAutoStopSweepTests : IAsyncLifetime
 
     public FleetAutoStopSweepTests()
     {
-        _services = new ServiceCollection().AddSingleton<IFleetRepository>(new FleetRepository(_factory)).BuildServiceProvider();
+        _services = new ServiceCollection().AddSingleton<IFleetReader>(new FleetRepository(_factory)).BuildServiceProvider();
         _announcer = new FleetChangeAnnouncer(
             _bus, _services.GetRequiredService<IServiceScopeFactory>(), _clients, NullLogger<FleetChangeAnnouncer>.Instance);
     }

@@ -96,7 +96,8 @@ Rules:
 - **Visibility:** command/query = `public sealed record` (the contract); **handler = `internal sealed`**
   (the dispatcher resolves it by reflection); validators separate and `internal sealed`.
 - **Repository:** interface `public` (`I<Module>Repository`); implementation in
-  `Repositories/Implementations/`, `internal sealed`.
+  `Repositories/Implementations/`, `internal sealed`. In a module with a change signal the repository extends a
+  read-only `I<Module>Reader`: only command handlers take the repository, everything else takes the reader.
 - **Per-module registration.** `Add<Module>Module()` calls `AddModuleHandlers(typeof(<Module>Module))`,
   which scans only that module's namespace. `AddCqrs()` registers only the dispatcher. There is **no
   global multi-assembly scan** — it would register handlers of unloaded modules and fail DI validation.
@@ -128,6 +129,10 @@ Rules:
 - **Enforced by `CommandSignalCoverageTests`:** every command in `Shared` has a scenario proving it signals, a reason
   on the exemption list, or an entry on the known-gap list citing its ticket. The known-gap list only shrinks — a new
   command never goes on it.
+- **A write goes through a command.** A service, gRPC method, view-model or background job that changes a signalling
+  module's state dispatches the command instead of writing to the store. `WriteRepositoryGuardTests` (one per test
+  project) fails for any type outside the command handlers that takes such a module's write repository in its
+  constructor, unless it is on the allow-list with a reason.
 
 Background and the rejected alternatives (a dispatcher behaviour, an EF interceptor) are in
 [`docs/architecture.md`](docs/architecture.md#change-signals).

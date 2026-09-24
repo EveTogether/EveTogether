@@ -31,7 +31,7 @@ public sealed partial class CompositionsViewModel : ObservableObject, IRefreshab
     private readonly IDisposable _changeSubscription;
     private readonly IServiceProvider _services;
     private readonly ClientFleetService _localFleets;
-    private readonly IFleetCompositionRepository _compositionRepository;
+    private readonly IFleetCompositionReader _compositionRepository;
     private readonly ICharacterRegistry _characters;
     private readonly IClientSessionStore _sessions;
     private readonly IFleetTransportClient _transport;
@@ -43,7 +43,7 @@ public sealed partial class CompositionsViewModel : ObservableObject, IRefreshab
     {
         _services = services;
         _localFleets = services.GetRequiredService<ClientFleetService>();
-        _compositionRepository = services.GetRequiredService<IFleetCompositionRepository>();
+        _compositionRepository = services.GetRequiredService<IFleetCompositionReader>();
         _characters = services.GetRequiredService<ICharacterRegistry>();
         _sessions = services.GetRequiredService<IClientSessionStore>();
         _transport = services.GetRequiredService<IFleetTransportClient>();

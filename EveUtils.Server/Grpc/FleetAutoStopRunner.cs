@@ -30,7 +30,7 @@ namespace EveUtils.Server.Grpc;
 /// ever been read client-side; reading it server-side is the work this ticket adds.</para>
 /// </summary>
 public sealed class FleetAutoStopRunner(
-    IFleetRepository repository,
+    IFleetReader repository,
     IDispatcher dispatcher,
     ILogger<FleetAutoStopRunner> logger)
 {

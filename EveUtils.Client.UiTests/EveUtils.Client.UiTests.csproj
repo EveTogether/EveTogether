@@ -22,4 +22,9 @@
   <ItemGroup>
     <ProjectReference Include="..\EveUtils.Client\EveUtils.Client.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <!-- One definition of a write repository for both hosts' guard tests (ET-383). -->
+    <Compile Include="..\EveUtils.Server.Tests\WriteRepositoryGuard.cs" Link="WriteRepositoryGuard.cs" />
+  </ItemGroup>
 </Project>

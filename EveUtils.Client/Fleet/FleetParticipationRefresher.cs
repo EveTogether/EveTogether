@@ -111,7 +111,7 @@ public sealed class FleetParticipationRefresher(
             return;
 
         using IServiceScope scope = scopeFactory.CreateScope();
-        var repository = scope.ServiceProvider.GetRequiredService<IFleetRepository>();
+        var repository = scope.ServiceProvider.GetRequiredService<IFleetReader>();
 
         foreach (int ownerId in mine)
         foreach (FleetEntity fleet in await repository.ListByCreatorAsync(ownerId, cancellationToken))
