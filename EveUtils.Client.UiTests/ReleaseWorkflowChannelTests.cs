@@ -46,7 +46,10 @@ public class ReleaseWorkflowChannelTests
                 .SelectMany(list => list.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)),
         ];
 
-        var channelFlags = _Matches(workflow, @"--channel\s+(\S+)");
+        // Anchored to the start of the line (after leading whitespace) so the explanatory comment above — which
+        // also mentions "--channel" in prose — is not read as a fourth invocation. Captures to end of line, not
+        // just to the next space: the value itself is "${{ env.RUNTIME_ID }}-stable", which contains spaces.
+        var channelFlags = _Matches(workflow, @"^\s*--channel\s+(.+)$");
         Assert.Equal(3, channelFlags.Count); // one vpk pack per build job: windows, linux, macos
         Assert.All(channelFlags, flag => Assert.Equal("${{ env.RUNTIME_ID }}-stable", flag));
 
