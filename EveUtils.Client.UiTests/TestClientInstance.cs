@@ -1,4 +1,5 @@
 using EveUtils.Client.Composition;
+using EveUtils.Client.Fleet;
 using EveUtils.Client.Runs;
 using EveUtils.Shared.Data;
 using EveUtils.Shared.Messaging;
@@ -51,11 +52,13 @@ public sealed class TestClientInstance : IDisposable
 
         var services = ClientServices.Build(collection =>
         {
-            // A screen hears about a run change one RunChangeFeed window later; zero posts it straight to the UI thread,
+            // A screen hears about a run or composition change one feed window later; zero posts it straight to the UI thread,
             // so a test sees the refresh at its next RunJobs() rather than having to sleep through the window.
             // RunChangeFeedTests covers the window itself.
             collection.AddSingleton(provider => new RunChangeFeed(provider.GetRequiredService<IEventBus>(),
                 provider.GetRequiredService<ILogger<RunChangeFeed>>(), TimeSpan.Zero));
+            collection.AddSingleton(provider => new CompositionChangeFeed(provider.GetRequiredService<IEventBus>(),
+                provider.GetRequiredService<ILogger<CompositionChangeFeed>>(), TimeSpan.Zero));
             configure?.Invoke(collection);
         });
 

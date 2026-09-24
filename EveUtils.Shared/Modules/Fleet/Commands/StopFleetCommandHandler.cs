@@ -40,7 +40,10 @@ internal sealed class StopFleetCommandHandler(IFleetRepository repository, IDisp
 
         var automatic = command.Trigger != FleetStopTrigger.Manual;
         await eventBus.PublishAsync(
-            new FleetChangedEvent(new FleetChangePayload(fleet.Id, FleetChangeKind.Stopped, automatic ? command.Trigger : null)),
+            new FleetChangedEvent(new FleetChangePayload(fleet.Id, FleetChangeKind.Stopped, automatic ? command.Trigger : null))
+            {
+                ActingCharacterId = command.ActingCharacterId
+            },
             EventTarget.Local, cancellationToken);
 
         // Tell each roster member the op is over for now — they keep their seat but are free to fly elsewhere. The

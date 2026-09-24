@@ -32,11 +32,18 @@ internal sealed class ConcludeFleetCommandHandler(IFleetRepository repository, I
                 MessageSeverity.Error, MessageCodes.ValidationFailed,
                 "Only an active fleet can be concluded; disband a forming fleet instead.", "Fleet"));
 
+        // Measured before the write: concluding takes the fleet out of discovery.
+        var wasListed = await repository.IsOpenAsync(fleet.Id, cancellationToken);
         fleet.Activation = FleetActivation.Concluded;
         fleet.LastActivityAt = DateTimeOffset.UtcNow;
         await repository.UpdateAsync(fleet, cancellationToken);
         await eventBus.PublishAsync(
-            new FleetChangedEvent(new FleetChangePayload(fleet.Id, FleetChangeKind.Concluded)), EventTarget.Local, cancellationToken);
+            new FleetChangedEvent(new FleetChangePayload(fleet.Id, FleetChangeKind.Concluded))
+            {
+                ActingCharacterId = command.ActingCharacterId,
+                WasListed = wasListed
+            },
+            EventTarget.Local, cancellationToken);
 
         // Tell each roster member the op is over (the creator pressed Conclude; externals have no inbox/session).
         var members = await repository.ListMembersAsync(fleet.Id, cancellationToken);

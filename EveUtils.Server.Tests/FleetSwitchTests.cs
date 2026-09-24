@@ -61,7 +61,7 @@ public class FleetSwitchTests
                     Messages.Add(message);
                     return (TResult)(object)Result<long>.Success(Messages.Count);
                 case SwitchToFleetCommand switching:
-                    return (TResult)(object)await new SwitchToFleetCommandHandler(repository, this).Handle(switching, cancellationToken);
+                    return (TResult)(object)await new SwitchToFleetCommandHandler(repository, this, new InProcessEventBus()).Handle(switching, cancellationToken);
                 default:
                     throw new NotSupportedException(command.GetType().Name);
             }
@@ -220,7 +220,7 @@ public class FleetSwitchTests
         var ct = TestContext.Current.CancellationToken;
         var (repo, harness, sunday, sansha) = await SceneAsync(ct);
 
-        var result = await new SwitchToFleetCommandHandler(repo, harness)
+        var result = await new SwitchToFleetCommandHandler(repo, harness, new InProcessEventBus())
             .Handle(new SwitchToFleetCommand(sunday, Tessa), ct);
 
         Assert.True(result.IsSuccess);
@@ -253,10 +253,10 @@ public class FleetSwitchTests
         // The door JOIN closes, measured rather than assumed: JoinFleetCommandHandler tests visibility before it
         // tests membership, so it refuses even a pilot who is already on the roster. Hooking up later through JOIN
         // is therefore shut on an invite-only fleet — which is precisely why this route exists.
-        var join = await new JoinFleetCommandHandler(repo).Handle(new JoinFleetCommand(sunday, Tessa), ct);
+        var join = await new JoinFleetCommandHandler(repo, new InProcessEventBus()).Handle(new JoinFleetCommand(sunday, Tessa), ct);
         Assert.False(join.IsSuccess);
 
-        var result = await new SwitchToFleetCommandHandler(repo, harness)
+        var result = await new SwitchToFleetCommandHandler(repo, harness, new InProcessEventBus())
             .Handle(new SwitchToFleetCommand(sunday, Tessa), ct);
 
         Assert.True(result.IsSuccess);
@@ -285,12 +285,12 @@ public class FleetSwitchTests
         }, ct);
 
         // What happens without the switch: refused, and the invite is left standing on purpose.
-        var refused = await new RespondToFleetInviteCommandHandler(repo)
+        var refused = await new RespondToFleetInviteCommandHandler(repo, new InProcessEventBus())
             .Handle(new RespondToFleetInviteCommand(inviteId, Accept: true, ActingCharacterId: Tessa), ct);
         Assert.False(refused.IsSuccess);
         Assert.Equal(FleetInviteStatus.Pending, (await repo.GetInviteAsync(inviteId, ct))!.Status);
 
-        var switched = await new SwitchToFleetCommandHandler(repo, harness)
+        var switched = await new SwitchToFleetCommandHandler(repo, harness, new InProcessEventBus())
             .Handle(new SwitchToFleetCommand(sunday, Tessa), ct);
 
         Assert.True(switched.IsSuccess);
@@ -307,7 +307,7 @@ public class FleetSwitchTests
         var ct = TestContext.Current.CancellationToken;
         var (repo, harness, sunday, sansha) = await SceneAsync(ct, tessaOnSunday: false);
 
-        var result = await new SwitchToFleetCommandHandler(repo, harness)
+        var result = await new SwitchToFleetCommandHandler(repo, harness, new InProcessEventBus())
             .Handle(new SwitchToFleetCommand(sunday, Tessa), ct);
 
         Assert.False(result.IsSuccess);
@@ -323,7 +323,7 @@ public class FleetSwitchTests
         var (repo, harness, sunday, sansha) = await SceneAsync(ct);
         await repo.AddMemberAsync(new FleetMember { FleetId = sunday, CharacterId = Aurel, Role = FleetRole.SquadMember, WingId = -1, SquadId = -1 }, ct);
 
-        var result = await new SwitchToFleetCommandHandler(repo, harness)
+        var result = await new SwitchToFleetCommandHandler(repo, harness, new InProcessEventBus())
             .Handle(new SwitchToFleetCommand(sunday, Aurel), ct);
 
         Assert.False(result.IsSuccess);
@@ -341,7 +341,7 @@ public class FleetSwitchTests
         fleet!.Activation = FleetActivation.Forming;
         await repo.UpdateAsync(fleet, ct);
 
-        var result = await new SwitchToFleetCommandHandler(repo, harness)
+        var result = await new SwitchToFleetCommandHandler(repo, harness, new InProcessEventBus())
             .Handle(new SwitchToFleetCommand(sunday, Tessa), ct);
 
         Assert.False(result.IsSuccess);

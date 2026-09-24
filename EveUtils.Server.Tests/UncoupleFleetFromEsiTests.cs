@@ -1,4 +1,5 @@
 using System.Threading.Tasks;
+using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Fleet.Commands;
 using EveUtils.Shared.Modules.Fleet.Entities;
 using EveUtils.Shared.Modules.Fleet.Repositories;
@@ -35,7 +36,7 @@ public class UncoupleFleetFromEsiTests
     {
         var ct = TestContext.Current.CancellationToken;
         var (repo, fleetId) = await CoupledFleetAsync(owner: 100, ct);
-        var handler = new UncoupleFleetFromEsiCommandHandler(repo);
+        var handler = new UncoupleFleetFromEsiCommandHandler(repo, new InProcessEventBus());
 
         var result = await handler.Handle(new UncoupleFleetFromEsiCommand(fleetId, ActingCharacterId: 100), ct);
 
@@ -51,7 +52,7 @@ public class UncoupleFleetFromEsiTests
     {
         var ct = TestContext.Current.CancellationToken;
         var (repo, fleetId) = await CoupledFleetAsync(owner: 100, ct);
-        var handler = new UncoupleFleetFromEsiCommandHandler(repo);
+        var handler = new UncoupleFleetFromEsiCommandHandler(repo, new InProcessEventBus());
 
         var result = await handler.Handle(new UncoupleFleetFromEsiCommand(fleetId, ActingCharacterId: 200), ct);
 
@@ -67,7 +68,7 @@ public class UncoupleFleetFromEsiTests
         var ct = TestContext.Current.CancellationToken;
         var repo = new FleetRepository(_factory);
         var fleetId = await repo.AddAsync(new FleetEntity { Name = "Home Defense", CreatorCharacterId = 100, State = FleetState.Active }, ct);
-        var handler = new UncoupleFleetFromEsiCommandHandler(repo);
+        var handler = new UncoupleFleetFromEsiCommandHandler(repo, new InProcessEventBus());
 
         var result = await handler.Handle(new UncoupleFleetFromEsiCommand(fleetId, ActingCharacterId: 100), ct);
 
@@ -79,7 +80,7 @@ public class UncoupleFleetFromEsiTests
     public async Task Uncouple_UnknownFleet_IsRejected()
     {
         var ct = TestContext.Current.CancellationToken;
-        var handler = new UncoupleFleetFromEsiCommandHandler(new FleetRepository(_factory));
+        var handler = new UncoupleFleetFromEsiCommandHandler(new FleetRepository(_factory), new InProcessEventBus());
 
         var result = await handler.Handle(new UncoupleFleetFromEsiCommand(FleetId: 12345, ActingCharacterId: 100), ct);
 

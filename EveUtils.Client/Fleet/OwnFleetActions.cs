@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 namespace EveUtils.Client.Fleet;
 
 /// <summary>
-/// The fleet lifecycle actions a screen is in the middle of. A local fleet's command raises its change on the bus before
+/// The fleet actions a screen is in the middle of. A local fleet's command raises its change on the bus before
 /// the call returns, and the acting screen redraws itself once it has: the change is news to every other screen, not to
 /// that one. The change is delivered before the awaited call resumes, so a screen that runs its action through here
 /// can drop the echo with <see cref="Covers"/> instead of reloading twice.

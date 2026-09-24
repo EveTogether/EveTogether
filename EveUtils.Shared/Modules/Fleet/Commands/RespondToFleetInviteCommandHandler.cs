@@ -2,11 +2,13 @@ using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Fleet.Dtos;
 using EveUtils.Shared.Modules.Fleet.Entities;
+using EveUtils.Shared.Modules.Fleet.Enums;
+using EveUtils.Shared.Modules.Fleet.Events;
 using EveUtils.Shared.Modules.Fleet.Repositories;
 
 namespace EveUtils.Shared.Modules.Fleet.Commands;
 
-internal sealed class RespondToFleetInviteCommandHandler(IFleetRepository repository)
+internal sealed class RespondToFleetInviteCommandHandler(IFleetRepository repository, IEventBus eventBus)
     : ICommandHandler<RespondToFleetInviteCommand, Result<FleetInviteResponsePayload>>
 {
     public async Task<Result<FleetInviteResponsePayload>> Handle(RespondToFleetInviteCommand command, CancellationToken cancellationToken = default)
@@ -73,6 +75,10 @@ internal sealed class RespondToFleetInviteCommandHandler(IFleetRepository reposi
             }, cancellationToken);
         }
 
+        var kind = command.Accept ? FleetChangeKind.RosterChanged : FleetChangeKind.InvitesChanged;
+        await eventBus.PublishAsync(
+            new FleetChangedEvent(new FleetChangePayload(invite.FleetId, kind)) { ActingCharacterId = command.ActingCharacterId },
+            EventTarget.Local, cancellationToken);
         return Result<FleetInviteResponsePayload>.Success(new FleetInviteResponsePayload(
             invite.Id, invite.FleetId, invite.InviterCharacterId, invite.InviteeCharacterId, command.Accept));
     }

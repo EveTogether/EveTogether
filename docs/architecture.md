@@ -107,8 +107,10 @@ handler ──(write ok)──► <Module>ChangedEvent (Local) ──► ChangeF
   subscribes once and every new command reaches it without a new pairing.
 - **Local only from the handler.** The same handler runs on the client (local fleets, the local library) and on the
   server, and only the host knows who else must hear it. So each host has a **relay subscriber** on the signal:
-  - *server* — a relay (e.g. `FleetChangeAnnouncer`) subscribes and pushes the change over the bus stream to its
-    audience (roster, or every connected character for a listed fleet);
+  - *server* — a relay subscribes and pushes the change over the bus stream to its audience: `FleetChangeAnnouncer`
+    sends a listed fleet's lifecycle change to every connected character and anything else to the fleet's roster,
+    owner, actor and a member it just removed; `CompositionChangeRelay` sends a shared composition's change to every
+    connected character;
   - *client* — `ServerConnection` republishes a server-sourced event on the local bus, stamped with its server, so
     a screen hears a server change and a local one through the same signal.
 - **Echo rule.** The server relays to the acting client as well; a client does not publish for a change it made
@@ -132,12 +134,7 @@ writes too, and risks echo.
 
 **Where the code does not follow it yet** (tracked under epic ET-379):
 
-- Fleet structure, roster and invite commands and all composition commands publish nothing; the server announces
-  them by hand in `FleetsGrpcService`, the client through `CompositionChangePublisher` and
-  `FleetRosterWatch.Announce` (ET-381).
-- Compositions break the echo rule both ways: the server leaves the acting character out of `composition.changed`
-  (`FleetsGrpcService.AnnounceCompositionChangedAsync`), and the client publishes for a change it made on a server
-  (ET-381).
+
 - Fittings, Messaging, Settings, ApiKeys and the remaining modules: a signal or a reasoned exemption (ET-382).
 - Writes outside the dispatcher — `DataAdminService`, `FleetCleanupRunner`, `ClientFleetService.AddLocalCharacterAsync`
   — are invisible to the test (ET-383).

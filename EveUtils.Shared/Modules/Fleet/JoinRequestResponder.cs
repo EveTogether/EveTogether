@@ -3,7 +3,10 @@ using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.DependencyInjection;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Fleet.Commands;
+using EveUtils.Shared.Modules.Fleet.Dtos;
 using EveUtils.Shared.Modules.Fleet.Entities;
+using EveUtils.Shared.Modules.Fleet.Enums;
+using EveUtils.Shared.Modules.Fleet.Events;
 using EveUtils.Shared.Modules.Fleet.Repositories;
 using EveUtils.Shared.Modules.Messaging.Commands;
 using EveUtils.Shared.Modules.Messaging.Entities;
@@ -17,7 +20,7 @@ namespace EveUtils.Shared.Modules.Fleet;
 /// the message path (<see cref="FleetJoinRequestResponder"/>, via the generic RespondToMessage) and the direct
 /// <c>RespondToJoinRequestCommand</c>. Auto-registered via the <see cref="IScopedService"/> marker.
 /// </summary>
-public sealed class JoinRequestResponder(IFleetRepository repository, IDispatcher dispatcher) : IScopedService
+public sealed class JoinRequestResponder(IFleetRepository repository, IDispatcher dispatcher, IEventBus eventBus) : IScopedService
 {
     public async Task<Result> RespondAsync(long requestId, bool accept, int actingCharacterId, CancellationToken cancellationToken = default)
     {
@@ -68,6 +71,13 @@ public sealed class JoinRequestResponder(IFleetRepository repository, IDispatche
                 JoinTime = DateTimeOffset.UtcNow
             }, cancellationToken);
         }
+
+        // Published here rather than by the commands that reach this core, so the direct respond and the message path
+        // (RespondToMessage → FleetJoinRequestResponder) each signal once.
+        var kind = accept ? FleetChangeKind.RosterChanged : FleetChangeKind.InvitesChanged;
+        await eventBus.PublishAsync(
+            new FleetChangedEvent(new FleetChangePayload(request.FleetId, kind)) { ActingCharacterId = actingCharacterId },
+            EventTarget.Local, cancellationToken);
 
         // Notify the requester of the outcome through the queue (plain mail, no response).
         var notify = await dispatcher.Send(new EnqueueMessageCommand(

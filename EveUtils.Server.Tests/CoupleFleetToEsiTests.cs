@@ -1,4 +1,5 @@
 using System.Threading.Tasks;
+using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Fleet.Commands;
 using EveUtils.Shared.Modules.Fleet.Entities;
 using EveUtils.Shared.Modules.Fleet.Repositories;
@@ -23,7 +24,7 @@ public class CoupleFleetToEsiTests
         var ct = TestContext.Current.CancellationToken;
         var repo = new FleetRepository(_factory);
         var fleetId = await repo.AddAsync(new FleetEntity { Name = "Home Defense", CreatorCharacterId = 100, State = FleetState.Active }, ct);
-        var handler = new CoupleFleetToEsiCommandHandler(repo);
+        var handler = new CoupleFleetToEsiCommandHandler(repo, new InProcessEventBus());
 
         var result = await handler.Handle(
             new CoupleFleetToEsiCommand(fleetId, EsiFleetId: 999, EsiFleetBossId: 100, ActingCharacterId: 100), ct);
@@ -41,7 +42,7 @@ public class CoupleFleetToEsiTests
         var ct = TestContext.Current.CancellationToken;
         var repo = new FleetRepository(_factory);
         var fleetId = await repo.AddAsync(new FleetEntity { Name = "Home Defense", CreatorCharacterId = 100, State = FleetState.Active }, ct);
-        var handler = new CoupleFleetToEsiCommandHandler(repo);
+        var handler = new CoupleFleetToEsiCommandHandler(repo, new InProcessEventBus());
 
         var result = await handler.Handle(new CoupleFleetToEsiCommand(fleetId, 999, 100, ActingCharacterId: 200), ct);
 
@@ -55,7 +56,7 @@ public class CoupleFleetToEsiTests
     public async Task Couple_UnknownFleet_IsRejected()
     {
         var ct = TestContext.Current.CancellationToken;
-        var handler = new CoupleFleetToEsiCommandHandler(new FleetRepository(_factory));
+        var handler = new CoupleFleetToEsiCommandHandler(new FleetRepository(_factory), new InProcessEventBus());
 
         var result = await handler.Handle(new CoupleFleetToEsiCommand(FleetId: 12345, 999, 100, 100), ct);
 

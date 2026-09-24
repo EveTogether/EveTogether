@@ -80,7 +80,7 @@ public class FleetMemberAvailabilityTests
         var ct = TestContext.Current.CancellationToken;
         var (repo, _, kaskaId, _) = await SceneAsync(ct);
 
-        var result = await new SetFleetMemberAvailabilityCommandHandler(repo).Handle(
+        var result = await new SetFleetMemberAvailabilityCommandHandler(repo, new InProcessEventBus()).Handle(
             new SetFleetMemberAvailabilityCommand(kaskaId, FleetMemberAvailability.SignedOff, "can't make Sunday", Kaska), ct);
 
         Assert.True(result.IsSuccess);
@@ -99,7 +99,7 @@ public class FleetMemberAvailabilityTests
         var ct = TestContext.Current.CancellationToken;
         var (repo, _, kaskaId, _) = await SceneAsync(ct);
 
-        var result = await new SetFleetMemberAvailabilityCommandHandler(repo).Handle(
+        var result = await new SetFleetMemberAvailabilityCommandHandler(repo, new InProcessEventBus()).Handle(
             new SetFleetMemberAvailabilityCommand(kaskaId, FleetMemberAvailability.SignedOff, null, Owner), ct);
 
         Assert.False(result.IsSuccess);
@@ -112,7 +112,7 @@ public class FleetMemberAvailabilityTests
         var ct = TestContext.Current.CancellationToken;
         var (repo, _, kaskaId, _) = await SceneAsync(ct);
 
-        var result = await new SetFleetMemberAvailabilityCommandHandler(repo).Handle(
+        var result = await new SetFleetMemberAvailabilityCommandHandler(repo, new InProcessEventBus()).Handle(
             new SetFleetMemberAvailabilityCommand(kaskaId, FleetMemberAvailability.SignedOff, null, Tessa), ct);
 
         Assert.False(result.IsSuccess);
@@ -128,7 +128,7 @@ public class FleetMemberAvailabilityTests
         var (repo, fleetId, _, _) = await SceneAsync(ct);
         var vaari = Assert.Single(await repo.ListMembersAsync(fleetId, ct), m => m.CharacterId == Vaari);
 
-        var result = await new SetFleetMemberAvailabilityCommandHandler(repo).Handle(
+        var result = await new SetFleetMemberAvailabilityCommandHandler(repo, new InProcessEventBus()).Handle(
             new SetFleetMemberAvailabilityCommand(vaari.Id, FleetMemberAvailability.SignedOff, null, Vaari), ct);
 
         Assert.False(result.IsSuccess);
@@ -142,7 +142,7 @@ public class FleetMemberAvailabilityTests
         var ct = TestContext.Current.CancellationToken;
         var (repo, _, kaskaId, _) = await SceneAsync(ct, FleetActivation.Active);
 
-        var result = await new SetFleetMemberAvailabilityCommandHandler(repo).Handle(
+        var result = await new SetFleetMemberAvailabilityCommandHandler(repo, new InProcessEventBus()).Handle(
             new SetFleetMemberAvailabilityCommand(kaskaId, FleetMemberAvailability.SignedOff, null, Kaska), ct);
 
         Assert.False(result.IsSuccess);
@@ -153,7 +153,7 @@ public class FleetMemberAvailabilityTests
     {
         var ct = TestContext.Current.CancellationToken;
         var (repo, _, kaskaId, _) = await SceneAsync(ct);
-        var handler = new SetFleetMemberAvailabilityCommandHandler(repo);
+        var handler = new SetFleetMemberAvailabilityCommandHandler(repo, new InProcessEventBus());
         await handler.Handle(new SetFleetMemberAvailabilityCommand(kaskaId, FleetMemberAvailability.SignedOff, "busy", Kaska), ct);
 
         var result = await handler.Handle(new SetFleetMemberAvailabilityCommand(kaskaId, FleetMemberAvailability.Available, null, Kaska), ct);
@@ -174,7 +174,7 @@ public class FleetMemberAvailabilityTests
         var ct = TestContext.Current.CancellationToken;
         var (repo, fleetId, kaskaId, _) = await SceneAsync(ct);
         var harness = new Harness();
-        await new SetFleetMemberAvailabilityCommandHandler(repo).Handle(
+        await new SetFleetMemberAvailabilityCommandHandler(repo, new InProcessEventBus()).Handle(
             new SetFleetMemberAvailabilityCommand(kaskaId, FleetMemberAvailability.SignedOff, "can't make it", Kaska), ct);
 
         var result = await new StartFleetCommandHandler(repo, harness, new InProcessEventBus()).Handle(new StartFleetCommand(fleetId, Owner), ct);
@@ -197,7 +197,7 @@ public class FleetMemberAvailabilityTests
         var ct = TestContext.Current.CancellationToken;
         var (repo, fleetId, kaskaId, tessaId) = await SceneAsync(ct);
         var harness = new Harness();
-        var handler = new SetFleetMemberAvailabilityCommandHandler(repo);
+        var handler = new SetFleetMemberAvailabilityCommandHandler(repo, new InProcessEventBus());
         await handler.Handle(new SetFleetMemberAvailabilityCommand(kaskaId, FleetMemberAvailability.SignedOff, "can't make it", Kaska), ct);
         await handler.Handle(new SetFleetMemberAvailabilityCommand(tessaId, FleetMemberAvailability.Available, null, Tessa), ct);
 
@@ -220,7 +220,7 @@ public class FleetMemberAvailabilityTests
         var ct = TestContext.Current.CancellationToken;
         var (repo, fleetId, kaskaId, _) = await SceneAsync(ct);
         var harness = new Harness();
-        await new SetFleetMemberAvailabilityCommandHandler(repo).Handle(
+        await new SetFleetMemberAvailabilityCommandHandler(repo, new InProcessEventBus()).Handle(
             new SetFleetMemberAvailabilityCommand(kaskaId, FleetMemberAvailability.SignedOff, null, Kaska), ct);
 
         await new StartFleetCommandHandler(repo, harness, new InProcessEventBus()).Handle(new StartFleetCommand(fleetId, Owner), ct);

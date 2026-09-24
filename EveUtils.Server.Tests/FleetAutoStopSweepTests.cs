@@ -12,9 +12,11 @@ using EveUtils.Shared.Modules.Fleet.Commands;
 using EveUtils.Shared.Modules.Fleet.Entities;
 using EveUtils.Shared.Modules.Fleet.Enums;
 using EveUtils.Shared.Modules.Fleet.Metrics;
+using EveUtils.Shared.Modules.Fleet.Repositories;
 using EveUtils.Shared.Modules.Fleet.Repositories.Implementations;
 using EveUtils.Shared.Modules.Messaging.Commands;
 using Grpc.Core;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 using FleetEntity = EveUtils.Shared.Modules.Fleet.Entities.Fleet;
@@ -31,7 +33,7 @@ namespace EveUtils.Server.Tests;
 /// attribution is asserted as hard as the outcome: a sweep that could not act as the owner would simply be refused
 /// by <c>FleetStructureGuard</c>, and a fleet that came back Forming is the proof that it was not.
 /// </summary>
-public class FleetAutoStopSweepTests
+public sealed class FleetAutoStopSweepTests : IAsyncLifetime
 {
     private const int Owner = 4001;
     private const int Flying = 4002;
@@ -43,12 +45,30 @@ public class FleetAutoStopSweepTests
 
     private readonly SqliteServerDbContextFactory _factory = new();
     private readonly ConnectedClients _clients = new();
+    private readonly InProcessEventBus _bus = new();
+    private readonly ServiceProvider _services;
+    private readonly FleetChangeAnnouncer _announcer;
+
+    public FleetAutoStopSweepTests()
+    {
+        _services = new ServiceCollection().AddSingleton<IFleetRepository>(new FleetRepository(_factory)).BuildServiceProvider();
+        _announcer = new FleetChangeAnnouncer(
+            _bus, _services.GetRequiredService<IServiceScopeFactory>(), _clients, NullLogger<FleetChangeAnnouncer>.Instance);
+    }
+
+    public ValueTask InitializeAsync() => new(_announcer.StartAsync(CancellationToken.None));
+
+    public async ValueTask DisposeAsync()
+    {
+        _announcer.Dispose();
+        await _services.DisposeAsync();
+    }
 
     // ── Harness ─────────────────────────────────────────────────────────────────────────────────────
 
     /// <summary>Routes StopFleetCommand to the real handler and records every message the handler enqueues, so the
     /// mail a pilot would actually receive is assertable without a message store.</summary>
-    private sealed class Harness(FleetRepository repository) : IDispatcher
+    private sealed class Harness(FleetRepository repository, IEventBus bus) : IDispatcher
     {
         public List<EnqueueMessageCommand> Messages { get; } = [];
         public List<StopFleetCommand> Stops { get; } = [];
@@ -65,7 +85,7 @@ public class FleetAutoStopSweepTests
             {
                 case StopFleetCommand stop:
                     Stops.Add(stop);
-                    var handler = new StopFleetCommandHandler(repository, this, new InProcessEventBus());
+                    var handler = new StopFleetCommandHandler(repository, this, bus);
                     return (TResult)(object)await handler.Handle(stop, cancellationToken);
                 case EnqueueMessageCommand message:
                     Messages.Add(message);
@@ -98,8 +118,8 @@ public class FleetAutoStopSweepTests
                 FleetId = fleetId, CharacterId = characterId, Role = FleetRole.SquadMember, WingId = -1, SquadId = -1,
             }, ct);
 
-        var harness = new Harness(repo);
-        return (repo, harness, new FleetAutoStopRunner(repo, harness, new FleetChangeAnnouncer(repo, _clients), NullLogger<FleetAutoStopRunner>.Instance), fleetId);
+        var harness = new Harness(repo, _bus);
+        return (repo, harness, new FleetAutoStopRunner(repo, harness, NullLogger<FleetAutoStopRunner>.Instance), fleetId);
     }
 
     private static DateTimeOffset Silent => Now - FleetMemberPresence.SilentAfter - TimeSpan.FromMinutes(5);

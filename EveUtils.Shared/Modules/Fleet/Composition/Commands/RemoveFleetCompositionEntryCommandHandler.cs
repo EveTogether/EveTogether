@@ -1,12 +1,14 @@
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Fleet.Composition.Repositories;
+using EveUtils.Shared.Modules.Fleet.Enums;
 
 namespace EveUtils.Shared.Modules.Fleet.Composition.Commands;
 
 internal sealed class RemoveFleetCompositionEntryCommandHandler(
     IFleetCompositionRepository repository,
-    FleetCompositionAuthorizer authorizer) : ICommandHandler<RemoveFleetCompositionEntryCommand, Result>
+    FleetCompositionAuthorizer authorizer,
+    CompositionChangeSignal changes) : ICommandHandler<RemoveFleetCompositionEntryCommand, Result>
 {
     public async Task<Result> Handle(RemoveFleetCompositionEntryCommand command, CancellationToken cancellationToken = default)
     {
@@ -26,6 +28,7 @@ internal sealed class RemoveFleetCompositionEntryCommandHandler(
                 MessageSeverity.Error, MessageCodes.PermissionDenied, "You may not manage this composition.", "FleetComposition"));
 
         await repository.DeleteEntryAsync(command.EntryId, cancellationToken);
+        await changes.PublishAsync(composition.Id, CompositionChangeKind.Edited, cancellationToken);
         return Result.Success();
     }
 }

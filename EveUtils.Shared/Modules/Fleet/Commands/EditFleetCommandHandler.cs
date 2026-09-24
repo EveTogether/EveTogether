@@ -26,6 +26,8 @@ internal sealed class EditFleetCommandHandler(IFleetRepository repository, IEven
             return Result.Failure(new ResultMessage(
                 MessageSeverity.Error, MessageCodes.PermissionDenied, "Only the fleet's creator can edit it.", "Fleet"));
 
+        // Measured before the write: an edit to invite-only takes the fleet out of discovery (ET-360).
+        var wasListed = await repository.IsOpenAsync(fleet.Id, cancellationToken);
         fleet.Name = command.Name.Trim();
         fleet.Description = command.Description;
         fleet.Visibility = command.Visibility;
@@ -36,7 +38,12 @@ internal sealed class EditFleetCommandHandler(IFleetRepository repository, IEven
 
         await repository.UpdateAsync(fleet, cancellationToken);
         await eventBus.PublishAsync(
-            new FleetChangedEvent(new FleetChangePayload(fleet.Id, FleetChangeKind.Edited)), EventTarget.Local, cancellationToken);
+            new FleetChangedEvent(new FleetChangePayload(fleet.Id, FleetChangeKind.Edited))
+            {
+                ActingCharacterId = command.ActingCharacterId,
+                WasListed = wasListed
+            },
+            EventTarget.Local, cancellationToken);
         return Result.Success();
     }
 }

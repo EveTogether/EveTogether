@@ -1,10 +1,13 @@
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Messaging;
+using EveUtils.Shared.Modules.Fleet.Dtos;
+using EveUtils.Shared.Modules.Fleet.Enums;
+using EveUtils.Shared.Modules.Fleet.Events;
 using EveUtils.Shared.Modules.Fleet.Repositories;
 
 namespace EveUtils.Shared.Modules.Fleet.Commands;
 
-internal sealed class RemoveFleetMemberCommandHandler(IFleetRepository repository)
+internal sealed class RemoveFleetMemberCommandHandler(IFleetRepository repository, IEventBus eventBus)
     : ICommandHandler<RemoveFleetMemberCommand, Result>
 {
     public async Task<Result> Handle(RemoveFleetMemberCommand command, CancellationToken cancellationToken = default)
@@ -36,6 +39,13 @@ internal sealed class RemoveFleetMemberCommandHandler(IFleetRepository repositor
         // A roster change is a member event — bump the activity clock so the cleanup grace resets.
         await repository.TouchActivityAsync(fleet.Id, DateTimeOffset.UtcNow, cancellationToken);
 
+        await eventBus.PublishAsync(
+            new FleetChangedEvent(new FleetChangePayload(fleet.Id, FleetChangeKind.RosterChanged))
+            {
+                ActingCharacterId = command.ActingCharacterId,
+                FormerMemberCharacterId = member.CharacterId
+            },
+            EventTarget.Local, cancellationToken);
         return Result.Success();
     }
 }

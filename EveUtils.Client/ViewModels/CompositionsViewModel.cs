@@ -4,7 +4,6 @@ using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
-using Avalonia.Threading;
 using CommunityToolkit.Mvvm.Input;
 using EveUtils.Client.Dialogs;
 using EveUtils.Client.Fleet;
@@ -50,20 +49,16 @@ public sealed partial class CompositionsViewModel : ObservableObject, IRefreshab
         _transport = services.GetRequiredService<IFleetTransportClient>();
         _dialogs = services.GetRequiredService<IDialogService>();
 
-        _changeSubscription = services.GetRequiredService<IEventBus>().Subscribe<CompositionChangedEvent>(_OnCompositionChanged);
+        _changeSubscription = services.GetRequiredService<CompositionChangeFeed>().Subscribe(_OnCompositionsChangedAsync);
 
         _ = _EnsureInitializedAsync();
     }
 
     public void Dispose() => _changeSubscription.Dispose();
 
-    // Local changes and server pushes both arrive here; the bus can call from any thread and the tabs are bound.
-    private void _OnCompositionChanged(CompositionChangedEvent change) =>
-        Dispatcher.UIThread.Post(() =>
-        {
-            foreach (var tab in Tabs.Where(t => t.Shows(change)))
-                _ = tab.RefreshAfterChangeAsync();
-        });
+    // Local changes and server pushes both arrive here, on the UI thread; a tab the batch touches twice reloads once.
+    private Task _OnCompositionsChangedAsync(IReadOnlyList<CompositionChangedEvent> changes) =>
+        Task.WhenAll(Tabs.Where(tab => changes.Any(tab.Shows)).Select(tab => tab.RefreshAfterChangeAsync()));
 
     /// <summary>Local library first, then one tab per coupled server.</summary>
     public ObservableCollection<CompositionTabViewModel> Tabs { get; } = [];

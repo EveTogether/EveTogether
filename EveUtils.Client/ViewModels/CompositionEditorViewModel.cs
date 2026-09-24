@@ -4,7 +4,6 @@ using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.Linq;
 using System.Threading.Tasks;
-using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EveUtils.Client.Dialogs;
@@ -59,7 +58,7 @@ public sealed partial class CompositionEditorViewModel : ObservableObject, IDisp
         _Recompute();
 
         if (_compositionId is not null)
-            _changeSubscription = services.GetService<IEventBus>()?.Subscribe<CompositionChangedEvent>(_OnCompositionChanged);
+            _changeSubscription = services.GetService<CompositionChangeFeed>()?.Subscribe(_OnCompositionsChangedAsync);
     }
 
     public void Dispose() => _changeSubscription?.Dispose();
@@ -238,16 +237,16 @@ public sealed partial class CompositionEditorViewModel : ObservableObject, IDisp
         }
     }
 
-    // Our own save publishes for every command it replays; those are not news to this editor.
-    private void _OnCompositionChanged(CompositionChangedEvent change)
+    // Our own save publishes for every command it replays; those are not news to this editor. Of a burst, the last change
+    // about this composition decides what happens.
+    private Task _OnCompositionsChangedAsync(IReadOnlyList<CompositionChangedEvent> changes)
     {
-        if (_isSaving
-            || _compositionId is not { } compositionId
-            || change.Data.CompositionId != compositionId
-            || change.Data.IsClientOnly == _client.SharesFitsToServer)
-            return;
+        if (_isSaving || _compositionId is not { } compositionId)
+            return Task.CompletedTask;
 
-        Dispatcher.UIThread.Post(() => _ = _HandleRemoteChangeAsync(change.Data.Kind));
+        var latest = changes.LastOrDefault(change =>
+            change.Data.CompositionId == compositionId && change.Data.IsClientOnly != _client.SharesFitsToServer);
+        return latest is null ? Task.CompletedTask : _HandleRemoteChangeAsync(latest.Data.Kind);
     }
 
     private async Task _HandleRemoteChangeAsync(CompositionChangeKind kind)

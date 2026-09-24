@@ -51,7 +51,8 @@ internal sealed class CreateFleetCommandHandler(IFleetRepository repository, IEv
         await repository.AddSquadAsync(new FleetSquad { WingId = wingId, Name = "Squad 1" }, cancellationToken);
 
         await eventBus.PublishAsync(
-            new FleetChangedEvent(new FleetChangePayload(id, FleetChangeKind.Created)), EventTarget.Local, cancellationToken);
+            new FleetChangedEvent(new FleetChangePayload(id, FleetChangeKind.Created)) { ActingCharacterId = command.ActingCharacterId },
+            EventTarget.Local, cancellationToken);
         return Result<long>.Success(id);
     }
 }

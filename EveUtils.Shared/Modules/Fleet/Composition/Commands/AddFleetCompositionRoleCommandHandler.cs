@@ -1,12 +1,14 @@
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Fleet.Composition.Repositories;
+using EveUtils.Shared.Modules.Fleet.Enums;
 
 namespace EveUtils.Shared.Modules.Fleet.Composition.Commands;
 
 internal sealed class AddFleetCompositionRoleCommandHandler(
     IFleetCompositionRepository repository,
-    FleetCompositionAuthorizer authorizer) : ICommandHandler<AddFleetCompositionRoleCommand, Result<long>>
+    FleetCompositionAuthorizer authorizer,
+    CompositionChangeSignal changes) : ICommandHandler<AddFleetCompositionRoleCommand, Result<long>>
 {
     public async Task<Result<long>> Handle(AddFleetCompositionRoleCommand command, CancellationToken cancellationToken = default)
     {
@@ -32,6 +34,7 @@ internal sealed class AddFleetCompositionRoleCommandHandler(
             SortOrder = existing.Count
         }, cancellationToken);
 
+        await changes.PublishAsync(composition.Id, CompositionChangeKind.Edited, cancellationToken);
         return Result<long>.Success(id);
     }
 }

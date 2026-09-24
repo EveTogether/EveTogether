@@ -36,7 +36,8 @@ internal sealed class StartFleetCommandHandler(IFleetRepository repository, IDis
         fleet.LastActivityAt = now;
         await repository.UpdateAsync(fleet, cancellationToken);
         await eventBus.PublishAsync(
-            new FleetChangedEvent(new FleetChangePayload(fleet.Id, FleetChangeKind.Activated)), EventTarget.Local, cancellationToken);
+            new FleetChangedEvent(new FleetChangePayload(fleet.Id, FleetChangeKind.Activated)) { ActingCharacterId = command.ActingCharacterId },
+            EventTarget.Local, cancellationToken);
 
         // Notify each roster member that the fleet has started. Metrics are shared automatically while you are a
         // connected member — no "enter" step — so the message just announces the start.

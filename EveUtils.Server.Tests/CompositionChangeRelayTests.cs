@@ -6,6 +6,7 @@ using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Data;
 using EveUtils.Shared.DependencyInjection;
 using EveUtils.Shared.Identity;
+using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Fleet;
 using EveUtils.Shared.Modules.Fleet.Composition;
 using EveUtils.Shared.Modules.Fleet.Composition.Repositories;
@@ -26,11 +27,11 @@ using EveUtils.Shared.Cqrs.Permissions;
 namespace EveUtils.Server.Tests;
 
 /// <summary>
-/// ET-11: a composition changed through the gRPC service is pushed to the other connected characters as
+/// ET-11: a composition changed through the gRPC service is pushed to the connected characters as
 /// <c>composition.changed</c>, carrying the composition that really changed — also when the RPC only names a role or
-/// an entry, and also when it deletes the very row that tells which composition it belonged to. The acting character is
-/// left out (its own client already published the change), and a composition that never reaches the server (client-only)
-/// is announced to nobody.
+/// an entry, and also when it deletes the very row that tells which composition it belonged to. A composition that never
+/// reaches the server (client-only) is announced to nobody. Since ET-381 the acting character hears it too: its client
+/// no longer publishes a server change itself (the echo rule).
 /// </summary>
 public sealed class CompositionChangeRelayTests : IDisposable
 {
@@ -42,6 +43,7 @@ public sealed class CompositionChangeRelayTests : IDisposable
     private readonly IServiceScope _scope;
     private readonly RecordingWriter _actor = new();
     private readonly RecordingWriter _viewer = new();
+    private CompositionChangeRelay? _relay;
 
     public CompositionChangeRelayTests()
     {
@@ -50,7 +52,9 @@ public sealed class CompositionChangeRelayTests : IDisposable
         services.AddServerIdentity();
         services.AddPermissionRegistry();
         services.AddCqrs();
+        services.AddEventBus();
         services.AddSharedServices(ExecutionHost.Server);
+        services.AddSingleton<IRuntimeContext>(new RuntimeContext(ExecutionHost.Server));
         services.AddFleetModule();
         services.AddSingleton<IDbContextFactory<SharedDbContext>>(_factory);
         services.AddSingleton<IDbContextFactory<ServerDbContext>>(_factory);
@@ -60,13 +64,14 @@ public sealed class CompositionChangeRelayTests : IDisposable
 
     public void Dispose()
     {
+        _relay?.Dispose();
         _scope.Dispose();
         _provider.Dispose();
         _factory.Dispose();
     }
 
     [Fact]
-    public async Task ARoleOrEntryChange_ReachesOtherCharactersWithTheOwningComposition_AndNotTheActor()
+    public async Task ARoleOrEntryChange_ReachesEveryConnectedCharacterWithTheOwningComposition_TheActorIncluded()
     {
         var (service, token) = await _ServiceAsync();
         var context = _Context(token);
@@ -80,23 +85,21 @@ public sealed class CompositionChangeRelayTests : IDisposable
             Fit = new FitReferenceDto { ShipTypeId = 11987, FitName = "Guardian", RawJson = "{}", ContentHash = "h-guardian" }
         }, context);
         Assert.True(entry.Accepted, entry.Message);
-        var edited = await service.EditFleetCompositionEntry(new EditFleetCompositionEntryRequest { EntryId = entry.Id, EntryMinCount = 3 }, context);
-        var entryRemoved = await service.RemoveFleetCompositionEntry(new RemoveFleetCompositionEntryRequest { EntryId = entry.Id }, context);
-        var roleRemoved = await service.RemoveFleetCompositionRole(new RemoveFleetCompositionRoleRequest { RoleId = role.Id }, context);
+        await service.EditFleetCompositionEntry(new EditFleetCompositionEntryRequest { EntryId = entry.Id, EntryMinCount = 3 }, context);
+        await service.RemoveFleetCompositionEntry(new RemoveFleetCompositionEntryRequest { EntryId = entry.Id }, context);
+        await service.RemoveFleetCompositionRole(new RemoveFleetCompositionRoleRequest { RoleId = role.Id }, context);
 
-        Assert.Equal(
-            [
-                (created.Id, CompositionChangeKind.Created),
-                (created.Id, CompositionChangeKind.Edited), // role added
-                (created.Id, CompositionChangeKind.Edited), // entry added
-                (created.Id, CompositionChangeKind.Edited), // entry edited
-                (created.Id, CompositionChangeKind.Edited), // entry removed — resolved before the row was deleted
-                (created.Id, CompositionChangeKind.Edited)  // role removed — same
-            ],
-            _viewer.Changes());
-        Assert.Empty(_actor.Written);
-        Assert.All([created.CompositionId, role.CompositionId, entry.CompositionId, edited.CompositionId,
-            entryRemoved.CompositionId, roleRemoved.CompositionId], id => Assert.Equal(created.Id, id));
+        List<(long, CompositionChangeKind)> expected =
+        [
+            (created.Id, CompositionChangeKind.Created),
+            (created.Id, CompositionChangeKind.Edited), // role added
+            (created.Id, CompositionChangeKind.Edited), // entry added
+            (created.Id, CompositionChangeKind.Edited), // entry edited
+            (created.Id, CompositionChangeKind.Edited), // entry removed — resolved before the row was deleted
+            (created.Id, CompositionChangeKind.Edited)  // role removed — same
+        ];
+        Assert.Equal(expected, _viewer.Changes());
+        Assert.Equal(expected, _actor.Changes());
     }
 
     [Fact]
@@ -125,9 +128,10 @@ public sealed class CompositionChangeRelayTests : IDisposable
         clients.Add(new ConnectedClient("raymond", Raymond, "Raymond", _viewer));
 
         var services = _scope.ServiceProvider;
-        var fleets = services.GetRequiredService<IFleetRepository>();
+        _relay = new CompositionChangeRelay(services.GetRequiredService<IEventBus>(), clients, NullLogger<CompositionChangeRelay>.Instance);
+        await _relay.StartAsync(cancellationToken);
         var service = new FleetsGrpcService(
-            sessions, services.GetRequiredService<IDispatcher>(), clients, new FleetChangeAnnouncer(fleets, clients), fleets,
+            sessions, services.GetRequiredService<IDispatcher>(), clients, services.GetRequiredService<IFleetRepository>(),
             services.GetRequiredService<IFleetCompositionRepository>(), services.GetRequiredService<FleetCompositionAuthorizer>(),
             authRepository);
         return (service, issued.AccessToken);

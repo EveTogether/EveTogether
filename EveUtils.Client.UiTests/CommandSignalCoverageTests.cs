@@ -5,9 +5,12 @@ using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.ApiKeys.Commands;
 using EveUtils.Shared.Modules.Fittings.Commands;
 using EveUtils.Shared.Modules.Fleet.Commands;
+using EveUtils.Shared.Modules.Fleet.Composition;
 using EveUtils.Shared.Modules.Fleet.Composition.Commands;
+using EveUtils.Shared.Modules.Fleet.Dtos;
 using EveUtils.Shared.Modules.Fleet.Entities;
 using EveUtils.Shared.Modules.Fleet.Events;
+using EveUtils.Shared.Modules.Fleet.Queries;
 using EveUtils.Shared.Modules.Gamelog.Commands;
 using EveUtils.Shared.Modules.Killmails.Commands;
 using EveUtils.Shared.Modules.Messaging.Commands;
@@ -35,6 +38,7 @@ namespace EveUtils.Client.UiTests;
 public sealed class CommandSignalCoverageTests
 {
     private const int Owner = 95001680;
+    private const int Other = 95001681;
     private const string ModulesNamespace = "EveUtils.Shared.Modules.";
 
     /// <summary>The one signal each module (or sub-module) publishes after a write, keyed on the namespace between
@@ -74,30 +78,18 @@ public sealed class CommandSignalCoverageTests
         [typeof(ImportRunBountyCommand)] = "needs a character's own gamelog file on disk to add anything, which the "
             + "shared harness has no directory for; proven end to end in HomefrontMoneyScenarioTests.S11",
         [typeof(ImportMissingGroupBountyCommand)] = "writes no run of its own: it only picks the runs and hands them to "
-            + "ImportRunBountyCommand, whose own writes are the ones that signal"
+            + "ImportRunBountyCommand, whose own writes are the ones that signal",
+        // ET-381: asking members to come over changes no fleet — no roster, no seat, no invite. It only enqueues a
+        // message per member, which is the Messaging module's to signal (ET-382); the answer runs SwitchToFleetCommand.
+        [typeof(RequestFleetSwitchCommand)] = "changes no fleet state: it only enqueues a message per member, which "
+            + "Messaging signals; the member's answer runs SwitchToFleetCommand, which signals the move"
     };
 
     /// <summary>Commands measured by ET-379 to publish no signal, each against the ticket that closes it. This list
     /// only ever shrinks: a new command gets a scenario or an exemption, never a place here.</summary>
     private static readonly IReadOnlyList<(string Ticket, Type[] Commands)> KnownGaps =
     [
-        ("ET-381", [
-            typeof(AddExternalMemberCommand), typeof(AssignMemberFitCommand), typeof(CoupleFleetToEsiCommand),
-            typeof(CreateFleetInviteCommand), typeof(CreateSquadCommand), typeof(CreateWingCommand),
-            typeof(DeleteSquadCommand), typeof(DeleteWingCommand), typeof(JoinFleetCommand), typeof(MoveMemberCommand),
-            typeof(RemoveFleetMemberCommand), typeof(RenameSquadCommand), typeof(RenameWingCommand),
-            typeof(ReportMemberFitVerdictCommand), typeof(ReportMemberInGameFleetCommand),
-            typeof(RequestFleetSwitchCommand), typeof(RequestToJoinCommand), typeof(RespondToFleetInviteCommand),
-            typeof(RespondToJoinRequestCommand), typeof(SetFleetCompositionCommand),
-            typeof(SetFleetEsiAutomationCommand), typeof(SetFleetMemberAvailabilityCommand), typeof(SwapMembersCommand),
-            typeof(SwitchToFleetCommand), typeof(TransferFleetOwnershipCommand), typeof(UncoupleFleetFromEsiCommand),
-            typeof(AddFleetCompositionEntryCommand), typeof(AddFleetCompositionRoleCommand),
-            typeof(CreateFleetCompositionCommand), typeof(DeleteFleetCompositionCommand),
-            typeof(EditFleetCompositionCommand), typeof(EditFleetCompositionEntryCommand),
-            typeof(EditFleetCompositionRoleCommand), typeof(RemoveFleetCompositionEntryCommand),
-            typeof(RemoveFleetCompositionRoleCommand), typeof(ReorderFleetCompositionEntriesCommand),
-            typeof(ReorderFleetCompositionRolesCommand)
-        ]),
+
         ("ET-382", [
             typeof(CreateApiKeyCommand), typeof(DeleteApiKeyCommand), typeof(RevokeApiKeyCommand),
             typeof(SetApiKeyScopesCommand), typeof(ImportFitFromTextCommand), typeof(ImportFittingsFromEsiCommand),
@@ -110,7 +102,7 @@ public sealed class CommandSignalCoverageTests
 
     /// <summary>The size of <see cref="KnownGaps"/>. Closing a gap means taking it off the list and lowering this with
     /// it; raising it is the one change to this file a reviewer should refuse.</summary>
-    private const int KnownGapCount = 54;
+    private const int KnownGapCount = 17;
 
     /// <summary>For every command outside Runs that signals: real state to run it against, and what its signal must
     /// name.</summary>
@@ -156,6 +148,274 @@ public sealed class CommandSignalCoverageTests
         {
             long fleetId = await _CreateAsync(dispatcher, cancellationToken);
             return new Act(() => dispatcher.Send(new DisbandFleetCommand(fleetId, Owner), cancellationToken), _Names(fleetId));
+        },
+
+        [typeof(CreateWingCommand)] = async (dispatcher, cancellationToken) =>
+        {
+            long fleetId = await _CreateAsync(dispatcher, cancellationToken);
+            return new Act(async () => await dispatcher.Send(new CreateWingCommand(fleetId, "Wing 2", Owner), cancellationToken),
+                _Names(fleetId));
+        },
+
+        [typeof(RenameWingCommand)] = async (dispatcher, cancellationToken) =>
+        {
+            long fleetId = await _CreateAsync(dispatcher, cancellationToken);
+            long wingId = await _WingAsync(dispatcher, fleetId, cancellationToken);
+            return new Act(() => dispatcher.Send(new RenameWingCommand(wingId, "Logistics", Owner), cancellationToken), _Names(fleetId));
+        },
+
+        [typeof(DeleteWingCommand)] = async (dispatcher, cancellationToken) =>
+        {
+            long fleetId = await _CreateAsync(dispatcher, cancellationToken);
+            long wingId = await _WingAsync(dispatcher, fleetId, cancellationToken);
+            return new Act(() => dispatcher.Send(new DeleteWingCommand(wingId, Owner), cancellationToken), _Names(fleetId));
+        },
+
+        [typeof(CreateSquadCommand)] = async (dispatcher, cancellationToken) =>
+        {
+            long fleetId = await _CreateAsync(dispatcher, cancellationToken);
+            long wingId = await _WingAsync(dispatcher, fleetId, cancellationToken);
+            return new Act(async () => await dispatcher.Send(new CreateSquadCommand(wingId, "Squad 2", Owner), cancellationToken),
+                _Names(fleetId));
+        },
+
+        [typeof(RenameSquadCommand)] = async (dispatcher, cancellationToken) =>
+        {
+            long fleetId = await _CreateAsync(dispatcher, cancellationToken);
+            long squadId = await _SquadAsync(dispatcher, fleetId, cancellationToken);
+            return new Act(() => dispatcher.Send(new RenameSquadCommand(squadId, "Tackle", Owner), cancellationToken), _Names(fleetId));
+        },
+
+        [typeof(DeleteSquadCommand)] = async (dispatcher, cancellationToken) =>
+        {
+            long fleetId = await _CreateAsync(dispatcher, cancellationToken);
+            long squadId = await _SquadAsync(dispatcher, fleetId, cancellationToken);
+            return new Act(() => dispatcher.Send(new DeleteSquadCommand(squadId, Owner), cancellationToken), _Names(fleetId));
+        },
+
+        [typeof(JoinFleetCommand)] = async (dispatcher, cancellationToken) =>
+        {
+            long fleetId = await _CreateAsync(dispatcher, cancellationToken);
+            return new Act(() => dispatcher.Send(new JoinFleetCommand(fleetId, Other), cancellationToken), _Names(fleetId));
+        },
+
+        [typeof(AddExternalMemberCommand)] = async (dispatcher, cancellationToken) =>
+        {
+            long fleetId = await _CreateAsync(dispatcher, cancellationToken);
+            return new Act(async () => await dispatcher.Send(new AddExternalMemberCommand(fleetId, Other, Owner), cancellationToken),
+                _Names(fleetId));
+        },
+
+        [typeof(MoveMemberCommand)] = async (dispatcher, cancellationToken) =>
+        {
+            long fleetId = await _CreateAsync(dispatcher, cancellationToken);
+            long memberId = await _JoinedAsync(dispatcher, fleetId, cancellationToken);
+            return new Act(() => dispatcher.Send(new MoveMemberCommand(memberId, FleetRole.Unassigned, -1, -1, Owner), cancellationToken),
+                _Names(fleetId));
+        },
+
+        [typeof(SwapMembersCommand)] = async (dispatcher, cancellationToken) =>
+        {
+            long fleetId = await _CreateAsync(dispatcher, cancellationToken);
+            long otherId = await _JoinedAsync(dispatcher, fleetId, cancellationToken);
+            long ownerId = await _MemberAsync(dispatcher, fleetId, Owner, cancellationToken);
+            return new Act(() => dispatcher.Send(new SwapMembersCommand(ownerId, otherId, Owner), cancellationToken), _Names(fleetId));
+        },
+
+        [typeof(RemoveFleetMemberCommand)] = async (dispatcher, cancellationToken) =>
+        {
+            long fleetId = await _CreateAsync(dispatcher, cancellationToken);
+            long memberId = await _JoinedAsync(dispatcher, fleetId, cancellationToken);
+            return new Act(() => dispatcher.Send(new RemoveFleetMemberCommand(memberId, Owner), cancellationToken), _Names(fleetId));
+        },
+
+        [typeof(TransferFleetOwnershipCommand)] = async (dispatcher, cancellationToken) =>
+        {
+            long fleetId = await _CreateAsync(dispatcher, cancellationToken);
+            await _JoinedAsync(dispatcher, fleetId, cancellationToken);
+            return new Act(() => dispatcher.Send(new TransferFleetOwnershipCommand(fleetId, Other, Owner), cancellationToken),
+                _Names(fleetId));
+        },
+
+        [typeof(AssignMemberFitCommand)] = async (dispatcher, cancellationToken) =>
+        {
+            long fleetId = await _CreateAsync(dispatcher, cancellationToken);
+            long memberId = await _MemberAsync(dispatcher, fleetId, Owner, cancellationToken);
+            return new Act(() => dispatcher.Send(new AssignMemberFitCommand(memberId, _Fit(), null, Owner), cancellationToken),
+                _Names(fleetId));
+        },
+
+        [typeof(ReportMemberFitVerdictCommand)] = async (dispatcher, cancellationToken) =>
+        {
+            long fleetId = await _CreateAsync(dispatcher, cancellationToken);
+            long memberId = await _MemberAsync(dispatcher, fleetId, Owner, cancellationToken);
+            Assert.True((await dispatcher.Send(new AssignMemberFitCommand(memberId, _Fit(), null, Owner), cancellationToken)).IsSuccess);
+            return new Act(async () => await dispatcher.Send(
+                new ReportMemberFitVerdictCommand(memberId, FitSkillVerdict.CanFly, Owner), cancellationToken), _Names(fleetId));
+        },
+
+        [typeof(ReportMemberInGameFleetCommand)] = async (dispatcher, cancellationToken) =>
+        {
+            long fleetId = await _CreateAsync(dispatcher, cancellationToken);
+            long memberId = await _MemberAsync(dispatcher, fleetId, Owner, cancellationToken);
+            return new Act(async () => await dispatcher.Send(new ReportMemberInGameFleetCommand(memberId, true, Owner), cancellationToken),
+                _Names(fleetId));
+        },
+
+        [typeof(SetFleetMemberAvailabilityCommand)] = async (dispatcher, cancellationToken) =>
+        {
+            long fleetId = await _CreateAsync(dispatcher, cancellationToken);
+            long memberId = await _MemberAsync(dispatcher, fleetId, Owner, cancellationToken);
+            return new Act(() => dispatcher.Send(new SetFleetMemberAvailabilityCommand(
+                memberId, FleetMemberAvailability.SignedOff, "Out tonight", Owner), cancellationToken), _Names(fleetId));
+        },
+
+        [typeof(SetFleetCompositionCommand)] = async (dispatcher, cancellationToken) =>
+        {
+            long fleetId = await _CreateAsync(dispatcher, cancellationToken);
+            long compositionId = await _CompositionAsync(dispatcher, cancellationToken);
+            return new Act(() => dispatcher.Send(new SetFleetCompositionCommand(fleetId, compositionId, Owner), cancellationToken),
+                _Names(fleetId));
+        },
+
+        [typeof(CoupleFleetToEsiCommand)] = async (dispatcher, cancellationToken) =>
+        {
+            long fleetId = await _CreateAsync(dispatcher, cancellationToken);
+            return new Act(() => dispatcher.Send(new CoupleFleetToEsiCommand(fleetId, 1234567, Owner, Owner), cancellationToken),
+                _Names(fleetId));
+        },
+
+        [typeof(UncoupleFleetFromEsiCommand)] = async (dispatcher, cancellationToken) =>
+        {
+            long fleetId = await _CreateAsync(dispatcher, cancellationToken);
+            Assert.True((await dispatcher.Send(new CoupleFleetToEsiCommand(fleetId, 1234567, Owner, Owner), cancellationToken)).IsSuccess);
+            return new Act(() => dispatcher.Send(new UncoupleFleetFromEsiCommand(fleetId, Owner), cancellationToken), _Names(fleetId));
+        },
+
+        [typeof(SetFleetEsiAutomationCommand)] = async (dispatcher, cancellationToken) =>
+        {
+            long fleetId = await _CreateAsync(dispatcher, cancellationToken);
+            return new Act(() => dispatcher.Send(new SetFleetEsiAutomationCommand(fleetId, Owner, true, true), cancellationToken),
+                _Names(fleetId));
+        },
+
+        [typeof(CreateFleetInviteCommand)] = async (dispatcher, cancellationToken) =>
+        {
+            long fleetId = await _CreateAsync(dispatcher, cancellationToken);
+            return new Act(async () => await dispatcher.Send(_Invite(fleetId), cancellationToken), _Names(fleetId));
+        },
+
+        [typeof(RespondToFleetInviteCommand)] = async (dispatcher, cancellationToken) =>
+        {
+            long fleetId = await _CreateAsync(dispatcher, cancellationToken);
+            Result<FleetInvitePayload> invited = await dispatcher.Send(_Invite(fleetId), cancellationToken);
+            Assert.True(invited.IsSuccess);
+            long inviteId = invited.Value?.InviteId ?? throw new InvalidOperationException("The invite carried no id.");
+            return new Act(async () => await dispatcher.Send(new RespondToFleetInviteCommand(inviteId, true, Other), cancellationToken),
+                _Names(fleetId));
+        },
+
+        [typeof(RequestToJoinCommand)] = async (dispatcher, cancellationToken) =>
+        {
+            long fleetId = await _CreateAsync(dispatcher, cancellationToken, FleetVisibility.InviteOnly);
+            return new Act(async () => await dispatcher.Send(new RequestToJoinCommand(fleetId, Other), cancellationToken), _Names(fleetId));
+        },
+
+        [typeof(RespondToJoinRequestCommand)] = async (dispatcher, cancellationToken) =>
+        {
+            long fleetId = await _CreateAsync(dispatcher, cancellationToken, FleetVisibility.InviteOnly);
+            Result<FleetJoinRequestPayload> requested = await dispatcher.Send(new RequestToJoinCommand(fleetId, Other), cancellationToken);
+            Assert.True(requested.IsSuccess);
+            long requestId = requested.Value?.RequestId ?? throw new InvalidOperationException("The request carried no id.");
+            return new Act(() => dispatcher.Send(new RespondToJoinRequestCommand(requestId, true, Owner), cancellationToken),
+                _Names(fleetId));
+        },
+
+        [typeof(SwitchToFleetCommand)] = async (dispatcher, cancellationToken) =>
+        {
+            long fleetId = await _StartedAsync(dispatcher, cancellationToken);
+            return new Act(async () => await dispatcher.Send(new SwitchToFleetCommand(fleetId, Other), cancellationToken), _Names(fleetId));
+        },
+
+        [typeof(CreateFleetCompositionCommand)] = (dispatcher, cancellationToken) =>
+        {
+            long? compositionId = null;
+            return Task.FromResult(new Act(async () =>
+            {
+                Result<long> created = await dispatcher.Send(_Composition(), cancellationToken);
+                compositionId = created.Value;
+                return created;
+            }, published => compositionId is { } id && _NamesComposition(id)(published)));
+        },
+
+        [typeof(EditFleetCompositionCommand)] = async (dispatcher, cancellationToken) =>
+        {
+            long compositionId = await _CompositionAsync(dispatcher, cancellationToken);
+            return new Act(() => dispatcher.Send(new EditFleetCompositionCommand(compositionId, "Armor", null, Owner), cancellationToken),
+                _NamesComposition(compositionId));
+        },
+
+        [typeof(DeleteFleetCompositionCommand)] = async (dispatcher, cancellationToken) =>
+        {
+            long compositionId = await _CompositionAsync(dispatcher, cancellationToken);
+            return new Act(() => dispatcher.Send(new DeleteFleetCompositionCommand(compositionId, Owner), cancellationToken),
+                _NamesComposition(compositionId));
+        },
+
+        [typeof(AddFleetCompositionRoleCommand)] = async (dispatcher, cancellationToken) =>
+        {
+            long compositionId = await _CompositionAsync(dispatcher, cancellationToken);
+            return new Act(async () => await dispatcher.Send(
+                new AddFleetCompositionRoleCommand(compositionId, "Logistics", null, Owner), cancellationToken), _NamesComposition(compositionId));
+        },
+
+        [typeof(EditFleetCompositionRoleCommand)] = async (dispatcher, cancellationToken) =>
+        {
+            (long compositionId, long roleId) = await _RoleAsync(dispatcher, cancellationToken);
+            return new Act(() => dispatcher.Send(new EditFleetCompositionRoleCommand(roleId, "Tackle", 2, Owner), cancellationToken),
+                _NamesComposition(compositionId));
+        },
+
+        [typeof(RemoveFleetCompositionRoleCommand)] = async (dispatcher, cancellationToken) =>
+        {
+            (long compositionId, long roleId) = await _RoleAsync(dispatcher, cancellationToken);
+            return new Act(() => dispatcher.Send(new RemoveFleetCompositionRoleCommand(roleId, Owner), cancellationToken),
+                _NamesComposition(compositionId));
+        },
+
+        [typeof(ReorderFleetCompositionRolesCommand)] = async (dispatcher, cancellationToken) =>
+        {
+            (long compositionId, long roleId) = await _RoleAsync(dispatcher, cancellationToken);
+            return new Act(() => dispatcher.Send(new ReorderFleetCompositionRolesCommand(compositionId, [roleId], Owner), cancellationToken),
+                _NamesComposition(compositionId));
+        },
+
+        [typeof(AddFleetCompositionEntryCommand)] = async (dispatcher, cancellationToken) =>
+        {
+            (long compositionId, long roleId) = await _RoleAsync(dispatcher, cancellationToken);
+            return new Act(async () => await dispatcher.Send(
+                new AddFleetCompositionEntryCommand(roleId, _Fit(), null, Owner), cancellationToken), _NamesComposition(compositionId));
+        },
+
+        [typeof(EditFleetCompositionEntryCommand)] = async (dispatcher, cancellationToken) =>
+        {
+            (long compositionId, _, long entryId) = await _EntryAsync(dispatcher, cancellationToken);
+            return new Act(() => dispatcher.Send(new EditFleetCompositionEntryCommand(entryId, 3, Owner), cancellationToken),
+                _NamesComposition(compositionId));
+        },
+
+        [typeof(RemoveFleetCompositionEntryCommand)] = async (dispatcher, cancellationToken) =>
+        {
+            (long compositionId, _, long entryId) = await _EntryAsync(dispatcher, cancellationToken);
+            return new Act(() => dispatcher.Send(new RemoveFleetCompositionEntryCommand(entryId, Owner), cancellationToken),
+                _NamesComposition(compositionId));
+        },
+
+        [typeof(ReorderFleetCompositionEntriesCommand)] = async (dispatcher, cancellationToken) =>
+        {
+            (long compositionId, long roleId, long entryId) = await _EntryAsync(dispatcher, cancellationToken);
+            return new Act(() => dispatcher.Send(new ReorderFleetCompositionEntriesCommand(roleId, [entryId], Owner), cancellationToken),
+                _NamesComposition(compositionId));
         }
     };
 
@@ -257,14 +517,67 @@ public sealed class CommandSignalCoverageTests
     private static Predicate<IIntegrationEvent> _Names(long fleetId) =>
         published => published is FleetChangedEvent changed && changed.FleetId == fleetId;
 
-    private static CreateFleetCommand _Create() =>
-        new("Signal fleet", null, FleetVisibility.Public, null, null, default, Owner);
+    private static Predicate<IIntegrationEvent> _NamesComposition(long compositionId) =>
+        published => published is CompositionChangedEvent changed && changed.Data.CompositionId == compositionId;
 
-    private static async Task<long> _CreateAsync(IDispatcher dispatcher, CancellationToken cancellationToken)
+    private static CreateFleetCommand _Create(FleetVisibility visibility = FleetVisibility.Public) =>
+        new("Signal fleet", null, visibility, null, null, default, Owner);
+
+    private static async Task<long> _CreateAsync(
+        IDispatcher dispatcher, CancellationToken cancellationToken, FleetVisibility visibility = FleetVisibility.Public)
     {
-        Result<long> created = await dispatcher.Send(_Create(), cancellationToken);
+        Result<long> created = await dispatcher.Send(_Create(visibility), cancellationToken);
         Assert.True(created.IsSuccess);
         return created.Value;
+    }
+
+    private static async Task<long> _MemberAsync(IDispatcher dispatcher, long fleetId, int characterId, CancellationToken cancellationToken) =>
+        (await dispatcher.Query(new ListMembersQuery(fleetId), cancellationToken)).Single(member => member.CharacterId == characterId).Id;
+
+    private static async Task<long> _JoinedAsync(IDispatcher dispatcher, long fleetId, CancellationToken cancellationToken)
+    {
+        Assert.True((await dispatcher.Send(new JoinFleetCommand(fleetId, Other), cancellationToken)).IsSuccess);
+        return await _MemberAsync(dispatcher, fleetId, Other, cancellationToken);
+    }
+
+    private static async Task<long> _WingAsync(IDispatcher dispatcher, long fleetId, CancellationToken cancellationToken) =>
+        (await dispatcher.Query(new ListWingsQuery(fleetId), cancellationToken)).First().Id;
+
+    private static async Task<long> _SquadAsync(IDispatcher dispatcher, long fleetId, CancellationToken cancellationToken)
+    {
+        long wingId = await _WingAsync(dispatcher, fleetId, cancellationToken);
+        return (await dispatcher.Query(new ListSquadsQuery(wingId), cancellationToken)).First().Id;
+    }
+
+    private static CreateFleetInviteCommand _Invite(long fleetId) =>
+        new(fleetId, Other, FleetRole.SquadMember, null, null, null, Owner);
+
+    private static FitReference _Fit() => new() { ShipTypeId = 11987, FitName = "Guardian", ContentHash = "signal-guardian" };
+
+    private static CreateFleetCompositionCommand _Composition() => new("Signal doctrine", null, true, Owner);
+
+    private static async Task<long> _CompositionAsync(IDispatcher dispatcher, CancellationToken cancellationToken)
+    {
+        Result<long> created = await dispatcher.Send(_Composition(), cancellationToken);
+        Assert.True(created.IsSuccess);
+        return created.Value;
+    }
+
+    private static async Task<(long CompositionId, long RoleId)> _RoleAsync(IDispatcher dispatcher, CancellationToken cancellationToken)
+    {
+        long compositionId = await _CompositionAsync(dispatcher, cancellationToken);
+        Result<long> role = await dispatcher.Send(new AddFleetCompositionRoleCommand(compositionId, "Logistics", null, Owner), cancellationToken);
+        Assert.True(role.IsSuccess);
+        return (compositionId, role.Value);
+    }
+
+    private static async Task<(long CompositionId, long RoleId, long EntryId)> _EntryAsync(
+        IDispatcher dispatcher, CancellationToken cancellationToken)
+    {
+        (long compositionId, long roleId) = await _RoleAsync(dispatcher, cancellationToken);
+        Result<long> entry = await dispatcher.Send(new AddFleetCompositionEntryCommand(roleId, _Fit(), null, Owner), cancellationToken);
+        Assert.True(entry.IsSuccess);
+        return (compositionId, roleId, entry.Value);
     }
 
     private static async Task<long> _StartedAsync(IDispatcher dispatcher, CancellationToken cancellationToken)
