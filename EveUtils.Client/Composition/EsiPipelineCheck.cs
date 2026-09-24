@@ -111,6 +111,13 @@ public static class EsiPipelineCheck
             var entry = await store.GetAsync(FileEsiCacheStore.KeyFor($"{Base}/killmails/1/abc/"));
             Check("14 immutable killmail → forever cache, no 2nd call", entry!.ExpiresAt is null && stub.Calls == 1 && r2.FromCache);
         }
+        {
+            var stub = new StubHttpMessageHandler((_, _) => Json(200, ProbeBody).WithExpires(TimeSpan.FromMinutes(5)));
+            var (client, _, store) = Wire(stub, AnyAuth);
+            await client.GetAsync<Probe>("/characters/5/killmails/recent/");
+            var entry = await store.GetAsync(FileEsiCacheStore.KeyFor($"{Base}/characters/5/killmails/recent/"));
+            Check("14b a character's recent-killmail list → Expires TTL, not forever", entry?.ExpiresAt is not null);
+        }
 
         // ── Rate limiting (6, 11, 15) ───────────────────────────────────────────────────────────────
         {

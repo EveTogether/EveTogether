@@ -33,9 +33,11 @@ using EveUtils.Shared.Modules.Esi;
 using EveUtils.Shared.Modules.Esi.Http;
 using EveUtils.Client.Skills;
 using EveUtils.Client.Implants;
+using EveUtils.Client.Killmails;
 using EveUtils.Shared.Modules.Skills;
 using EveUtils.Shared.Modules.Skills.Repositories;
 using EveUtils.Shared.Modules.Implants;
+using EveUtils.Shared.Modules.Killmails;
 using EveUtils.Shared.Modules.Implants.Repositories;
 using EveUtils.Shared.Transport;
 using Microsoft.EntityFrameworkCore;
@@ -108,6 +110,7 @@ public static class ClientServices
                 sp.GetRequiredService<ICharacterSkillQueueRepository>(), sp.GetRequiredService<ICharacterAttributesRepository>())); // skills + queue/attributes import
         services.AddSingleton<IEsiImplantImporter>(sp =>
             new EsiImplantImporter(sp.GetRequiredService<IEsiClient>(), sp.GetRequiredService<ICharacterImplantRepository>())); // implants import
+        services.AddSingleton<EsiKillmailImporter>(); // kills + losses import (the repository auto-registers)
         services.AddSingleton(TimeProvider.System); // injectable clock
         services.AddSingleton<IThemeService, ThemeService>(); // runtime faction theming (live swap + persistence)
         services.AddSingleton<Calendar.IWeekStartService, Calendar.WeekStartService>(); // week-start setting (live swap + persistence)
@@ -153,6 +156,7 @@ public static class ClientServices
         services.AddRunsModule();
         services.AddModuleEsiScopes(SkillsScopeCatalog.Catalog); // esi-skills read_skills + read_skillqueue
         services.AddModuleEsiScopes(ImplantsScopeCatalog.Catalog); // esi-clones read_implants
+        services.AddModuleEsiScopes(KillmailsScopeCatalog.Catalog); // esi-killmails read_killmails (on by default)
         services.AddModuleEsiScopes(FleetsScopeCatalog.Catalog); // esi-fleets read/write (opt-in, Q1) for in-game fleet coupling
         services.AddModuleEsiScopes(LocationScopeCatalog.Catalog); // esi-location read_location (opt-in) for the abyssal countdown
         services.AddEsiScopeRegistry(); // built from all IEsiScopeCatalog registrations (modules)
@@ -171,6 +175,7 @@ public static class ClientServices
         services.AddSingleton<IShipFitDetectionService>(serviceProvider => serviceProvider.GetRequiredService<ShipFitDetectionService>());
         services.AddSingleton<SkillRefreshService>(); // on-start + 120 s (ESI skill-endpoint TTL) skill+queue refresh for all coupled characters
         services.AddSingleton<ImplantRefreshService>(); // on-start + 120 s implant refresh for all coupled characters
+        services.AddSingleton<KillmailRefreshService>(); // on-start + 5 min (the recent-list TTL) killmail import for all coupled characters
         services.AddSingleton<EveUtils.Client.Platform.EveClientPresenceService>(); // 5 s sweep for running EVE clients → character-list badge
     }
 

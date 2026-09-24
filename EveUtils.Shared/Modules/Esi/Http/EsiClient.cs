@@ -220,7 +220,7 @@ public sealed class EsiClient(
             var value = JsonSerializer.Deserialize<T>(body, JsonOptions);
             if (value is null)
                 return EsiResult<T>.Fail(EsiError.Of(EsiErrorKind.ParseError, "ESI returned a null body for a success status."));
-            return EsiResult<T>.Ok(value, fromCache);
+            return EsiResult<T>.Ok(value, fromCache, EsiCacheHeaders.ReadPages(response) ?? 1);
         }
         catch (JsonException ex)
         {

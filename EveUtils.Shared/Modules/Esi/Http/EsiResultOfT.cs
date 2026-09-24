@@ -7,13 +7,17 @@ public sealed class EsiResult<T> : EsiResult
 {
     public T? Value { get; }
 
-    private EsiResult(bool isSuccess, T? value, bool fromCache, EsiError? error)
+    /// <summary>ESI's <c>X-Pages</c> on a paginated endpoint; 1 when the response carries none.</summary>
+    public int Pages { get; }
+
+    private EsiResult(bool isSuccess, T? value, bool fromCache, EsiError? error, int pages = 1)
         : base(isSuccess, fromCache, error)
     {
         Value = value;
+        Pages = pages;
     }
 
-    public static EsiResult<T> Ok(T value, bool fromCache = false) => new(true, value, fromCache, null);
+    public static EsiResult<T> Ok(T value, bool fromCache = false, int pages = 1) => new(true, value, fromCache, null, pages);
     public static new EsiResult<T> Fail(EsiError error) => new(false, default, false, error);
 
     /// <summary>Projects to the typed envelope.</summary>

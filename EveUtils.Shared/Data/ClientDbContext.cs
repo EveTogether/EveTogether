@@ -9,6 +9,7 @@ using EveUtils.Shared.Modules.Runs;
 using EveUtils.Shared.Modules.Settings;
 using EveUtils.Shared.Modules.Skills;
 using EveUtils.Shared.Modules.Implants;
+using EveUtils.Shared.Modules.Killmails;
 using EveUtils.Shared.Transport;
 using Microsoft.EntityFrameworkCore;
 
@@ -27,6 +28,7 @@ public sealed class ClientDbContext(DbContextOptions<ClientDbContext> options) :
         ImplantsModule.ConfigureModel(modelBuilder);           // client-only imported character implants
         FittingsModule.ConfigureClientModel(modelBuilder);     // client-local fittings
         RunsModule.ConfigureClientModel(modelBuilder);         // client-local activity runs and derived summaries
+        KillmailsModule.ConfigureModel(modelBuilder);          // client-only imported kills and losses (RunId → Run)
         FleetModule.ConfigureClientModel(modelBuilder);        // client-only fleets: same Shared entities + IsClientOnly
         modelBuilder.ApplyConfiguration(new LocalCharacterConfiguration()); // client-local character registry
         modelBuilder.ApplyConfiguration(new CoupledServerConfiguration());      // client-local coupled servers + trust
