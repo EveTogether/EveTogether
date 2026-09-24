@@ -31,13 +31,23 @@ public static class FitDetailLauncher
             return;
         }
 
-        var viewModel = new FitDetailWindowViewModel(esi, FitNameResolverFactory.For(services),
+        await OpenAsync(services, dialogs, esi, esi.Name);
+    }
+
+    /// <summary>
+    /// Opens a fit that was never stored as ESI JSON — reconstructed from a killmail (ET-333) — the same read-only
+    /// way as a composition's fit snapshot: no local fit id, so export, push and edit stay off.
+    /// </summary>
+    public static async Task OpenAsync(IServiceProvider services, IDialogService dialogs, EsiFitting fit, string name)
+    {
+        var viewModel = new FitDetailWindowViewModel(fit, FitNameResolverFactory.For(services),
             services.GetService<IFitStatsProvider>(),
             services.GetService<ISdeAccessor>(),
             services.GetService<IDogmaDataAccessor>(),
             services.GetService<ITypeImageProvider>(),
             services.GetService<IMarketPriceRepository>(),
-            toasts: services.GetService<IToastService>());
+            toasts: services.GetService<IToastService>(),
+            name: name);
 
         await viewModel.InitializeAsync();
         dialogs.ShowFitDetail(viewModel);

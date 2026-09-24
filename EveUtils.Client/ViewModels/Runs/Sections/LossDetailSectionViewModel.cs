@@ -1,8 +1,10 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
+using EveUtils.Client.Dialogs;
 using EveUtils.Client.Fleet;
 using EveUtils.Client.Formatting;
 using EveUtils.Client.Killmails;
+using EveUtils.Client.ViewModels.Killmails;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Esi;
 using EveUtils.Shared.Modules.Killmails;
@@ -74,10 +76,13 @@ public sealed partial class LossDetailSectionViewModel(RunDetailSectionServices 
         foreach (RunLossDto loss in losses)
         {
             ActivityRunDetailDto? run = detail.Runs.FirstOrDefault(candidate => candidate.RunId == loss.RunId);
+            int lossCharacterId = loss.CharacterId;
+            int lossKillmailId = loss.KillmailId;
             Losses.Add(new LinkedLossViewModel(services.Dispatcher, loss.CharacterId, loss.KillmailId,
                 [.. loss.OtherRuns.Select(other => new LinkedLossRunChoice(other.RunId,
                     $"{other.SiteName ?? "unnamed run"} · {other.StartedAtUtc.ToLocalTime():d MMM HH:mm}"))],
-                _ChangedAsync)
+                _ChangedAsync,
+                services.Services is not null ? () => _OpenKillmail(lossCharacterId, lossKillmailId) : null)
             {
                 ShipText = _TypeName(loss.VictimShipTypeId),
                 FitText = run?.FitNameSnapshot ?? "no fit recorded",
@@ -94,6 +99,18 @@ public sealed partial class LossDetailSectionViewModel(RunDetailSectionServices 
     {
         RaiseActivityCorrected();
         return Task.CompletedTask;
+    }
+
+    // OPEN KILLMAIL (ET-333): the same "no service, no action" rule every other lookup in this section follows —
+    // a section built without an IServiceProvider never offers the button at all (LinkedLossViewModel.CanOpenKillmail).
+    private void _OpenKillmail(int characterId, int killmailId)
+    {
+        if (services.Services is not { } provider || provider.GetService<IDialogService>() is not { } dialogs)
+        {
+            return;
+        }
+
+        dialogs.ShowKillmailDetail(new KillmailDetailViewModel(services.Dispatcher, dialogs, provider, characterId, killmailId));
     }
 
     private static string _Reason(RunLossDto loss) => loss.LinkSource switch

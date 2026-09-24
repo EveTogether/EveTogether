@@ -36,6 +36,8 @@
                             <Button Classes="rowaction" Content="LINK TO OTHER RUN…"
                                     IsVisible="{Binding HasOtherRuns}" Command="{Binding LinkToOtherRunCommand}"/>
                             <Button Classes="rowaction" Content="UNLINK" Command="{Binding UnlinkCommand}"/>
+                            <Button Classes="rowaction" Content="OPEN KILLMAIL" IsVisible="{Binding CanOpenKillmail}"
+                                    Command="{Binding OpenKillmailCommand}"/>
                         </StackPanel>
                         <TextBlock Classes="hint" TextWrapping="Wrap" Margin="0"
                                    IsVisible="{Binding ErrorText, Converter={x:Static ObjectConverters.IsNotNull}}"

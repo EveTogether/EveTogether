@@ -360,6 +360,12 @@ public sealed class RecordingDialogService : IDialogService
 
     public KillmailsOverviewViewModel ShowKillmails(KillmailsOverviewViewModel viewModel) => LastKillmails = viewModel;
 
+    /// <summary>The killmail detail screen the shell was asked to open, or null — a hook to drive it without
+    /// standing up the real window (ET-333).</summary>
+    public KillmailDetailViewModel? LastKillmailDetail { get; private set; }
+
+    public void ShowKillmailDetail(KillmailDetailViewModel viewModel) => LastKillmailDetail = viewModel;
+
     /// <summary>The save-a-preset dialog the tool asked for, or null — and a hook to drive it (pick a path and
     /// export) without a window.</summary>
     public PresetExportViewModel? LastPresetExport { get; private set; }

@@ -272,6 +272,11 @@ public interface IDialogService
     /// Returns the screen now showing — the one already open, when it was.</summary>
     KillmailsOverviewViewModel ShowKillmails(KillmailsOverviewViewModel viewModel);
 
+    /// <summary>Opens one killmail's detail (ET-333) as a hosted module, keyed on
+    /// <c>killmail-{characterId}-{killmailId}</c> so the same mail opened from KILLMAILS or from LINKED LOSS is one
+    /// tab rather than two.</summary>
+    void ShowKillmailDetail(KillmailDetailViewModel viewModel);
+
     /// <summary>Save-a-preset dialog (ET-61): pick what goes in, name it, write it to one portable file. Modal — the
     /// file picker inside it belongs to the window, so the view-model never sees a path it did not ask for.</summary>
     Task ShowPresetExportAsync(PresetExportViewModel viewModel);

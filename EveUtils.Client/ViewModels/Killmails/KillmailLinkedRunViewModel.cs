@@ -1,40 +1,31 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using EveUtils.Client.ViewModels.Runs;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Killmails.Commands;
 using CqrsDispatcher = EveUtils.Shared.Cqrs.IDispatcher;
 
-namespace EveUtils.Client.ViewModels.Runs;
-
-/// <summary>A run a loss may be moved to, as the picker names it.</summary>
-public sealed record LinkedLossRunChoice(Guid RunId, string Text)
-{
-    public override string ToString() => Text;
-}
+namespace EveUtils.Client.ViewModels.Killmails;
 
 /// <summary>
-/// One linked loss in LINKED LOSS (ET-331) and the pilot's two actions on it: move it to another run, or unlink it.
-/// Both go through <see cref="SetKillmailRunLinkCommand"/>, which rebuilds the activities and marks the link Manual.
+/// LINKED RUN on the killmail detail screen (ET-333): the run a loss is linked to, with OPEN RUN plus the same
+/// move-to-another-run and unlink actions as LINKED LOSS (ET-331) — both go through
+/// <see cref="SetKillmailRunLinkCommand"/>, so this window carries no linking rule of its own (AC6).
 /// </summary>
-public sealed partial class LinkedLossViewModel(
-    CqrsDispatcher dispatcher, int characterId, int killmailId, IReadOnlyList<LinkedLossRunChoice> otherRuns,
-    Func<Task> changed, Action? openKillmail = null) : ObservableObject
+public sealed partial class KillmailLinkedRunViewModel(
+    CqrsDispatcher dispatcher, int characterId, int killmailId, Guid activitySummaryId, DateOnly day,
+    IReadOnlyList<LinkedLossRunChoice> otherRuns, Func<Guid, DateOnly, Task> openRun, Func<Task> changed)
+    : ObservableObject
 {
-    /// <summary>Whether OPEN KILLMAIL (ET-333) can be shown — false when the section was built without a dialog
-    /// service to open it with (e.g. a test that only exercises the link/unlink actions).</summary>
-    public bool CanOpenKillmail => openKillmail is not null;
-
-    [RelayCommand(CanExecute = nameof(CanOpenKillmail))]
-    private void OpenKillmail() => openKillmail?.Invoke();
-
-
-    public required string ShipText { get; init; }
-
-    public required string FitText { get; init; }
+    public required string SiteText { get; init; }
 
     public required string TimeText { get; init; }
 
-    public required string FinalBlowText { get; init; }
+    public required bool IsFailed { get; init; }
+
+    public required string StatusChipText { get; init; }
+
+    public required string ValueText { get; init; }
 
     public required string ReasonText { get; init; }
 
@@ -55,6 +46,9 @@ public sealed partial class LinkedLossViewModel(
     private bool CanLink => SelectedRun is not null && !IsBusy;
 
     private bool CanUnlink => !IsBusy;
+
+    [RelayCommand]
+    private Task OpenRunAsync() => openRun(activitySummaryId, day);
 
     [RelayCommand(CanExecute = nameof(CanLink))]
     private Task LinkToOtherRunAsync() => _SetRunAsync(SelectedRun?.RunId);

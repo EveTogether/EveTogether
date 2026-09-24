@@ -532,6 +532,12 @@ public sealed class DialogService : IDialogService, ISingletonService
             as KillmailsOverviewViewModel ?? viewModel;
     }
 
+    public void ShowKillmailDetail(KillmailDetailViewModel viewModel)
+    {
+        _Observe(viewModel.LoadAsync(), "this screen could not be read");
+        Route(new KillmailDetailWindow(viewModel), viewModel.Title, "killmails", viewModel.ModuleId, MaterialIconKind.SkullOutline);
+    }
+
     /// <summary>A modal dialog rather than a docked module (ET-163 nazorg): filling in a run is a moment, not a
     /// screen you keep open — the run itself lives in the activity window, which the view model opens on its way
     /// out.</summary>

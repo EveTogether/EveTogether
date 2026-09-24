@@ -726,7 +726,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
 
         IReadOnlyList<Character> characters = await _services.GetRequiredService<ICharacterRegistry>().GetAllAsync();
         _dialogs.ShowKillmails(new KillmailsOverviewViewModel(
-            _services.GetRequiredService<IDispatcher>(), _services, characters,
+            _services.GetRequiredService<IDispatcher>(), _dialogs, _services, characters,
             (characterId, scope) => ReAuthenticateAsync(characterId, [scope])));
     }
 

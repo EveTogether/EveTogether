@@ -1,0 +1,39 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vk="using:EveUtils.Client.ViewModels.Killmails"
+             x:Class="EveUtils.Client.Views.Killmails.KillmailLinkedRunView"
+             x:DataType="vk:KillmailLinkedRunViewModel">
+
+    <StackPanel Spacing="8">
+        <Border BorderThickness="1" BorderBrush="{DynamicResource BorderBrush}" Padding="7,6"
+                Classes.danger="{Binding IsFailed}">
+            <Grid ColumnDefinitions="44,*,Auto" ColumnSpacing="8">
+                <TextBlock Grid.Column="0" FontFamily="{StaticResource MonoFont}" VerticalAlignment="Center" Text="{Binding TimeText}"/>
+                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                    <TextBlock Foreground="{StaticResource TextBrightBrush}" FontSize="12" Text="{Binding SiteText}"/>
+                    <Border Classes="chip danger" IsVisible="{Binding IsFailed}" HorizontalAlignment="Left">
+                        <TextBlock Text="{Binding StatusChipText}"/>
+                    </Border>
+                    <Border Classes="chip dim" IsVisible="{Binding !IsFailed}" HorizontalAlignment="Left">
+                        <TextBlock Text="{Binding StatusChipText}"/>
+                    </Border>
+                </StackPanel>
+                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                    <TextBlock Classes="money" Text="{Binding ValueText}"/>
+                    <Button Classes="rowaction" Content="OPEN RUN" Command="{Binding OpenRunCommand}"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+        <TextBlock Classes="hint" TextWrapping="Wrap" Margin="0" Text="{Binding ReasonText}"/>
+        <StackPanel Orientation="Horizontal" Spacing="6">
+            <ComboBox MinWidth="200" ItemsSource="{Binding OtherRuns}" SelectedItem="{Binding SelectedRun}"
+                      IsVisible="{Binding HasOtherRuns}" PlaceholderText="another run of this pilot…"/>
+            <Button Classes="rowaction" Content="LINK TO OTHER RUN…" IsVisible="{Binding HasOtherRuns}"
+                    Command="{Binding LinkToOtherRunCommand}"/>
+            <Button Classes="rowaction" Content="UNLINK" Command="{Binding UnlinkCommand}"/>
+        </StackPanel>
+        <TextBlock Classes="hint" TextWrapping="Wrap" Margin="0"
+                   IsVisible="{Binding ErrorText, Converter={x:Static ObjectConverters.IsNotNull}}"
+                   Text="{Binding ErrorText}"/>
+    </StackPanel>
+</UserControl>

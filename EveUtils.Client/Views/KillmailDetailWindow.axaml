@@ -1,0 +1,164 @@
+<v:ChromedWindow xmlns="https://github.com/avaloniaui" xmlns:v="using:EveUtils.Client.Views"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vk="using:EveUtils.Client.ViewModels.Killmails"
+        xmlns:vwk="using:EveUtils.Client.Views.Killmails"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="758" d:DesignHeight="720"
+        x:Class="EveUtils.Client.Views.KillmailDetailWindow"
+        x:DataType="vk:KillmailDetailViewModel"
+        Width="758" Height="720" MinWidth="420" MinHeight="320"
+        WindowStartupLocation="CenterOwner"
+        Title="{Binding Title}">
+
+    <!-- Layout follows ActivityDetailWindow (ET-333 grooming): a header with big figures, then folding sections —
+         here always expanded, since nothing tests collapsing them — capped at 1040px like every other activity
+         screen (see ActivityDetailWindow.axaml for why MaxWidth needs Stretch, not Left, alignment). -->
+    <DockPanel MaxWidth="1040">
+
+        <Border DockPanel.Dock="Top" Padding="14,12,14,14" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource BorderBrush}">
+            <StackPanel Spacing="10">
+                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
+                    <Border Grid.Column="0" Width="64" Height="64" BorderThickness="1" BorderBrush="{DynamicResource BorderBrush}"/>
+                    <StackPanel Grid.Column="1" Spacing="2">
+                        <TextBlock Classes="panel-title" FontSize="13" Text="{Binding ShipName}"/>
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <TextBlock Classes="label" Text="{Binding KindText}"/>
+                            <Border Classes="chip danger" IsVisible="{Binding IsFailedLoss}"><TextBlock Text="FAILED RUN"/></Border>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,4,0,0">
+                            <TextBlock FontSize="11" Text="{Binding PilotName}"/>
+                            <TextBlock Classes="hint" Margin="0" Text="{Binding CorpAllianceText}"/>
+                        </StackPanel>
+                    </StackPanel>
+                    <StackPanel Grid.Column="2" HorizontalAlignment="Right">
+                        <TextBlock FontFamily="{StaticResource MonoFont}" FontSize="10.5" TextAlignment="Right" Text="{Binding TimeText}"/>
+                        <TextBlock Classes="hint" Margin="0" TextAlignment="Right" Text="{Binding SystemLineText}"/>
+                    </StackPanel>
+                </Grid>
+                <Grid ColumnDefinitions="Auto,Auto,Auto,Auto,*" ColumnSpacing="24">
+                    <StackPanel Grid.Column="0" Spacing="2">
+                        <TextBlock Classes="label" Text="{Binding PrimaryFigureLabel}"/>
+                        <TextBlock FontFamily="{StaticResource MonoFont}" FontSize="26" FontWeight="SemiBold" Text="{Binding PrimaryFigureText}"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" Spacing="2">
+                        <TextBlock Classes="label" Text="DESTROYED"/>
+                        <TextBlock FontFamily="{StaticResource MonoFont}" FontSize="15" FontWeight="SemiBold" Text="{Binding DestroyedText}"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="2" Spacing="2">
+                        <TextBlock Classes="label" Text="DROPPED"/>
+                        <TextBlock FontFamily="{StaticResource MonoFont}" FontSize="15" FontWeight="SemiBold" Text="{Binding DroppedText}"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="3" Spacing="2">
+                        <TextBlock Classes="label" Text="DAMAGE TAKEN"/>
+                        <TextBlock FontFamily="{StaticResource MonoFont}" FontSize="15" FontWeight="SemiBold" Text="{Binding DamageTakenText}"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="4" Spacing="2" HorizontalAlignment="Right">
+                        <TextBlock Classes="label" HorizontalAlignment="Right" Text="{Binding FifthFigureLabel}"/>
+                        <TextBlock FontFamily="{StaticResource MonoFont}" FontSize="15" FontWeight="SemiBold"
+                                   HorizontalAlignment="Right" Text="{Binding FifthFigureText}"/>
+                    </StackPanel>
+                </Grid>
+                <Grid Height="5">
+                    <Border Background="{StaticResource RedBrush}" IsVisible="{Binding IsLoss}"/>
+                    <Border Background="{StaticResource GreenBrush}" IsVisible="{Binding !IsLoss}"/>
+                </Grid>
+                <TextBlock Classes="hint" Margin="0" TextWrapping="Wrap"
+                           IsVisible="{Binding StatusMessage, Converter={x:Static ObjectConverters.IsNotNull}}"
+                           Text="{Binding StatusMessage}"/>
+            </StackPanel>
+        </Border>
+
+        <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+            <StackPanel>
+
+                <!-- ══ LINKED RUN ══ -->
+                <Border Padding="14,9" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource DividerBrush}">
+                    <Grid ColumnDefinitions="96,*" ColumnSpacing="10">
+                        <TextBlock Classes="sectiontitle" Text="LINKED RUN"/>
+                        <TextBlock Grid.Column="1" Classes="sectionsummary" Text="{Binding LinkedRunSummaryText}"/>
+                    </Grid>
+                </Border>
+                <Border Classes="sectionbody">
+                    <StackPanel>
+                        <ContentControl Content="{Binding LinkedRun}" IsVisible="{Binding HasLinkedRun}">
+                            <ContentControl.ContentTemplate>
+                                <DataTemplate DataType="vk:KillmailLinkedRunViewModel">
+                                    <vwk:KillmailLinkedRunView/>
+                                </DataTemplate>
+                            </ContentControl.ContentTemplate>
+                        </ContentControl>
+                        <TextBlock Classes="hint" Margin="0" IsVisible="{Binding !HasLinkedRun}" Text="{Binding LinkedRunSummaryText}"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- ══ FIT ══ -->
+                <Border Padding="14,9" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource DividerBrush}">
+                    <Grid ColumnDefinitions="96,*" ColumnSpacing="10">
+                        <TextBlock Classes="sectiontitle" Text="FIT"/>
+                        <TextBlock Grid.Column="1" Classes="sectionsummary" Text="{Binding FitSummaryText}"/>
+                    </Grid>
+                </Border>
+                <Border Classes="sectionbody">
+                    <StackPanel>
+                        <Border BorderThickness="1" BorderBrush="{DynamicResource BorderBrush}" Padding="10,8" Margin="0,0,0,6">
+                            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+                                <TextBlock VerticalAlignment="Center" FontSize="12" Text="{Binding FitHeaderText}"/>
+                                <Button Grid.Column="2" Classes="small" Content="OPEN FIT" Command="{Binding OpenFitCommand}"/>
+                            </Grid>
+                        </Border>
+                        <ItemsControl ItemsSource="{Binding FitGroups}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="vk:KillmailFitGroupViewModel">
+                                    <StackPanel Margin="0,6,0,0">
+                                        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8" Margin="0,0,0,3">
+                                            <TextBlock Classes="label" Text="{Binding Header}"/>
+                                            <Border Grid.Column="2">
+                                                <TextBlock FontFamily="{StaticResource MonoFont}" FontSize="10"
+                                                           Foreground="{StaticResource TextDimBrush}" Text="{Binding SummaryText}"/>
+                                            </Border>
+                                        </Grid>
+                                        <ItemsControl ItemsSource="{Binding Rows}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate DataType="vk:KillmailDetailItemRowViewModel">
+                                                    <vwk:KillmailItemLineView/>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <TextBlock Classes="hint" TextWrapping="Wrap" Margin="0,8,0,0" IsVisible="{Binding IsAbyssal}"
+                                   Text="An abyssal wreck cannot be reached, so what dropped there is lost as well — it is still listed as ESI reports it."/>
+                    </StackPanel>
+                </Border>
+
+                <!-- ══ ATTACKERS ══ -->
+                <Border Padding="14,9" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource DividerBrush}">
+                    <Grid ColumnDefinitions="96,*" ColumnSpacing="10">
+                        <TextBlock Classes="sectiontitle" Text="ATTACKERS"/>
+                        <TextBlock Grid.Column="1" Classes="sectionsummary" Text="{Binding AttackersSummaryText}"/>
+                    </Grid>
+                </Border>
+                <Border Classes="sectionbody">
+                    <ItemsControl ItemsSource="{Binding Attackers}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="vk:KillmailDetailAttackerRowViewModel">
+                                <vwk:KillmailAttackerLineView/>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </Border>
+
+            </StackPanel>
+        </ScrollViewer>
+
+        <Border DockPanel.Dock="Bottom" Padding="14,10">
+            <Grid ColumnDefinitions="Auto,*,Auto">
+                <Button Classes="small ghost" Content="COPY ESI LINK" Command="{Binding CopyEsiLinkCommand}"/>
+                <TextBlock Grid.Column="2" Classes="hint" Margin="0" Text="{Binding FooterText}"/>
+            </Grid>
+        </Border>
+    </DockPanel>
+</v:ChromedWindow>

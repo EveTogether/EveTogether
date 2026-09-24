@@ -146,7 +146,7 @@ public sealed class KillmailsOverviewTests
         Character[] characters = [new Character("Test Pilot", Pilot,
             GrantedScopes: hasScope ? [KillmailsScopeCatalog.ReadKillmails] : [])];
         KillmailsOverviewViewModel viewModel = new(instance.Services.GetRequiredService<IDispatcher>(),
-            instance.Services, characters, (_, _) => Task.CompletedTask);
+            new RecordingDialogService(), instance.Services, characters, (_, _) => Task.CompletedTask);
         await viewModel.LoadAsync(Ct);
         return viewModel;
     }

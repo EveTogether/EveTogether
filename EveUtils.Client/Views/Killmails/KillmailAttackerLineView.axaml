@@ -1,0 +1,33 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vk="using:EveUtils.Client.ViewModels.Killmails"
+             x:Class="EveUtils.Client.Views.Killmails.KillmailAttackerLineView"
+             x:DataType="vk:KillmailDetailAttackerRowViewModel">
+
+    <UserControl.Styles>
+        <StyleInclude Source="avares://EveUtils.Client/Views/Runs/LootItemStyles.axaml"/>
+    </UserControl.Styles>
+
+    <Border Classes="detailrow" Padding="6,5">
+        <Grid ColumnDefinitions="22,*,150,70,44" ColumnSpacing="8">
+            <Border Grid.Column="0" Width="22" Height="22" BorderThickness="1" BorderBrush="{DynamicResource DividerBrush}"/>
+            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                    <TextBlock FontSize="11" Text="{Binding Name}"/>
+                    <Border Classes="badge role" IsVisible="{Binding IsFinalBlow}"><TextBlock Text="FINAL BLOW"/></Border>
+                    <Border Classes="badge top" IsVisible="{Binding IsTopDamage}"><TextBlock Text="TOP DAMAGE"/></Border>
+                    <Border Classes="badge me" IsVisible="{Binding IsYou}"><TextBlock Text="YOU"/></Border>
+                </StackPanel>
+                <TextBlock Classes="hint" Margin="0" FontSize="9.5" Text="{Binding SubText}"/>
+            </StackPanel>
+            <StackPanel Grid.Column="2" VerticalAlignment="Center">
+                <TextBlock FontSize="10.5" Text="{Binding ShipText}"/>
+                <TextBlock Classes="hint" Margin="0" FontSize="9.5"
+                           IsVisible="{Binding WeaponText, Converter={x:Static ObjectConverters.IsNotNull}}"
+                           Text="{Binding WeaponText}"/>
+            </StackPanel>
+            <TextBlock Grid.Column="3" Classes="money" HorizontalAlignment="Right" VerticalAlignment="Center" Text="{Binding DamageText}"/>
+            <TextBlock Grid.Column="4" Classes="money" HorizontalAlignment="Right" VerticalAlignment="Center" Text="{Binding PercentText}"/>
+        </Grid>
+    </Border>
+</UserControl>
