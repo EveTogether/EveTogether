@@ -29,8 +29,8 @@ namespace EveUtils.Client.UiTests;
 /// view-models: <see cref="IFleetRosterWatch"/>, which every screen showing a fleet roster subscribes to and every
 /// screen changing one announces on. The tests below therefore drive each PAIR of screens in both directions.
 ///
-/// The fleet under test is deliberately CLIENT-ONLY. A local fleet pushes no <c>fleet.changed</c> and never will, so
-/// any fix leaning on that signal solves nothing here — and it is exactly the fleet the operator was looking at.
+/// The fleet under test is deliberately CLIENT-ONLY. A local fleet never reaches a server, so no server push can rescue
+/// a screen here — and it is exactly the fleet the operator was looking at.
 /// </summary>
 public class FleetRosterFanOutTests
 {

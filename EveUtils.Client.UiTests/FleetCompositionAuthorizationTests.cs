@@ -4,6 +4,7 @@ using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Fleet.Composition;
 using EveUtils.Shared.Modules.Fleet.Composition.Commands;
 using EveUtils.Shared.Modules.Fleet.Composition.Repositories;
+using EveUtils.Shared.Runtime;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -23,6 +24,8 @@ public class FleetCompositionAuthorizationTests
     private static FleetCompositionAuthorizer Authorizer(bool policyGrants) =>
         new(new StubAccessPolicy(policyGrants), new StubPrincipalAccessor(new Principal("local", null)));
 
+    private static CompositionChangeSignal Signal() => new(new InProcessEventBus(), new RuntimeContext(ExecutionHost.Client));
+
     private static async Task<(IFleetCompositionRepository Repo, long CompositionId)> SeedAsync(TestClientInstance instance)
     {
         var repo = instance.Services.GetRequiredService<IFleetCompositionRepository>();
@@ -37,7 +40,7 @@ public class FleetCompositionAuthorizationTests
         using var instance = TestClientInstance.Create();
         var (repo, compositionId) = await SeedAsync(instance);
 
-        var handler = new EditFleetCompositionCommandHandler(repo, Authorizer(policyGrants: false));
+        var handler = new EditFleetCompositionCommandHandler(repo, Authorizer(policyGrants: false), Signal());
         var result = await handler.Handle(new EditFleetCompositionCommand(compositionId, "Hijacked", null, Stranger));
 
         Assert.False(result.IsSuccess);
@@ -52,7 +55,7 @@ public class FleetCompositionAuthorizationTests
         var (repo, compositionId) = await SeedAsync(instance);
 
         // The owner branch holds regardless of the refusing policy.
-        var handler = new EditFleetCompositionCommandHandler(repo, Authorizer(policyGrants: false));
+        var handler = new EditFleetCompositionCommandHandler(repo, Authorizer(policyGrants: false), Signal());
         var result = await handler.Handle(new EditFleetCompositionCommand(compositionId, "Renamed", null, Owner));
 
         Assert.True(result.IsSuccess);
@@ -65,7 +68,7 @@ public class FleetCompositionAuthorizationTests
         using var instance = TestClientInstance.Create();
         var (repo, compositionId) = await SeedAsync(instance);
 
-        var handler = new EditFleetCompositionCommandHandler(repo, Authorizer(policyGrants: true));
+        var handler = new EditFleetCompositionCommandHandler(repo, Authorizer(policyGrants: true), Signal());
         var result = await handler.Handle(new EditFleetCompositionCommand(compositionId, "Managed", null, Stranger));
 
         Assert.True(result.IsSuccess);
@@ -79,7 +82,7 @@ public class FleetCompositionAuthorizationTests
         var (repo, compositionId) = await SeedAsync(instance);
         var roleId = await repo.AddRoleAsync(new FleetCompositionRole { CompositionId = compositionId, RoleName = "DPS", SortOrder = 0 });
 
-        var handler = new RemoveFleetCompositionRoleCommandHandler(repo, Authorizer(policyGrants: false));
+        var handler = new RemoveFleetCompositionRoleCommandHandler(repo, Authorizer(policyGrants: false), Signal());
         var result = await handler.Handle(new RemoveFleetCompositionRoleCommand(roleId, Stranger));
 
         Assert.False(result.IsSuccess);

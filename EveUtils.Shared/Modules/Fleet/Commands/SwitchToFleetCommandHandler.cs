@@ -1,14 +1,17 @@
 using System.Linq;
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Messaging;
+using EveUtils.Shared.Modules.Fleet.Dtos;
 using EveUtils.Shared.Modules.Fleet.Entities;
+using EveUtils.Shared.Modules.Fleet.Enums;
+using EveUtils.Shared.Modules.Fleet.Events;
 using EveUtils.Shared.Modules.Fleet.Repositories;
 using EveUtils.Shared.Modules.Messaging.Commands;
 using EveUtils.Shared.Modules.Messaging.Entities;
 
 namespace EveUtils.Shared.Modules.Fleet.Commands;
 
-internal sealed class SwitchToFleetCommandHandler(IFleetRepository repository, IDispatcher dispatcher)
+internal sealed class SwitchToFleetCommandHandler(IFleetRepository repository, IDispatcher dispatcher, IEventBus eventBus)
     : ICommandHandler<SwitchToFleetCommand, Result<IReadOnlyList<long>>>
 {
     public async Task<Result<IReadOnlyList<long>>> Handle(SwitchToFleetCommand command, CancellationToken cancellationToken = default)
@@ -72,6 +75,14 @@ internal sealed class SwitchToFleetCommandHandler(IFleetRepository repository, I
         {
             await repository.RemoveMemberAsync(seat.Id, cancellationToken);
             await repository.TouchActivityAsync(seat.FleetId, now, cancellationToken);
+            // The fleet walked out of has watchers too, and they should not have to refresh to notice.
+            await eventBus.PublishAsync(
+                new FleetChangedEvent(new FleetChangePayload(seat.FleetId, FleetChangeKind.RosterChanged))
+                {
+                    ActingCharacterId = command.ActingCharacterId,
+                    FormerMemberCharacterId = command.ActingCharacterId
+                },
+                EventTarget.Local, cancellationToken);
         }
 
         // ── Step 2: couple here. With every other active membership gone the entry-guard now passes, which is the
@@ -112,6 +123,11 @@ internal sealed class SwitchToFleetCommandHandler(IFleetRepository repository, I
         }
 
         await repository.TouchActivityAsync(fleet.Id, now, cancellationToken);
+        // A member already on this roster who left elsewhere now counts here: the roster's "active elsewhere" moved.
+        if (!alreadyOnRoster || leaving.Count > 0)
+            await eventBus.PublishAsync(
+                new FleetChangedEvent(new FleetChangePayload(fleet.Id, FleetChangeKind.RosterChanged)) { ActingCharacterId = command.ActingCharacterId },
+                EventTarget.Local, cancellationToken);
 
         // The commander asked; they should hear the answer without having to watch the roster. Plain mail: this is
         // a notification, not something to accept or decline.

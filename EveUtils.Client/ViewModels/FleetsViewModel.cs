@@ -134,7 +134,8 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
         _ = _ReloadEverythingAsync();
     }
 
-    /// <summary>Tell every other open screen that a roster moved, the one route such news travels (ET-52).</summary>
+    /// <summary>Tell every other open screen about a roster change beyond what the fleet signal carries (ET-381): a local
+    /// character added past the fleet commands, or a pilot of mine leaving — the watch stops publishing for them.</summary>
     private void _Announce(FleetRosterChange change)
     {
         _ownAnnouncements.Add(change);
@@ -642,15 +643,11 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
         var entryId = composition?.Roles.SelectMany(r => r.Entries)
             .FirstOrDefault(e => string.Equals(e.Fit.ContentHash, fit.ContentHash, StringComparison.OrdinalIgnoreCase))?.Id;
 
-        var assigned = await ServerOrLocalClient(server, member.CharacterId).AssignMemberFitAsync(member.Id, fit, entryId);
+        var assigned = await _ownActions.RunAsync(fleetId,
+            () => ServerOrLocalClient(server, member.CharacterId).AssignMemberFitAsync(member.Id, fit, entryId));
         StatusMessage = assigned.Ok ? $"Assigned {fit.FitName}." : $"Assign failed: {assigned.Message}";
-        if (!assigned.Ok)
-            return;
-
-        await _ReloadEverythingAsync();
-        // The ship and fit a pilot flies show in the shared member menu on every screen, so an assignment is a change
-        // to that member wherever they are drawn — the roster window and fleet metrics included.
-        _Announce(FleetRosterChange.Changed(fleetId, member.CharacterId));
+        if (assigned.Ok)
+            await _ReloadEverythingAsync();
     }
 
     [RelayCommand]
@@ -798,7 +795,8 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
             return;
 
         await LoadLocalFleetsAsync(); // the card is this fleet's roster — a member added to it has to appear on it.
-        // …and on fleet metrics and the roster window, if either stands open. An add is a roster change like any other.
+        // …and on fleet metrics and the roster window, if either stands open. This add writes past the fleet commands, so
+        // it has no signal of its own to carry that news (ET-383).
         foreach (int characterId in addedIds)
             _Announce(FleetRosterChange.Added(row.Id, characterId));
     }
@@ -815,13 +813,11 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
         if (characterId is null)
             return;
 
-        var added = await _localFleets.AddExternalAsync(row.Id, characterId.Value, row.Info.CreatorCharacterId);
+        var added = await _ownActions.RunAsync(row.Id,
+            () => _localFleets.AddExternalAsync(row.Id, characterId.Value, row.Info.CreatorCharacterId));
         StatusMessage = added.IsSuccess ? "Added external pilot." : $"Failed: {added.Messages.FirstOrDefault()?.Text}";
-        if (!added.IsSuccess)
-            return;
-
-        await LoadLocalFleetsAsync(); // same as ADD TOON: the pilot has to land on the card, not just in the status line.
-        _Announce(FleetRosterChange.Added(row.Id, characterId.Value));
+        if (added.IsSuccess)
+            await LoadLocalFleetsAsync(); // same as ADD TOON: the pilot has to land on the card, not just in the status line.
     }
 
     /// <summary>Opens the live metrics for a client-only fleet (formerly "Enter local"): selects it for the inline

@@ -1,5 +1,4 @@
 using System.Globalization;
-using EveUtils.Shared.Modules.Fleet.Enums;
 using EveUtils.Grpc;
 using EveUtils.Server.Auth;
 using EveUtils.Shared.Cqrs;
@@ -8,7 +7,6 @@ using EveUtils.Shared.Modules.Fleet.Commands;
 using EveUtils.Shared.Modules.Fleet.Composition;
 using EveUtils.Shared.Modules.Fleet.Composition.Commands;
 using EveUtils.Shared.Modules.Fleet.Composition.Repositories;
-using EveUtils.Shared.Modules.Fleet.Dtos;
 using EveUtils.Shared.Modules.Fleet.Entities;
 using EveUtils.Shared.Modules.Fleet.Events;
 using EveUtils.Shared.Modules.Fleet.Queries;
@@ -33,7 +31,6 @@ public sealed class FleetsGrpcService(
     ServerSessionService sessions,
     IDispatcher dispatcher,
     ConnectedClients connectedClients,
-    FleetChangeAnnouncer announcer,
     IFleetRepository fleets,
     IFleetCompositionRepository compositions,
     FleetCompositionAuthorizer compositionAuthorizer,
@@ -54,8 +51,6 @@ public sealed class FleetsGrpcService(
             (FleetOfflineBehavior)request.OfflineBehavior,
             character), context.CancellationToken);
 
-        if (result.IsSuccess)
-            await AnnounceLifecycleAsync(result.Value, FleetChangeKind.Created, listedBeforeChange: false, context.CancellationToken);
         return result.IsSuccess
             ? new CreateFleetReply { Accepted = true, Message = "Created.", FleetId = result.Value }
             : new CreateFleetReply { Accepted = false, Message = FirstMessage(result) };
@@ -65,7 +60,6 @@ public sealed class FleetsGrpcService(
     {
         var character = await AuthenticateAsync(context);
 
-        var wasListed = await fleets.IsOpenAsync(request.FleetId, context.CancellationToken);
         var result = await dispatcher.Send(new EditFleetCommand(
             request.FleetId,
             request.Name,
@@ -76,8 +70,6 @@ public sealed class FleetsGrpcService(
             (FleetOfflineBehavior)request.OfflineBehavior,
             character), context.CancellationToken);
 
-        if (result.IsSuccess)
-            await AnnounceLifecycleAsync(request.FleetId, FleetChangeKind.Edited, wasListed, context.CancellationToken);
         return ToActionReply(result, "Saved.");
     }
 
@@ -87,8 +79,6 @@ public sealed class FleetsGrpcService(
 
         var result = await dispatcher.Send(new SetFleetCompositionCommand(
             request.FleetId, request.HasCompositionId ? request.CompositionId : null, character), context.CancellationToken);
-        if (result.IsSuccess)
-            await BroadcastFleetChangedAsync(request.FleetId, FleetChangeKind.CompositionChanged, context.CancellationToken);
         return ToActionReply(result, "Composition coupled.");
     }
 
@@ -98,8 +88,6 @@ public sealed class FleetsGrpcService(
 
         var result = await dispatcher.Send(new CoupleFleetToEsiCommand(
             request.FleetId, request.EsiFleetId, request.EsiFleetBossId, character), context.CancellationToken);
-        if (result.IsSuccess)
-            await BroadcastFleetChangedAsync(request.FleetId, FleetChangeKind.RosterChanged, context.CancellationToken);
         return ToActionReply(result, "Coupled to the in-game fleet.");
     }
 
@@ -108,8 +96,6 @@ public sealed class FleetsGrpcService(
         var character = await AuthenticateAsync(context);
 
         var result = await dispatcher.Send(new UncoupleFleetFromEsiCommand(request.FleetId, character), context.CancellationToken);
-        if (result.IsSuccess)
-            await BroadcastFleetChangedAsync(request.FleetId, FleetChangeKind.RosterChanged, context.CancellationToken);
         return ToActionReply(result, "Uncoupled from the in-game fleet.");
     }
 
@@ -120,8 +106,6 @@ public sealed class FleetsGrpcService(
         var result = await dispatcher.Send(
             new SetFleetEsiAutomationCommand(request.FleetId, character, request.AutoApplyStructure, request.AutoInviteMembers),
             context.CancellationToken);
-        if (result.IsSuccess)
-            await BroadcastFleetChangedAsync(request.FleetId, FleetChangeKind.RosterChanged, context.CancellationToken);
         return ToActionReply(result, "ESI automation settings saved.");
     }
 
@@ -129,10 +113,7 @@ public sealed class FleetsGrpcService(
     {
         var character = await AuthenticateAsync(context);
 
-        var wasListed = await fleets.IsOpenAsync(request.FleetId, context.CancellationToken);
         var result = await dispatcher.Send(new DisbandFleetCommand(request.FleetId, character), context.CancellationToken);
-        if (result.IsSuccess)
-            await AnnounceLifecycleAsync(request.FleetId, FleetChangeKind.Disbanded, wasListed, context.CancellationToken);
         return ToActionReply(result, "Disbanded.");
     }
 
@@ -141,8 +122,6 @@ public sealed class FleetsGrpcService(
         var character = await AuthenticateAsync(context);
 
         var result = await dispatcher.Send(new StartFleetCommand(request.FleetId, character), context.CancellationToken);
-        if (result.IsSuccess)
-            await AnnounceLifecycleAsync(request.FleetId, FleetChangeKind.Activated, listedBeforeChange: false, context.CancellationToken);
         return ToActionReply(result, "Started.");
     }
 
@@ -151,8 +130,6 @@ public sealed class FleetsGrpcService(
         var character = await AuthenticateAsync(context);
 
         var result = await dispatcher.Send(new StopFleetCommand(request.FleetId, character), context.CancellationToken);
-        if (result.IsSuccess)
-            await AnnounceLifecycleAsync(request.FleetId, FleetChangeKind.Stopped, listedBeforeChange: false, context.CancellationToken);
         return ToActionReply(result, "Stopped.");
     }
 
@@ -160,10 +137,7 @@ public sealed class FleetsGrpcService(
     {
         var character = await AuthenticateAsync(context);
 
-        var wasListed = await fleets.IsOpenAsync(request.FleetId, context.CancellationToken);
         var result = await dispatcher.Send(new ConcludeFleetCommand(request.FleetId, character), context.CancellationToken);
-        if (result.IsSuccess)
-            await AnnounceLifecycleAsync(request.FleetId, FleetChangeKind.Concluded, wasListed, context.CancellationToken);
         return ToActionReply(result, "Concluded.");
     }
 
@@ -209,14 +183,6 @@ public sealed class FleetsGrpcService(
         var character = await AuthenticateAsync(context);
 
         var result = await dispatcher.Send(new SwitchToFleetCommand(request.FleetId, character), context.CancellationToken);
-        if (result.IsSuccess)
-        {
-            // Both rosters changed: the one gained a member, the ones left behind lost one. The fleet a switcher
-            // walked out of has watchers too, and they should not have to refresh to notice.
-            await BroadcastFleetChangedAsync(request.FleetId, FleetChangeKind.RosterChanged, context.CancellationToken);
-            foreach (var left in result.Value ?? [])
-                await BroadcastFleetChangedAsync(left, FleetChangeKind.RosterChanged, context.CancellationToken);
-        }
         return ToActionReply(result, "Switched.");
     }
 
@@ -323,10 +289,6 @@ public sealed class FleetsGrpcService(
 
         var result = await dispatcher.Send(new MoveMemberCommand(
             request.MemberId, (FleetRole)request.Role, request.WingId, request.SquadId, character), context.CancellationToken);
-        // A move/unassign is a roster mutation — refresh viewers live just like a swap/fit change (the request
-        // carries only the member, so resolve its fleet). Without it other open windows kept the old position.
-        if (result.IsSuccess && await fleets.GetMemberAsync(request.MemberId, context.CancellationToken) is { } member)
-            await BroadcastFleetChangedAsync(member.FleetId, FleetChangeKind.RosterChanged, context.CancellationToken);
         return ToActionReply(result, "Moved.");
     }
 
@@ -336,11 +298,6 @@ public sealed class FleetsGrpcService(
 
         var result = await dispatcher.Send(new SwapMembersCommand(
             request.FirstMemberId, request.SecondMemberId, character), context.CancellationToken);
-        // Stream G: a position swap is a roster mutation — refresh viewers live just like a move/fit change. Reuse the
-        // RosterChanged kind (clients reload kind-agnostically). Both members share a fleet (the handler enforces it),
-        // so resolve it from either one.
-        if (result.IsSuccess && await fleets.GetMemberAsync(request.FirstMemberId, context.CancellationToken) is { } member)
-            await BroadcastFleetChangedAsync(member.FleetId, FleetChangeKind.RosterChanged, context.CancellationToken);
         return ToActionReply(result, "Members swapped.");
     }
 
@@ -351,11 +308,6 @@ public sealed class FleetsGrpcService(
         var result = await dispatcher.Send(new AssignMemberFitCommand(
             request.MemberId, FromFitDto(request.Fit),
             request.HasCompositionEntryId ? request.CompositionEntryId : null, character), context.CancellationToken);
-        // B-4: a member-fit change must refresh viewers live — the roster's assigned fit + skill badge and
-        // the Fleets tabs' member leaves. Reuse the existing RosterChanged kind (the request carries only the member,
-        // so resolve its fleet) rather than a new event type; clients reload kind-agnostically.
-        if (result.IsSuccess && await fleets.GetMemberAsync(request.MemberId, context.CancellationToken) is { } member)
-            await BroadcastFleetChangedAsync(member.FleetId, FleetChangeKind.RosterChanged, context.CancellationToken);
         return ToActionReply(result, "Fit assigned.");
     }
 
@@ -364,11 +316,8 @@ public sealed class FleetsGrpcService(
         var character = await AuthenticateAsync(context);
 
         // cross-client: self-only enforced in the handler (the pilot's client is the only skill authority).
-        // The result's value says whether the stored verdict changed — only then are viewers notified.
         var result = await dispatcher.Send(new ReportMemberFitVerdictCommand(
             request.MemberId, (FitSkillVerdict)request.Verdict, character), context.CancellationToken);
-        if (result.IsSuccess && result.Value && await fleets.GetMemberAsync(request.MemberId, context.CancellationToken) is { } member)
-            await BroadcastFleetChangedAsync(member.FleetId, FleetChangeKind.RosterChanged, context.CancellationToken);
         return result.IsSuccess
             ? new FleetActionReply { Accepted = true, Message = "Reported." }
             : new FleetActionReply { Accepted = false, Message = FirstMessage(result) };
@@ -379,11 +328,8 @@ public sealed class FleetsGrpcService(
         var character = await AuthenticateAsync(context);
 
         // self-report: self-only enforced in the handler (presence comes from the pilot's own /characters/{id}/fleet/).
-        // The result's value says whether the stored presence changed — only then are viewers notified.
         var result = await dispatcher.Send(new ReportMemberInGameFleetCommand(
             request.MemberId, request.InFleet, character), context.CancellationToken);
-        if (result.IsSuccess && result.Value && await fleets.GetMemberAsync(request.MemberId, context.CancellationToken) is { } member)
-            await BroadcastFleetChangedAsync(member.FleetId, FleetChangeKind.RosterChanged, context.CancellationToken);
         return result.IsSuccess
             ? new FleetActionReply { Accepted = true, Message = "Reported." }
             : new FleetActionReply { Accepted = false, Message = FirstMessage(result) };
@@ -398,8 +344,6 @@ public sealed class FleetsGrpcService(
         var result = await dispatcher.Send(new SetFleetMemberAvailabilityCommand(
             request.MemberId, (FleetMemberAvailability)request.Availability,
             request.HasNote ? request.Note : null, character), context.CancellationToken);
-        if (result.IsSuccess && await fleets.GetMemberAsync(request.MemberId, context.CancellationToken) is { } member)
-            await BroadcastFleetChangedAsync(member.FleetId, FleetChangeKind.RosterChanged, context.CancellationToken);
         return ToActionReply(result, "Availability set.");
     }
 
@@ -442,8 +386,6 @@ public sealed class FleetsGrpcService(
 
         var result = await dispatcher.Send(new AddExternalMemberCommand(
             request.FleetId, request.CharacterId, character), context.CancellationToken);
-        if (result.IsSuccess)
-            await BroadcastFleetChangedAsync(request.FleetId, FleetChangeKind.RosterChanged, context.CancellationToken);
         return ToActionReply(result, "Added.");
     }
 
@@ -453,8 +395,6 @@ public sealed class FleetsGrpcService(
 
         var result = await dispatcher.Send(new TransferFleetOwnershipCommand(
             request.FleetId, request.NewOwnerCharacterId, character), context.CancellationToken);
-        if (result.IsSuccess)
-            await BroadcastFleetChangedAsync(request.FleetId, FleetChangeKind.RosterChanged, context.CancellationToken);
         return ToActionReply(result, "Transferred.");
     }
 
@@ -462,13 +402,8 @@ public sealed class FleetsGrpcService(
     {
         var character = await AuthenticateAsync(context);
 
-        // Resolve the fleet BEFORE the removal deletes the member row, so a successful kick can still notify the
-        // remaining (and the kicked) members — without it their open windows kept showing the removed member.
-        var member = await fleets.GetMemberAsync(request.MemberId, context.CancellationToken);
         var result = await dispatcher.Send(new RemoveFleetMemberCommand(
             request.MemberId, character), context.CancellationToken);
-        if (result.IsSuccess && member is not null)
-            await BroadcastFleetChangedAsync(member.FleetId, FleetChangeKind.RosterChanged, context.CancellationToken);
         return ToActionReply(result, "Removed.");
     }
 
@@ -506,8 +441,6 @@ public sealed class FleetsGrpcService(
 
         var payload = result.Value!;
         await PushAsync(new FleetInviteRespondedEvent(payload, payload.InviteeCharacterId), context.CancellationToken);
-        if (payload.Accepted)
-            await BroadcastFleetChangedAsync(payload.FleetId, FleetChangeKind.RosterChanged, context.CancellationToken);
         return new FleetActionReply { Accepted = true, Message = payload.Accepted ? "Joined." : "Declined." };
     }
 
@@ -575,8 +508,6 @@ public sealed class FleetsGrpcService(
         var character = await AuthenticateAsync(context);
 
         var result = await dispatcher.Send(new JoinFleetCommand(request.FleetId, character), context.CancellationToken);
-        if (result.IsSuccess)
-            await BroadcastFleetChangedAsync(request.FleetId, FleetChangeKind.RosterChanged, context.CancellationToken);
         return ToActionReply(result, "Joined.");
     }
 
@@ -670,8 +601,6 @@ public sealed class FleetsGrpcService(
             return new FleetActionReply { Accepted = true, Message = "Left." }; // not a member → nothing to do
 
         var result = await dispatcher.Send(new RemoveFleetMemberCommand(member.Id, character), context.CancellationToken);
-        if (result.IsSuccess)
-            await BroadcastFleetChangedAsync(request.FleetId, FleetChangeKind.RosterChanged, context.CancellationToken);
         return ToActionReply(result, "Left.");
     }
 
@@ -680,9 +609,6 @@ public sealed class FleetsGrpcService(
     private Task PushAsync(ITargetedEvent integrationEvent, CancellationToken cancellationToken) =>
         connectedClients.SendToCharacterAsync(integrationEvent.TargetCharacterId, WireEnvelopeFactory.ToEnvelope(integrationEvent), cancellationToken);
 
-    /// <summary>Notifies a fleet's currently connected members that its lifecycle or roster changed, so their open
-    /// fleet list, roster window and metrics participation refresh live instead of only on a reconnect/restart. The
-    /// remaining roster is resolved fresh, so a leave/remove reaches everyone still in the fleet.</summary>
     // --- Fleet Compositions. Acting character from the session; mutations gated owner-or-manage in
     // the handlers. Reads go straight to the composition repository (trivial pass-throughs, no query handler). ---
 
@@ -692,19 +618,16 @@ public sealed class FleetsGrpcService(
 
         var result = await dispatcher.Send(new CreateFleetCompositionCommand(
             request.Name, NullIfEmpty(request.Description), request.IsClientOnly, character), context.CancellationToken);
-        if (result.IsSuccess && !request.IsClientOnly)
-            await AnnounceCompositionChangedAsync(result.Value, CompositionChangeKind.Created, character, context.CancellationToken);
-        return ToCreateReply(result, result.IsSuccess ? result.Value : 0);
+        return ToCreateReply(result);
     }
 
     public override Task<FleetActionReply> EditFleetComposition(EditFleetCompositionRequest request, ServerCallContext context) =>
-        MutateCompositionAsync(context, CompositionChangeKind.Edited, "Saved.", _ => Task.FromResult<long?>(request.CompositionId),
-            character => dispatcher.Send(new EditFleetCompositionCommand(
-                request.CompositionId, request.Name, NullIfEmpty(request.Description), character), context.CancellationToken));
+        MutateCompositionAsync(context, "Saved.", character => dispatcher.Send(new EditFleetCompositionCommand(
+            request.CompositionId, request.Name, NullIfEmpty(request.Description), character), context.CancellationToken));
 
     public override Task<FleetActionReply> DeleteFleetComposition(DeleteFleetCompositionRequest request, ServerCallContext context) =>
-        MutateCompositionAsync(context, CompositionChangeKind.Deleted, "Deleted.", _ => Task.FromResult<long?>(request.CompositionId),
-            character => dispatcher.Send(new DeleteFleetCompositionCommand(request.CompositionId, character), context.CancellationToken));
+        MutateCompositionAsync(context, "Deleted.", character => dispatcher.Send(
+            new DeleteFleetCompositionCommand(request.CompositionId, character), context.CancellationToken));
 
     public override async Task<ListFleetCompositionsReply> ListMyFleetCompositions(ListMyFleetCompositionsRequest request, ServerCallContext context)
     {
@@ -762,68 +685,48 @@ public sealed class FleetsGrpcService(
     }
 
     public override Task<CreateStructureReply> AddFleetCompositionRole(AddFleetCompositionRoleRequest request, ServerCallContext context) =>
-        AddToCompositionAsync(context, _ => Task.FromResult<long?>(request.CompositionId),
-            character => dispatcher.Send(new AddFleetCompositionRoleCommand(
-                request.CompositionId, request.RoleName, request.HasGroupMinCount ? request.GroupMinCount : null, character), context.CancellationToken));
+        AddToCompositionAsync(context, character => dispatcher.Send(new AddFleetCompositionRoleCommand(
+            request.CompositionId, request.RoleName, request.HasGroupMinCount ? request.GroupMinCount : null, character), context.CancellationToken));
 
     public override Task<FleetActionReply> EditFleetCompositionRole(EditFleetCompositionRoleRequest request, ServerCallContext context) =>
-        MutateCompositionAsync(context, CompositionChangeKind.Edited, "Saved.", ct => CompositionOfRoleAsync(request.RoleId, ct),
-            character => dispatcher.Send(new EditFleetCompositionRoleCommand(
-                request.RoleId, request.RoleName, request.HasGroupMinCount ? request.GroupMinCount : null, character), context.CancellationToken));
+        MutateCompositionAsync(context, "Saved.", character => dispatcher.Send(new EditFleetCompositionRoleCommand(
+            request.RoleId, request.RoleName, request.HasGroupMinCount ? request.GroupMinCount : null, character), context.CancellationToken));
 
     public override Task<FleetActionReply> RemoveFleetCompositionRole(RemoveFleetCompositionRoleRequest request, ServerCallContext context) =>
-        MutateCompositionAsync(context, CompositionChangeKind.Edited, "Removed.", ct => CompositionOfRoleAsync(request.RoleId, ct),
-            character => dispatcher.Send(new RemoveFleetCompositionRoleCommand(request.RoleId, character), context.CancellationToken));
+        MutateCompositionAsync(context, "Removed.", character => dispatcher.Send(
+            new RemoveFleetCompositionRoleCommand(request.RoleId, character), context.CancellationToken));
 
     public override Task<FleetActionReply> ReorderFleetCompositionRoles(ReorderFleetCompositionRolesRequest request, ServerCallContext context) =>
-        MutateCompositionAsync(context, CompositionChangeKind.Edited, "Reordered.", _ => Task.FromResult<long?>(request.CompositionId),
-            character => dispatcher.Send(new ReorderFleetCompositionRolesCommand(
-                request.CompositionId, request.OrderedRoleIds.ToList(), character), context.CancellationToken));
+        MutateCompositionAsync(context, "Reordered.", character => dispatcher.Send(new ReorderFleetCompositionRolesCommand(
+            request.CompositionId, request.OrderedRoleIds.ToList(), character), context.CancellationToken));
 
     public override Task<CreateStructureReply> AddFleetCompositionEntry(AddFleetCompositionEntryRequest request, ServerCallContext context) =>
-        AddToCompositionAsync(context, ct => CompositionOfRoleAsync(request.RoleId, ct),
-            character => dispatcher.Send(new AddFleetCompositionEntryCommand(
-                request.RoleId, FromFitDto(request.Fit), request.HasEntryMinCount ? request.EntryMinCount : null, character), context.CancellationToken));
+        AddToCompositionAsync(context, character => dispatcher.Send(new AddFleetCompositionEntryCommand(
+            request.RoleId, FromFitDto(request.Fit), request.HasEntryMinCount ? request.EntryMinCount : null, character), context.CancellationToken));
 
     public override Task<FleetActionReply> EditFleetCompositionEntry(EditFleetCompositionEntryRequest request, ServerCallContext context) =>
-        MutateCompositionAsync(context, CompositionChangeKind.Edited, "Saved.", ct => CompositionOfEntryAsync(request.EntryId, ct),
-            character => dispatcher.Send(new EditFleetCompositionEntryCommand(
-                request.EntryId, request.HasEntryMinCount ? request.EntryMinCount : null, character), context.CancellationToken));
+        MutateCompositionAsync(context, "Saved.", character => dispatcher.Send(new EditFleetCompositionEntryCommand(
+            request.EntryId, request.HasEntryMinCount ? request.EntryMinCount : null, character), context.CancellationToken));
 
     public override Task<FleetActionReply> RemoveFleetCompositionEntry(RemoveFleetCompositionEntryRequest request, ServerCallContext context) =>
-        MutateCompositionAsync(context, CompositionChangeKind.Edited, "Removed.", ct => CompositionOfEntryAsync(request.EntryId, ct),
-            character => dispatcher.Send(new RemoveFleetCompositionEntryCommand(request.EntryId, character), context.CancellationToken));
+        MutateCompositionAsync(context, "Removed.", character => dispatcher.Send(
+            new RemoveFleetCompositionEntryCommand(request.EntryId, character), context.CancellationToken));
 
     public override Task<FleetActionReply> ReorderFleetCompositionEntries(ReorderFleetCompositionEntriesRequest request, ServerCallContext context) =>
-        MutateCompositionAsync(context, CompositionChangeKind.Edited, "Reordered.", ct => CompositionOfRoleAsync(request.RoleId, ct),
-            character => dispatcher.Send(new ReorderFleetCompositionEntriesCommand(
-                request.RoleId, request.OrderedEntryIds.ToList(), character), context.CancellationToken));
+        MutateCompositionAsync(context, "Reordered.", character => dispatcher.Send(new ReorderFleetCompositionEntriesCommand(
+            request.RoleId, request.OrderedEntryIds.ToList(), character), context.CancellationToken));
 
-    // The owning composition is looked up before the mutation: a removed role or entry can no longer be traced back to
-    // it afterwards. The reply carries it so the acting client can publish the change with the real id as well.
     private async Task<FleetActionReply> MutateCompositionAsync(
-        ServerCallContext context, CompositionChangeKind kind, string okMessage,
-        Func<CancellationToken, Task<long?>> owningComposition, Func<int, Task<Result>> mutation)
+        ServerCallContext context, string okMessage, Func<int, Task<Result>> mutation)
     {
         var character = await AuthenticateAsync(context);
-
-        var compositionId = await owningComposition(context.CancellationToken);
-        var result = await mutation(character);
-        if (result.IsSuccess && compositionId is not null)
-            await AnnounceCompositionChangedAsync(compositionId.Value, kind, character, context.CancellationToken);
-        return ToActionReply(result, okMessage, compositionId ?? 0);
+        return ToActionReply(await mutation(character), okMessage);
     }
 
-    private async Task<CreateStructureReply> AddToCompositionAsync(
-        ServerCallContext context, Func<CancellationToken, Task<long?>> owningComposition, Func<int, Task<Result<long>>> mutation)
+    private async Task<CreateStructureReply> AddToCompositionAsync(ServerCallContext context, Func<int, Task<Result<long>>> mutation)
     {
         var character = await AuthenticateAsync(context);
-
-        var compositionId = await owningComposition(context.CancellationToken);
-        var result = await mutation(character);
-        if (result.IsSuccess && compositionId is not null)
-            await AnnounceCompositionChangedAsync(compositionId.Value, CompositionChangeKind.Edited, character, context.CancellationToken);
-        return ToCreateReply(result, compositionId ?? 0);
+        return ToCreateReply(await mutation(character));
     }
 
     private static FleetCompositionDto ToCompositionDto(FleetComposition c, bool canEdit = false, string ownerName = "", int fleetCount = 0) => new()
@@ -909,41 +812,6 @@ public sealed class FleetsGrpcService(
         };
     }
 
-    private async Task BroadcastFleetChangedAsync(long fleetId, FleetChangeKind kind, CancellationToken cancellationToken)
-    {
-        var members = await fleets.ListMembersAsync(fleetId, cancellationToken);
-        var envelope = WireEnvelopeFactory.ToEnvelope(new FleetChangedEvent(new FleetChangePayload(fleetId, kind)));
-        await connectedClients.SendToCharactersAsync(members.Select(m => m.CharacterId), envelope, cancellationToken);
-    }
-
-    /// <summary>Tells every other connected character that a shared composition changed. The shared library is one
-    /// server-wide list that every connected character sees (<c>ListAllFleetCompositions</c>), so that is the audience;
-    /// the acting character's own client already published the change locally and is left out.</summary>
-    private Task AnnounceCompositionChangedAsync(
-        long compositionId, CompositionChangeKind kind, int actingCharacter, CancellationToken cancellationToken)
-    {
-        var envelope = WireEnvelopeFactory.ToEnvelope(new CompositionChangedEvent(
-            new CompositionChangePayload(compositionId, kind, IsClientOnly: false)));
-        var audience = connectedClients.ConnectedCharacters().Select(c => c.CharacterId).Where(id => id != actingCharacter);
-        return connectedClients.SendToCharactersAsync(audience, envelope, cancellationToken);
-    }
-
-    private async Task<long?> CompositionOfRoleAsync(long roleId, CancellationToken cancellationToken) =>
-        (await compositions.GetRoleAsync(roleId, cancellationToken))?.CompositionId;
-
-    private async Task<long?> CompositionOfEntryAsync(long entryId, CancellationToken cancellationToken)
-    {
-        var entry = await compositions.GetEntryAsync(entryId, cancellationToken);
-        return entry is null ? null : await CompositionOfRoleAsync(entry.RoleId, cancellationToken);
-    }
-
-    private async Task AnnounceLifecycleAsync(
-        long fleetId, FleetChangeKind kind, bool listedBeforeChange, CancellationToken cancellationToken)
-    {
-        var members = await fleets.ListMembersAsync(fleetId, cancellationToken);
-        await announcer.AnnounceAsync(
-            new FleetChangePayload(fleetId, kind), members.Select(m => m.CharacterId), listedBeforeChange, cancellationToken);
-    }
 
     private static long? NullIfZero(long value) => value > 0 ? value : null;
 
@@ -959,14 +827,14 @@ public sealed class FleetsGrpcService(
             ?? throw new RpcException(new Status(StatusCode.Unauthenticated, NotAuthenticated));
     }
 
-    private static FleetActionReply ToActionReply(Result result, string okMessage, long compositionId = 0) =>
+    private static FleetActionReply ToActionReply(Result result, string okMessage) =>
         result.IsSuccess
-            ? new FleetActionReply { Accepted = true, Message = okMessage, CompositionId = compositionId }
+            ? new FleetActionReply { Accepted = true, Message = okMessage }
             : new FleetActionReply { Accepted = false, Message = FirstMessage(result) };
 
-    private static CreateStructureReply ToCreateReply(Result<long> result, long compositionId = 0) =>
+    private static CreateStructureReply ToCreateReply(Result<long> result) =>
         result.IsSuccess
-            ? new CreateStructureReply { Accepted = true, Message = "Created.", Id = result.Value, CompositionId = compositionId }
+            ? new CreateStructureReply { Accepted = true, Message = "Created.", Id = result.Value }
             : new CreateStructureReply { Accepted = false, Message = FirstMessage(result) };
 
     private static FleetDto ToDto(FleetEntity f)

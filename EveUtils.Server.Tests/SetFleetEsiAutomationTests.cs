@@ -1,4 +1,5 @@
 using System.Threading.Tasks;
+using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Fleet.Commands;
 using EveUtils.Shared.Modules.Fleet.Entities;
 using EveUtils.Shared.Modules.Fleet.Repositories;
@@ -29,7 +30,7 @@ public class SetFleetEsiAutomationTests
     {
         var ct = TestContext.Current.CancellationToken;
         var (repo, fleetId) = await FleetAsync(owner: 100, ct);
-        var handler = new SetFleetEsiAutomationCommandHandler(repo);
+        var handler = new SetFleetEsiAutomationCommandHandler(repo, new InProcessEventBus());
 
         var result = await handler.Handle(
             new SetFleetEsiAutomationCommand(fleetId, ActingCharacterId: 100, AutoApplyStructure: true, AutoInviteMembers: true), ct);
@@ -45,7 +46,7 @@ public class SetFleetEsiAutomationTests
     {
         var ct = TestContext.Current.CancellationToken;
         var (repo, fleetId) = await FleetAsync(owner: 100, ct);
-        var handler = new SetFleetEsiAutomationCommandHandler(repo);
+        var handler = new SetFleetEsiAutomationCommandHandler(repo, new InProcessEventBus());
 
         await handler.Handle(new SetFleetEsiAutomationCommand(fleetId, 100, AutoApplyStructure: true, AutoInviteMembers: true), ct);
         // Turn Auto Apply off but keep Auto Invite on — the caller passes the full desired state, so both are written.
@@ -61,7 +62,7 @@ public class SetFleetEsiAutomationTests
     {
         var ct = TestContext.Current.CancellationToken;
         var (repo, fleetId) = await FleetAsync(owner: 100, ct);
-        var handler = new SetFleetEsiAutomationCommandHandler(repo);
+        var handler = new SetFleetEsiAutomationCommandHandler(repo, new InProcessEventBus());
 
         var result = await handler.Handle(
             new SetFleetEsiAutomationCommand(fleetId, ActingCharacterId: 200, AutoApplyStructure: true, AutoInviteMembers: true), ct);
@@ -76,7 +77,7 @@ public class SetFleetEsiAutomationTests
     public async Task Set_UnknownFleet_IsRejected()
     {
         var ct = TestContext.Current.CancellationToken;
-        var handler = new SetFleetEsiAutomationCommandHandler(new FleetRepository(_factory));
+        var handler = new SetFleetEsiAutomationCommandHandler(new FleetRepository(_factory), new InProcessEventBus());
 
         var result = await handler.Handle(
             new SetFleetEsiAutomationCommand(FleetId: 12345, ActingCharacterId: 100, AutoApplyStructure: true, AutoInviteMembers: true), ct);

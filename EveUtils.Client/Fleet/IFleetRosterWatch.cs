@@ -11,9 +11,10 @@ namespace EveUtils.Client.Fleet;
 /// ET-49 and ET-52 in turn — three rounds of the same "and this neighbour too" — so it is one announcement with
 /// however many listeners instead.
 ///
-/// A member change is announced here by the screen that made it. A fleet's lifecycle change is not: the Shared command
-/// handlers raise <c>FleetChangedEvent</c> on the local bus, a client-only fleet's own and a server fleet's push
-/// alike, and <see cref="FleetRosterWatch"/> folds it IN � so a screen has one subscription covering every origin.
+/// Every fleet command raises <c>FleetChangedEvent</c> on the local bus once its write is done (ET-381) — a client-only
+/// fleet's own handler and a server fleet's push alike — and <see cref="FleetRosterWatch"/> folds it in, so a screen has
+/// one subscription covering every origin. A screen announces here only what no command carries: a pilot it removed,
+/// or a local toon added past the commands (ET-383).
 /// </summary>
 public interface IFleetRosterWatch
 {

@@ -25,11 +25,18 @@ internal sealed class DisbandFleetCommandHandler(IFleetRepository repository, IE
         if (fleet.State == FleetState.Archived)
             return Result.Success(); // already disbanded — idempotent
 
+        // Measured before the write: disbanding takes the fleet out of discovery.
+        var wasListed = await repository.IsOpenAsync(fleet.Id, cancellationToken);
         fleet.State = FleetState.Archived;
         fleet.LastActivityAt = DateTimeOffset.UtcNow;
         await repository.UpdateAsync(fleet, cancellationToken);
         await eventBus.PublishAsync(
-            new FleetChangedEvent(new FleetChangePayload(fleet.Id, FleetChangeKind.Disbanded)), EventTarget.Local, cancellationToken);
+            new FleetChangedEvent(new FleetChangePayload(fleet.Id, FleetChangeKind.Disbanded))
+            {
+                ActingCharacterId = command.ActingCharacterId,
+                WasListed = wasListed
+            },
+            EventTarget.Local, cancellationToken);
         return Result.Success();
     }
 }

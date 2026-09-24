@@ -44,7 +44,7 @@ public sealed class FleetMemberRemovalService(IServiceProvider services, IDialog
         // (ET-52). It also stops this client publishing for them: the participation set is otherwise only rewritten
         // by the fleets listing, which sweeps while its window is open and never while it is closed, so the client
         // kept pushing a kicked pilot's samples at 1 Hz and lazy discovery put their card straight back (ET-49).
-        // A client-only fleet pushes no fleet.changed, so nothing else would ever have corrected either of those.
+        // The removal's own fleet signal (ET-381) redraws the screens, but carries no pilot to stop publishing for.
         services.GetService<IFleetRosterWatch>()?.Announce(
             FleetRosterChange.Removed(request.FleetId, request.CharacterId));
 

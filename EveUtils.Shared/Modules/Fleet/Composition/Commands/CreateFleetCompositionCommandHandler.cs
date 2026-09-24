@@ -1,10 +1,11 @@
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Fleet.Composition.Repositories;
+using EveUtils.Shared.Modules.Fleet.Enums;
 
 namespace EveUtils.Shared.Modules.Fleet.Composition.Commands;
 
-internal sealed class CreateFleetCompositionCommandHandler(IFleetCompositionRepository repository)
+internal sealed class CreateFleetCompositionCommandHandler(IFleetCompositionRepository repository, CompositionChangeSignal changes)
     : ICommandHandler<CreateFleetCompositionCommand, Result<long>>
 {
     public async Task<Result<long>> Handle(CreateFleetCompositionCommand command, CancellationToken cancellationToken = default)
@@ -24,6 +25,7 @@ internal sealed class CreateFleetCompositionCommandHandler(IFleetCompositionRepo
             UpdatedAt = now
         }, cancellationToken);
 
+        await changes.PublishAsync(id, CompositionChangeKind.Created, cancellationToken, command.IsClientOnly);
         return Result<long>.Success(id);
     }
 }

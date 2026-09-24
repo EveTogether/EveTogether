@@ -1,11 +1,14 @@
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Messaging;
+using EveUtils.Shared.Modules.Fleet.Dtos;
 using EveUtils.Shared.Modules.Fleet.Entities;
+using EveUtils.Shared.Modules.Fleet.Enums;
+using EveUtils.Shared.Modules.Fleet.Events;
 using EveUtils.Shared.Modules.Fleet.Repositories;
 
 namespace EveUtils.Shared.Modules.Fleet.Commands;
 
-internal sealed class ReportMemberFitVerdictCommandHandler(IFleetRepository repository)
+internal sealed class ReportMemberFitVerdictCommandHandler(IFleetRepository repository, IEventBus eventBus)
     : ICommandHandler<ReportMemberFitVerdictCommand, Result<bool>>
 {
     public async Task<Result<bool>> Handle(ReportMemberFitVerdictCommand command, CancellationToken cancellationToken = default)
@@ -29,6 +32,9 @@ internal sealed class ReportMemberFitVerdictCommandHandler(IFleetRepository repo
 
         member.FitSkillVerdict = verdict;
         await repository.UpdateMemberAsync(member, cancellationToken);
+        await eventBus.PublishAsync(
+            new FleetChangedEvent(new FleetChangePayload(member.FleetId, FleetChangeKind.RosterChanged)) { ActingCharacterId = command.ActingCharacterId },
+            EventTarget.Local, cancellationToken);
         return Result<bool>.Success(true);
     }
 }

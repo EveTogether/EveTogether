@@ -1,7 +1,6 @@
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Modules.Fleet.Cleanup;
 using EveUtils.Shared.Modules.Fleet.Commands;
-using EveUtils.Shared.Modules.Fleet.Dtos;
 using EveUtils.Shared.Modules.Fleet.Entities;
 using EveUtils.Shared.Modules.Fleet.Enums;
 using EveUtils.Shared.Modules.Fleet.Repositories;
@@ -13,7 +12,8 @@ namespace EveUtils.Server.Grpc;
 /// One automatic-stop sweep over the started fleets (ET-167): a fleet whose roster has emptied, or whose members
 /// have all gone quiet, goes back to standing by. Pulled out of the background service the way
 /// <see cref="FleetCleanupRunner"/> was, so a headless check can run a deterministic sweep against a supplied "now".
-/// The decision is the pure <see cref="FleetAutoStopPolicy"/>; this only loads, dispatches and announces.
+/// The decision is the pure <see cref="FleetAutoStopPolicy"/>; this only loads and dispatches — the stop's own signal
+/// reaches the fleet's watchers through <see cref="FleetChangeAnnouncer"/>, owner included, like a pressed STOP.
 ///
 /// <para><b>This is the first path on which the server changes a fleet's phase by itself, so the shape of it matters
 /// more than its length.</b> It opens no new door: it sends the ordinary <see cref="StopFleetCommand"/> with the
@@ -32,7 +32,6 @@ namespace EveUtils.Server.Grpc;
 public sealed class FleetAutoStopRunner(
     IFleetRepository repository,
     IDispatcher dispatcher,
-    FleetChangeAnnouncer announcer,
     ILogger<FleetAutoStopRunner> logger)
 {
     public async Task<SweepResult> SweepAsync(
@@ -71,8 +70,6 @@ public sealed class FleetAutoStopRunner(
                 "Fleet auto-stop: '{FleetName}' ({FleetId}) stood down by {Trigger}; roster {MemberCount}, present {PresentCount}, ever heard {EverHeardCount}.",
                 fleet.Name, fleet.Id, reason, census.MemberCount, census.PresentCount, census.EverHeardCount);
 
-            await AnnounceAsync(fleet.Id, fleet.CreatorCharacterId, members, reason, cancellationToken);
-
             if (reason == FleetStopTrigger.RosterEmpty)
                 rosterEmpty++;
             else
@@ -81,24 +78,6 @@ public sealed class FleetAutoStopRunner(
 
         return new SweepResult(rosterEmpty, allOffline);
     }
-
-    /// <summary>
-    /// The same live push <c>FleetsGrpcService</c> sends after a pressed STOP, so an open roster or fleet list
-    /// re-reads instead of showing a fleet that is no longer running. The owner is addressed explicitly as well as
-    /// the roster: they need not be a member of their own fleet, and on an empty roster they are the only audience
-    /// there is. A public fleet reaches every connected client, the way <see cref="FleetChangeAnnouncer"/> decides.
-    /// </summary>
-    private Task AnnounceAsync(
-        long fleetId,
-        int ownerCharacterId,
-        IReadOnlyList<FleetMember> members,
-        FleetStopTrigger trigger,
-        CancellationToken cancellationToken) =>
-        announcer.AnnounceAsync(
-            new FleetChangePayload(fleetId, FleetChangeKind.Stopped, trigger),
-            members.Select(m => m.CharacterId).Append(ownerCharacterId),
-            listedBeforeChange: false,
-            cancellationToken);
 
     public readonly record struct SweepResult(int RosterEmpty, int AllOffline)
     {

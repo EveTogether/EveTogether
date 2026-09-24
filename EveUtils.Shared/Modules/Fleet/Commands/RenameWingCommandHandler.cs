@@ -1,11 +1,14 @@
 using System.Linq;
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Messaging;
+using EveUtils.Shared.Modules.Fleet.Dtos;
+using EveUtils.Shared.Modules.Fleet.Enums;
+using EveUtils.Shared.Modules.Fleet.Events;
 using EveUtils.Shared.Modules.Fleet.Repositories;
 
 namespace EveUtils.Shared.Modules.Fleet.Commands;
 
-internal sealed class RenameWingCommandHandler(IFleetRepository repository)
+internal sealed class RenameWingCommandHandler(IFleetRepository repository, IEventBus eventBus)
     : ICommandHandler<RenameWingCommand, Result>
 {
     public async Task<Result> Handle(RenameWingCommand command, CancellationToken cancellationToken = default)
@@ -26,6 +29,9 @@ internal sealed class RenameWingCommandHandler(IFleetRepository repository)
 
         wing.Name = command.Name.Trim();
         await repository.UpdateWingAsync(wing, cancellationToken);
+        await eventBus.PublishAsync(
+            new FleetChangedEvent(new FleetChangePayload(wing.FleetId, FleetChangeKind.StructureChanged)) { ActingCharacterId = command.ActingCharacterId },
+            EventTarget.Local, cancellationToken);
         return Result.Success();
     }
 }

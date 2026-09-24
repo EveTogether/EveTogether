@@ -7,7 +7,6 @@ using EveUtils.Client.Fleet;
 using EveUtils.Grpc;
 using EveUtils.Shared.Modules.Fleet.Dtos;
 using EveUtils.Shared.Modules.Fleet.Entities;
-using EveUtils.Shared.Modules.Fleet.Enums;
 using Grpc.Core;
 using GrpcFleets = EveUtils.Grpc.Fleets;
 using EveUtils.Shared.DependencyInjection;
@@ -29,8 +28,8 @@ namespace EveUtils.Client.Transport;
 /// fail "Not authenticated" while the stream still shows connected.
 /// </summary>
 public sealed class FleetClient(
-    GrpcChannelFactory channelFactory, IClientSessionStore sessionStore, ServerSessionRefresher refresher,
-    CompositionChangePublisher compositionChanges) : IFleetTransportClient, ISingletonService
+    GrpcChannelFactory channelFactory, IClientSessionStore sessionStore, ServerSessionRefresher refresher)
+    : IFleetTransportClient, ISingletonService
 {
     public async Task<(bool Ok, string Message, long FleetId)> CreateFleetAsync(
         string serverAddress, string name, string? description, FleetVisibility visibility,
@@ -439,7 +438,7 @@ public sealed class FleetClient(
                 Name = name,
                 Description = description ?? string.Empty,
                 IsClientOnly = isClientOnly
-            }, headers, cancellationToken: cancellationToken), cancellationToken, isClientOnly ? null : CompositionChangeKind.Created);
+            }, headers, cancellationToken: cancellationToken), cancellationToken);
 
     public Task<(bool Ok, string Message)> EditFleetCompositionAsync(
         string serverAddress, long compositionId, string name, string? description, int actingCharacterId = 0, CancellationToken cancellationToken = default) =>
@@ -449,11 +448,11 @@ public sealed class FleetClient(
                 CompositionId = compositionId,
                 Name = name,
                 Description = description ?? string.Empty
-            }, headers, cancellationToken: cancellationToken), cancellationToken, CompositionChangeKind.Edited);
+            }, headers, cancellationToken: cancellationToken), cancellationToken);
 
     public Task<(bool Ok, string Message)> DeleteFleetCompositionAsync(string serverAddress, long compositionId, int actingCharacterId = 0, CancellationToken cancellationToken = default) =>
         ActionAsync(serverAddress, actingCharacterId, (client, headers) =>
-            client.DeleteFleetCompositionAsync(new DeleteFleetCompositionRequest { CompositionId = compositionId }, headers, cancellationToken: cancellationToken), cancellationToken, CompositionChangeKind.Deleted);
+            client.DeleteFleetCompositionAsync(new DeleteFleetCompositionRequest { CompositionId = compositionId }, headers, cancellationToken: cancellationToken), cancellationToken);
 
     // Both composition lists throw rather than return an empty list on a failure: the Compositions window says
     // "no compositions shared on this server yet" for an empty result, which is a lie when the read never landed.
@@ -488,7 +487,7 @@ public sealed class FleetClient(
         if (groupMinCount is int min)
             request.GroupMinCount = min;
         return CreateStructureAsync(serverAddress, actingCharacterId, (client, headers) =>
-            client.AddFleetCompositionRoleAsync(request, headers, cancellationToken: cancellationToken), cancellationToken, CompositionChangeKind.Edited);
+            client.AddFleetCompositionRoleAsync(request, headers, cancellationToken: cancellationToken), cancellationToken);
     }
 
     public Task<(bool Ok, string Message)> EditFleetCompositionRoleAsync(
@@ -498,12 +497,12 @@ public sealed class FleetClient(
         if (groupMinCount is int min)
             request.GroupMinCount = min;
         return ActionAsync(serverAddress, actingCharacterId, (client, headers) =>
-            client.EditFleetCompositionRoleAsync(request, headers, cancellationToken: cancellationToken), cancellationToken, CompositionChangeKind.Edited);
+            client.EditFleetCompositionRoleAsync(request, headers, cancellationToken: cancellationToken), cancellationToken);
     }
 
     public Task<(bool Ok, string Message)> RemoveFleetCompositionRoleAsync(string serverAddress, long roleId, int actingCharacterId = 0, CancellationToken cancellationToken = default) =>
         ActionAsync(serverAddress, actingCharacterId, (client, headers) =>
-            client.RemoveFleetCompositionRoleAsync(new RemoveFleetCompositionRoleRequest { RoleId = roleId }, headers, cancellationToken: cancellationToken), cancellationToken, CompositionChangeKind.Edited);
+            client.RemoveFleetCompositionRoleAsync(new RemoveFleetCompositionRoleRequest { RoleId = roleId }, headers, cancellationToken: cancellationToken), cancellationToken);
 
     public Task<(bool Ok, string Message)> ReorderFleetCompositionRolesAsync(
         string serverAddress, long compositionId, IReadOnlyList<long> orderedRoleIds, int actingCharacterId = 0, CancellationToken cancellationToken = default)
@@ -511,7 +510,7 @@ public sealed class FleetClient(
         var request = new ReorderFleetCompositionRolesRequest { CompositionId = compositionId };
         request.OrderedRoleIds.AddRange(orderedRoleIds);
         return ActionAsync(serverAddress, actingCharacterId, (client, headers) =>
-            client.ReorderFleetCompositionRolesAsync(request, headers, cancellationToken: cancellationToken), cancellationToken, CompositionChangeKind.Edited);
+            client.ReorderFleetCompositionRolesAsync(request, headers, cancellationToken: cancellationToken), cancellationToken);
     }
 
     public Task<(bool Ok, string Message, long Id)> AddFleetCompositionEntryAsync(
@@ -521,7 +520,7 @@ public sealed class FleetClient(
         if (entryMinCount is int min)
             request.EntryMinCount = min;
         return CreateStructureAsync(serverAddress, actingCharacterId, (client, headers) =>
-            client.AddFleetCompositionEntryAsync(request, headers, cancellationToken: cancellationToken), cancellationToken, CompositionChangeKind.Edited);
+            client.AddFleetCompositionEntryAsync(request, headers, cancellationToken: cancellationToken), cancellationToken);
     }
 
     public Task<(bool Ok, string Message)> EditFleetCompositionEntryAsync(
@@ -531,12 +530,12 @@ public sealed class FleetClient(
         if (entryMinCount is int min)
             request.EntryMinCount = min;
         return ActionAsync(serverAddress, actingCharacterId, (client, headers) =>
-            client.EditFleetCompositionEntryAsync(request, headers, cancellationToken: cancellationToken), cancellationToken, CompositionChangeKind.Edited);
+            client.EditFleetCompositionEntryAsync(request, headers, cancellationToken: cancellationToken), cancellationToken);
     }
 
     public Task<(bool Ok, string Message)> RemoveFleetCompositionEntryAsync(string serverAddress, long entryId, int actingCharacterId = 0, CancellationToken cancellationToken = default) =>
         ActionAsync(serverAddress, actingCharacterId, (client, headers) =>
-            client.RemoveFleetCompositionEntryAsync(new RemoveFleetCompositionEntryRequest { EntryId = entryId }, headers, cancellationToken: cancellationToken), cancellationToken, CompositionChangeKind.Edited);
+            client.RemoveFleetCompositionEntryAsync(new RemoveFleetCompositionEntryRequest { EntryId = entryId }, headers, cancellationToken: cancellationToken), cancellationToken);
 
     public Task<(bool Ok, string Message)> ReorderFleetCompositionEntriesAsync(
         string serverAddress, long roleId, IReadOnlyList<long> orderedEntryIds, int actingCharacterId = 0, CancellationToken cancellationToken = default)
@@ -544,7 +543,7 @@ public sealed class FleetClient(
         var request = new ReorderFleetCompositionEntriesRequest { RoleId = roleId };
         request.OrderedEntryIds.AddRange(orderedEntryIds);
         return ActionAsync(serverAddress, actingCharacterId, (client, headers) =>
-            client.ReorderFleetCompositionEntriesAsync(request, headers, cancellationToken: cancellationToken), cancellationToken, CompositionChangeKind.Edited);
+            client.ReorderFleetCompositionEntriesAsync(request, headers, cancellationToken: cancellationToken), cancellationToken);
     }
 
     private static FleetCompositionInfo MapComposition(FleetCompositionDto dto) => new(
@@ -633,14 +632,11 @@ public sealed class FleetClient(
 
     private async Task<(bool Ok, string Message)> ActionAsync(
         string serverAddress, int actingCharacterId,
-        Func<GrpcFleets.FleetsClient, Metadata, AsyncUnaryCall<FleetActionReply>> call, CancellationToken cancellationToken,
-        CompositionChangeKind? compositionChange = null)
+        Func<GrpcFleets.FleetsClient, Metadata, AsyncUnaryCall<FleetActionReply>> call, CancellationToken cancellationToken)
     {
         try
         {
             var reply = await InvokeAsync(serverAddress, actingCharacterId, call, cancellationToken);
-            if (reply.Accepted)
-                await PublishCompositionChangeAsync(compositionChange, reply.CompositionId, serverAddress, cancellationToken);
             return (reply.Accepted, reply.Message);
         }
         catch (RpcException ex)
@@ -651,14 +647,11 @@ public sealed class FleetClient(
 
     private async Task<(bool Ok, string Message, long Id)> CreateStructureAsync(
         string serverAddress, int actingCharacterId,
-        Func<GrpcFleets.FleetsClient, Metadata, AsyncUnaryCall<CreateStructureReply>> call, CancellationToken cancellationToken,
-        CompositionChangeKind? compositionChange = null)
+        Func<GrpcFleets.FleetsClient, Metadata, AsyncUnaryCall<CreateStructureReply>> call, CancellationToken cancellationToken)
     {
         try
         {
             var reply = await InvokeAsync(serverAddress, actingCharacterId, call, cancellationToken);
-            if (reply.Accepted)
-                await PublishCompositionChangeAsync(compositionChange, reply.CompositionId, serverAddress, cancellationToken);
             return (reply.Accepted, reply.Message, reply.Id);
         }
         catch (RpcException ex)
@@ -667,14 +660,6 @@ public sealed class FleetClient(
         }
     }
 
-    // The one place a server composition change is published locally. The server names the owning composition in its
-    // reply; a server that predates that leaves it 0, and a change without a real id is not announced.
-    private async Task PublishCompositionChangeAsync(
-        CompositionChangeKind? kind, long compositionId, string serverAddress, CancellationToken cancellationToken)
-    {
-        if (kind is { } changed && compositionId > 0)
-            await compositionChanges.PublishAsync(compositionId, changed, serverAddress, cancellationToken);
-    }
 
     /// <summary>A refused list reply (<c>Ok = false</c>) is a FAILURE, not an empty result. Every map above used to
     /// fold it to <c>[]</c>, which is how "the server no longer accepts this session" came out looking exactly like

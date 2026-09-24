@@ -188,7 +188,8 @@ builder.Services.AddWireEvents();
 builder.Services.AddSingleton<ConnectedClients>();
 builder.Services.AddHostedService<EventBusKeepaliveService>(); // liveness ping → clients detect a vanished server (tunnel half-open), ghosts get evicted
 builder.Services.AddScoped<FleetBroadcastResolver>();       // Live broadcast set = roster members ∩ presence
-builder.Services.AddScoped<FleetChangeAnnouncer>();        // lifecycle push: public fleet → every connected client, else roster
+builder.Services.AddHostedService<FleetChangeAnnouncer>();  // fleet signal relay: listed lifecycle → every connected client, else the fleet's own audience
+builder.Services.AddHostedService<CompositionChangeRelay>(); // composition signal relay: every connected client
 builder.Services.AddScoped<FleetCleanupRunner>();           // one cleanup sweep (archive/hard-delete)
 builder.Services.AddScoped<FleetAutoStopRunner>();          // one auto-stop sweep (emptied/gone-quiet fleet → standing by)
 builder.Services.AddHostedService<FleetCleanupService>();   // periodic fleet pass: auto-stop, then cleanup

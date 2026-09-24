@@ -24,5 +24,14 @@ public enum FleetChangeKind
     /// <summary>The fleet's own details were edited (ET-360) — a name, a time or the visibility, so a public fleet made
     /// invite-only takes its row out of every non-member's list. Appended for the same wire reason as
     /// <see cref="Stopped"/>.</summary>
-    Edited
+    Edited,
+
+    /// <summary>A wing or squad was created, renamed or deleted (ET-381). Appended for the same wire reason as
+    /// <see cref="Stopped"/>.</summary>
+    StructureChanged,
+
+    /// <summary>An invite or a join request was raised or turned down — the roster's pending section moved, the roster
+    /// itself did not (ET-381). An accepted one is a <see cref="RosterChanged"/>. Appended for the same wire reason as
+    /// <see cref="Stopped"/>.</summary>
+    InvitesChanged
 }

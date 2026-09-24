@@ -1,11 +1,14 @@
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Messaging;
+using EveUtils.Shared.Modules.Fleet.Dtos;
 using EveUtils.Shared.Modules.Fleet.Entities;
+using EveUtils.Shared.Modules.Fleet.Enums;
+using EveUtils.Shared.Modules.Fleet.Events;
 using EveUtils.Shared.Modules.Fleet.Repositories;
 
 namespace EveUtils.Shared.Modules.Fleet.Commands;
 
-internal sealed class UncoupleFleetFromEsiCommandHandler(IFleetRepository repository)
+internal sealed class UncoupleFleetFromEsiCommandHandler(IFleetRepository repository, IEventBus eventBus)
     : ICommandHandler<UncoupleFleetFromEsiCommand, Result>
 {
     public async Task<Result> Handle(UncoupleFleetFromEsiCommand command, CancellationToken cancellationToken = default)
@@ -22,10 +25,16 @@ internal sealed class UncoupleFleetFromEsiCommandHandler(IFleetRepository reposi
                 "Only the fleet owner can uncouple it from the in-game fleet.", "Fleet"));
 
         // Idempotent: clearing an already-unlinked fleet is a no-op success — the caller's intent (no stored link) holds.
+        if (fleet is { EsiFleetId: null, EsiFleetBossId: null, EsiSyncState: EsiFleetSyncState.NotLinked })
+            return Result.Success();
+
         fleet.EsiFleetId = null;
         fleet.EsiFleetBossId = null;
         fleet.EsiSyncState = EsiFleetSyncState.NotLinked;
         await repository.UpdateAsync(fleet, cancellationToken);
+        await eventBus.PublishAsync(
+            new FleetChangedEvent(new FleetChangePayload(fleet.Id, FleetChangeKind.RosterChanged)) { ActingCharacterId = command.ActingCharacterId },
+            EventTarget.Local, cancellationToken);
         return Result.Success();
     }
 }

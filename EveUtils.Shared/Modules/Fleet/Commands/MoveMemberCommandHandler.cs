@@ -1,12 +1,15 @@
 using System.Linq;
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Messaging;
+using EveUtils.Shared.Modules.Fleet.Dtos;
 using EveUtils.Shared.Modules.Fleet.Entities;
+using EveUtils.Shared.Modules.Fleet.Enums;
+using EveUtils.Shared.Modules.Fleet.Events;
 using EveUtils.Shared.Modules.Fleet.Repositories;
 
 namespace EveUtils.Shared.Modules.Fleet.Commands;
 
-internal sealed class MoveMemberCommandHandler(IFleetRepository repository)
+internal sealed class MoveMemberCommandHandler(IFleetRepository repository, IEventBus eventBus)
     : ICommandHandler<MoveMemberCommand, Result>
 {
     public async Task<Result> Handle(MoveMemberCommand command, CancellationToken cancellationToken = default)
@@ -66,6 +69,9 @@ internal sealed class MoveMemberCommandHandler(IFleetRepository repository)
         member.SquadId = squadId;
         await repository.UpdateMemberAsync(member, cancellationToken);
 
+        await eventBus.PublishAsync(
+            new FleetChangedEvent(new FleetChangePayload(member.FleetId, FleetChangeKind.RosterChanged)) { ActingCharacterId = command.ActingCharacterId },
+            EventTarget.Local, cancellationToken);
         return Result.Success();
     }
 

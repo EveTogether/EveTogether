@@ -1,12 +1,14 @@
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Fleet.Composition.Repositories;
+using EveUtils.Shared.Modules.Fleet.Enums;
 
 namespace EveUtils.Shared.Modules.Fleet.Composition.Commands;
 
 internal sealed class EditFleetCompositionRoleCommandHandler(
     IFleetCompositionRepository repository,
-    FleetCompositionAuthorizer authorizer) : ICommandHandler<EditFleetCompositionRoleCommand, Result>
+    FleetCompositionAuthorizer authorizer,
+    CompositionChangeSignal changes) : ICommandHandler<EditFleetCompositionRoleCommand, Result>
 {
     public async Task<Result> Handle(EditFleetCompositionRoleCommand command, CancellationToken cancellationToken = default)
     {
@@ -32,6 +34,7 @@ internal sealed class EditFleetCompositionRoleCommandHandler(
         role.GroupMinCount = command.GroupMinCount;
 
         await repository.UpdateRoleAsync(role, cancellationToken);
+        await changes.PublishAsync(composition.Id, CompositionChangeKind.Edited, cancellationToken);
         return Result.Success();
     }
 }

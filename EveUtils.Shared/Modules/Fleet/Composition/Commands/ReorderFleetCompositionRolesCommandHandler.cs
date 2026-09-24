@@ -1,12 +1,14 @@
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Fleet.Composition.Repositories;
+using EveUtils.Shared.Modules.Fleet.Enums;
 
 namespace EveUtils.Shared.Modules.Fleet.Composition.Commands;
 
 internal sealed class ReorderFleetCompositionRolesCommandHandler(
     IFleetCompositionRepository repository,
-    FleetCompositionAuthorizer authorizer) : ICommandHandler<ReorderFleetCompositionRolesCommand, Result>
+    FleetCompositionAuthorizer authorizer,
+    CompositionChangeSignal changes) : ICommandHandler<ReorderFleetCompositionRolesCommand, Result>
 {
     public async Task<Result> Handle(ReorderFleetCompositionRolesCommand command, CancellationToken cancellationToken = default)
     {
@@ -20,6 +22,7 @@ internal sealed class ReorderFleetCompositionRolesCommandHandler(
                 MessageSeverity.Error, MessageCodes.PermissionDenied, "You may not manage this composition.", "FleetComposition"));
 
         await repository.ReorderRolesAsync(command.CompositionId, command.OrderedRoleIds, cancellationToken);
+        await changes.PublishAsync(composition.Id, CompositionChangeKind.Edited, cancellationToken);
         return Result.Success();
     }
 }

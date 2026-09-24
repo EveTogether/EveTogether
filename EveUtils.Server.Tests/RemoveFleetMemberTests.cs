@@ -1,5 +1,6 @@
 using System.Threading;
 using System.Threading.Tasks;
+using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Fleet.Commands;
 using EveUtils.Shared.Modules.Fleet.Entities;
 using EveUtils.Shared.Modules.Fleet.Repositories.Implementations;
@@ -42,7 +43,7 @@ public class RemoveFleetMemberTests
     {
         var ct = TestContext.Current.CancellationToken;
         var (repo, fleetId, _, memberId) = await FleetAsync(ct);
-        var handler = new RemoveFleetMemberCommandHandler(repo);
+        var handler = new RemoveFleetMemberCommandHandler(repo, new InProcessEventBus());
 
         var result = await handler.Handle(new RemoveFleetMemberCommand(memberId, ActingCharacterId: Owner), ct);
 
@@ -57,7 +58,7 @@ public class RemoveFleetMemberTests
     {
         var ct = TestContext.Current.CancellationToken;
         var (repo, fleetId, ownerMemberId, _) = await FleetAsync(ct);
-        var handler = new RemoveFleetMemberCommandHandler(repo);
+        var handler = new RemoveFleetMemberCommandHandler(repo, new InProcessEventBus());
 
         // The ordinary member tries to remove someone who is not them.
         var result = await handler.Handle(new RemoveFleetMemberCommand(ownerMemberId, ActingCharacterId: Member), ct);
@@ -72,7 +73,7 @@ public class RemoveFleetMemberTests
     {
         var ct = TestContext.Current.CancellationToken;
         var (repo, _, _, memberId) = await FleetAsync(ct);
-        var handler = new RemoveFleetMemberCommandHandler(repo);
+        var handler = new RemoveFleetMemberCommandHandler(repo, new InProcessEventBus());
 
         var result = await handler.Handle(new RemoveFleetMemberCommand(memberId, ActingCharacterId: Outsider), ct);
 
@@ -86,7 +87,7 @@ public class RemoveFleetMemberTests
     {
         var ct = TestContext.Current.CancellationToken;
         var (repo, _, _, memberId) = await FleetAsync(ct);
-        var handler = new RemoveFleetMemberCommandHandler(repo);
+        var handler = new RemoveFleetMemberCommandHandler(repo, new InProcessEventBus());
 
         var result = await handler.Handle(new RemoveFleetMemberCommand(memberId, ActingCharacterId: Member), ct);
 
@@ -101,7 +102,7 @@ public class RemoveFleetMemberTests
     {
         var ct = TestContext.Current.CancellationToken;
         var (repo, _, ownerMemberId, _) = await FleetAsync(ct);
-        var handler = new RemoveFleetMemberCommandHandler(repo);
+        var handler = new RemoveFleetMemberCommandHandler(repo, new InProcessEventBus());
 
         var result = await handler.Handle(new RemoveFleetMemberCommand(ownerMemberId, ActingCharacterId: Owner), ct);
 
@@ -114,7 +115,7 @@ public class RemoveFleetMemberTests
     {
         var ct = TestContext.Current.CancellationToken;
         var (repo, _, _, _) = await FleetAsync(ct);
-        var handler = new RemoveFleetMemberCommandHandler(repo);
+        var handler = new RemoveFleetMemberCommandHandler(repo, new InProcessEventBus());
 
         var result = await handler.Handle(new RemoveFleetMemberCommand(MemberId: 999_999, ActingCharacterId: Owner), ct);
 
@@ -128,7 +129,7 @@ public class RemoveFleetMemberTests
         var ct = TestContext.Current.CancellationToken;
         var (repo, fleetId, _, memberId) = await FleetAsync(ct);
         var before = (await repo.GetAsync(fleetId, ct))!.LastActivityAt;
-        var handler = new RemoveFleetMemberCommandHandler(repo);
+        var handler = new RemoveFleetMemberCommandHandler(repo, new InProcessEventBus());
 
         await handler.Handle(new RemoveFleetMemberCommand(memberId, ActingCharacterId: Owner), ct);
 

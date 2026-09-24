@@ -9,6 +9,7 @@ using EveUtils.Shared.DependencyInjection;
 using EveUtils.Shared.Identity;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Fleet;
+using EveUtils.Shared.Modules.Fleet.Commands;
 using EveUtils.Shared.Modules.Fleet.Composition;
 using EveUtils.Shared.Modules.Fleet.Composition.Repositories;
 using EveUtils.Shared.Modules.Fleet.Dtos;
@@ -27,22 +28,24 @@ using Xunit;
 namespace EveUtils.Server.Tests;
 
 /// <summary>
-/// ET-360: an edit of a fleet is pushed as <c>fleet.changed</c> — to every connected character when the fleet was
-/// public before or after the edit (so a non-member's row goes stale or vanishes), otherwise to its members only.
+/// ET-381: a fleet change made through the gRPC service reaches the fleet's other connected members because the
+/// command that made it published its signal and <see cref="FleetChangeAnnouncer"/> relayed it — not because the gRPC
+/// method remembered to announce. These two were the gaps: no gRPC method announced a new wing, and an accepted join
+/// request only reached the requester by mail.
 /// </summary>
-public sealed class FleetEditPushTests : IDisposable
+public sealed class FleetSignalRelayTests : IDisposable
 {
-    private const int Creator = 90250177;
-    private const int Onlooker = 90000002;
+    private const int Commander = 90250177;
+    private const int Wingman = 90000002;
+    private const int Requester = 90000003;
 
     private readonly SqliteServerDbContextFactory _factory = new();
     private readonly ServiceProvider _provider;
     private readonly IServiceScope _scope;
-    private readonly RecordingWriter _creatorStream = new();
-    private readonly RecordingWriter _onlookerStream = new();
+    private readonly RecordingWriter _wingmanStream = new();
     private FleetChangeAnnouncer? _announcer;
 
-    public FleetEditPushTests()
+    public FleetSignalRelayTests()
     {
         var services = new ServiceCollection();
         services.AddLogging();
@@ -51,6 +54,7 @@ public sealed class FleetEditPushTests : IDisposable
         services.AddCqrs();
         services.AddEventBus();
         services.AddSharedServices(ExecutionHost.Server);
+        services.AddSingleton<IRuntimeContext>(new RuntimeContext(ExecutionHost.Server));
         services.AddFleetModule();
         services.AddSingleton<IDbContextFactory<SharedDbContext>>(_factory);
         services.AddSingleton<IDbContextFactory<ServerDbContext>>(_factory);
@@ -66,73 +70,78 @@ public sealed class FleetEditPushTests : IDisposable
         _factory.Dispose();
     }
 
-    /// <summary>AC-1: the fleet leaves discovery with this edit, and the non-member's row has to go with it.</summary>
     [Fact]
-    public async Task APublicFleetMadeInviteOnly_ReachesAConnectedNonMember()
+    public async Task ANewWing_ReachesAnotherConnectedMember()
     {
         var (service, context) = await _ServiceAsync();
-        var fleetId = await _CreateActiveFleetAsync(service, context, FleetVisibility.Public);
+        var fleetId = await _FleetWithWingmanAsync(service, context, FleetVisibility.Public);
 
-        var reply = await _EditAsync(service, context, fleetId, FleetVisibility.InviteOnly);
+        var reply = await service.CreateWing(new CreateWingRequest { FleetId = fleetId, Name = "Wing 2" }, context);
 
         Assert.True(reply.Accepted, reply.Message);
-        var received = Assert.Single(_onlookerStream.Written).Event;
+        Assert.Equal(FleetChangeKind.StructureChanged, _ChangeFor(fleetId));
+    }
+
+    [Fact]
+    public async Task AnAcceptedJoinRequest_ReachesAnotherConnectedMember()
+    {
+        var (service, context) = await _ServiceAsync();
+        var fleetId = await _FleetWithWingmanAsync(service, context, FleetVisibility.InviteOnly);
+        var requested = await _Dispatcher().Send(new RequestToJoinCommand(fleetId, Requester), TestContext.Current.CancellationToken);
+        Assert.True(requested.IsSuccess);
+        _wingmanStream.Written.Clear();
+
+        var requestId = requested.Value?.RequestId ?? throw new InvalidOperationException("The request carried no id.");
+        var reply = await service.RespondToJoinRequest(new RespondToJoinRequestRequest { RequestId = requestId, Accept = true }, context);
+
+        Assert.True(reply.Accepted, reply.Message);
+        Assert.Equal(FleetChangeKind.RosterChanged, _ChangeFor(fleetId));
+    }
+
+    private FleetChangeKind _ChangeFor(long fleetId)
+    {
+        var received = Assert.Single(_wingmanStream.Written, w => w.Event.FleetId == fleetId).Event;
         Assert.Equal("fleet.changed", received.EventType);
-        Assert.Equal(fleetId, received.FleetId);
-        Assert.Equal(FleetChangeKind.Edited, JsonSerializer.Deserialize<FleetChangePayload>(received.PayloadJson)!.Kind);
+        var change = JsonSerializer.Deserialize<FleetChangePayload>(received.PayloadJson)
+            ?? throw new InvalidOperationException("The push carried no payload.");
+        return change.Kind;
     }
 
-    /// <summary>AC-2: an invite-only fleet stays hidden from discovery, so its edit may not announce it to strangers.</summary>
-    [Fact]
-    public async Task AnInviteOnlyFleetEdited_StaysOnItsRoster()
+    /// <summary>A fleet the commander created through the service, with the wingman on its roster. Seated straight
+    /// into the store: how they got there is not what these tests are about.</summary>
+    private async Task<long> _FleetWithWingmanAsync(FleetsGrpcService service, ServerCallContext context, FleetVisibility visibility)
     {
-        var (service, context) = await _ServiceAsync();
-        var fleetId = await _CreateActiveFleetAsync(service, context, FleetVisibility.InviteOnly);
-
-        var reply = await _EditAsync(service, context, fleetId, FleetVisibility.InviteOnly);
-
-        Assert.True(reply.Accepted, reply.Message);
-        Assert.Empty(_onlookerStream.Written);
-        Assert.Single(_creatorStream.Written, w => w.Event.FleetId == fleetId);
-    }
-
-    private async Task<long> _CreateActiveFleetAsync(FleetsGrpcService service, ServerCallContext context, FleetVisibility visibility)
-    {
-        var created = await service.CreateFleet(
-            new CreateFleetRequest { Name = "Roam", Visibility = (int)visibility }, context);
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var created = await service.CreateFleet(new CreateFleetRequest { Name = "Roam", Visibility = (int)visibility }, context);
         Assert.True(created.Accepted, created.Message);
-        var fleets = _scope.ServiceProvider.GetRequiredService<IFleetRepository>();
-        var fleet = await fleets.GetAsync(created.FleetId, TestContext.Current.CancellationToken)
-            ?? throw new InvalidOperationException("Fleet was not stored.");
-        fleet.State = FleetState.Active;
-        await fleets.UpdateAsync(fleet, TestContext.Current.CancellationToken);
-        _creatorStream.Written.Clear();
-        _onlookerStream.Written.Clear();
+        await _scope.ServiceProvider.GetRequiredService<IFleetRepository>().AddMemberAsync(new FleetMember
+        {
+            FleetId = created.FleetId, CharacterId = Wingman, Role = FleetRole.SquadMember, WingId = -1, SquadId = -1
+        }, cancellationToken);
+        _wingmanStream.Written.Clear();
         return created.FleetId;
     }
 
-    private static Task<FleetActionReply> _EditAsync(
-        FleetsGrpcService service, ServerCallContext context, long fleetId, FleetVisibility visibility) =>
-        service.EditFleet(new EditFleetRequest { FleetId = fleetId, Name = "Roam (renamed)", Visibility = (int)visibility }, context);
+    private IDispatcher _Dispatcher() => _scope.ServiceProvider.GetRequiredService<IDispatcher>();
 
     private async Task<(FleetsGrpcService Service, ServerCallContext Context)> _ServiceAsync()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var authRepository = new ServerAuthRepository(_factory);
-        var character = await authRepository.UpsertSyncedAsync(Creator, "Creator", new EncryptedToken([1], [2], [3]), null, cancellationToken);
+        var character = await authRepository.UpsertSyncedAsync(Commander, "Commander", new EncryptedToken([1], [2], [3]), null, cancellationToken);
         var sessions = new ServerSessionService(authRepository, NullLogger<ServerSessionService>.Instance);
         var issued = await sessions.IssueAsync(character.Id, cancellationToken);
 
         var clients = new ConnectedClients();
-        clients.Add(new ConnectedClient("creator", Creator, "Creator", _creatorStream));
-        clients.Add(new ConnectedClient("onlooker", Onlooker, "Onlooker", _onlookerStream));
+        clients.Add(new ConnectedClient("commander", Commander, "Commander", new RecordingWriter()));
+        clients.Add(new ConnectedClient("wingman", Wingman, "Wingman", _wingmanStream));
 
         var services = _scope.ServiceProvider;
         _announcer = new FleetChangeAnnouncer(services.GetRequiredService<IEventBus>(),
             services.GetRequiredService<IServiceScopeFactory>(), clients, NullLogger<FleetChangeAnnouncer>.Instance);
         await _announcer.StartAsync(cancellationToken);
         var service = new FleetsGrpcService(
-            sessions, services.GetRequiredService<IDispatcher>(), clients, services.GetRequiredService<IFleetRepository>(),
+            sessions, _Dispatcher(), clients, services.GetRequiredService<IFleetRepository>(),
             services.GetRequiredService<IFleetCompositionRepository>(),
             services.GetRequiredService<FleetCompositionAuthorizer>(),
             authRepository);
