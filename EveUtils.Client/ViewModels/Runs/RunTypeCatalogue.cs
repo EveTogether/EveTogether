@@ -265,7 +265,7 @@ public static class RunTypeCatalogue
             DetailSections =
             [
                 RunSectionId.Activity, RunSectionId.Enemies, RunSectionId.Fleet, RunSectionId.Loot,
-                RunSectionId.Consumables
+                RunSectionId.Consumables, RunSectionId.Loss
             ],
             Space = RunSpace.AbyssalPocket,
             LootStrategies = AbyssalLootStrategies,
