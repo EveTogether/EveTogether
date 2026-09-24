@@ -1,9 +1,13 @@
 using System.Net;
+using System.Security.Claims;
 using System.Text;
 using EveUtils.Grpc;
 using EveUtils.Server.Auth;
 using EveUtils.Server.Grpc;
+using EveUtils.Shared.Modules.AdminAuth.Permissions;
 using EveUtils.Shared.Modules.Esi;
+using EveUtils.Shared.Modules.Fittings.Repositories.Implementations;
+using EveUtils.Shared.Modules.Fleet.Composition.Repositories.Implementations;
 using EveUtils.Shared.Modules.ServerAuth.Repositories;
 using EveUtils.Shared.Modules.ServerAuth.Repositories.Implementations;
 using EveUtils.Shared.Modules.ServerAuth.Services;
@@ -135,6 +139,24 @@ public sealed class SyncedCharacterReleaseTests : IDisposable
         Assert.Equal(coupled.SyncedCharacterId, remaining.Id);
         Assert.Equal(["token=orphan-one&token_type_hint=refresh_token", "token=orphan-two&token_type_hint=refresh_token"],
             _ccp.Requests.Select(r => r.Body).Order().ToArray());
+    }
+
+    [Fact]
+    public async Task DeleteSyncedCharacter_ByAnAdmin_DeletesTheCharacterAndRevokesItsTokenAtCcp()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var session = await _PairAsync(90382598, "Abnoba Auscent", ct);
+        var dataAdmin = new DataAdminService(
+            _factory, new SharedFitRepository(_factory), _repository, new FleetCompositionRepository(_factory), new UnusedDispatcher(), _releaser);
+        var admin = new ClaimsPrincipal(new ClaimsIdentity([new Claim(AdminClaims.Permission, PanelPermissions.DataDelete)], "test"));
+
+        var result = await dataAdmin.DeleteSyncedCharacterAsync(admin, session.SyncedCharacterId, ct);
+
+        Assert.True(result.IsSuccess);
+        Assert.Empty(await _repository.ListSyncedAsync(ct));
+        var request = Assert.Single(_ccp.Requests);
+        Assert.Equal("https://login.eveonline.com/v2/oauth/revoke", request.Uri);
+        Assert.Equal($"token={RefreshToken}&token_type_hint=refresh_token", request.Body);
     }
 
     private async Task<(string AccessToken, int SyncedCharacterId)> _PairAsync(int esiCharacterId, string name, CancellationToken ct)

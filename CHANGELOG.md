@@ -17,6 +17,12 @@ release notes, not this file.
 
 ## [Unreleased]
 
+- **Fixed: the server no longer answers unauthenticated requests to the old test endpoints.** `GET`/`POST /ships` and
+  `GET /sync-logs` were leftovers from early development and let anyone who could reach a server read its sync log or
+  add rows to its database. They are gone.
+- **Fixed: deleting a paired character in the server panel now revokes its token at EVE too.** Until now the panel
+  removed the stored token but left it valid at EVE; it now revokes it, like decoupling does. If EVE cannot be
+  reached the character is still deleted.
 - **Fixed: decoupling a character now really lets go of it on the server.** Until now the server kept the character's
   EVE sign-in and went on refreshing it every minute after you decoupled. When the last machine decouples, the server
   now deletes the character with its stored token and revokes that token at EVE. A character that is still coupled

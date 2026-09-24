@@ -33,7 +33,8 @@ public sealed class DataAdminService(
     ISharedFitRepository sharedFits,
     IServerAuthRepository serverAuth,
     IFleetCompositionRepository compositions,
-    IDispatcher dispatcher) : IScopedService
+    IDispatcher dispatcher,
+    SyncedCharacterReleaser releaser) : IScopedService
 {
     // ── Shared fittings (seam: ISharedFitRepository) ──────────────────────────────────────────────
     public async Task<Result> DeleteSharedFitAsync(ClaimsPrincipal actor, int id, CancellationToken ct = default)
@@ -191,7 +192,8 @@ public sealed class DataAdminService(
 
     /// <summary>Removes a paired character + its sessions (cascade). Leaves loose scalar references
     /// (FleetMember.CharacterId / QueuedMessage.RecipientCharacterId / SharedFit.SharedByCharacterId) as
-    /// orphans by design — the UI warns first. Breaks any connected client's session for that character.</summary>
+    /// orphans by design — the UI warns first. Breaks any connected client's session for that character. The stored
+    /// EVE token is revoked at CCP after the delete; a failed revoke is only logged.</summary>
     public async Task<Result> DeleteSyncedCharacterAsync(ClaimsPrincipal actor, int id, CancellationToken ct = default)
     {
         if (!_MayDelete(actor))
@@ -204,6 +206,7 @@ public sealed class DataAdminService(
         db.RemoveRange(sessions);
         db.Remove(synced);
         await db.SaveChangesAsync(ct);
+        await releaser.RevokeStoredTokenAsync(synced, ct);
         return Result.Success();
     }
 
