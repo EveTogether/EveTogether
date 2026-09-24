@@ -255,29 +255,21 @@ public sealed class ClientFleetService(IServiceScopeFactory scopeFactory, Compos
     // --- Fleet Compositions. Client-only library: thin orchestration over the SAME Shared CQRS
     // composition handlers via the local dispatcher. Reads are served straight from the repository by the facade. ---
 
-    public async Task<Result<long>> CreateCompositionAsync(string name, string? description, bool isClientOnly, int ownerCharacterId, CancellationToken cancellationToken = default)
-    {
-        var result = await DispatchAsync(d => d.Send(new CreateFleetCompositionCommand(name, description, isClientOnly, ownerCharacterId), cancellationToken));
-        if (result.IsSuccess)
-            await compositionChanges.PublishAsync(result.Value, CompositionChangeKind.Created, serverAddress: null, cancellationToken);
-        return result;
-    }
+    public Task<Result<long>> CreateCompositionAsync(string name, string? description, bool isClientOnly, int ownerCharacterId, CancellationToken cancellationToken = default)
+        => MutateCompositionAsync(CompositionChangeKind.Created, owningComposition: null,
+            d => d.Send(new CreateFleetCompositionCommand(name, description, isClientOnly, ownerCharacterId), cancellationToken), cancellationToken);
 
     public Task<Result> EditCompositionAsync(long compositionId, string name, string? description, int actingCharacterId, CancellationToken cancellationToken = default)
-        => MutateCompositionAsync(CompositionChangeKind.Edited, _ => Task.FromResult(compositionId),
+        => MutateCompositionAsync(CompositionChangeKind.Edited, _ => Task.FromResult<long?>(compositionId),
             d => d.Send(new EditFleetCompositionCommand(compositionId, name, description, actingCharacterId), cancellationToken), cancellationToken);
 
     public Task<Result> DeleteCompositionAsync(long compositionId, int actingCharacterId, CancellationToken cancellationToken = default)
-        => MutateCompositionAsync(CompositionChangeKind.Deleted, _ => Task.FromResult(compositionId),
+        => MutateCompositionAsync(CompositionChangeKind.Deleted, _ => Task.FromResult<long?>(compositionId),
             d => d.Send(new DeleteFleetCompositionCommand(compositionId, actingCharacterId), cancellationToken), cancellationToken);
 
-    public async Task<Result<long>> AddCompositionRoleAsync(long compositionId, string roleName, int? groupMinCount, int actingCharacterId, CancellationToken cancellationToken = default)
-    {
-        var result = await DispatchAsync(d => d.Send(new AddFleetCompositionRoleCommand(compositionId, roleName, groupMinCount, actingCharacterId), cancellationToken));
-        if (result.IsSuccess)
-            await compositionChanges.PublishAsync(compositionId, CompositionChangeKind.Edited, serverAddress: null, cancellationToken);
-        return result;
-    }
+    public Task<Result<long>> AddCompositionRoleAsync(long compositionId, string roleName, int? groupMinCount, int actingCharacterId, CancellationToken cancellationToken = default)
+        => MutateCompositionAsync(CompositionChangeKind.Edited, _ => Task.FromResult<long?>(compositionId),
+            d => d.Send(new AddFleetCompositionRoleCommand(compositionId, roleName, groupMinCount, actingCharacterId), cancellationToken), cancellationToken);
 
     public Task<Result> EditCompositionRoleAsync(long roleId, string roleName, int? groupMinCount, int actingCharacterId, CancellationToken cancellationToken = default)
         => MutateCompositionAsync(CompositionChangeKind.Edited, r => CompositionOfRoleAsync(r, roleId, cancellationToken),
@@ -288,17 +280,12 @@ public sealed class ClientFleetService(IServiceScopeFactory scopeFactory, Compos
             d => d.Send(new RemoveFleetCompositionRoleCommand(roleId, actingCharacterId), cancellationToken), cancellationToken);
 
     public Task<Result> ReorderCompositionRolesAsync(long compositionId, IReadOnlyList<long> orderedRoleIds, int actingCharacterId, CancellationToken cancellationToken = default)
-        => MutateCompositionAsync(CompositionChangeKind.Edited, _ => Task.FromResult(compositionId),
+        => MutateCompositionAsync(CompositionChangeKind.Edited, _ => Task.FromResult<long?>(compositionId),
             d => d.Send(new ReorderFleetCompositionRolesCommand(compositionId, orderedRoleIds, actingCharacterId), cancellationToken), cancellationToken);
 
-    public async Task<Result<long>> AddCompositionEntryAsync(long roleId, FitReference fit, int? entryMinCount, int actingCharacterId, CancellationToken cancellationToken = default)
-    {
-        var result = await DispatchAsync(d => d.Send(new AddFleetCompositionEntryCommand(roleId, fit, entryMinCount, actingCharacterId), cancellationToken));
-        if (result.IsSuccess)
-            await compositionChanges.PublishAsync(
-                await ResolveAsync(r => CompositionOfRoleAsync(r, roleId, cancellationToken)), CompositionChangeKind.Edited, serverAddress: null, cancellationToken);
-        return result;
-    }
+    public Task<Result<long>> AddCompositionEntryAsync(long roleId, FitReference fit, int? entryMinCount, int actingCharacterId, CancellationToken cancellationToken = default)
+        => MutateCompositionAsync(CompositionChangeKind.Edited, r => CompositionOfRoleAsync(r, roleId, cancellationToken),
+            d => d.Send(new AddFleetCompositionEntryCommand(roleId, fit, entryMinCount, actingCharacterId), cancellationToken), cancellationToken);
 
     public Task<Result> EditCompositionEntryAsync(long entryId, int? entryMinCount, int actingCharacterId, CancellationToken cancellationToken = default)
         => MutateCompositionAsync(CompositionChangeKind.Edited, r => CompositionOfEntryAsync(r, entryId, cancellationToken),
@@ -312,33 +299,36 @@ public sealed class ClientFleetService(IServiceScopeFactory scopeFactory, Compos
         => MutateCompositionAsync(CompositionChangeKind.Edited, r => CompositionOfRoleAsync(r, roleId, cancellationToken),
             d => d.Send(new ReorderFleetCompositionEntriesCommand(roleId, orderedEntryIds, actingCharacterId), cancellationToken), cancellationToken);
 
-    // The composition is resolved before the mutation: a removed role or entry can no longer be traced back to it after.
-    private async Task<Result> MutateCompositionAsync(
+    // The one place a local composition change is published. The owning composition is looked up before the mutation:
+    // a removed role or entry can no longer be traced back to it afterwards. A create has none yet and takes the new id.
+    private async Task<T> MutateCompositionAsync<T>(
         CompositionChangeKind kind,
-        Func<IFleetCompositionRepository, Task<long>> resolveCompositionId,
-        Func<IDispatcher, Task<Result>> operation,
-        CancellationToken cancellationToken)
+        Func<IFleetCompositionRepository, Task<long?>>? owningComposition,
+        Func<IDispatcher, Task<T>> operation,
+        CancellationToken cancellationToken) where T : Result
     {
-        var compositionId = await ResolveAsync(resolveCompositionId);
+        var compositionId = owningComposition is null ? null : await ResolveAsync(owningComposition);
         var result = await DispatchAsync(operation);
-        if (result.IsSuccess)
-            await compositionChanges.PublishAsync(compositionId, kind, serverAddress: null, cancellationToken);
+        if (result is Result<long> created && kind is CompositionChangeKind.Created)
+            compositionId = created.Value;
+        if (result.IsSuccess && compositionId is not null)
+            await compositionChanges.PublishAsync(compositionId.Value, kind, serverAddress: null, cancellationToken);
         return result;
     }
 
-    private async Task<long> ResolveAsync(Func<IFleetCompositionRepository, Task<long>> resolveCompositionId)
+    private async Task<long?> ResolveAsync(Func<IFleetCompositionRepository, Task<long?>> owningComposition)
     {
         using var scope = scopeFactory.CreateScope();
-        return await resolveCompositionId(scope.ServiceProvider.GetRequiredService<IFleetCompositionRepository>());
+        return await owningComposition(scope.ServiceProvider.GetRequiredService<IFleetCompositionRepository>());
     }
 
-    private static async Task<long> CompositionOfRoleAsync(IFleetCompositionRepository repository, long roleId, CancellationToken cancellationToken) =>
-        (await repository.GetRoleAsync(roleId, cancellationToken))?.CompositionId ?? CompositionChangePayload.UnknownCompositionId;
+    private static async Task<long?> CompositionOfRoleAsync(IFleetCompositionRepository repository, long roleId, CancellationToken cancellationToken) =>
+        (await repository.GetRoleAsync(roleId, cancellationToken))?.CompositionId;
 
-    private static async Task<long> CompositionOfEntryAsync(IFleetCompositionRepository repository, long entryId, CancellationToken cancellationToken)
+    private static async Task<long?> CompositionOfEntryAsync(IFleetCompositionRepository repository, long entryId, CancellationToken cancellationToken)
     {
         var entry = await repository.GetEntryAsync(entryId, cancellationToken);
-        return entry is null ? CompositionChangePayload.UnknownCompositionId : await CompositionOfRoleAsync(repository, entry.RoleId, cancellationToken);
+        return entry is null ? null : await CompositionOfRoleAsync(repository, entry.RoleId, cancellationToken);
     }
 
     private async Task<T> DispatchAsync<T>(Func<IDispatcher, Task<T>> operation)

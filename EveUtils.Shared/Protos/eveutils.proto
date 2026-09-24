@@ -196,7 +196,7 @@ message EditFleetRequest {
   string from_time = 6;
   string to_time = 7;
 }
-message FleetActionReply { bool accepted = 1; string message = 2; }
+message FleetActionReply { bool accepted = 1; string message = 2; int64 composition_id = 3; }  // composition_id: set by the composition RPCs (ET-11), 0 elsewhere and from an older server
 
 message DisbandFleetRequest { int64 fleet_id = 1; }
 
@@ -254,7 +254,7 @@ message ListFleetsReply { bool ok = 1; string message = 2; repeated FleetDto fle
 
 // --- Fleet structure: wings/squads (F2b). The acting character (from the session) must own the fleet the
 // wing/squad belongs to. Create replies carry the new id; rename/delete reuse FleetActionReply. ---
-message CreateStructureReply { bool accepted = 1; string message = 2; int64 id = 3; }
+message CreateStructureReply { bool accepted = 1; string message = 2; int64 id = 3; int64 composition_id = 4; }  // composition_id: set by the composition RPCs (ET-11)
 
 message CreateWingRequest { int64 fleet_id = 1; string name = 2; }
 message RenameWingRequest { int64 wing_id = 1; string name = 2; }

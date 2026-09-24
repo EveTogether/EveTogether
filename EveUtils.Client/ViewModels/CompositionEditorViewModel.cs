@@ -243,7 +243,7 @@ public sealed partial class CompositionEditorViewModel : ObservableObject, IDisp
     {
         if (_isSaving
             || _compositionId is not { } compositionId
-            || !change.Data.Concerns(compositionId)
+            || change.Data.CompositionId != compositionId
             || change.Data.IsClientOnly == _client.SharesFitsToServer)
             return;
 
