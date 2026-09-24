@@ -9,7 +9,7 @@ namespace EveUtils.Client.UiTests;
 
 /// <summary>
 /// The training math behind the (later) skill-queue view: the CCP SP formula, the Omega SP/min rate, the EVE
-/// duration format, and folding attribute implants into the effective attributes that drive the rate.
+/// duration format, and the effective ESI attributes that drive the rate.
 /// </summary>
 public class SkillTrainingMathTests
 {
@@ -44,23 +44,39 @@ public class SkillTrainingMathTests
         Assert.Equal(expected, EveDurationFormatter.FormatWithSeconds(TimeSpan.FromSeconds(totalSeconds)));
 
     [Fact]
-    public void CharacterAttributeResolver_AddsImplantBonusesToBaseAttributes()
+    public void CharacterAttributeResolver_EsiAttributesWithImplants_UsesEffectiveRate()
     {
-        // Real attribute-enhancer implants carry their +stat on the "xxxBonus" attribute (178/177), NOT the bare
-        // character attribute (167/166) — the resolver maps the bonus onto the matching character attribute.
+        var (resolver, esiAttributes, implants) = _PlusFourCharacter();
+        var effective = resolver.Resolve(esiAttributes, implants);
+
+        Assert.Equal(new CharacterAttributeSet(21, 21, 31, 25, 21), effective);
+        Assert.Equal(35.5, SkillPointMath.SkillPointsPerMinute(
+            effective.For(DogmaAttributeIds.Perception), effective.For(DogmaAttributeIds.Willpower)));
+    }
+
+    [Fact]
+    public void CharacterAttributeResolver_Base_RemovesSdeImplantBonuses()
+    {
+        var (resolver, esiAttributes, implants) = _PlusFourCharacter();
+        var baseAttributes = resolver.Base(esiAttributes, implants);
+
+        Assert.Equal(new CharacterAttributeSet(17, 17, 27, 21, 17), baseAttributes);
+        Assert.Equal(99, baseAttributes.Charisma + baseAttributes.Intelligence + baseAttributes.Memory
+            + baseAttributes.Perception + baseAttributes.Willpower);
+    }
+
+    private static (CharacterAttributeResolver Resolver, CharacterAttributes Attributes, int[] Implants) _PlusFourCharacter()
+    {
         var dogma = new FakeDogmaDataAccessor()
-            .Type(30000, 0, 0, new SdeDogmaAttribute(DogmaAttributeIds.PerceptionBonus, 5)) // +5 Perception implant
-            .Type(30001, 0, 0, new SdeDogmaAttribute(DogmaAttributeIds.MemoryBonus, 4));     // +4 Memory implant
-        var baseAttributes = new CharacterAttributes
+            .Type(30000, 0, 0, new SdeDogmaAttribute(DogmaAttributeIds.CharismaBonus, 4))
+            .Type(30001, 0, 0, new SdeDogmaAttribute(DogmaAttributeIds.IntelligenceBonus, 4))
+            .Type(30002, 0, 0, new SdeDogmaAttribute(DogmaAttributeIds.MemoryBonus, 4))
+            .Type(30003, 0, 0, new SdeDogmaAttribute(DogmaAttributeIds.PerceptionBonus, 4))
+            .Type(30004, 0, 0, new SdeDogmaAttribute(DogmaAttributeIds.WillpowerBonus, 4));
+        var esiAttributes = new CharacterAttributes
         {
-            CharacterId = 1, Charisma = 19, Intelligence = 20, Memory = 21, Perception = 22, Willpower = 23
+            CharacterId = 1, Charisma = 21, Intelligence = 21, Memory = 31, Perception = 25, Willpower = 21
         };
-
-        var effective = new CharacterAttributeResolver(dogma).Resolve(baseAttributes, [30000, 30001]);
-
-        Assert.Equal(27, effective.Perception);     // 22 + 5
-        Assert.Equal(25, effective.Memory);          // 21 + 4
-        Assert.Equal(20, effective.Intelligence);    // unchanged
-        Assert.Equal(27, effective.For(DogmaAttributeIds.Perception)); // looked up by SDE attribute id
+        return (new CharacterAttributeResolver(dogma), esiAttributes, [30000, 30001, 30002, 30003, 30004]);
     }
 }
