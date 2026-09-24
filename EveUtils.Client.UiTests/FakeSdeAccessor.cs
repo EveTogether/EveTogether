@@ -205,8 +205,17 @@ public sealed class FakeSdeAccessor : ISdeAccessor
     public SdeSolarSystem? GetSolarSystem(int solarSystemId) =>
         _solarSystemsByName.Values.FirstOrDefault(system => system.SolarSystemId == solarSystemId);
 
-    // No fixtures wired up here — nothing under test today reads NPC corporation/faction names through this fake.
-    public string? GetNpcCorporationName(int corporationId) => null;
+    private readonly Dictionary<int, string> _npcCorporations = new();
+
+    public FakeSdeAccessor AddNpcCorporation(int corporationId, string name)
+    {
+        _npcCorporations[corporationId] = name;
+        return this;
+    }
+
+    public string? GetNpcCorporationName(int corporationId) => _npcCorporations.GetValueOrDefault(corporationId);
+
+    // No fixture wired up here — nothing under test today reads faction names through this fake.
     public string? GetFactionName(int factionId) => null;
 
     public void Close() { }

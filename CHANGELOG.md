@@ -17,6 +17,10 @@ release notes, not this file.
 
 ## [Unreleased]
 
+- **Changed: killmail character, corporation and alliance names are now resolved and cached locally.** No visible
+  change yet — groundwork for the upcoming kill/loss overview. A name is looked up from public ESI (or, for NPC
+  corporations and factions, your own local database) only once per month by default, and always shows the
+  corporation and alliance from the moment of the kill, never a character's corporation today.
 - **Fixed: a fit's stats no longer count a ship skill your character has not trained as level I.** With a
   character's own skills selected, an untrained hull skill still gave its first level of bonus (a Ferox without Caldari
   Battlecruiser showed 304.8 instead of 290.3 DPS); it now gives none, the same as a skill at level 0.
