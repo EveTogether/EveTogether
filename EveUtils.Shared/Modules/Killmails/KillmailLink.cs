@@ -43,7 +43,13 @@ public static partial class KillmailLink
             return false;
         }
 
-        killmailId = int.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture);
+        // The regex's \d+ has no length cap, so an oversized id (more than int can hold) must fail here rather
+        // than throw an OverflowException out of what callers treat as a pure, never-throwing parser.
+        if (!int.TryParse(match.Groups[1].Value, NumberStyles.None, CultureInfo.InvariantCulture, out killmailId))
+        {
+            return false;
+        }
+
         hash = match.Groups[2].Value;
         return true;
     }

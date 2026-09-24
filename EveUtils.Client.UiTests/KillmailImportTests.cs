@@ -228,6 +228,9 @@ public sealed class KillmailImportTests : IDisposable
     [InlineData("https://zkillboard.com/kill/138560925/")]
     [InlineData("Kill: Jithran (Cormorant Navy Issue)")]
     [InlineData("just some free text pasted by accident")]
+    // An id shape with more digits than an int can hold — the regex's \d+ has no length cap, so this must fail
+    // cleanly rather than throw an OverflowException out of the parser.
+    [InlineData("killReport:99999999999999999999:2305db84acc094d6ecfeda59ffcb3b5f70b9eb3f")]
     public void KillmailLink_TryParse_RejectsUnrecognizedInput(string text) =>
         Assert.False(KillmailLink.TryParse(text, out _, out _));
 
