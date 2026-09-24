@@ -17,7 +17,8 @@ public sealed partial class KillmailRowViewModel : ObservableObject
     private readonly Func<KillmailRowViewModel, Task> _openDetail;
 
     public KillmailRowViewModel(KillmailOverviewRowDto dto, string shipName, string systemName, string? regionName,
-        bool isAbyssal, string securityText, string counterpartyName, Func<KillmailRowViewModel, Task> openDetail)
+        bool isAbyssal, string securityText, string counterpartyName, TimeZoneInfo timeZone,
+        Func<KillmailRowViewModel, Task> openDetail)
     {
         _openDetail = openDetail;
         CharacterId = dto.CharacterId;
@@ -33,7 +34,10 @@ public sealed partial class KillmailRowViewModel : ObservableObject
         CounterpartyName = counterpartyName;
         Isk = dto.IskValue is { } value ? (dto.IsLoss ? -value : value) : null;
 
-        DateTime local = dto.KillmailTimeUtc.ToLocalTime();
+        // TimeZoneInfo.ConvertTimeFromUtc requires an explicit Utc kind — SQLite round-trips DateTime as Unspecified,
+        // and a test's own TimeZoneInfo is exactly how AC5's UTC-midnight boundary gets proven deterministically
+        // (ToLocalTime() alone always reads this machine's zone, which a test cannot control).
+        DateTime local = TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(dto.KillmailTimeUtc, DateTimeKind.Utc), timeZone);
         Day = DateOnly.FromDateTime(local);
         TimeText = local.ToString("HH:mm");
         KindGlyph = dto.IsLoss ? "▼" : "▲";
