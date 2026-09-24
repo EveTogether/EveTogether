@@ -198,7 +198,9 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
         }
 
         if (_installVersionBlock is not null)
+        {
             _installVersionBlock.Text = $"Version {EveUtils.Shared.App.AppInfo.Version}";
+        }
         if (_installBuildInfoBlock is not null)
         {
             var built = EveUtils.Shared.App.AppInfo.BuildDate is { } date
@@ -246,7 +248,10 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
     // Switch the visible category panel to match the selected nav item.
     private void OnCategoryChanged(object? sender, SelectionChangedEventArgs e)
     {
-        if (_generalPanel is null) return; // selection set during XAML load, before caching — ignore
+        if (_generalPanel is null)
+        {
+            return; // selection set during XAML load, before caching — ignore
+        }
 
         var index = (sender as ListBox)?.SelectedIndex ?? 0;
         _generalPanel.IsVisible = index == 0;
@@ -254,7 +259,9 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
         _privacyPanel.IsVisible = index == 2;
         _integrationsPanel.IsVisible = index == 3;
         if (_updatesPanel is not null)
+        {
             _updatesPanel.IsVisible = index == 4;
+        }
         _keyboardShortcutsPanel.IsVisible = index == KeyboardShortcutsCategory;
     }
 
@@ -319,7 +326,10 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
     // persists it — the same "only an actual pick freezes the default" rule the checkbox it replaced followed.
     private void OnChannelSegmentClicked(object? sender, RoutedEventArgs e)
     {
-        if (_channelStableButton is null || _channelNightlyButton is null) return;
+        if (_channelStableButton is null || _channelNightlyButton is null)
+        {
+            return;
+        }
 
         var toNightly = ReferenceEquals(sender, _channelNightlyButton);
         _channelStableButton.IsChecked = !toNightly;
@@ -330,7 +340,10 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
 
     private void UpdateChannelExplanation()
     {
-        if (_channelExplanationBlock is null) return;
+        if (_channelExplanationBlock is null)
+        {
+            return;
+        }
 
         _channelExplanationBlock.Text = _channelNightlyButton?.IsChecked == true
             ? "A nightly is a rolling build of the latest commits, replaced every night — expect things to break. Nightly builds are ahead of the next stable release, so switching back to stable does not undo one: you stay on it until a newer stable version is published."
@@ -338,19 +351,24 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
     }
 
     // Asks the same feed the startup check and About do, for the channel actually in force (not a pending, unsaved
-    // flip of the segmented control above). Never an uncaught exception: CheckAsync itself reports failure through
-    // Result, but the feed call is still a network call, so an unexpected throw is caught and shown like any other
-    // failed check rather than crashing the window.
+    // flip of the segmented control above). CheckAsync reports failure through Result, but the feed call can still
+    // throw unexpectedly — caught below so a network hiccup never crashes the window.
     private async void OnCheckNowUpdate(object? sender, RoutedEventArgs e)
     {
-        if (_updates is null || _checkNowResultBlock is null) return;
-
-        if (_checkNowButton is not null) _checkNowButton.IsEnabled = false;
-        _checkNowResultBlock.IsVisible = true;
-        _checkNowResultBlock.Text = "Checking…";
+        if (_updates is null || _checkNowResultBlock is null)
+        {
+            return;
+        }
 
         try
         {
+            if (_checkNowButton is not null)
+            {
+                _checkNowButton.IsEnabled = false;
+            }
+            _checkNowResultBlock.IsVisible = true;
+            _checkNowResultBlock.Text = "Checking…";
+
             var check = await _updates.CheckAsync(_effectiveChannel);
             _checkNowResultBlock.Text = UpdateNotice.Classify(check) switch
             {
@@ -369,7 +387,10 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
         }
         finally
         {
-            if (_checkNowButton is not null) _checkNowButton.IsEnabled = true;
+            if (_checkNowButton is not null)
+            {
+                _checkNowButton.IsEnabled = true;
+            }
         }
     }
 

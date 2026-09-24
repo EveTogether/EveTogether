@@ -35,10 +35,13 @@ public class SettingsWindowUpdatesTests
         };
 
         window.Show();
-        window.FindControl<ListBox>("CategoryNav")!.SelectedIndex = 4; // Updates
-        var frame = window.CaptureRenderedFrame();
-        Assert.NotNull(frame);
-        frame!.Save("/tmp/eveutils-settings-updates.png", new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
+        var categoryNav = window.FindControl<ListBox>("CategoryNav");
+        Assert.NotNull(categoryNav);
+        categoryNav.SelectedIndex = 4; // Updates
+
+        // Rendering is the assertion: a window whose XAML fails to load throws on construction, and one that lays
+        // out to nothing hands back no frame — same as UpdateViewRenderTests.Render.
+        Assert.NotNull(window.CaptureRenderedFrame());
     }
 
     [AvaloniaTheory]
@@ -59,13 +62,20 @@ public class SettingsWindowUpdatesTests
             currentFaction: EveUtils.Client.Theming.FactionTheme.Gallente,
             sdeVersionLabel: "", updates: updates);
         window.Show();
-        window.FindControl<ListBox>("CategoryNav")!.SelectedIndex = 4; // Updates
+        var categoryNav = window.FindControl<ListBox>("CategoryNav");
+        Assert.NotNull(categoryNav);
+        categoryNav.SelectedIndex = 4; // Updates
 
-        window.FindControl<Button>("CheckNowButton")!.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
-        for (var i = 0; i < 8; i++)
-            Dispatcher.UIThread.RunJobs();
+        var checkNowButton = window.FindControl<Button>("CheckNowButton");
+        Assert.NotNull(checkNowButton);
+        checkNowButton.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
 
-        var result = window.FindControl<TextBlock>("CheckNowResultBlock")!;
+        // FakeUpdateService answers with an already-completed Task, so the async handler's continuation is queued
+        // on, not blocked by, the dispatcher — one flush is enough to run it to completion.
+        Dispatcher.UIThread.RunJobs();
+
+        var result = window.FindControl<TextBlock>("CheckNowResultBlock");
+        Assert.NotNull(result);
         Assert.True(result.IsVisible);
         Assert.Contains(expectedSubstring, result.Text);
     }
