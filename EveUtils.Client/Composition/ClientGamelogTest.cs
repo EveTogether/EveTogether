@@ -26,7 +26,7 @@ namespace EveUtils.Client.Composition;
 /// character id — and only that one. A second character's log is tracked separately, never blended in.
 ///
 /// NB: this persists combat rows + the gamelog.directory setting in the client DB, so run it on a throwaway
-/// instance: <c>EVEUTILS_INSTANCE=gamelogtest dotnet run --project EveUtils.Client -- --gamelog-test</c>.
+/// instance: <c>EVETOGETHER_INSTANCE=gamelogtest dotnet run --project EveUtils.Client -- --gamelog-test</c>.
 /// The setting is reset to empty at the end so it never leaks to a real instance. Exit 0 = pass, 1 = fail.
 /// </summary>
 public static class ClientGamelogTest

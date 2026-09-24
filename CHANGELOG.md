@@ -13,6 +13,12 @@ taken from the matching `## vX.Y.Z` section below.
 
 ## [Unreleased]
 
+- **Changed: your data folder is now called `EveTogetherData`.** It used to be `%LOCALAPPDATA%\EveUtils`; on the
+  first start of this version everything in it — settings, sign-ins, fits, runs, caches and backups — moves over in one
+  step, nothing to do on your side. If the move cannot happen (for example another copy of EVE Together still has the
+  folder open), the app simply keeps using the old folder that time and tries again at the next start. Settings ->
+  Show Data Folder opens the new location. Running two copies side by side now uses `EVETOGETHER_INSTANCE`; the old
+  `EVEUTILS_INSTANCE` keeps working.
 - **Changed: the local EVE database now also carries regions, NPC corporations and factions.** No visible change
   yet — this is groundwork for the upcoming kill/loss overview, so a killmail's system, region and NPC attacker
   resolve from your own machine instead of another lookup to CCP's servers. Because the database format changed,

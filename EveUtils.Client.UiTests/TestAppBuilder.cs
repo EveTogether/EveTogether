@@ -6,7 +6,7 @@ using EveUtils.Client.UiTests;
 // Registers the Avalonia application used for every headless UI test in this assembly.
 [assembly: AvaloniaTestApplication(typeof(TestAppBuilder))]
 
-// Run tests serially: TestClientInstance isolates via the process-global EVEUTILS_INSTANCE env var, so two instances
+// Run tests serially: TestClientInstance isolates via the process-global EVETOGETHER_INSTANCE env var, so two instances
 // built in parallel would race on it (same DB → "table already exists" during migrate). Headless Avalonia tests also
 // want a single UI thread. Serial execution keeps both correct.
 [assembly: Xunit.CollectionBehavior(DisableTestParallelization = true)]
