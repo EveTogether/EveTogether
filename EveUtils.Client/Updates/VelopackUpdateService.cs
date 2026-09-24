@@ -118,7 +118,11 @@ internal sealed class VelopackUpdateService(ILogger<VelopackUpdateService> logge
             // Built per call rather than cached: the channel is a construction option, and the operator can change
             // it while the app is running (ET-339).
             var manager = new UpdateManager(
-                source, new UpdateOptions { ExplicitChannel = UpdateChannelName.For(channel) }, locator);
+                source, new UpdateOptions
+                {
+                    ExplicitChannel = UpdateChannelName.For(channel),
+                    AllowVersionDowngrade = channel == UpdateChannel.Nightly,
+                }, locator);
 
             Task<UpdateInfo?> check = manager.CheckForUpdatesAsync();
 
@@ -168,7 +172,14 @@ internal sealed class VelopackUpdateService(ILogger<VelopackUpdateService> logge
 
     private static AppRelease _ToRelease(VelopackAsset release)
     {
-        var version = release.Version.ToFullString();
+        string version = release.Version.ToFullString();
+        if (version.Contains("-nightly.", StringComparison.Ordinal))
+        {
+            string identity = release.NotesMarkdown?.Trim() is { } notes &&
+                notes.StartsWith("nightly-", StringComparison.Ordinal) ? notes : "nightly";
+
+            return new AppRelease(identity, string.Empty, $"{RepositoryUrl}/releases/tag/nightly", release.Size);
+        }
 
         return new AppRelease(
             version, release.NotesMarkdown ?? string.Empty, $"{RepositoryUrl}/releases/tag/v{version}", release.Size);

@@ -33,6 +33,7 @@ public sealed class FleetsGrpcService(
     ServerSessionService sessions,
     IDispatcher dispatcher,
     ConnectedClients connectedClients,
+    FleetChangeAnnouncer announcer,
     IFleetRepository fleets,
     IFleetCompositionRepository compositions,
     FleetCompositionAuthorizer compositionAuthorizer,
@@ -53,6 +54,8 @@ public sealed class FleetsGrpcService(
             (FleetOfflineBehavior)request.OfflineBehavior,
             character), context.CancellationToken);
 
+        if (result.IsSuccess)
+            await AnnounceLifecycleAsync(result.Value, FleetChangeKind.Created, listedBeforeChange: false, context.CancellationToken);
         return result.IsSuccess
             ? new CreateFleetReply { Accepted = true, Message = "Created.", FleetId = result.Value }
             : new CreateFleetReply { Accepted = false, Message = FirstMessage(result) };
@@ -123,7 +126,10 @@ public sealed class FleetsGrpcService(
     {
         var character = await AuthenticateAsync(context);
 
+        var wasListed = await fleets.IsOpenAsync(request.FleetId, context.CancellationToken);
         var result = await dispatcher.Send(new DisbandFleetCommand(request.FleetId, character), context.CancellationToken);
+        if (result.IsSuccess)
+            await AnnounceLifecycleAsync(request.FleetId, FleetChangeKind.Disbanded, wasListed, context.CancellationToken);
         return ToActionReply(result, "Disbanded.");
     }
 
@@ -133,7 +139,7 @@ public sealed class FleetsGrpcService(
 
         var result = await dispatcher.Send(new StartFleetCommand(request.FleetId, character), context.CancellationToken);
         if (result.IsSuccess)
-            await BroadcastFleetChangedAsync(request.FleetId, FleetChangeKind.Activated, context.CancellationToken);
+            await AnnounceLifecycleAsync(request.FleetId, FleetChangeKind.Activated, listedBeforeChange: false, context.CancellationToken);
         return ToActionReply(result, "Started.");
     }
 
@@ -143,7 +149,7 @@ public sealed class FleetsGrpcService(
 
         var result = await dispatcher.Send(new StopFleetCommand(request.FleetId, character), context.CancellationToken);
         if (result.IsSuccess)
-            await BroadcastFleetChangedAsync(request.FleetId, FleetChangeKind.Stopped, context.CancellationToken);
+            await AnnounceLifecycleAsync(request.FleetId, FleetChangeKind.Stopped, listedBeforeChange: false, context.CancellationToken);
         return ToActionReply(result, "Stopped.");
     }
 
@@ -151,9 +157,10 @@ public sealed class FleetsGrpcService(
     {
         var character = await AuthenticateAsync(context);
 
+        var wasListed = await fleets.IsOpenAsync(request.FleetId, context.CancellationToken);
         var result = await dispatcher.Send(new ConcludeFleetCommand(request.FleetId, character), context.CancellationToken);
         if (result.IsSuccess)
-            await BroadcastFleetChangedAsync(request.FleetId, FleetChangeKind.Concluded, context.CancellationToken);
+            await AnnounceLifecycleAsync(request.FleetId, FleetChangeKind.Concluded, wasListed, context.CancellationToken);
         return ToActionReply(result, "Concluded.");
     }
 
@@ -915,6 +922,14 @@ public sealed class FleetsGrpcService(
         var members = await fleets.ListMembersAsync(fleetId, cancellationToken);
         var envelope = WireEnvelopeFactory.ToEnvelope(new FleetChangedEvent(new FleetChangePayload(fleetId, kind)));
         await connectedClients.SendToCharactersAsync(members.Select(m => m.CharacterId), envelope, cancellationToken);
+    }
+
+    private async Task AnnounceLifecycleAsync(
+        long fleetId, FleetChangeKind kind, bool listedBeforeChange, CancellationToken cancellationToken)
+    {
+        var members = await fleets.ListMembersAsync(fleetId, cancellationToken);
+        await announcer.AnnounceAsync(
+            new FleetChangePayload(fleetId, kind), members.Select(m => m.CharacterId), listedBeforeChange, cancellationToken);
     }
 
     private static long? NullIfZero(long value) => value > 0 ? value : null;

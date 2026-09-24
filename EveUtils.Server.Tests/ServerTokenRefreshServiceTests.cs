@@ -167,7 +167,7 @@ public sealed class ServerTokenRefreshServiceTests
 
     private sealed class NoRevoker : IEsiTokenRevoker
     {
-        public Task RevokeRefreshTokenAsync(string refreshToken, string clientId, string clientSecret, CancellationToken cancellationToken = default) =>
+        public Task RevokeRefreshTokenAsync(string refreshToken, string clientId, string? clientSecret = null, CancellationToken cancellationToken = default) =>
             Task.CompletedTask;
     }
 

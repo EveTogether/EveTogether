@@ -7,10 +7,8 @@ name: Nightly
 # It does not run on every push. It runs at night, and only when something actually changed since the last one —
 # a nightly that is byte-for-byte yesterday's is noise — or whenever you fire it by hand from the Actions tab.
 #
-# A nightly has no version number to compare (that is what a rolling tag means), so its identity is the commit it
-# was built from: <base>-nightly.<run>, e.g. 0.2.1-nightly.42. <base> is one patch above the latest release tag
-# (including pre-releases; 0.0.1 if there is none) rather than an MSBuild VersionPrefix — this project has no such
-# property, and the version otherwise comes only from the release tag (see release.yml).
+# The internal package version is 0.0.0-nightly.<run>; the visible build identity is
+# nightly-<UTC date>.<commit hash>.<run>. Neither is tied to a stable release tag.
 on:
   schedule:
     # 03:17 UTC — deliberately not Cockpit's 02:43, so the two projects' nightlies never queue for the same
@@ -38,6 +36,7 @@ jobs:
     outputs:
       build: ${{ steps.decide.outputs.build }}
       previous: ${{ steps.decide.outputs.previous }}
+      display: ${{ steps.decide.outputs.display }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -57,6 +56,7 @@ jobs:
           published=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/nightly" -q .object.sha 2>/dev/null) || published=""
           echo "previous=$published" >> "$GITHUB_OUTPUT"
           head=$(git rev-parse HEAD)
+          echo "display=nightly-$(date -u +%Y%m%d).$(git rev-parse --short=7 HEAD).${{ github.run_number }}" >> "$GITHUB_OUTPUT"
 
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "Manual run — building this commit."
@@ -71,6 +71,46 @@ jobs:
             echo "main moved since the last nightly (was '$published', now '$head')."
             echo "build=true" >> "$GITHUB_OUTPUT"
           fi
+
+  tests:
+    needs: changes
+    if: needs.changes.outputs.build == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Run UI and server tests
+        shell: pwsh
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $false
+          dotnet test EveUtils.Client.UiTests/EveUtils.Client.UiTests.csproj -c Release --logger "trx;LogFileName=ui.trx" --results-directory TestResults
+          $uiExit = $LASTEXITCODE
+          dotnet test EveUtils.Server.Tests/EveUtils.Server.Tests.csproj -c Release --logger "trx;LogFileName=server.trx" --results-directory TestResults
+          $serverExit = $LASTEXITCODE
+
+          "## Nightly test results" >> $env:GITHUB_STEP_SUMMARY
+          $failedTests = @(Get-ChildItem TestResults -Filter '*.trx' -Recurse -ErrorAction SilentlyContinue | ForEach-Object {
+            ([xml](Get-Content -Raw -LiteralPath $_.FullName)).SelectNodes("//*[local-name()='UnitTestResult' and @outcome='Failed']") |
+              ForEach-Object { "- $($_.GetAttribute('testName'))" }
+          })
+          if ($failedTests.Count -gt 0) {
+            "### Failed tests" >> $env:GITHUB_STEP_SUMMARY
+            $failedTests >> $env:GITHUB_STEP_SUMMARY
+          }
+          if ($uiExit -ne 0 -or $serverExit -ne 0) {
+            if ($failedTests.Count -eq 0) {
+              "A test process failed before writing named results." >> $env:GITHUB_STEP_SUMMARY
+            }
+            exit 1
+          }
+          "UI and server tests passed." >> $env:GITHUB_STEP_SUMMARY
 
   build-windows:
     needs: changes
@@ -89,17 +129,11 @@ jobs:
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
-      - name: Resolve the nightly version
-        id: version
+      - name: Set package version and build identity
         shell: bash
         run: |
-          tag=$(git tag -l --sort=-v:refname | awk '/^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z][0-9A-Za-z.-]*)?$/ && !/-nightly([.-]|$)/ { if (!found++) print }')
-          base=${tag#v}
-          base=${base%%-*}
-          base=${base:-0.0.0}
-          patch=${base##*.}
-          base="${base%.*}.$((10#$patch + 1))"
-          echo "VERSION=${base}-nightly.${{ github.run_number }}" >> "$GITHUB_ENV"
+          echo "VERSION=0.0.0-nightly.${{ github.run_number }}" >> "$GITHUB_ENV"
+          echo "${{ needs.changes.outputs.display }}" > nightly-build.md
 
       - name: Publish (self-contained)
         run: >
@@ -109,6 +143,8 @@ jobs:
           --self-contained true
           -p:DebugType=none
           -p:Version=${{ env.VERSION }}
+          -p:InformationalVersion=${{ env.VERSION }}+${{ needs.changes.outputs.display }}
+          -p:IncludeSourceRevisionInInformationalVersion=false
           -o ${{ env.OUTPUT_DIR }}
 
       - name: Rename app host
@@ -131,6 +167,7 @@ jobs:
           --packDir ${{ env.OUTPUT_DIR }}
           --mainExe ${{ env.APP_NAME }}.exe
           --icon ${{ env.ICON_ICO }}
+          --releaseNotes nightly-build.md
           --channel ${{ env.RUNTIME_ID }}-nightly
           --outputDir artifacts-velopack
 
@@ -156,16 +193,10 @@ jobs:
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
-      - name: Resolve the nightly version
-        id: version
+      - name: Set package version and build identity
         run: |
-          tag=$(git tag -l --sort=-v:refname | awk '/^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z][0-9A-Za-z.-]*)?$/ && !/-nightly([.-]|$)/ { if (!found++) print }')
-          base=${tag#v}
-          base=${base%%-*}
-          base=${base:-0.0.0}
-          patch=${base##*.}
-          base="${base%.*}.$((10#$patch + 1))"
-          echo "VERSION=${base}-nightly.${{ github.run_number }}" >> "$GITHUB_ENV"
+          echo "VERSION=0.0.0-nightly.${{ github.run_number }}" >> "$GITHUB_ENV"
+          echo "${{ needs.changes.outputs.display }}" > nightly-build.md
 
       - name: Publish (self-contained)
         run: >
@@ -175,6 +206,8 @@ jobs:
           --self-contained true
           -p:DebugType=none
           -p:Version=${{ env.VERSION }}
+          -p:InformationalVersion=${{ env.VERSION }}+${{ needs.changes.outputs.display }}
+          -p:IncludeSourceRevisionInInformationalVersion=false
           -o ${{ env.OUTPUT_DIR }}
 
       - name: Rename app host
@@ -196,6 +229,7 @@ jobs:
           --packDir ${{ env.OUTPUT_DIR }}
           --mainExe ${{ env.APP_NAME }}
           --icon ${{ env.ICON_PNG }}
+          --releaseNotes nightly-build.md
           --channel ${{ env.RUNTIME_ID }}-nightly
           --categories "Utility;Game"
           --outputDir artifacts-velopack
@@ -225,16 +259,10 @@ jobs:
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
-      - name: Resolve the nightly version
-        id: version
+      - name: Set package version and build identity
         run: |
-          tag=$(git tag -l --sort=-v:refname | awk '/^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z][0-9A-Za-z.-]*)?$/ && !/-nightly([.-]|$)/ { if (!found++) print }')
-          base=${tag#v}
-          base=${base%%-*}
-          base=${base:-0.0.0}
-          patch=${base##*.}
-          base="${base%.*}.$((10#$patch + 1))"
-          echo "VERSION=${base}-nightly.${{ github.run_number }}" >> "$GITHUB_ENV"
+          echo "VERSION=0.0.0-nightly.${{ github.run_number }}" >> "$GITHUB_ENV"
+          echo "${{ needs.changes.outputs.display }}" > nightly-build.md
 
       - name: Publish (self-contained)
         run: >
@@ -244,6 +272,8 @@ jobs:
           --self-contained true
           -p:DebugType=none
           -p:Version=${{ env.VERSION }}
+          -p:InformationalVersion=${{ env.VERSION }}+${{ needs.changes.outputs.display }}
+          -p:IncludeSourceRevisionInInformationalVersion=false
           -o ${{ env.OUTPUT_DIR }}
 
       - name: Rename app host
@@ -282,6 +312,7 @@ jobs:
           --packDir ${{ env.OUTPUT_DIR }}
           --mainExe ${{ env.APP_NAME }}
           --icon eve-together.icns
+          --releaseNotes nightly-build.md
           --channel ${{ env.RUNTIME_ID }}-nightly
           --outputDir artifacts-velopack
 
@@ -312,18 +343,6 @@ jobs:
           pattern: nightly-*
           merge-multiple: true
 
-      - name: Resolve the nightly version
-        id: version
-        run: |
-          tag=$(git tag -l --sort=-v:refname | awk '/^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z][0-9A-Za-z.-]*)?$/ && !/-nightly([.-]|$)/ { if (!found++) print }')
-          base=${tag#v}
-          base=${base%%-*}
-          base=${base:-0.0.0}
-          patch=${base##*.}
-          base="${base%.*}.$((10#$patch + 1))"
-          echo "version=${base}-nightly.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
-          echo "sha=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
-
       # The changelog is the commits since the previous nightly — the question a rolling pre-release actually
       # raises: what landed in tonight's build. Falls back to the most recent commits when there is no previous
       # nightly to walk from (the very first nightly, or a pruned/rewritten history).
@@ -338,7 +357,9 @@ jobs:
           {
             echo "Rolling build of \`main\`, replaced whenever main moves. Not a release: things here are expected to break."
             echo
-            echo "Version: \`${{ steps.version.outputs.version }}\` · commit \`${{ steps.version.outputs.sha }}\`"
+            echo "Build: \`${{ needs.changes.outputs.display }}\`"
+            echo
+            echo "Installed an earlier nightly such as 0.2.1-nightly.4? Download this nightly's installer for your platform and install it once manually. The internal package version is lower, so older nightlies cannot update themselves. Your data stays outside the installation folder; later nightlies update normally."
             echo
             echo "### Changes since the previous nightly"
             echo
@@ -364,14 +385,14 @@ jobs:
           gh release create nightly \
             --target "${GITHUB_SHA}" \
             --prerelease \
-            --title "Nightly ${{ steps.version.outputs.version }} (${{ steps.version.outputs.sha }})" \
+            --title "${{ needs.changes.outputs.display }}" \
             --notes-file nightly-notes.md \
             dist/*
 
   # Mirrors release.yml's publish-server-image job (same Dockerfile, same registry/login/platform), on the same
   # changes-poort as the client builds above. Two tags, both unambiguously nightly: the rolling 'nightly' tag
-  # (mirrors the client's own rolling GitHub-release tag) and an immutable '<base>-nightly.<run>' tag in the same
-  # version form the client build uses — never 'latest' and never a bare vX.Y.Z, so a nightly image can never be
+  # (mirrors the client's own rolling GitHub-release tag) and an immutable build-identity tag. Never 'latest'
+  # and never a stable version tag, so a nightly image can never be
   # mistaken for, or accidentally pulled as, a stable one.
   publish-server-image:
     name: Publish nightly server image to GHCR
@@ -400,14 +421,7 @@ jobs:
         shell: bash
         run: |
           IMAGE=ghcr.io/evetogether/eve-together-server
-          tag=$(git tag -l --sort=-v:refname | awk '/^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z][0-9A-Za-z.-]*)?$/ && !/-nightly([.-]|$)/ { if (!found++) print }')
-          base=${tag#v}
-          base=${base%%-*}
-          base=${base:-0.0.0}
-          patch=${base##*.}
-          base="${base%.*}.$((10#$patch + 1))"
-          VERSION="${base}-nightly.${{ github.run_number }}"
-          echo "tags=$IMAGE:nightly,$IMAGE:$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tags=$IMAGE:nightly,$IMAGE:${{ needs.changes.outputs.display }}" >> "$GITHUB_OUTPUT"
 
       - name: Build and push server image
         uses: docker/build-push-action@v7

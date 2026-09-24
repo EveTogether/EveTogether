@@ -65,9 +65,9 @@ internal sealed partial class TableWriters
             "VALUES ($effectId, $name, $effectCategoryId, $published, $modifierInfoJson);",
             "$effectId", "$name", "$effectCategoryId", "$published", "$modifierInfoJson");
         _type = Prepare(connection, transaction,
-            "INSERT INTO Type (typeId, groupId, nameEn, nameKey, published, mass, volume, capacity, marketGroupId, metaGroupId) " +
-            "VALUES ($typeId, $groupId, $nameEn, $nameKey, $published, $mass, $volume, $capacity, $marketGroupId, $metaGroupId);",
-            "$typeId", "$groupId", "$nameEn", "$nameKey", "$published", "$mass", "$volume", "$capacity", "$marketGroupId", "$metaGroupId");
+            "INSERT INTO Type (typeId, groupId, nameEn, description, nameKey, published, mass, volume, capacity, marketGroupId, metaGroupId) " +
+            "VALUES ($typeId, $groupId, $nameEn, $description, $nameKey, $published, $mass, $volume, $capacity, $marketGroupId, $metaGroupId);",
+            "$typeId", "$groupId", "$nameEn", "$description", "$nameKey", "$published", "$mass", "$volume", "$capacity", "$marketGroupId", "$metaGroupId");
         _typeDogmaAttribute = Prepare(connection, transaction,
             "INSERT INTO TypeDogmaAttribute (typeId, attributeId, value) VALUES ($typeId, $attributeId, $value);",
             "$typeId", "$attributeId", "$value");
@@ -205,6 +205,8 @@ internal sealed partial class TableWriters
         _type.Parameters["$typeId"].Value = Key(e);
         _type.Parameters["$groupId"].Value = Int(e, "groupID");
         _type.Parameters["$nameEn"].Value = name;
+        var description = StripHtml(EnName(e, "description"));
+        _type.Parameters["$description"].Value = description.Length > 0 ? description : DBNull.Value;
         _type.Parameters["$nameKey"].Value = SqliteSdeAccessor.NameKey(name);
         _type.Parameters["$published"].Value = Bool(e, "published");
         _type.Parameters["$mass"].Value = Double(e, "mass");

@@ -802,19 +802,55 @@ public class DogmaCalculatorTests
         Assert.Equal(0.351616, result.ShipAttribute(explosive), 5);  // Explosive x 0.82
     }
 
-    [Fact]
-    public void CharacterSnapshot_InjectsOnlyTrainedSkills()
+    private const int CaldariBattlecruiser = 33096;
+
+    // The Ferox's real hull-bonus shape: the ship stores shipBonusCBC1/2 (743/745) as the per-level value, the hull skill
+    // PreMuls them by its skillLevel (effects 5286/5287), and the ship's effects PostPercent the optimal and damage of
+    // turrets requiring Medium Hybrid Turret (3304). One turret: damageMultiplier 2.0, 10 s cycle, 20 km optimal.
+    private static FitResult CalculateFerox(Dictionary<int, int> levels)
     {
+        const int ferox = 16227, railgun = 3186, antimatter = 21904, mediumHybridTurret = 3304;
         var data = new FakeDogmaDataAccessor()
-            .Type(587, 25, 6, new SdeDogmaAttribute(DogmaAttributeIds.CpuOutput, 100))
-            .Type(3426, 9000, 16)
-            .Type(3413, 9000, 16);
+            .Type(ferox, 419, 6, new SdeDogmaAttribute(743, 10), new SdeDogmaAttribute(745, 5))
+            .TypeEffect(ferox, 5334).TypeEffect(ferox, 6177)
+            .Effect(5334, 0, new ModifierInfo(ModifierFunc.LocationRequiredSkillModifier, ModifierDomain.ShipId, 6, DogmaAttributeIds.MaxRange, 743, null, mediumHybridTurret))
+            .Effect(6177, 0, new ModifierInfo(ModifierFunc.LocationRequiredSkillModifier, ModifierDomain.ShipId, 6, DogmaAttributeIds.DamageMultiplier, 745, null, mediumHybridTurret))
+            .Type(CaldariBattlecruiser, 257, 16)
+            .TypeEffect(CaldariBattlecruiser, 5286).TypeEffect(CaldariBattlecruiser, 5287)
+            .Effect(5286, 0, new ModifierInfo(ModifierFunc.ItemModifier, ModifierDomain.ShipId, 0, 743, DogmaAttributeIds.SkillLevel, null, null))
+            .Effect(5287, 0, new ModifierInfo(ModifierFunc.ItemModifier, ModifierDomain.ShipId, 0, 745, DogmaAttributeIds.SkillLevel, null, null))
+            .Type(railgun, 74, 7,
+                new SdeDogmaAttribute(DogmaAttributeIds.DamageMultiplier, 2.0),
+                new SdeDogmaAttribute(DogmaAttributeIds.CycleTime, 10000),
+                new SdeDogmaAttribute(DogmaAttributeIds.MaxRange, 20000),
+                new SdeDogmaAttribute(182, mediumHybridTurret))                                 // requiredSkill1
+            .Type(antimatter, 85, 8, new SdeDogmaAttribute(114, 10));
+        return Calculate(data, new FitInput(ferox,
+            [new ModuleInput(railgun, ModuleState.Active, ChargeTypeId: antimatter)], SkillSource.From(levels)));
+    }
 
-        var result = Calculate(data, new FitInput(587, [],
-            SkillSource.From(new Dictionary<int, int> { [3426] = 4 })));
+    [Fact]
+    public void CharacterSnapshot_UntrainedHullSkill_EqualsExplicitLevelZero()
+    {
+        var absent = CalculateFerox(new Dictionary<int, int>());
+        var explicitZero = CalculateFerox(new Dictionary<int, int> { [CaldariBattlecruiser] = 0 });
 
-        // No skill effects seeded, so output is unchanged; the point is the snapshot path runs without all-V.
-        Assert.Equal(100, result.Derived.CpuOutput);
+        // Level 0 is no bonus: 10 × 2.0 / 10 s and the turret's own 20 km. Level I would be 2.1 and 22 km.
+        Assert.Equal(2.0, absent.Derived.TurretDps, 6);
+        Assert.Equal(20000, absent.Contributions.Single().OptimalRange, 6);
+        Assert.Equal(explicitZero.Derived.TurretDps, absent.Derived.TurretDps, 6);
+        Assert.Equal(explicitZero.Contributions.Single().OptimalRange, absent.Contributions.Single().OptimalRange, 6);
+    }
+
+    [Theory]
+    [InlineData(1, 2.1, 22000)]   // +5% damage, +10% optimal per level
+    [InlineData(3, 2.3, 26000)]
+    public void CharacterSnapshot_TrainedHullSkill_ScalesTheBonusPerLevel(int level, double dps, double optimal)
+    {
+        var result = CalculateFerox(new Dictionary<int, int> { [CaldariBattlecruiser] = level });
+
+        Assert.Equal(dps, result.Derived.TurretDps, 6);
+        Assert.Equal(optimal, result.Contributions.Single().OptimalRange, 6);
     }
 
     [Fact]

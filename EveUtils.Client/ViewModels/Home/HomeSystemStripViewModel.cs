@@ -39,7 +39,7 @@ public sealed partial class HomeSystemStripViewModel : ObservableObject, IDispos
             _localApi.StatusChanged += _OnLocalApiChanged;
         _ShowClipboard();
         _ShowLocalApi();
-        VersionText = AppInfo.Version;
+        VersionText = AppInfo.DisplayVersion;
     }
 
     [ObservableProperty] private string _pricesText = "Prices";

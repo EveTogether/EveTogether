@@ -45,6 +45,9 @@ public interface ISdeAccessor
     /// <summary>The published charge types in a group with their charge size, for the fit-detail charge picker.</summary>
     IReadOnlyList<SdeChargeType> GetChargeTypesInGroup(int groupId);
 
+    /// <summary>The published skills in a group, with training rank and primary/secondary character attributes.</summary>
+    IReadOnlyList<SdeSkill> GetSkillsInGroup(int groupId);
+
     /// <summary>The published combat-booster types (those carrying the boosterness attribute 1087), for the fit-detail
     /// booster simulator picker. Ordered by name.</summary>
     IReadOnlyList<SdeNamedType> GetBoosterTypes();

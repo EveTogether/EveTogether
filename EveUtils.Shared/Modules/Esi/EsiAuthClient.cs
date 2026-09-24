@@ -14,20 +14,22 @@ namespace EveUtils.Shared.Modules.Esi;
 /// </summary>
 public sealed class EsiAuthClient(IHttpClientFactory httpClientFactory) : IEsiAuthClient, IEsiTokenRevoker, ISingletonService
 {
-    public async Task RevokeRefreshTokenAsync(string refreshToken, string clientId, string clientSecret, CancellationToken cancellationToken = default)
+    public async Task RevokeRefreshTokenAsync(string refreshToken, string clientId, string? clientSecret = null, CancellationToken cancellationToken = default)
     {
         var form = new Dictionary<string, string>
         {
             ["token"] = refreshToken,
             ["token_type_hint"] = "refresh_token"
         };
-        var basic = Convert.ToBase64String(Encoding.ASCII.GetBytes($"{clientId}:{clientSecret}"));
 
-        using var request = new HttpRequestMessage(HttpMethod.Post, EsiEndpoints.Revoke)
-        {
-            Content = new FormUrlEncodedContent(form)
-        };
-        request.Headers.Authorization = new AuthenticationHeaderValue("Basic", basic);
+        using var request = new HttpRequestMessage(HttpMethod.Post, EsiEndpoints.Revoke);
+        // Credentials exactly once, the same rule RefreshAsync follows: in the header with a secret, in the body without.
+        if (!string.IsNullOrEmpty(clientSecret))
+            request.Headers.Authorization = new AuthenticationHeaderValue("Basic",
+                Convert.ToBase64String(Encoding.ASCII.GetBytes($"{clientId}:{clientSecret}")));
+        else
+            form["client_id"] = clientId;
+        request.Content = new FormUrlEncodedContent(form);
         request.Headers.Host = "login.eveonline.com";
 
         var httpClient = httpClientFactory.CreateClient(EsiHttpClients.Auth);
