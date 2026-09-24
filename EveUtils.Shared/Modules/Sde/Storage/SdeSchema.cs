@@ -23,9 +23,11 @@ public static class SdeSchema
     /// v7 added <c>Type.metaGroupId</c> (mutated-type detection, ET-146 deel A) and
     /// <c>MutaplasmidAttributeRange</c>/<c>MutaplasmidResultingType</c> (dynamicItemAttributes.jsonl, ET-146 deel D);
     /// v8 added <c>Site.gameplayDescription</c> and the <c>Site.includedTypeIdsJson</c>/<c>excludedTypeIdsJson</c>
-    /// pair (ET-232) — the individual-hull refinement <c>shipGroupIdsJson</c> alone could not express.
+    /// pair (ET-232) — the individual-hull refinement <c>shipGroupIdsJson</c> alone could not express;
+    /// v9 added <c>SolarSystem.regionId</c> and the <c>Region</c>, <c>NpcCorporation</c> and <c>Faction</c> tables
+    /// (ET-335) so a killmail's system, region, attacker corporation and faction resolve from the SDE instead of ESI.
     /// </summary>
-    public const int SchemaVersion = 8;
+    public const int SchemaVersion = 9;
 
     /// <summary>Schema-creating statements, run before the bulk load.</summary>
     public static readonly string[] CreateTables =
@@ -132,11 +134,14 @@ public static class SdeSchema
         "CREATE TABLE SiteNameAlias (dungeonId INTEGER NOT NULL, nameKey TEXT NOT NULL, locale TEXT NOT NULL);",
         // The mission side of the SDE (ET-173). SolarSystem backs Agent.solarSystemId; agent and site name
         // resolution is only ever by id, never joined against Site's own dungeonId space (see Mission below).
+        // regionId (ET-335) comes straight off mapSolarSystems.jsonl — no constellation table is needed because
+        // the system already carries its region id, not just its constellation id.
         """
         CREATE TABLE SolarSystem (
             solarSystemId  INTEGER PRIMARY KEY,
             nameEn         TEXT NOT NULL,
-            securityStatus REAL NOT NULL
+            securityStatus REAL NOT NULL,
+            regionId       INTEGER NOT NULL
         ) WITHOUT ROWID;
         """,
         // Only npcCharacters rows with an `agent` sub-object become a row here (ET-173 AC-2). solarSystemId is
@@ -177,6 +182,12 @@ public static class SdeSchema
         // missionId -> arcId only (ET-173 AC-6, minimal by design); the nextMissions chain graph is a read
         // concern (ET-131), not an import concern.
         "CREATE TABLE EpicArcMission (missionId INTEGER PRIMARY KEY, arcId INTEGER NOT NULL) WITHOUT ROWID;",
+        // Id + English name only (ET-335) — the killmail importer's own tables. A killmail's attacker/victim
+        // corporation or faction id resolves here when it belongs to an NPC; a miss means the id is a player's
+        // and must go to ESI instead (see ISdeAccessor.GetNpcCorporationName/GetFactionName).
+        "CREATE TABLE Region (regionId INTEGER PRIMARY KEY, nameEn TEXT NOT NULL) WITHOUT ROWID;",
+        "CREATE TABLE NpcCorporation (corporationId INTEGER PRIMARY KEY, nameEn TEXT NOT NULL) WITHOUT ROWID;",
+        "CREATE TABLE Faction (factionId INTEGER PRIMARY KEY, nameEn TEXT NOT NULL) WITHOUT ROWID;",
         // dynamicItemAttributes.jsonl (ET-146 deel D): one row per (mutaplasmid, rollable attribute). The min/max
         // are multipliers on the source type's base value, not rolled values themselves — see the ticket's
         // research. No consumer reads this yet (deel B decides how the unknown-state should use it).

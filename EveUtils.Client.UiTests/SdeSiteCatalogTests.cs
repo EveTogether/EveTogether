@@ -219,21 +219,22 @@ public sealed class SdeSiteCatalogTests : IDisposable
     }
 
     [Fact]
-    public void SchemaVersion_IsEight_AndAnOlderStoreReadsAsUnavailable()
+    public void SchemaVersion_IsNine_AndAStoreFromThePreviousVersionReadsAsUnavailable()
     {
-        Assert.Equal(8, SdeSchema.SchemaVersion);
+        Assert.Equal(9, SdeSchema.SchemaVersion);
 
-        // A store left behind by a v3 build has no Site table. The accessor must refuse it outright so
-        // SdeImporter.CheckForUpdateAsync sees a null local version and offers the rebuild.
+        // A store left behind by the v8 build (ET-335's predecessor) has no regionId/Region/NpcCorporation/Faction
+        // shape. The accessor must refuse it outright so SdeImporter.CheckForUpdateAsync sees a null local version
+        // and offers the rebuild — this is the test that goes red if the version bump itself is forgotten.
         Directory.CreateDirectory(_dir);
-        var dbPath = Path.Combine(_dir, "v3.db");
+        var dbPath = Path.Combine(_dir, "v8.db");
         using (var connection = new SqliteConnection($"Data Source={dbPath};Pooling=False"))
         {
             connection.Open();
             using var command = connection.CreateCommand();
             command.CommandText =
                 "CREATE TABLE Meta (key TEXT PRIMARY KEY, value TEXT NOT NULL) WITHOUT ROWID;" +
-                $"INSERT INTO Meta VALUES ('{SdeSchema.MetaSchemaVersion}', '3'), ('{SdeSchema.MetaBuildNumber}', '3386912');";
+                $"INSERT INTO Meta VALUES ('{SdeSchema.MetaSchemaVersion}', '8'), ('{SdeSchema.MetaBuildNumber}', '3539543');";
             command.ExecuteNonQuery();
         }
 

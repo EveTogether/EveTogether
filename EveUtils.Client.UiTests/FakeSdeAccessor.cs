@@ -28,6 +28,8 @@ public sealed class FakeSdeAccessor : ISdeAccessor
     private readonly Dictionary<int, SdeAgent> _agents = new();
     private readonly Dictionary<string, SdeAgent> _agentsByName = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, SdeSolarSystem> _solarSystemsByName = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<int, string> _npcCorporations = new();
+    private readonly Dictionary<int, string> _factions = new();
 
     public bool IsAvailable { get; private set; } = true;
     public SdeVersion? Version => new(1, DateTimeOffset.UnixEpoch);
@@ -78,6 +80,18 @@ public sealed class FakeSdeAccessor : ISdeAccessor
     public FakeSdeAccessor AddSolarSystem(SdeSolarSystem system)
     {
         _solarSystemsByName[system.Name] = system;
+        return this;
+    }
+
+    public FakeSdeAccessor AddNpcCorporation(int corporationId, string name)
+    {
+        _npcCorporations[corporationId] = name;
+        return this;
+    }
+
+    public FakeSdeAccessor AddFaction(int factionId, string name)
+    {
+        _factions[factionId] = name;
         return this;
     }
 
@@ -196,6 +210,9 @@ public sealed class FakeSdeAccessor : ISdeAccessor
 
     public SdeSolarSystem? GetSolarSystem(int solarSystemId) =>
         _solarSystemsByName.Values.FirstOrDefault(system => system.SolarSystemId == solarSystemId);
+
+    public string? GetNpcCorporationName(int corporationId) => _npcCorporations.GetValueOrDefault(corporationId);
+    public string? GetFactionName(int factionId) => _factions.GetValueOrDefault(factionId);
 
     public void Close() { }
     public void Reopen() { }

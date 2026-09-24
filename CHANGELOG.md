@@ -13,6 +13,10 @@ taken from the matching `## vX.Y.Z` section below.
 
 ## [Unreleased]
 
+- **Changed: the local EVE database now also carries regions, NPC corporations and factions.** No visible change
+  yet — this is groundwork for the upcoming kill/loss overview, so a killmail's system, region and NPC attacker
+  resolve from your own machine instead of another lookup to CCP's servers. Because the database format changed,
+  it downloads fresh (about 100 MB) the next time you start the app, the same as after every earlier update to it.
 - **Added: rewrite what a run cost you by hand.** A saved activity's CONSUMABLES block has a REWRITE CONSUMABLES BY
   HAND button for each of your characters, the same box you already use to rewrite loot. Set the filament to 0 when a
   fleetmate's was used, or add the ammo, drones, boosters and nanite paste you went through. Every line is valued at
