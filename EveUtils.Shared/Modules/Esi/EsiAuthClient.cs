@@ -12,8 +12,30 @@ namespace EveUtils.Shared.Modules.Esi;
 /// token (rotation-proof). Uses the bare <see cref="EsiHttpClients.Auth"/> client (header handler
 /// only) via the factory so this singleton never captures a transient HttpClient.
 /// </summary>
-public sealed class EsiAuthClient(IHttpClientFactory httpClientFactory) : IEsiAuthClient, ISingletonService
+public sealed class EsiAuthClient(IHttpClientFactory httpClientFactory) : IEsiAuthClient, IEsiTokenRevoker, ISingletonService
 {
+    public async Task RevokeRefreshTokenAsync(string refreshToken, string clientId, string clientSecret, CancellationToken cancellationToken = default)
+    {
+        var form = new Dictionary<string, string>
+        {
+            ["token"] = refreshToken,
+            ["token_type_hint"] = "refresh_token"
+        };
+        var basic = Convert.ToBase64String(Encoding.ASCII.GetBytes($"{clientId}:{clientSecret}"));
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, EsiEndpoints.Revoke)
+        {
+            Content = new FormUrlEncodedContent(form)
+        };
+        request.Headers.Authorization = new AuthenticationHeaderValue("Basic", basic);
+        request.Headers.Host = "login.eveonline.com";
+
+        var httpClient = httpClientFactory.CreateClient(EsiHttpClients.Auth);
+        using var response = await httpClient.SendAsync(request, cancellationToken);
+        if (!response.IsSuccessStatusCode)
+            throw new EsiTokenExchangeException((int)response.StatusCode, await response.Content.ReadAsStringAsync(cancellationToken));
+    }
+
     public Task<EsiTokenSet> ExchangePublicAsync(string code, Pkce pkce, string clientId, CancellationToken cancellationToken = default)
     {
         var form = new Dictionary<string, string>

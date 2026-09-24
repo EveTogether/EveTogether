@@ -17,6 +17,12 @@ release notes, not this file.
 
 ## [Unreleased]
 
+- **Fixed: decoupling a character now really lets go of it on the server.** Until now the server kept the character's
+  EVE sign-in and went on refreshing it every minute after you decoupled. When the last machine decouples, the server
+  now deletes the character with its stored token and revokes that token at EVE. A character that is still coupled
+  from another PC is left alone and keeps working. If the server was offline when you decoupled, the client
+  remembers it and tells the server the next time it connects. On startup the server also clears characters that
+  earlier decouples had left behind.
 - **Added: EVE Together reads your game log in more client languages.** Until now only an English client produced DPS,
   repairs, neuts, application, mining, bounty or a location; a German or Russian client got nothing, without a word.
   The language is now read from the game log itself, and German, Russian, French, Spanish, Japanese and Chinese work

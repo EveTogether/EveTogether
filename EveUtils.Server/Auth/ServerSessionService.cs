@@ -177,16 +177,16 @@ public sealed class ServerSessionService(IServerAuthRepository repository, ILogg
 
     /// <summary>
     /// Client-initiated decouple: delete the session bound to this access token so it can no
-    /// longer be used to attach. Returns true if a session was found and removed.
+    /// longer be used to attach. Returns the removed session, or null when none matched.
     /// </summary>
-    public async Task<bool> RevokeAsync(string accessToken, CancellationToken cancellationToken = default)
+    public async Task<ServerSession?> RevokeAsync(string accessToken, CancellationToken cancellationToken = default)
     {
         var session = await repository.FindSessionByAccessHashAsync(TokenSecurity.Hash(accessToken), cancellationToken);
         if (session is null)
-            return false;
+            return null;
 
         await repository.DeleteSessionAsync(session.Id, cancellationToken);
-        return true;
+        return session;
     }
 
     /// <summary>Enough of the stored hash to line two log lines up against each other, far too little to be a token.</summary>

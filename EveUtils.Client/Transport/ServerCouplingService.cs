@@ -10,10 +10,14 @@ namespace EveUtils.Client.Transport;
 /// Tears down a character↔server coupling: revoke the server session (so the bus stream is cut), drop the
 /// local session, then either detach the bus from that server (no characters left) or re-attach it with a remaining
 /// character's session. Shared by the per-character gear-button decouple and the per-server "decouple" action in the
-/// Fleets window, so the teardown sequence lives in one place.
+/// Fleets window, so the teardown sequence lives in one place. A revoke the server never heard — it was unreachable —
+/// is kept and repeated on the next connection to it (<see cref="PendingServerRevokeFlusher"/>).
 /// </summary>
 public sealed class ServerCouplingService(
-    IClientSessionStore sessionStore, ServerSessionClient sessionClient, IRemoteBusConnector busConnector)
+    IClientSessionStore sessionStore,
+    IServerSessionRevoker sessionRevoker,
+    IPendingServerRevokeStore pendingRevokes,
+    IRemoteBusConnector busConnector)
     : ISingletonService
 {
     /// <summary>Decouples one character from one server, keeping any other characters coupled to it live.</summary>
@@ -41,8 +45,9 @@ public sealed class ServerCouplingService(
     private async Task RevokeAndRemoveAsync(string serverAddress, int characterId, CancellationToken cancellationToken)
     {
         var session = await sessionStore.LoadForCharacterAsync(serverAddress, characterId, cancellationToken);
-        if (session is not null)
-            await sessionClient.RevokeAsync(serverAddress, session.AccessToken, cancellationToken);
+        if (session is not null
+            && await sessionRevoker.RevokeAsync(serverAddress, session.AccessToken, cancellationToken) == ServerRevokeOutcome.Unreachable)
+            await pendingRevokes.QueueAsync(serverAddress, characterId, session.AccessToken, cancellationToken);
         await sessionStore.RemoveAsync(serverAddress, characterId, cancellationToken);
     }
 }
