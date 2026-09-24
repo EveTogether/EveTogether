@@ -43,11 +43,11 @@ public sealed class SkillDetailViewModel
         Rank = skill.Rank;
         AttributesText = $"{SkillAttributeLookup.Name(skill.PrimaryAttributeId)} / {SkillAttributeLookup.Name(skill.SecondaryAttributeId)}";
         CurrentLevel = currentLevel;
-        PipsText = new string('■', currentLevel) + new string('□', 5 - currentLevel);
         Description = description;
         SpPerMinute = spPerMinute;
 
         var levels = new List<SkillLevelRowViewModel>(5);
+        int? trainingLevel = null;
         for (int level = 1; level <= 5; level++)
         {
             long totalSp = (long)SkillPointMath.SkillPointsForLevel(skill.Rank, level);
@@ -62,8 +62,13 @@ public sealed class SkillDetailViewModel
             }
             else if (queueEntry is not null)
             {
+                bool training = _IsCurrentlyTraining(queueEntry, now);
+                if (training)
+                {
+                    trainingLevel = level;
+                }
                 status = queueEntry.FinishDate is { } finish
-                    ? $"{(_IsCurrentlyTraining(queueEntry, now) ? "training" : "queued")} · {finish.ToLocalTime():ddd d MMM HH:mm}"
+                    ? $"{(training ? "training" : "queued")} · {finish.ToLocalTime():ddd d MMM HH:mm}"
                     : "queue paused";
             }
             else
@@ -73,6 +78,7 @@ public sealed class SkillDetailViewModel
 
             levels.Add(new SkillLevelRowViewModel(level, RomanLevel.Text(level), totalSp, trained, status));
         }
+        PipsText = SkillLevelPips.Text(currentLevel, trainingLevel);
         Levels = levels;
     }
 

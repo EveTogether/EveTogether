@@ -104,8 +104,8 @@ public sealed partial class SkillsQueueViewModel : ObservableObject
                 fromNowText = "≈" + SkillQueueStanding.Until(pausedCumulative);
             }
 
-            Rows.Add(new SkillQueueRowViewModel(position, skill.TypeId, skill.Name, entry.FinishedLevel, groupName,
-                position == 1, thisLevelText, endsText, fromNowText));
+            Rows.Add(new SkillQueueRowViewModel(position, skill.TypeId, skill.Name, snapshot.LevelOf(skill.TypeId),
+                entry.FinishedLevel, groupName, position == 1, thisLevelText, endsText, fromNowText));
         }
 
         SpInQueueText = spTotal > 0 ? $"{(spTotal / 1_000_000.0).ToString("0.00", CultureInfo.InvariantCulture)}M" : "—";

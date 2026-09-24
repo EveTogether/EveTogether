@@ -79,10 +79,10 @@
         <Border DockPanel.Dock="Top" Padding="14,10" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource BorderBrush}">
             <Grid ColumnDefinitions="Auto,*,Auto">
                 <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
-                    <TextBlock Classes="panel-title" FontSize="13" Text="SKILLS"/>
+                    <TextBlock Classes="panel-title" FontSize="13" VerticalAlignment="Center" Text="SKILLS"/>
                     <TextBlock Classes="label" FontSize="10" VerticalAlignment="Center" Text="CHARACTER"/>
                     <!-- The FitDetailWindow SKILLS-combobox spot, with the ET-184 row as the item template (ET-16). -->
-                    <ComboBox Classes="characterpick"
+                    <ComboBox Classes="characterpick" VerticalAlignment="Center"
                               ItemsSource="{Binding FilteredCharacterOptions}"
                               SelectedItem="{Binding SelectedCharacterOption, Mode=TwoWay}">
                         <ComboBox.ItemTemplate>
@@ -93,7 +93,11 @@
                     </ComboBox>
                     <TextBlock Classes="hint" VerticalAlignment="Center" Text="{Binding CharacterOrdinalText}"/>
                 </StackPanel>
-                <TextBlock Grid.Column="2" Classes="hint" VerticalAlignment="Center" Text="{Binding TotalSpText}"/>
+                <StackPanel Grid.Column="2" VerticalAlignment="Center" HorizontalAlignment="Right">
+                    <TextBlock Classes="hint" HorizontalAlignment="Right" Text="{Binding TotalSpText}"/>
+                    <TextBlock Classes="hint" HorizontalAlignment="Right" Text="{Binding UnallocatedSpText}"
+                               IsVisible="{Binding UnallocatedSpText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                </StackPanel>
             </Grid>
         </Border>
 
@@ -109,9 +113,10 @@
             <TabItem Header="TRAINING QUEUE">
                 <sk:SkillsQueuePane DataContext="{Binding Queue}"/>
             </TabItem>
-            <!-- PLANS and OPTIMISE: the tabstrip only (ET-16 scope) — content lands in S5/S6. -->
-            <TabItem Header="PLANS" IsEnabled="False"/>
-            <TabItem Header="OPTIMISE" IsEnabled="False"/>
+            <!-- PLANS and OPTIMISE: the tabstrip only (ET-16 scope) — content lands in S5/S6. A tooltip says so,
+                 rather than the disabled tab reading as broken (Raymond's preview feedback, 2026-09-24). -->
+            <TabItem Header="PLANS" IsEnabled="False" ToolTip.Tip="Skill plans — coming soon"/>
+            <TabItem Header="OPTIMISE" IsEnabled="False" ToolTip.Tip="Optimise — coming soon"/>
         </TabControl>
     </DockPanel>
 </v:ChromedWindow>

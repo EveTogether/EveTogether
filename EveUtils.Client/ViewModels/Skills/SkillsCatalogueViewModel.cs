@@ -83,9 +83,11 @@ public sealed partial class SkillsCatalogueViewModel : ObservableObject
             return;
         }
 
+        var trainingHead = _snapshot.TrainingHead;
         foreach (var skill in _snapshot.Sde.GetSkillsInGroup(value.GroupId).OrderBy(s => s.Name))
         {
-            Skills.Add(new SkillRowViewModel(skill.TypeId, skill.Name, _snapshot.LevelOf(skill.TypeId), _StatusText(skill)));
+            int? trainingLevel = trainingHead is { } head && head.SkillTypeId == skill.TypeId ? head.Level : null;
+            Skills.Add(new SkillRowViewModel(skill.TypeId, skill.Name, _snapshot.LevelOf(skill.TypeId), trainingLevel, _StatusText(skill)));
         }
     }
 
@@ -128,7 +130,7 @@ public sealed partial class SkillsCatalogueViewModel : ObservableObject
             .FirstOrDefault();
         if (queued is not null)
         {
-            return $"QUEUE → {RomanLevel.Text(queued.FinishedLevel)} {SkillQueueStanding.Until(_TimeLeft(queued))}";
+            return $"→ {RomanLevel.Text(queued.FinishedLevel)} · {SkillQueueStanding.Until(_TimeLeft(queued))}";
         }
 
         double rate = _snapshot.SpPerMinute(skill.PrimaryAttributeId, skill.SecondaryAttributeId);
@@ -139,7 +141,7 @@ public sealed partial class SkillsCatalogueViewModel : ObservableObject
 
         double levelSp = SkillPointMath.SkillPointsForLevel(skill.Rank, level + 1)
                         - SkillPointMath.SkillPointsForLevel(skill.Rank, level);
-        return SkillQueueStanding.Until(TimeSpan.FromMinutes(levelSp / rate));
+        return $"→ {RomanLevel.Text(level + 1)} · {SkillQueueStanding.Until(TimeSpan.FromMinutes(levelSp / rate))}";
     }
 
     private TimeSpan _TimeLeft(SkillQueueEntry entry) =>

@@ -44,7 +44,8 @@ public sealed partial class SkillsWindowViewModel : ObservableObject, IRefreshab
     [ObservableProperty] private int? _selectedCharacterId;
     [ObservableProperty] private string _selectedCharacterName = "";
     [ObservableProperty] private string _characterOrdinalText = "";
-    [ObservableProperty] private string _totalSpText = "—";
+    [ObservableProperty] private string _totalSpText = "Total Skill Points not imported yet";
+    [ObservableProperty] private string _unallocatedSpText = "";
     [ObservableProperty] private int _selectedTabIndex;
     [ObservableProperty] private SkillsCatalogueViewModel? _catalogue;
     [ObservableProperty] private SkillsQueueViewModel? _queue;
@@ -230,9 +231,18 @@ public sealed partial class SkillsWindowViewModel : ObservableObject, IRefreshab
             SelectedCharacterOption = CharacterOptions.FirstOrDefault(o => o.CharacterId == characterId);
             _suppressSelectionApply = false;
 
-            TotalSpText = snapshot.Attributes is { } attrs
-                ? $"{attrs.TotalSp.ToString("N0", CultureInfo.InvariantCulture)} skill points"
-                : "—"; // AC6: straight from ESI total_sp — never a sum over trained levels
+            // AC6: straight from ESI total_sp/unallocated_sp — never a sum over trained levels. Null only when this
+            // character's skills have never been imported — a clear placeholder rather than a blank header.
+            if (snapshot.Attributes is { } attrs)
+            {
+                TotalSpText = $"{attrs.TotalSp.ToString("N0", CultureInfo.InvariantCulture)} Total Skill Points";
+                UnallocatedSpText = $"{attrs.UnallocatedSp.ToString("N0", CultureInfo.InvariantCulture)} unallocated skill points";
+            }
+            else
+            {
+                TotalSpText = "Total Skill Points not imported yet";
+                UnallocatedSpText = "";
+            }
             Catalogue = catalogue;
             Queue = queue;
             StatusMessage = null;

@@ -70,7 +70,9 @@ public sealed class SkillsWindowViewModelTests
         Assert.Equal(expectedCharacterId, viewModel.SelectedCharacterId);
     }
 
-    /// <summary>Criterion 6. Red if the header total reads as a sum over trained levels instead of ESI's own total_sp.</summary>
+    /// <summary>Criterion 6. Red if the header total reads as a sum over trained levels instead of ESI's own
+    /// total_sp/unallocated_sp, or if a character whose skills were never imported gets a blank header instead of a
+    /// clear placeholder (Raymond's preview feedback, 2026-09-24).</summary>
     [Fact]
     public async Task TotalSpText_ReadsEsisTotalSp_NeverASumOverTrainedLevels()
     {
@@ -82,12 +84,28 @@ public sealed class SkillsWindowViewModelTests
             .ReplaceForCharacterAsync(1, new Dictionary<int, int> { [3300] = 3 }, Ct);
         await instance.Services.GetRequiredService<ICharacterAttributesRepository>().ReplaceForCharacterAsync(
             new CharacterAttributes { CharacterId = 1, Charisma = 17, Intelligence = 17, Memory = 17, Perception = 27,
-                Willpower = 21, TotalSp = 183_432_787, UnallocatedSp = 0 }, Ct);
+                Willpower = 21, TotalSp = 187_783_359, UnallocatedSp = 6_378_705 }, Ct);
         var viewModel = new SkillsWindowViewModel(instance.Services, startingCharacterId: 1);
 
         await viewModel.LoadAsync(Ct);
 
-        Assert.Equal("183,432,787 skill points", viewModel.TotalSpText);
+        Assert.Equal("187,783,359 Total Skill Points", viewModel.TotalSpText);
+        Assert.Equal("6,378,705 unallocated skill points", viewModel.UnallocatedSpText);
+    }
+
+    /// <summary>Criterion 6, fresh-database case. Red if a character with no skill import yet leaves the header
+    /// blank instead of a placeholder that says so.</summary>
+    [Fact]
+    public async Task TotalSpText_ShowsAPlaceholder_WhenNeverImported()
+    {
+        using var instance = TestClientInstance.Create();
+        await _SeedCharactersAsync(instance, (1, "FreshCharacter"));
+        var viewModel = new SkillsWindowViewModel(instance.Services, startingCharacterId: 1);
+
+        await viewModel.LoadAsync(Ct);
+
+        Assert.Equal("Total Skill Points not imported yet", viewModel.TotalSpText);
+        Assert.Equal("", viewModel.UnallocatedSpText);
     }
 
     /// <summary>

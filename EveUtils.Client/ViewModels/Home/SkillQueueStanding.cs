@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using EveUtils.Client.Skills;
 using EveUtils.Shared.Modules.Skills.Entities;
 
 namespace EveUtils.Client.ViewModels.Home;
@@ -36,7 +37,7 @@ public sealed record SkillQueueStanding(
             entries.Max(entry => entry.FinishDate), entries.Count);
     }
 
-    public string SkillText => $"{SkillName} {_Roman(Level)}";
+    public string SkillText => $"{SkillName} {RomanLevel.Text(Level)}";
 
     public TimeSpan? QueueLeft(DateTimeOffset now) => QueueEndsAt is { } end ? _NotNegative(end - now) : null;
 
@@ -65,14 +66,4 @@ public sealed record SkillQueueStanding(
     }
 
     private static TimeSpan _NotNegative(TimeSpan span) => span < TimeSpan.Zero ? TimeSpan.Zero : span;
-
-    private static string _Roman(int level) => level switch
-    {
-        1 => "I",
-        2 => "II",
-        3 => "III",
-        4 => "IV",
-        5 => "V",
-        _ => level.ToString(System.Globalization.CultureInfo.InvariantCulture)
-    };
 }
