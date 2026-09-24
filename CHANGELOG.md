@@ -48,6 +48,7 @@ entries under `[Unreleased]` below that were not there yet at the previous night
   to your killmails while the window stays open, and the background import starts immediately instead of waiting up
   to 5 minutes for its next tick. A killmail the background refresh finds later, with the window still open, now
   appears the same way.
+- **Added: see which of your characters can fly each fit in a fleet composition.** COMP shows readiness counts per fit and a searchable list of names, with the time and queued skills still needed to fly it.
 - **Added: opening a killmail shows its full detail.** Double-click a row in KILLMAILS, or press OPEN KILLMAIL on a
   linked loss, to see the victim, the fit split into what was destroyed and what dropped, every attacker with their
   ship, weapon, damage and share, and the total value at today's prices. OPEN FIT reconstructs the fit as it was flown
