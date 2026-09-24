@@ -23,7 +23,7 @@ internal static class UnusedReleaser
 
     private sealed class UnusedRevoker : IEsiTokenRevoker
     {
-        public Task RevokeRefreshTokenAsync(string refreshToken, string clientId, string clientSecret, CancellationToken cancellationToken = default) =>
+        public Task RevokeRefreshTokenAsync(string refreshToken, string clientId, string? clientSecret = null, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
     }
 }

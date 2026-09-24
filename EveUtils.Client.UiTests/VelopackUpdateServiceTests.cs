@@ -126,6 +126,33 @@ public class VelopackUpdateServiceTests : IDisposable
         Assert.Null(result.Value);
     }
 
+    [Fact]
+    public async Task CheckAsync_WhenNightlyVersionDrops_OffersTheNewBuild()
+    {
+        Result<AppRelease?> result = await VelopackUpdateService.CheckAsync(
+            UpdateChannel.Nightly,
+            new Feed(_Package("0.0.0-nightly.5")),
+            new TestVelopackLocator(PackageId, "0.2.1-nightly.4", _packages),
+            TimeSpan.FromSeconds(5),
+            NullLogger.Instance,
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.NotNull(result.Value);
+    }
+
+    [Fact]
+    public async Task CheckAsync_WithANightlyOffer_UsesItsBuildIdentityAndRollingReleasePage()
+    {
+        Result<AppRelease?> result = await _CheckAsync(
+            new Feed(_Package("0.0.0-nightly.6", "nightly-20260924.a1b2c3d.6")),
+            UpdateChannel.Nightly);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("nightly-20260924.a1b2c3d.6", result.Value?.Version);
+        Assert.Equal("https://github.com/EveTogether/EveTogether/releases/tag/nightly", result.Value?.Url);
+    }
+
     /// <summary>
     /// The channel that reaches the feed is what keeps a Windows install away from the macOS package in the same
     /// release, and a stable install away from a nightly asset (ET-339).

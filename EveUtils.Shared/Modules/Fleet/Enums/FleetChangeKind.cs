@@ -14,5 +14,10 @@ public enum FleetChangeKind
     /// again, so the surfaces that react to <see cref="Activated"/> have to re-read. Appended rather than slotted in
     /// beside <see cref="Activated"/> on purpose: this travels the wire between a client and a server that update
     /// separately, so the existing values must keep the numbers they already have.</summary>
-    Stopped
+    Stopped,
+
+    /// <summary>A fleet appeared or was disbanded (ET-10) — for a public fleet that is a row arriving in or leaving
+    /// every connected client's discovery list. Appended for the same wire reason as <see cref="Stopped"/>.</summary>
+    Created,
+    Disbanded
 }

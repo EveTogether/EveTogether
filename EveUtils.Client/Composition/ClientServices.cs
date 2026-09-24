@@ -93,10 +93,12 @@ public static class ClientServices
             sp.GetRequiredService<IHttpClientFactory>(),
             sp.GetRequiredService<ISettingRepository>(),
             DataDirectory())); // opt-in CCP type images, per-instance disk cache
-        services.AddSingleton<ICharacterPortraitProvider>(sp => new CharacterPortraitProvider(
+        services.AddSingleton(sp => new CharacterPortraitProvider(
             sp.GetRequiredService<IHttpClientFactory>(),
             sp.GetRequiredService<ISettingRepository>(),
             DataDirectory())); // hex character portraits in the shell, per-instance disk cache
+        services.AddSingleton<ICharacterPortraitProvider>(sp => sp.GetRequiredService<CharacterPortraitProvider>());
+        services.AddSingleton<ICharacterDataEraser>(sp => sp.GetRequiredService<CharacterPortraitProvider>()); // ET-345
         // EVE settings sync (ET-59): the backup store needs the per-instance data dir, so it is wired by hand;
         // SettingsSyncService / EveSettingsNameResolver / EveSettingsPreferences carry lifetime markers.
         services.AddSingleton(new EveSettings.SettingsBackupService(DataDirectory()));

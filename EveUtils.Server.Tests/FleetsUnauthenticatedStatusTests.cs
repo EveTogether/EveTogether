@@ -46,7 +46,7 @@ public class FleetsUnauthenticatedStatusTests
     /// <summary>Only the session service is reached before the gate refuses, so the rest of the graph stays out of it.</summary>
     private FleetsGrpcService Service() =>
         new(new ServerSessionService(new ServerAuthRepository(_factory), NullLogger<ServerSessionService>.Instance),
-            null!, null!, null!, null!, null!, null!);
+            null!, null!, null!, null!, null!, null!, null!);
 
     private static ServerCallContext Context(string? bearer)
     {

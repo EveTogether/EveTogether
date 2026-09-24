@@ -282,6 +282,19 @@ public sealed class GamelogClientService : IFleetMetricSource, ISingletonService
         }
     }
 
+    /// <summary>
+    /// Undoes <see cref="MapCharacter"/> for a character removed from this PC (ET-345): its location watch stops, and
+    /// a gamelog line under its name is stamped with no id from here on — a pilot still flying is a local-only row
+    /// again, never a quiet way back for the removed id.
+    /// </summary>
+    public void ForgetCharacter(int characterId)
+    {
+        _services.GetService<IEsiLocationMonitor>()?.Stop(characterId);
+        if (_nameById.TryRemove(characterId, out var name))
+            _idByName.TryRemove(new KeyValuePair<string, int>(name, characterId));
+        _currentRun.TryRemove(characterId, out _);
+    }
+
     private async Task RefreshRegistryMapAsync()
     {
         if (_registry is null)

@@ -20,6 +20,24 @@ release notes, not this file.
 - **Fixed: a fit's stats no longer count a ship skill your character has not trained as level I.** With a
   character's own skills selected, an untrained hull skill still gave its first level of bonus (a Ferox without Caldari
   Battlecruiser showed 304.8 instead of 290.3 DPS); it now gives none, the same as a skill at level 0.
+- **Added: you can now remove a character.** Until now a character you had added stayed in the list for good. Its
+  settings have a Remove character button at the bottom: two clicks and it is decoupled from every server, its EVE
+  sign-in is revoked at CCP, and its skills, implants, killmails, messages, cached metrics and tokens are deleted from
+  this PC. Your runs and fittings stay unless you tick "Also delete this character's runs and fittings". A run that is
+  still going is stopped first. A character that commands an active fleet can't be removed until you hand the fleet
+  over or stop it. If a server can't be reached, the character is removed anyway and that server is told the next time
+  it connects. Signing in with the character again adds it back.
+- **Fixed: public fleets in the fleet list now update live even when you're not in them.** When a commander started,
+  stopped or concluded a public fleet, or created or disbanded one, only its members saw it change; everyone else kept
+  seeing the old status until they pressed Refresh. That includes a fleet the server stands down on its own after it
+  empties or goes quiet. Invite-only fleets stay private: only their members are told about them, as before.
+- **Changed: red buttons such as Conclude and Remove read better.** Their red label sat on a light wash that left it
+  just under the contrast the rest of the app keeps to; the wash is gone, the red outline stays.
+- **Changed: nightly builds now show their build date, commit and run number instead of a release number.** If you installed an
+  earlier nightly, reinstall once from the nightly release page; later nightly updates will work as usual. Stable builds
+  keep their regular version.
+- **Changed: the local EVE database now includes skill details and item descriptions.** It downloads fresh the next
+  time you start the app so the upcoming skill catalogue can use EVE's own data.
 - **Fixed: the server no longer answers unauthenticated requests to the old test endpoints.** `GET`/`POST /ships` and
   `GET /sync-logs` were leftovers from early development and let anyone who could reach a server read its sync log or
   add rows to its database. They are gone.

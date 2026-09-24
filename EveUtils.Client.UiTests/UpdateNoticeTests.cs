@@ -65,9 +65,11 @@ public class UpdateNoticeTests
         Assert.DoesNotContain("up to date", status, System.StringComparison.OrdinalIgnoreCase);
     }
 
-    [Fact]
-    public void StartupStatus_NamesTheOfferedVersion() =>
-        Assert.Equal("Update available: v0.3.0", UpdateNotice.StartupStatus(Offer(), Installed));
+    [Theory]
+    [InlineData("0.3.0", "Update available: v0.3.0")]
+    [InlineData("nightly-20260924.a1b2c3d.6", "Update available: nightly-20260924.a1b2c3d.6")]
+    public void StartupStatus_NamesTheOfferedVersion(string version, string expected) =>
+        Assert.Equal(expected, UpdateNotice.StartupStatus(Offer(version), Installed));
 
     [Fact]
     public void StartupStatus_ConfirmsTheInstalledVersion_WhenTheFeedAnswered() =>

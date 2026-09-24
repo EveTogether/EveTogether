@@ -28,7 +28,7 @@ public static class UpdateNotice
     /// </summary>
     public static string? StartupStatus(Result<AppRelease?> check, string installedVersion) => Classify(check) switch
     {
-        UpdateNoticeKind.Available => $"Update available: v{check.Value!.Version}",
+        UpdateNoticeKind.Available => $"Update available: {check.Value?.DisplayVersion}",
         UpdateNoticeKind.UpToDate => $"You're on the latest version ({installedVersion}).",
         // The feed's own messages already read as sentences that say the check failed, so they are not prefixed again.
         UpdateNoticeKind.Failed => Reason(check),
