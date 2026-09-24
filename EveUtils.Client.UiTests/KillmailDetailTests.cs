@@ -70,14 +70,22 @@ public sealed class KillmailDetailTests
         bool priceShip, bool priceItem, string expected)
     {
         using TestClientInstance instance = _NewInstance();
+        // One ReplaceAllAsync call for whichever prices apply — a second call would wipe the first's row instead of
+        // adding to it, since it replaces the whole price table rather than upserting into it.
+        List<(int TypeId, double Price)> prices = [];
         if (priceShip)
         {
-            await _PriceAsync(instance, (Gila, 1_000_000));
+            prices.Add((Gila, 1_000_000));
         }
 
         if (priceItem)
         {
-            await _PriceAsync(instance, (ModuleTypeId, 2_000_000));
+            prices.Add((ModuleTypeId, 2_000_000));
+        }
+
+        if (prices.Count > 0)
+        {
+            await _PriceAsync(instance, [.. prices]);
         }
 
         await _AddAsync(instance, _LossWithItems(1, new LocalKillmailItem { Flag = 27, TypeId = ModuleTypeId, QuantityDestroyed = 1 }));
@@ -222,7 +230,8 @@ public sealed class KillmailDetailTests
             (Func<Task<bool>>)(async () =>
             {
                 using TestClientInstance instance = _NewInstance();
-                await instance.Services.GetRequiredService<ICharacterRegistry>().AddOrUpdateAsync(new Character("Test Pilot", Pilot), Ct);
+                await instance.Services.GetRequiredService<ICharacterRegistry>().AddOrUpdateAsync(
+                    new Character("Test Pilot", Pilot, GrantedScopes: [KillmailsScopeCatalog.ReadKillmails]), Ct);
                 await _AddAsync(instance, _KillWithAttackers(1));
                 IReadOnlyList<Character> characters = await instance.Services.GetRequiredService<ICharacterRegistry>().GetAllAsync(Ct);
                 var dialogs = (RecordingDialogService)instance.Services.GetRequiredService<IDialogService>();
