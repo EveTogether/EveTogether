@@ -2,9 +2,13 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Avalonia.Headless.XUnit;
+using Avalonia.Threading;
+using EveUtils.Client.Killmails;
 using EveUtils.Client.ViewModels.Killmails;
 using EveUtils.Shared.Identity;
 using EveUtils.Shared.Messaging;
+using EveUtils.Shared.Modules.Esi.Http;
 using EveUtils.Shared.Modules.Killmails;
 using EveUtils.Shared.Modules.Killmails.Commands;
 using EveUtils.Shared.Modules.Killmails.Dtos;
@@ -88,6 +92,92 @@ public sealed class KillmailsOverviewTests
         Assert.True(viewModel.NeedsAccess);
         Assert.Empty(viewModel.Days);
         Assert.True(viewModel.Characters.Single().NeedsAccess);
+    }
+
+    /// <summary>ET-363 AC1. Red if the tile only flips after a reopen: GRANT ACCESS raises
+    /// <see cref="ICharacterRegistry.RegistryChanged"/> (the same signal <c>SkillRefreshService</c>,
+    /// <c>ImplantRefreshService</c> and <c>MetricsWindowViewModel</c> already react to), and this screen has to catch
+    /// it live rather than only through <see cref="KillmailsOverviewViewModel.RefreshModule"/> (ET-46's reopen path).</summary>
+    [AvaloniaFact]
+    public async Task Character_ScopeGrantedWhileOpen_FlipsTheTileWithoutReopening()
+    {
+        using TestClientInstance instance = TestClientInstance.Create();
+        ICharacterRegistry registry = instance.Services.GetRequiredService<ICharacterRegistry>();
+        await registry.AddOrUpdateAsync(new Character("Test Pilot", Pilot, GrantedScopes: []), Ct);
+        await _AddAsync(instance, _Kill(1));
+        KillmailsOverviewViewModel viewModel = new(instance.Services.GetRequiredService<IDispatcher>(),
+            new RecordingDialogService(), instance.Services, [new Character("Test Pilot", Pilot, GrantedScopes: [])],
+            (_, _) => Task.CompletedTask);
+        await viewModel.LoadAsync(Ct);
+        Assert.True(viewModel.NeedsAccess);
+
+        await registry.AddOrUpdateAsync(new Character("Test Pilot", Pilot, GrantedScopes: [KillmailsScopeCatalog.ReadKillmails]), Ct);
+
+        // NeedsAccess flips to false the moment the triggered read starts, not when it finishes (_ReadAsync's own
+        // ordering) — wait for the read to settle too, or the assertion below could catch Days still empty.
+        Assert.True(await _WaitForAsync(() => !viewModel.NeedsAccess && !viewModel.IsBusy));
+        Assert.False(viewModel.Characters.Single().NeedsAccess);
+        Assert.Equal([1], _VisibleIds(viewModel));
+        viewModel.Dispose();
+    }
+
+    /// <summary>ET-363 AC3. Red if a killmail the background refresh finds while KILLMAILS is open sits invisible
+    /// until the pilot reopens it: <see cref="EsiKillmailImporter.KillmailsImported"/> is the same seam AC1's
+    /// RegistryChanged fix already listens on — reused rather than a second refresh path.</summary>
+    [AvaloniaFact]
+    public async Task NewKillmailFoundInTheBackground_AppearsWithoutReopening()
+    {
+        RoutingEsiClient esi = new();
+        esi.Responses[$"/characters/{Pilot}/killmails/recent/?page=1"] = new[] { new EsiKillmailRef { KillmailId = 2, KillmailHash = "hash2" } };
+        esi.Responses["/killmails/2/hash2/"] = new EsiKillmail
+        {
+            KillmailId = 2, KillmailTime = DateTimeOffset.UtcNow, SolarSystemId = System1,
+            Victim = new EsiKillmailVictim { CharacterId = Pilot + 1000, ShipTypeId = Vexor, DamageTaken = 1 },
+            Attackers = [new EsiKillmailAttacker { CharacterId = Pilot, DamageDone = 1, FinalBlow = true }]
+        };
+        using TestClientInstance instance = TestClientInstance.Create(services => services.AddSingleton<IEsiClient>(esi));
+        await instance.Services.GetRequiredService<ICharacterRegistry>()
+            .AddOrUpdateAsync(new Character("Test Pilot", Pilot, GrantedScopes: [KillmailsScopeCatalog.ReadKillmails]), Ct);
+        await _AddAsync(instance, _Kill(1));
+        KillmailsOverviewViewModel viewModel = new(instance.Services.GetRequiredService<IDispatcher>(),
+            new RecordingDialogService(), instance.Services,
+            [new Character("Test Pilot", Pilot, GrantedScopes: [KillmailsScopeCatalog.ReadKillmails])], (_, _) => Task.CompletedTask);
+        await viewModel.LoadAsync(Ct);
+        Assert.Equal([1], _VisibleIds(viewModel));
+
+        // Stands in for the background KillmailRefreshService's own 5-minute tick finding this mail — no scope or
+        // character change involved, just a new killmail landing while the window is already open.
+        await instance.Services.GetRequiredService<EsiKillmailImporter>().ImportAsync(Pilot, Ct);
+
+        Assert.True(await _WaitForAsync(() => _VisibleIds(viewModel).Contains(2)));
+        Assert.Equal([1, 2], _VisibleIds(viewModel).OrderBy(id => id));
+        viewModel.Dispose();
+    }
+
+    private sealed class RoutingEsiClient : IEsiClient
+    {
+        public Dictionary<string, object?> Responses { get; } = new();
+
+        public Task<EsiResult<T>> RequestAsync<T>(EsiRequest request, CancellationToken cancellationToken = default) =>
+            Task.FromResult(Responses.TryGetValue(request.Path, out object? value) && value is T typed
+                ? EsiResult<T>.Ok(typed)
+                : EsiResult<T>.Fail(EsiError.Of(EsiErrorKind.ServerError, $"no stub for {request.Path}", 500)));
+    }
+
+    private static async Task<bool> _WaitForAsync(Func<bool> condition, int tries = 150)
+    {
+        for (int i = 0; i < tries; i++)
+        {
+            Dispatcher.UIThread.RunJobs();
+            if (condition())
+            {
+                return true;
+            }
+
+            await Task.Delay(20);
+        }
+
+        return condition();
     }
 
     /// <summary>Criterion 4. Red if only the ship name is searched.</summary>

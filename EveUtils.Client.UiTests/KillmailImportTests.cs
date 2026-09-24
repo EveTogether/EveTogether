@@ -70,6 +70,29 @@ public sealed class KillmailImportTests : IDisposable
         Assert.Equal([Page1, Page2, "/killmails/1/hash1/"], stub.Captured.Select(request => new Uri(request.Uri).PathAndQuery));
     }
 
+    // ET-363 AC2: a character that just granted the scope has nothing known yet, so every page comes back with
+    // unknown mails and none of them can short-circuit the walk — proves the importer backfills the whole 90-day
+    // feed ESI hands back, not just the first page, against a fake ESI with more than one page.
+    [Fact]
+    public async Task ImportAsync_FreshCharacter_WalksEveryPageEsiReturns()
+    {
+        _routes[Page1] = () => _RecentPage(3, 1);
+        _routes[Page2] = () => _RecentPage(3, 2);
+        _routes[Page3] = () => _RecentPage(3, 3);
+        _routes["/killmails/1/hash1/"] = () => Json(200, _Killmail(1));
+        _routes["/killmails/2/hash2/"] = () => Json(200, _Killmail(2));
+        _routes["/killmails/3/hash3/"] = () => Json(200, _Killmail(3));
+        var (client, _, stub) = _Pipeline(EsiAuthorization.Authorized("token"));
+
+        var result = await new EsiKillmailImporter(client, Repository, Scopes).ImportAsync(CharacterId, TestContext.Current.CancellationToken);
+
+        Assert.Equal(3, result.ImportedCount);
+        Assert.Equal([Page1, Page2, Page3],
+            stub.Captured.Select(request => new Uri(request.Uri).PathAndQuery).Where(path => path.Contains("/recent/")));
+        var stored = await Repository.GetForCharacterAsync(CharacterId, TestContext.Current.CancellationToken);
+        Assert.Equal([1, 2, 3], stored.Select(killmail => killmail.KillmailId).Order());
+    }
+
     [Fact]
     public async Task ImportAsync_KeepsAMailThatLeftTheRecentList()
     {

@@ -12,5 +12,9 @@ public partial class KillmailsWindow : ChromedWindow
 {
     public KillmailsWindow() => AvaloniaXamlLoader.Load(this);
 
-    public KillmailsWindow(KillmailsOverviewViewModel viewModel) : this() => DataContext = viewModel;
+    public KillmailsWindow(KillmailsOverviewViewModel viewModel) : this()
+    {
+        DataContext = viewModel;
+        Closed += (_, _) => viewModel.Dispose(); // release the RegistryChanged subscription when the window closes
+    }
 }

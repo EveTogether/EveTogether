@@ -22,6 +22,12 @@ entries under `[Unreleased]` below that were not there yet at the previous night
   pilots make. An open composition editor quietly picks up changes made elsewhere as long as you have not edited
   anything yet; if you have, your edits are never overwritten and the editor offers RELOAD instead, and a composition
   deleted elsewhere says so and can no longer be saved.
+- **Fixed: KILLMAILS now refreshes itself right after you grant access.** Granting the killmail scope through GRANT
+  ACCESS used to leave the tile stuck until you closed and reopened the window — and even then the background import
+  hadn't necessarily run yet, so the character could still show nothing. Both now happen right away: the tile flips
+  to your killmails while the window stays open, and the background import starts immediately instead of waiting up
+  to 5 minutes for its next tick. A killmail the background refresh finds later, with the window still open, now
+  appears the same way.
 - **Added: opening a killmail shows its full detail.** Double-click a row in KILLMAILS, or press OPEN KILLMAIL on a
   linked loss, to see the victim, the fit split into what was destroyed and what dropped, every attacker with their
   ship, weapon, damage and share, and the total value at today's prices. OPEN FIT reconstructs the fit as it was flown

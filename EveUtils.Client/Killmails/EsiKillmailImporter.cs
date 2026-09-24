@@ -26,6 +26,14 @@ public sealed class EsiKillmailImporter(IEsiClient esi, ILocalKillmailRepository
     // One import per character at a time, shared across instances, so two callers never add the same mail twice.
     private static readonly ConcurrentDictionary<int, SemaphoreSlim> _importGates = new();
 
+    /// <summary>Fired after new killmails land in storage for a character — a live KILLMAILS overview listens here to
+    /// refresh itself (ET-363 AC3), the same "announce after it actually landed" shape as
+    /// <see cref="ICharacterRegistry.RegistryChanged"/> already uses for a character/scope change; this class is a
+    /// registered singleton, so the background <c>KillmailRefreshService</c> and every open overview share the one
+    /// instance the event travels through. Raised on whichever thread the import ran on — never the UI thread — so a
+    /// listener touching bound collections has to marshal it itself.</summary>
+    public event Action<int>? KillmailsImported;
+
     public async Task<KillmailImportResult> ImportAsync(int characterId, CancellationToken cancellationToken = default)
     {
         var gate = _importGates.GetOrAdd(characterId, _ => new SemaphoreSlim(1, 1));
@@ -71,6 +79,11 @@ public sealed class EsiKillmailImporter(IEsiClient esi, ILocalKillmailRepository
             }
 
             await repository.AddMissingAsync(characterId, killmails, cancellationToken);
+            if (killmails.Count > 0)
+            {
+                KillmailsImported?.Invoke(characterId);
+            }
+
             // Also without new mails: a loss nothing fitted before may fit a run stopped or fitted since.
             Result<int> linked;
             await using (AsyncServiceScope scope = scopes.CreateAsyncScope())
