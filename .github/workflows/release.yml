@@ -75,6 +75,36 @@ jobs:
           $exe = Join-Path $env:OUTPUT_DIR 'EveUtils.Client.exe'
           if (Test-Path $exe) { Rename-Item $exe "$env:APP_NAME.exe" }
 
+      - name: Verify the app icon is embedded
+        shell: pwsh
+        run: |
+          Add-Type -TypeDefinition @"
+          using System;
+          using System.Runtime.InteropServices;
+          public static class IconProbe {
+            delegate bool EnumProc(IntPtr module, IntPtr type, IntPtr name, IntPtr param);
+            [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+            static extern IntPtr LoadLibraryEx(string file, IntPtr reserved, uint flags);
+            [DllImport("kernel32.dll")]
+            static extern bool FreeLibrary(IntPtr module);
+            [DllImport("kernel32.dll", SetLastError = true)]
+            static extern bool EnumResourceNames(IntPtr module, IntPtr type, EnumProc callback, IntPtr param);
+            public static int CountGroupIcons(string file) {
+              // 0x22 = LOAD_LIBRARY_AS_DATAFILE | LOAD_LIBRARY_AS_IMAGE_RESOURCE; 14 = RT_GROUP_ICON
+              IntPtr module = LoadLibraryEx(file, IntPtr.Zero, 0x22);
+              if (module == IntPtr.Zero) throw new System.ComponentModel.Win32Exception();
+              int count = 0;
+              EnumResourceNames(module, (IntPtr)14, (m, t, n, p) => { count++; return true; }, IntPtr.Zero);
+              FreeLibrary(module);
+              return count;
+            }
+          }
+          "@
+          $exe = Join-Path $env:OUTPUT_DIR "$env:APP_NAME.exe"
+          $groups = [IconProbe]::CountGroupIcons((Resolve-Path $exe).Path)
+          Write-Host "RT_GROUP_ICON resources in ${exe}: $groups"
+          if ($groups -lt 1) { throw "$exe has no embedded icon (is ApplicationIcon set in EveUtils.Client.csproj?)" }
+
       - name: Install vpk
         shell: bash
         run: dotnet tool install -g vpk --version ${{ env.VPK_VERSION }}
