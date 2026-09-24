@@ -19,6 +19,9 @@
     <SolidColorBrush x:Key="BorderStrongBrush" Color="#99CB4D3E"/>
     <SolidColorBrush x:Key="DividerBrush" Color="#1FE68676"/>
     <SolidColorBrush x:Key="GlowBrush" Color="#70CB4D3E"/>
+    <!-- Violet, not red: the accent here already is red, and a loss must not read as a gain in the same hue. -->
+    <SolidColorBrush x:Key="StripLossBrush" Color="#FFA65AE8"/>
+    <SolidColorBrush x:Key="StripLossBrightBrush" Color="#FFD08AFF"/>
 
     <SolidColorBrush x:Key="BgRowHoverBrush" Color="#1FCB4D3E"/>
     <SolidColorBrush x:Key="BgRowSelectedBrush" Color="#33CB4D3E"/>

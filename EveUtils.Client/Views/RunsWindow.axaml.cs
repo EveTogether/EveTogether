@@ -106,7 +106,7 @@ public partial class RunsWindow : ChromedWindow
     /// A day picked in the activity strip (ET-292), at the top of the list. The list is virtualised and the day was
     /// only just unfolded, so its header may not have a container yet: first the layout that takes the unfold in, then
     /// <c>ScrollIntoView</c> to realise the header somewhere in view, then the offset moved by exactly how far below
-    /// the top it landed. At the top, the pinned day over the list is that very day drawn over its own header.
+    /// the top it landed. At the top the real header is in view, so nothing is pinned above it.
     /// </summary>
     private void _ScrollDayToTop(RunsDayViewModel day) =>
         Dispatcher.UIThread.Post(() =>
@@ -361,13 +361,20 @@ public partial class RunsWindow : ChromedWindow
 
     /// <summary>The sticky day header (ET-290). A virtualised list has no header element to pin — the one that scrolled
     /// away may already be drawing another row — so the day of the topmost visible item is drawn again over the top of
-    /// the list, from the same template, while the list is scrolled away from its start.</summary>
+    /// the list, from the same template, once that day's own header has scrolled above the top.</summary>
     private void _PinTopDay()
     {
         RunsDayViewModel? day = _activityList.Scroll is { Offset.Y: > 0.5 } ? _TopDay() : null;
+        if (day is not null && _IsHeaderAtOrBelowTop(day))
+            day = null;
+
         _stickyDayContent.Content = day;
         _stickyDay.IsVisible = day is not null;
     }
+
+    private bool _IsHeaderAtOrBelowTop(RunsDayViewModel day) =>
+        _activityList.ContainerFromItem(day) is { } header
+        && header.TranslatePoint(default, _activityList) is { Y: >= -0.5 };
 
     private RunsDayViewModel? _TopDay()
     {

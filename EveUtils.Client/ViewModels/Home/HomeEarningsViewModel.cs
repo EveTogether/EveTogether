@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using Avalonia;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EveUtils.Client.Calendar;
@@ -25,6 +26,8 @@ public sealed record HomeEarningsInput(
 public sealed partial class HomeEarningsViewModel : ObservableObject
 {
     public const double ChartHeight = 70;
+
+    private const double ZeroLabelHalfHeight = 6;
 
     private HomeEarningsInput? _input;
 
@@ -55,6 +58,8 @@ public sealed partial class HomeEarningsViewModel : ObservableObject
     public bool IsRunsShade => Shade == RunsStripShade.Runs;
 
     [ObservableProperty] private string _chartMaxText = string.Empty;
+    [ObservableProperty] private string _chartMinText = string.Empty;
+    [ObservableProperty] private Thickness _zeroLabelMargin;
     [ObservableProperty] private string _averageText = string.Empty;
     [ObservableProperty] private double _averageOffset;
     [ObservableProperty] private bool _hasAverage;
@@ -95,7 +100,10 @@ public sealed partial class HomeEarningsViewModel : ObservableObject
 
         decimal[] values = [.. Enumerable.Range(0, EarningsPeriods.ChartDays)
             .Select(offset => RunsActivityStripViewModel.ValueOf(Shade, [.. byDay[first.AddDays(offset)]]))];
-        decimal max = Math.Max(values.Max(), 0m);
+        decimal gainMax = Math.Max(values.Max(), 0m);
+        decimal lossMax = Math.Max(-values.Min(), 0m);
+        double pixelsPerUnit = gainMax + lossMax == 0 ? 0 : ChartHeight / (double)(gainMax + lossMax);
+        double zeroLine = (double)lossMax * pixelsPerUnit;
         DateOnly[] tracked = [.. Enumerable.Range(0, EarningsPeriods.ChartDays)
             .Select(offset => first.AddDays(offset))
             .Where(day => input.FirstTracked is { } start && day >= start)];
@@ -105,15 +113,18 @@ public sealed partial class HomeEarningsViewModel : ObservableObject
         {
             DateOnly day = first.AddDays(offset);
             bool isTracked = input.FirstTracked is { } start && day >= start;
-            Days[offset].Show(day, max == 0 ? 0 : (double)(values[offset] / max) * ChartHeight, isTracked,
+            double barHeight = Math.Abs((double)values[offset]) * pixelsPerUnit;
+            Days[offset].Show(day, barHeight, values[offset] < 0 ? zeroLine - barHeight : zeroLine, values[offset] < 0, isTracked,
                 day == today ? EarningsBarAge.Today : day >= weekStart ? EarningsBarAge.ThisWeek : EarningsBarAge.Older,
                 day == first || day.DayOfWeek == input.FirstDay ? _DayLabel(day) : string.Empty,
                 isTracked ? RunsActivityStripViewModel.DayTooltip(day, [.. byDay[day]]) : $"{_DayLabel(day)} · not tracked yet");
         }
 
-        ChartMaxText = max == 0 ? string.Empty : _ValueText(max);
-        HasAverage = tracked.Length > 0 && average > 0;
-        AverageOffset = max == 0 ? 0 : (double)(average / max) * ChartHeight;
+        ChartMaxText = gainMax == 0 ? string.Empty : _ValueText(gainMax);
+        ChartMinText = lossMax == 0 ? string.Empty : _ValueText(-lossMax);
+        ZeroLabelMargin = new Thickness(0, 0, 0, Math.Max(0, zeroLine - ZeroLabelHalfHeight));
+        HasAverage = tracked.Length > 0 && average != 0;
+        AverageOffset = zeroLine + (double)average * pixelsPerUnit;
         AverageText = HasAverage ? $"avg {_ValueText(average)} per tracked day" : string.Empty;
     }
 
@@ -130,13 +141,16 @@ public enum EarningsBarAge
     Today
 }
 
-/// <summary>One of the 30 bars: its height in pixels, how recent it is (today, this week or older — the three
-/// strengths of the accent), and whether tracking had started by then.</summary>
+/// <summary>One of the 30 bars: its height in pixels and how far above the chart's floor it starts (a loss hangs
+/// below the zero line, in the loss colour), how recent it is (today, this week or older — the three strengths of the
+/// accent), and whether tracking had started by then.</summary>
 public sealed partial class HomeEarningsDayViewModel(Action<DateOnly> open) : ObservableObject
 {
     public DateOnly Date { get; private set; }
 
     [ObservableProperty] private double _barHeight;
+    [ObservableProperty] private Thickness _barMargin;
+    [ObservableProperty] private bool _isLoss;
     [ObservableProperty] private bool _isTracked;
     [ObservableProperty] private EarningsBarAge _age;
     [ObservableProperty] private string _label = string.Empty;
@@ -153,10 +167,13 @@ public sealed partial class HomeEarningsDayViewModel(Action<DateOnly> open) : Ob
 
     partial void OnAgeChanged(EarningsBarAge value) => OnPropertyChanged(nameof(BarOpacity));
 
-    internal void Show(DateOnly date, double barHeight, bool isTracked, EarningsBarAge age, string label, string tooltip)
+    internal void Show(DateOnly date, double barHeight, double barBottom, bool isLoss, bool isTracked, EarningsBarAge age,
+        string label, string tooltip)
     {
         Date = date;
         BarHeight = barHeight;
+        BarMargin = new Thickness(0, 0, 0, barBottom);
+        IsLoss = isLoss;
         IsTracked = isTracked;
         Age = age;
         Label = label;

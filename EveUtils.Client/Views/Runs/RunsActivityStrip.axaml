@@ -54,6 +54,31 @@
         <Style Selector="Border.fill.bright">
             <Setter Property="Background" Value="{DynamicResource AccentBrightBrush}"/>
         </Style>
+        <!-- A loss (ET-385): the faction's own loss colour on the same opacity steps as a gain, and a thin light ring
+             inside the cell so it also reads without the colour. A day that netted nothing carries a dot instead. -->
+        <Style Selector="Border.fill.loss">
+            <Setter Property="Background" Value="{DynamicResource StripLossBrush}"/>
+        </Style>
+        <Style Selector="Border.fill.lossbright">
+            <Setter Property="Background" Value="{DynamicResource StripLossBrightBrush}"/>
+        </Style>
+        <Style Selector="Border.lossmark">
+            <Setter Property="Margin" Value="2"/>
+            <Setter Property="CornerRadius" Value="1"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="BorderBrush" Value="{StaticResource TextBrightBrush}"/>
+            <Setter Property="IsHitTestVisible" Value="False"/>
+        </Style>
+        <Style Selector="Border.lossmark.bright">
+            <Setter Property="BorderBrush" Value="{StaticResource BgDeepBrush}"/>
+        </Style>
+        <Style Selector="Border.neutralmark">
+            <Setter Property="Width" Value="4"/>
+            <Setter Property="Height" Value="4"/>
+            <Setter Property="CornerRadius" Value="2"/>
+            <Setter Property="Background" Value="{StaticResource TextDimSmallBrush}"/>
+            <Setter Property="IsHitTestVisible" Value="False"/>
+        </Style>
         <!-- Before the first activity ever saved: hatched, the mockup's repeating 135° stripe. -->
         <Style Selector="Border.fill.untracked">
             <Setter Property="Background">
@@ -201,8 +226,12 @@
                             Command="{Binding ClickCommand}" ToolTip.Tip="{Binding Tooltip}">
                         <Panel>
                             <Border Classes="fill" Classes.empty="{Binding IsEmpty}" Classes.accent="{Binding IsAccent}"
-                                    Classes.bright="{Binding IsBright}" Classes.untracked="{Binding IsUntracked}"
+                                    Classes.bright="{Binding IsBright}" Classes.loss="{Binding IsLoss}"
+                                    Classes.lossbright="{Binding IsLossBright}" Classes.untracked="{Binding IsUntracked}"
                                     Opacity="{Binding FillOpacity}"/>
+                            <Border Classes="lossmark" Classes.bright="{Binding IsLossBright}" IsVisible="{Binding IsLoss}"
+                                    Opacity="{Binding MarkOpacity}"/>
+                            <Border Classes="neutralmark" IsVisible="{Binding IsNeutral}" Opacity="{Binding MarkOpacity}"/>
                             <Border Classes="today" IsVisible="{Binding IsToday}"/>
                             <Border Classes="picked" IsVisible="{Binding IsPicked}">
                                 <Border Classes="pickedinner"/>
@@ -246,7 +275,32 @@
                     </Border>
                 </Button>
             </StackPanel>
-            <StackPanel Orientation="Horizontal" Spacing="4">
+            <StackPanel x:Name="LegendIsk" Orientation="Horizontal" Spacing="4" IsVisible="{Binding IsIskShade}">
+                <TextBlock Classes="stripink" Margin="0,0,2,0" Text="loss"/>
+                <Panel>
+                    <Border Classes="legend fill lossbright"/>
+                    <Border Classes="lossmark bright"/>
+                </Panel>
+                <Panel>
+                    <Border Classes="legend fill loss" Opacity=".70"/>
+                    <Border Classes="lossmark"/>
+                </Panel>
+                <Panel>
+                    <Border Classes="legend fill loss" Opacity=".48"/>
+                    <Border Classes="lossmark"/>
+                </Panel>
+                <Panel>
+                    <Border Classes="legend fill loss" Opacity=".28"/>
+                    <Border Classes="lossmark"/>
+                </Panel>
+                <Border Classes="legend fill empty"/>
+                <Border Classes="legend fill accent" Opacity=".28"/>
+                <Border Classes="legend fill accent" Opacity=".48"/>
+                <Border Classes="legend fill accent" Opacity=".70"/>
+                <Border Classes="legend fill bright"/>
+                <TextBlock Classes="stripink" Margin="2,0,0,0" Text="gain"/>
+            </StackPanel>
+            <StackPanel x:Name="LegendRuns" Orientation="Horizontal" Spacing="4" IsVisible="{Binding IsRunsShade}">
                 <TextBlock Classes="stripink" Margin="0,0,2,0" Text="less"/>
                 <Border Classes="legend fill empty"/>
                 <Border Classes="legend fill accent" Opacity=".28"/>
