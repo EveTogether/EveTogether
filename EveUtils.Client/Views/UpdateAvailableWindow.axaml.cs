@@ -6,7 +6,7 @@ using EveUtils.Client.Updates;
 namespace EveUtils.Client.Views;
 
 /// <summary>
-/// The update offer: the two version numbers, the download size and the notes the feed carries. Returns true if the
+/// The update offer: the installed and offered build labels, the download size and the notes the feed carries. Returns true if the
 /// user pressed "Download and install", false on "Later" or a plain close — nothing is fetched until they say so.
 /// </summary>
 public partial class UpdateAvailableWindow : ChromedWindow
@@ -19,7 +19,7 @@ public partial class UpdateAvailableWindow : ChromedWindow
     public UpdateAvailableWindow(string installedVersion, AppRelease release) : this()
     {
         this.FindControl<TextBlock>("InstalledBlock")!.Text = installedVersion;
-        this.FindControl<TextBlock>("AvailableBlock")!.Text = $"v{release.Version}";
+        this.FindControl<TextBlock>("AvailableBlock")!.Text = release.DisplayVersion;
         this.FindControl<SelectableTextBlock>("NotesBlock")!.Text =
             string.IsNullOrWhiteSpace(release.Notes) ? "This release ships without notes." : release.Notes.Trim();
 

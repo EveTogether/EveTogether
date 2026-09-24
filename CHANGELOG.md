@@ -26,6 +26,9 @@ release notes, not this file.
   it connects. Signing in with the character again adds it back.
 - **Changed: red buttons such as Conclude and Remove read better.** Their red label sat on a light wash that left it
   just under the contrast the rest of the app keeps to; the wash is gone, the red outline stays.
+- **Changed: nightly builds now show their build date, commit and run number instead of a release number.** If you installed an
+  earlier nightly, reinstall once from the nightly release page; later nightly updates will work as usual. Stable builds
+  keep their regular version.
 - **Fixed: the server no longer answers unauthenticated requests to the old test endpoints.** `GET`/`POST /ships` and
   `GET /sync-logs` were leftovers from early development and let anyone who could reach a server read its sync log or
   add rows to its database. They are gone.

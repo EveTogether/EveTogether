@@ -8,8 +8,8 @@ namespace EveUtils.Shared.App;
 /// <summary>
 /// Application identity shared across the client and server hosts: product name, the contact info ESI
 /// requires in a User-Agent, and the running build's version. The version is read from the entry
-/// assembly so it always reflects the tag the release pipeline injects (<c>-p:Version</c>); dev builds
-/// fall back to the assembly default in <c>Directory.Build.props</c>.
+/// assembly. Nightly builds carry a separate display identity in the informational version's build metadata;
+/// dev builds fall back to the assembly default in <c>Directory.Build.props</c>.
 /// </summary>
 public static class AppInfo
 {
@@ -24,6 +24,8 @@ public static class AppInfo
 
     /// <summary>Running build version (e.g. "0.1.0-alpha"), without a leading "v".</summary>
     public static string Version { get; } = _ResolveVersion();
+
+    public static string DisplayVersion { get; } = _ResolveDisplayVersion();
 
     /// <summary>
     /// When the entry assembly's file was written — the publish step's timestamp for a CI build, a local
@@ -41,11 +43,30 @@ public static class AppInfo
         var informational = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
         if (!string.IsNullOrWhiteSpace(informational))
         {
-            var plus = informational.IndexOf('+'); // drop the +<git-sha> source-revision suffix
+            var plus = informational.IndexOf('+'); // build metadata does not change the package version
             return plus >= 0 ? informational[..plus] : informational;
         }
 
         return assembly.GetName().Version?.ToString(3) ?? "0.0.0";
+    }
+
+    private static string _ResolveDisplayVersion()
+    {
+        Assembly assembly = Assembly.GetEntryAssembly() ?? typeof(AppInfo).Assembly;
+        string? informational = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
+
+        return string.IsNullOrWhiteSpace(informational)
+            ? $"v{Version}"
+            : DisplayVersionFromInformational(informational);
+    }
+
+    internal static string DisplayVersionFromInformational(string informational)
+    {
+        int plus = informational.IndexOf('+');
+        if (plus >= 0 && informational[(plus + 1)..].StartsWith("nightly-", StringComparison.Ordinal))
+            return informational[(plus + 1)..];
+
+        return $"v{(plus >= 0 ? informational[..plus] : informational)}";
     }
 
     private static DateOnly? _ResolveBuildDate()

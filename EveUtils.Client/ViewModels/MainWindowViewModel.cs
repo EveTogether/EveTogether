@@ -2478,7 +2478,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
     private void OfferUpdate(AppRelease release) =>
         _services?.GetService<IToastService>()?.Show(
             "Update available",
-            $"EVE Together v{release.Version} is ready to download. You're on {InstalledVersion}.",
+            $"EVE Together {release.DisplayVersion} is ready to download. You're on {InstalledVersion}.",
             ToastKind.Information,
             [
                 new ToastAction("Later", () => { }),
@@ -2501,7 +2501,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         if (_services is null) return;
 
         ActivityStatus =
-            $"Downloading v{release.Version}… the app stays usable, you'll be asked to restart when it's ready.";
+            $"Downloading {release.DisplayVersion}… the app stays usable, you'll be asked to restart when it's ready.";
 
         var download = await _services.GetRequiredService<IUpdateService>().DownloadAsync(await ResolveUpdateChannelAsync());
         if (!download.IsSuccess)
@@ -2510,8 +2510,8 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
             return;
         }
 
-        ActivityStatus = $"Update v{release.Version} downloaded — restart to finish updating.";
-        UpdateReadyMessage = $"v{release.Version} is ready. Restart to finish updating.";
+        ActivityStatus = $"Update {release.DisplayVersion} downloaded — restart to finish updating.";
+        UpdateReadyMessage = $"{release.DisplayVersion} is ready. Restart to finish updating.";
         IsUpdateReady = true;
     }
 
@@ -2527,7 +2527,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
     [RelayCommand]
     private void DismissUpdateReady() => IsUpdateReady = false;
 
-    private static string InstalledVersion => $"v{EveUtils.Shared.App.AppInfo.Version}";
+    private static string InstalledVersion => EveUtils.Shared.App.AppInfo.DisplayVersion;
 
     /// <summary>
     /// On startup, if a newer (or missing) SDE build is available, ask the user once and — on accept — run the

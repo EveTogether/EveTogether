@@ -5,6 +5,7 @@ using EveUtils.Client.Dialogs;
 using EveUtils.Client.Notifications;
 using EveUtils.Client.Updates;
 using EveUtils.Client.ViewModels;
+using EveUtils.Shared.App;
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Settings.Commands;
@@ -160,14 +161,14 @@ public class UpdateFlowTests
     }
 
     [AvaloniaFact]
-    public async Task StartupCheck_DefaultsToStable_WhenNoChannelIsStored()
+    public async Task StartupCheck_DefaultsToBuildChannel_WhenNoChannelIsStored()
     {
         var harness = Build();
         using var instance = harness.Instance;
 
         await RunStartupCheckAsync(harness);
 
-        Assert.Equal(UpdateChannel.Stable, harness.Updates.LastChannel);
+        Assert.Equal(BuildChannel.FromVersion(AppInfo.Version), harness.Updates.LastChannel);
     }
 
     [AvaloniaFact]

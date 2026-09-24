@@ -199,7 +199,7 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
 
         if (_installVersionBlock is not null)
         {
-            _installVersionBlock.Text = $"Version {EveUtils.Shared.App.AppInfo.Version}";
+            _installVersionBlock.Text = $"Version {EveUtils.Shared.App.AppInfo.DisplayVersion}";
         }
         if (_installBuildInfoBlock is not null)
         {
@@ -373,9 +373,9 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
             _checkNowResultBlock.Text = UpdateNotice.Classify(check) switch
             {
                 UpdateNoticeKind.Available =>
-                    $"Update available: v{check.Value!.Version}. Open About to download it.",
+                    $"Update available: {check.Value?.DisplayVersion}. Open About to download it.",
                 UpdateNoticeKind.UpToDate =>
-                    $"Up to date (v{EveUtils.Shared.App.AppInfo.Version}).",
+                    $"Up to date ({EveUtils.Shared.App.AppInfo.DisplayVersion}).",
                 UpdateNoticeKind.NotInstalled =>
                     "This copy updates manually — see About for details.",
                 _ => UpdateNotice.Reason(check),
