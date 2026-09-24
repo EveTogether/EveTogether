@@ -32,6 +32,15 @@ entries under `[Unreleased]` below that were not there yet at the previous night
   server is never asked for its fleets there, so those fleets used to be missing without a word. The fleet list now
   shows one line per server, such as "Catbank is not connected to <server> — its fleets are not shown here", naming
   every character in that position. The line disappears as soon as they are all connected.
+- **Fixed: a HOMEFRONT outcome you pick by hand can no longer be silently overwritten.** ET-287 moved the section's
+  store reads and writes off the UI thread; a hand pick's own write raced against the run's own default outcome or
+  the "pale shadow" gamelog line and could lose, reverting Failed back to Completed with no sign anything had
+  happened. The pick is now awaited through to the store before the command returns, and a second window on the
+  same run (a detail screen, another client) no longer collides with it mid-write.
+- **Fixed: the "run is not shared" fleet notice could stay blank on the very first check.** The same ET-287 move
+  left a caller who explicitly waits for the check — opening the run window itself — with no way to catch up with
+  an earlier, unawaited tick's own lookup already under way; it saw the throttle interval still open and moved on
+  with the notice unset instead of the answer it asked for.
 - **Changed: compositions update live in every open window.** Creating, editing or deleting a composition now refreshes
   the COMPOSITIONS list straight away, for your local library and for a server's shared one — including changes other
   pilots make. An open composition editor quietly picks up changes made elsewhere as long as you have not edited

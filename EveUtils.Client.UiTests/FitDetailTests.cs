@@ -594,16 +594,23 @@ public class FitDetailTests
     }
 
     [Fact]
-    public async Task SkillGap_Estimate_ReflectsCharacterAttributesAndImplants()
+    public async Task SkillGap_Estimate_UnaffectedByImplantTypeIds_SinceEsiAttributesAreAlreadyEffective()
     {
+        // ET-349 fixed a double count: ESI's /characters/{id}/attributes/ already folds attribute-implant bonuses
+        // into the reported values, so CharacterAttributeResolver.Resolve() now returns those ESI attributes
+        // unchanged instead of adding the SDE implant bonus a second time. FakeAttributesRepo below stands in for
+        // that ESI read and reports the same Perception 20 / Willpower 20 regardless of implantTypeIds, exactly
+        // like a real ESI response would once the implant is already reflected in the attribute values themselves
+        // — so an implant type id list passed separately can no longer change the training-rate estimate.
+        // rate = Perception(20) + Willpower(20)/2 = 30 SP/min either way; 210.7k SP / 30 SP/min ≈ 7025 min ≈ 4d 21h,
+        // identical for both calls.
         var withoutImplant = await SkillGapEstimateAsync([]);
-        var withImplant = await SkillGapEstimateAsync([30000]);   // +5 Perception implant raises the primary attribute
+        var withImplant = await SkillGapEstimateAsync([30000]);
 
         Assert.NotNull(withoutImplant);
         Assert.NotNull(withImplant);
         Assert.Contains("210.7k SP", withoutImplant);                 // SP to train IV→V at rank 1
-        Assert.Contains("210.7k SP", withImplant);                    // same SP — only the rate changed
-        Assert.NotEqual(withoutImplant, withImplant);                 // the implant shortened the Omega time
+        Assert.Equal(withoutImplant, withImplant);                    // same ESI attributes -> same rate -> same estimate
     }
 
     [AvaloniaFact]
