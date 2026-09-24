@@ -103,22 +103,31 @@ public sealed class KillmailsOverviewTests
         Assert.Equal(expected, row.Matches(needle));
     }
 
-    /// <summary>Criterion 5. Red if a day's mails do not group together, or the newest day is not first.</summary>
+    /// <summary>Criterion 5. Red if a mail near UTC midnight lands under the wrong day — the exact rood-condition the
+    /// ticket names. A fixed UTC+2 clock (never this machine's own zone, so the test is the same on every machine)
+    /// makes it deterministic: two mails on the same UTC calendar day land on two different LOCAL days once the
+    /// offset carries one of them past midnight.</summary>
     [Fact]
-    public async Task Days_GroupMailsByLocalCalendarDay_NewestFirst()
+    public async Task Days_GroupByLocalCalendarDay_NotUtc()
     {
-        using TestClientInstance instance = TestClientInstance.Create();
-        DateTime laterDay = new(2026, 3, 15, 12, 0, 0, DateTimeKind.Utc);
-        DateTime sameLaterDay = laterDay.AddHours(2);
-        DateTime earlierDay = laterDay.AddDays(-3); // a gap no real-world UTC offset (±14h) can fold into the same local day
-        await _AddAsync(instance, _Kill(1, atUtc: laterDay), _Kill(2, atUtc: sameLaterDay), _Kill(3, atUtc: earlierDay));
+        TimeZoneInfo zone = TimeZoneInfo.CreateCustomTimeZone("ET332-UTC+2", TimeSpan.FromHours(2), "ET332-UTC+2", "ET332-UTC+2");
+        using TestClientInstance instance = TestClientInstance.Create(services => services.AddSingleton<TimeProvider>(new FixedZoneTimeProvider(zone)));
+        DateTime nearUtcMidnight = new(2026, 3, 15, 23, 30, 0, DateTimeKind.Utc); // local 01:30 on the 16th (+2)
+        DateTime sameUtcDayEarlier = new(2026, 3, 15, 10, 0, 0, DateTimeKind.Utc); // local noon on the 15th — same UTC day as above, different local day
+        DateTime earlierUtcDay = new(2026, 3, 12, 10, 0, 0, DateTimeKind.Utc);
+        await _AddAsync(instance, _Kill(1, atUtc: nearUtcMidnight), _Kill(2, atUtc: sameUtcDayEarlier), _Kill(3, atUtc: earlierUtcDay));
 
         KillmailsOverviewViewModel viewModel = await _LoadAsync(instance, hasScope: true);
 
-        Assert.Equal(2, viewModel.Days.Count);
-        Assert.True(viewModel.Days[0].Day > viewModel.Days[1].Day);
-        Assert.Equal(2, viewModel.Days[0].Rows.Count);
-        Assert.Single(viewModel.Days[1].Rows);
+        // Grouping by raw UTC date would merge mail 1 and mail 2 (both UTC 15 March) into one day; grouping by local
+        // date (the requirement) puts mail 1 alone under the 16th, ahead of mail 2's day, newest first.
+        Assert.Equal(3, viewModel.Days.Count);
+        Assert.Equal(new DateOnly(2026, 3, 16), viewModel.Days[0].Day);
+        Assert.Equal(1, viewModel.Days[0].Rows.Single().KillmailId);
+        Assert.Equal(new DateOnly(2026, 3, 15), viewModel.Days[1].Day);
+        Assert.Equal(2, viewModel.Days[1].Rows.Single().KillmailId);
+        Assert.Equal(new DateOnly(2026, 3, 12), viewModel.Days[2].Day);
+        Assert.Equal(3, viewModel.Days[2].Rows.Single().KillmailId);
     }
 
     /// <summary>Criterion 6. Red if an unpriced mail shows 0 ISK instead of "no price".</summary>
@@ -206,6 +215,11 @@ public sealed class KillmailsOverviewTests
             RunId: null, LinkSource: KillmailLinkSource.None, NotLinkedCandidateCount: 0,
             IskValue: iskValue is { } value ? value : null);
         return new KillmailRowViewModel(dto, shipName, systemName, regionName: null, isAbyssal: false, securityText: "0.5",
-            counterpartyName: counterparty, openDetail: _ => Task.CompletedTask);
+            counterpartyName: counterparty, TimeZoneInfo.Utc, openDetail: _ => Task.CompletedTask);
+    }
+
+    private sealed class FixedZoneTimeProvider(TimeZoneInfo zone) : TimeProvider
+    {
+        public override TimeZoneInfo LocalTimeZone { get; } = zone;
     }
 }

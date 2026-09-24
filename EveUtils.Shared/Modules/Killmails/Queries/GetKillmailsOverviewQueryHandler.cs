@@ -7,6 +7,8 @@ using EveUtils.Shared.Modules.Killmails.Dtos;
 using EveUtils.Shared.Modules.Killmails.Entities;
 using EveUtils.Shared.Modules.Market.Repositories;
 using EveUtils.Shared.Modules.Runs.Entities;
+using EveUtils.Shared.Modules.Runs.Enums;
+using EveUtils.Shared.Modules.Runs.Isk;
 using Microsoft.EntityFrameworkCore;
 
 namespace EveUtils.Shared.Modules.Killmails.Queries;
@@ -20,12 +22,15 @@ internal sealed class GetKillmailsOverviewQueryHandler(
         GetKillmailsOverviewQuery query, CancellationToken cancellationToken = default)
     {
         await using ClientDbContext db = await contextFactory.CreateDbContextAsync(cancellationToken);
+        // AsSplitQuery: Items and Attackers are two independent one-to-many collections, and one combined query would
+        // cross them — a kill with 60 item rows and 300 attackers would come back as 18,000 rows for that one mail.
         List<LocalKillmail> killmails = await db.Set<LocalKillmail>()
             .AsNoTracking()
             .Include(killmail => killmail.Items)
             .Include(killmail => killmail.Attackers)
             .Where(killmail => killmail.CharacterId == query.CharacterId)
             .OrderByDescending(killmail => killmail.KillmailTimeUtc)
+            .AsSplitQuery()
             .ToListAsync(cancellationToken);
         if (killmails.Count == 0)
         {
@@ -64,28 +69,10 @@ internal sealed class GetKillmailsOverviewQueryHandler(
         return Result<IReadOnlyList<KillmailOverviewRowDto>>.Success(rows);
     }
 
-    // Ship plus every destroyed or dropped item, at today's average — null rather than 0 when none of it is priced
-    // (ET-332 AC6), the same distinction the loot draws (GetBestDropsQueryHandler skips an unpriced type rather than
-    // counting it as worthless).
-    private static decimal? _Value(LocalKillmail killmail, IReadOnlyDictionary<int, double> prices)
-    {
-        bool anyPriced = prices.ContainsKey(killmail.VictimShipTypeId) || killmail.Items.Any(item => prices.ContainsKey(item.TypeId));
-        if (!anyPriced)
-        {
-            return null;
-        }
-
-        decimal value = prices.TryGetValue(killmail.VictimShipTypeId, out double shipPrice) ? (decimal)shipPrice : 0m;
-        foreach (LocalKillmailItem item in killmail.Items)
-        {
-            if (prices.TryGetValue(item.TypeId, out double itemPrice))
-            {
-                value += (decimal)itemPrice * (item.QuantityDestroyed + item.QuantityDropped);
-            }
-        }
-
-        return value;
-    }
+    // Ship plus every destroyed or dropped item, at today's average — the exact math RunIskFactsReader already uses
+    // for a run's own SHIP LOSS share (ET-331): null rather than 0 when none of it is priced (ET-332 AC6).
+    private static decimal? _Value(LocalKillmail killmail, IReadOnlyDictionary<int, double> prices) =>
+        RunIskFactsReader.KnownLootValue(RunIskFactsReader.LossLines([killmail]), LootKind.Lost, prices);
 
     // Every run of this character still there to match against — unlike the link pass (LinkKillmailsToRunsCommandHandler),
     // this read is not windowed: it only runs once, for a screen scoped to one character's own killmails.

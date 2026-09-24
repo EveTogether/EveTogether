@@ -35,7 +35,9 @@ public sealed partial class KillmailCharacterOptionViewModel : ObservableObject
     /// instead of a count and reads no killmails for it (ET-332 AC3).</summary>
     public bool NeedsAccess { get; }
 
-    [ObservableProperty] private int _count;
+    /// <summary>Null until this character has actually been read: shown blank rather than "0", so a tile nobody has
+    /// selected yet never reads as "no kills" (ET-332).</summary>
+    [ObservableProperty] private int? _count;
 
     [ObservableProperty] private bool _isSelected;
 
