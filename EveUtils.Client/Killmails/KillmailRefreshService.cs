@@ -10,7 +10,10 @@ namespace EveUtils.Client.Killmails;
 
 /// <summary>
 /// Imports every coupled character's new kills and losses on start and then every 5 minutes, the cache time of
-/// <c>/characters/{id}/killmails/recent/</c>. Characters without the killmail scope are skipped quietly.
+/// <c>/characters/{id}/killmails/recent/</c>. Characters without the killmail scope are skipped quietly. A character
+/// that just granted the scope is imported immediately via <see cref="ICharacterRegistry.RegistryChanged"/> (ET-363)
+/// — the same seam <c>SkillRefreshService</c> and <c>ImplantRefreshService</c> use — instead of waiting up to 5
+/// minutes for the next tick.
 /// </summary>
 public sealed class KillmailRefreshService(
     EsiKillmailImporter importer,
@@ -23,20 +26,31 @@ public sealed class KillmailRefreshService(
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        while (!stoppingToken.IsCancellationRequested)
+        registry.RegistryChanged += _OnRegistryChanged;
+        try
         {
-            await _RefreshAllAsync(stoppingToken);
+            while (!stoppingToken.IsCancellationRequested)
+            {
+                await _RefreshAllAsync(stoppingToken);
 
-            try
-            {
-                await Task.Delay(RefreshInterval, stoppingToken);
-            }
-            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
-            {
-                return;
+                try
+                {
+                    await Task.Delay(RefreshInterval, stoppingToken);
+                }
+                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+                {
+                    return;
+                }
             }
         }
+        finally
+        {
+            registry.RegistryChanged -= _OnRegistryChanged;
+        }
     }
+
+    // A newly coupled or newly scoped character should import its killmails straight away, not only at the next tick.
+    private void _OnRegistryChanged() => _ = _RefreshAllAsync(CancellationToken.None);
 
     // Imports killmails for every registered character once, unless ESI is down.
     private async Task _RefreshAllAsync(CancellationToken cancellationToken)

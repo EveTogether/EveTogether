@@ -5,6 +5,7 @@ using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EveUtils.Client.Dialogs;
@@ -46,8 +47,15 @@ namespace EveUtils.Client.ViewModels.Killmails;
 /// read is discarded rather than applied — <see cref="_readVersion"/> is bumped at the start of every
 /// <see cref="_ReadAsync"/> and checked before the result is used, so switching characters twice quickly can never
 /// leave the second character's tile showing the first character's mails.</para>
+///
+/// <para><b>Live scope grants (ET-363):</b> a GRANT ACCESS granted while this screen stands open comes through
+/// <see cref="ICharacterRegistry.RegistryChanged"/> — the same seam <c>SkillRefreshService</c>, <c>ImplantRefreshService</c>,
+/// <c>ShipFitDetectionService</c> and <c>MetricsWindowViewModel</c> already use for a changed character/scope status —
+/// rather than waiting for a re-open (<see cref="RefreshModule"/>) that may never come. A new killmail the background
+/// <c>KillmailRefreshService</c> finds on its own 5-minute tick reaches this screen the same way, through
+/// <see cref="EsiKillmailImporter.KillmailsImported"/> (ET-363 AC3) — one seam, not two.</para>
 /// </summary>
-public sealed partial class KillmailsOverviewViewModel : ViewModelBase, IRefreshableModule
+public sealed partial class KillmailsOverviewViewModel : ViewModelBase, IRefreshableModule, IDisposable
 {
     private readonly CqrsDispatcher _dispatcher;
     private readonly IDialogService _dialogs;
@@ -58,6 +66,8 @@ public sealed partial class KillmailsOverviewViewModel : ViewModelBase, IRefresh
     private readonly KillmailNames _names;
     private readonly CharacterFaceCache _faces;
     private readonly TimeProvider _clock;
+    private readonly ICharacterRegistry? _registry;
+    private readonly EsiKillmailImporter? _importer;
     private readonly KillmailShowFilterTileViewModel _allFilter;
     private readonly KillmailShowFilterTileViewModel _killsFilter;
     private readonly KillmailShowFilterTileViewModel _lossesFilter;
@@ -103,7 +113,44 @@ public sealed partial class KillmailsOverviewViewModel : ViewModelBase, IRefresh
 
         _RebuildCharacterTiles(characters);
         _ShowEmpty();
+
+        _registry = services.GetService<ICharacterRegistry>();
+        if (_registry is not null)
+        {
+            _registry.RegistryChanged += _OnRegistryChanged;
+        }
+
+        _importer = services.GetService<EsiKillmailImporter>();
+        if (_importer is not null)
+        {
+            _importer.KillmailsImported += _OnKillmailsImported;
+        }
     }
+
+    /// <summary>Releases the <see cref="ICharacterRegistry.RegistryChanged"/> and
+    /// <see cref="EsiKillmailImporter.KillmailsImported"/> subscriptions — called by <c>KillmailsWindow</c>'s own
+    /// <c>Closed</c> handler, the same pattern <c>MetricsWindow</c> uses.</summary>
+    public void Dispose()
+    {
+        if (_registry is not null)
+        {
+            _registry.RegistryChanged -= _OnRegistryChanged;
+        }
+
+        if (_importer is not null)
+        {
+            _importer.KillmailsImported -= _OnKillmailsImported;
+        }
+    }
+
+    // A scope granted or lost while this screen stands open (GRANT ACCESS's whole point, ET-363) — may fire from a
+    // background thread (a re-auth's own registry write, or another module's background refresh), so the rebuild
+    // that touches the bound Characters/Days collections has to be posted to the UI thread rather than run inline.
+    private void _OnRegistryChanged() => Dispatcher.UIThread.Post(() => _ = _RefreshCharactersAndReadAsync());
+
+    // A new killmail the background refresh (or another window's paste) found for some character (ET-363 AC3) —
+    // reuses the exact same rebuild-and-read as a registry change rather than a second, narrower refresh path.
+    private void _OnKillmailsImported(int characterId) => Dispatcher.UIThread.Post(() => _ = _RefreshCharactersAndReadAsync());
 
     public ObservableCollection<KillmailCharacterOptionViewModel> Characters { get; } = [];
 
