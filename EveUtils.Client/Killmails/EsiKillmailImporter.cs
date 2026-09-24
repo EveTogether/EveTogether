@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using EveUtils.Shared.Cqrs;
+using EveUtils.Shared.Identity;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Esi.Http;
 using EveUtils.Shared.Modules.Killmails;
@@ -87,6 +88,62 @@ public sealed class EsiKillmailImporter(IEsiClient esi, ILocalKillmailRepository
         {
             gate.Release();
         }
+    }
+
+    /// <summary>
+    /// Imports one killmail by id + hash — a pasted ESI link or in-game <c>killReport:</c> link (ET-338), bypassing
+    /// the 5-minute cache on <c>/characters/{id}/killmails/recent/</c>. Stored for every own character on the mail,
+    /// victim or attacker; refused with nothing stored when none of them are. No repository method beyond
+    /// <see cref="ILocalKillmailRepository.AddMissingAsync"/> is needed: it already skips a mail already known for
+    /// that character, so a mail the feed later re-discovers (or already found first) never duplicates.
+    /// </summary>
+    public async Task<KillmailImportResult> ImportOneAsync(int killmailId, string hash, CancellationToken cancellationToken = default)
+    {
+        var detail = await esi.GetAsync<EsiKillmail>($"/killmails/{killmailId}/{hash}/", cancellationToken: cancellationToken);
+        if (!detail.IsSuccess || detail.Value is null)
+        {
+            return _Failure(detail.Error);
+        }
+
+        EsiKillmail killmail = detail.Value;
+        var mailCharacterIds = new HashSet<int>(killmail.Attackers.Select(attacker => attacker.CharacterId).OfType<int>());
+        if (killmail.Victim.CharacterId is { } victimId)
+        {
+            mailCharacterIds.Add(victimId);
+        }
+
+        IReadOnlyList<Character> characters;
+        await using (AsyncServiceScope scope = scopes.CreateAsyncScope())
+        {
+            characters = await scope.ServiceProvider.GetRequiredService<ICharacterRegistry>().GetAllAsync(cancellationToken);
+        }
+
+        List<int> ownCharacterIds = [.. characters
+            .Select(character => character.EsiCharacterId)
+            .OfType<int>()
+            .Where(mailCharacterIds.Contains)];
+        if (ownCharacterIds.Count == 0)
+        {
+            return new KillmailImportResult(KillmailImportStatus.NoOwnCharacter, 0, "None of your characters is on this killmail.");
+        }
+
+        var stored = 0;
+        foreach (int characterId in ownCharacterIds)
+        {
+            SemaphoreSlim gate = _importGates.GetOrAdd(characterId, _ => new SemaphoreSlim(1, 1));
+            await gate.WaitAsync(cancellationToken);
+            try
+            {
+                await repository.AddMissingAsync(characterId, [_ToEntity(characterId, hash, killmail)], cancellationToken);
+                stored++;
+            }
+            finally
+            {
+                gate.Release();
+            }
+        }
+
+        return KillmailImportResult.Ok(stored);
     }
 
     private static LocalKillmail _ToEntity(int characterId, string hash, EsiKillmail killmail) => new()
