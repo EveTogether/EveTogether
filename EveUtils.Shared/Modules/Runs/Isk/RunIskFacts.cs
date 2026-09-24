@@ -20,12 +20,12 @@ public sealed record RunIskFacts
     /// <summary>Whether there is loot at all, priced or not — what tells "not priced yet" from "nothing".</summary>
     public required bool HasLoot { get; init; }
 
-    /// <summary>What CONSUMABLES charges the run — a positive cost, contributed as negative ISK (ET-249). Null when
-    /// there is a confirmed count but no price for its filament type yet.</summary>
+    /// <summary>What CONSUMABLES charges the run — the filament and whatever else the pilot wrote out as spent
+    /// (ET-249, ET-334), a positive cost contributed as negative ISK. Null when none of it has a price yet.</summary>
     public required decimal? ConsumableIskCost { get; init; }
 
-    /// <summary>Whether a filament count was ever confirmed for this run, priced or not — what tells "not priced
-    /// yet" from "nothing to charge".</summary>
+    /// <summary>Whether the run spent anything at all, priced or not — what tells "not priced yet" from "nothing to
+    /// charge".</summary>
     public required bool HasConsumables { get; init; }
 
     /// <summary>Priced mining, valued through the price source — Mutanite at its fixed NPC price, everything else at

@@ -35,7 +35,9 @@ public sealed partial class LootDetailSectionViewModel : RunDetailSection
     public override void Apply(RunDetailSectionInput input)
     {
         ActivityDetailDto detail = input.Detail;
-        RunLootCaptureDto[] captures = [.. detail.Runs.SelectMany(run => run.LootCaptures)];
+        RunLootCaptureDto[] captures = [.. detail.Runs
+            .SelectMany(run => run.LootCaptures)
+            .Where(capture => capture.Role is not LootCaptureRole.Consumed)];
         _hasCaptures = captures.Length > 0;
         LootEmptyText = captures.Length > 0
             ? null

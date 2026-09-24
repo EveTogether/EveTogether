@@ -17,9 +17,8 @@ namespace EveUtils.Client.ViewModels.Runs;
 public sealed partial class ActivityLootLineViewModel : ObservableObject
 {
     public ActivityLootLineViewModel(int itemTypeId, string name, long? quantity, decimal? unitPrice, LootKind lootKind,
-        bool isExcluded = false, int captureCount = 1, string? ownerText = null)
+        bool isExcluded = false, int captureCount = 1)
     {
-        OwnerText = ownerText;
         ItemTypeId = itemTypeId;
         Name = name;
         Quantity = quantity;
@@ -71,9 +70,6 @@ public sealed partial class ActivityLootLineViewModel : ObservableObject
     public int CaptureCount { get; }
 
     public string? CaptureCountText => CaptureCount > 1 ? $"({CaptureCount} captures)" : null;
-
-    /// <summary>Whose line this is, where a list holds one per pilot — CONSUMABLES names who spent the filament.</summary>
-    public string? OwnerText { get; }
 
     /// <summary>The line that carries the most of its character's loot — marked so the one Blood Bronze Tag worth
     /// more than everything else put together is read first rather than found (ET-215 mockup).</summary>

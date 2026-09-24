@@ -42,6 +42,16 @@ public sealed partial class RunLootViewModel : ViewModelBase
         _appraisal = appraisal;
         _sde = sde;
         _images = images;
+        LootEditor = new InventoryListEditorViewModel(sde, _StoreLootListAsync);
+        LootEditor.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName != nameof(InventoryListEditorViewModel.IsOpen))
+                return;
+
+            OnPropertyChanged(nameof(CanOfferLootEdit));
+            OnPropertyChanged(nameof(CanEditLoot));
+            _LoadIfDeferred();
+        };
     }
 
     /// <summary>Raised after a correction this section made itself landed — a capture left out or counted again, or
@@ -118,8 +128,6 @@ public sealed partial class RunLootViewModel : ViewModelBase
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanEditLoot))]
     [NotifyPropertyChangedFor(nameof(CanCorrect))]
-    [NotifyPropertyChangedFor(nameof(CanFinishLootEdit))]
-    [NotifyPropertyChangedFor(nameof(FinishLootEditText))]
     private bool _isBusy;
 
     /// <summary>Another run of the same activity is mid-correction. Its summary rebuild has to land before this one
@@ -127,7 +135,6 @@ public sealed partial class RunLootViewModel : ViewModelBase
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanEditLoot))]
     [NotifyPropertyChangedFor(nameof(CanCorrect))]
-    [NotifyPropertyChangedFor(nameof(CanFinishLootEdit))]
     private bool _isHeld;
 
     /// <summary>Whether a capture can be left out or counted again right now.</summary>
@@ -205,37 +212,19 @@ public sealed partial class RunLootViewModel : ViewModelBase
 
     // ── The list as text ────────────────────────────────────────────────────────────────────────────
 
-    /// <summary>The list is open for editing. While it is, the box is the list: what is in it is what "done" will
-    /// make the loot.</summary>
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CanOfferLootEdit))]
-    [NotifyPropertyChangedFor(nameof(CanEditLoot))]
-    private bool _isEditingLoot;
+    /// <summary>The box the list is written out in — the same box CONSUMABLES rewrites its own list in (ET-334).
+    /// While it is open, what is in it is what "done" will make the loot.</summary>
+    public InventoryListEditorViewModel LootEditor { get; }
 
     /// <summary>A read <see cref="LoadWhenIdleAsync"/> held back while a correction was open, still owed.</summary>
     private bool _isLoadDeferred;
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CanFinishLootEdit))]
-    private string? _lootText;
-
-    /// <summary>Why the box cannot be accepted as it stands, in the clipboard watch's own words. Beside the text it
-    /// turns down rather than in a toast, and it is the reason "done" is greyed: silently dropping a row the pilot
-    /// typed is the one outcome worth blocking on.</summary>
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CanFinishLootEdit))]
-    private string? _lootTextRefusal;
-
-    public bool CanFinishLootEdit => !IsBusy && !IsHeld && LootTextRefusal is null && !string.IsNullOrWhiteSpace(LootText);
-
-    public string FinishLootEditText => IsBusy ? "SAVING…" : "SAVE THIS LIST";
 
     /// <summary>Correcting the list by hand belongs to the way that has no starting hold. With one, the list is the
     /// difference between two cargo holds — so the thing to correct is those two, in the boxes above, and a
     /// hand-written list would only be a third answer to a question that already has one. Not while the box is
     /// already open, either: asking again would throw away what is being typed in it.</summary>
     public bool CanOfferLootEdit =>
-        !IsReadOnly && !IsEditingLoot && _sde is not null && LootTally.Ends(_TallyCaptures()).Before < 0;
+        !IsReadOnly && !LootEditor.IsOpen && _sde is not null && LootTally.Ends(_TallyCaptures()).Before < 0;
 
     /// <summary><see cref="CanOfferLootEdit"/>, and not while a correction is still being written.</summary>
     public bool CanEditLoot => CanOfferLootEdit && CanCorrect;
@@ -296,6 +285,8 @@ public sealed partial class RunLootViewModel : ViewModelBase
     {
         _isLoadDeferred = false;
         RunStatusMessage = null;
+        // What the pilot spent is CONSUMABLES' list (ET-334), stored beside the loot but never part of it.
+        captures = [.. captures.Where(capture => capture.Role is not LootCaptureRole.Consumed)];
         await _LoadPricesAsync(captures.SelectMany(capture => capture.Entries), cancellationToken);
         _names.Clear();
         foreach (RunLootEntryDto entry in captures.SelectMany(capture => capture.Entries))
@@ -346,20 +337,24 @@ public sealed partial class RunLootViewModel : ViewModelBase
     /// </summary>
     public Task LoadWhenIdleAsync(IReadOnlyList<RunLootCaptureDto> captures, CancellationToken cancellationToken = default)
     {
-        if (!IsEditingLoot && !IsBusy)
+        if (!LootEditor.IsOpen && !IsBusy)
             return LoadAsync(captures, cancellationToken);
 
         _isLoadDeferred = true;
         return Task.CompletedTask;
     }
 
-    partial void OnIsEditingLootChanged(bool value) => _LoadIfDeferred();
+    partial void OnIsBusyChanged(bool value)
+    {
+        LootEditor.IsBusy = value;
+        _LoadIfDeferred();
+    }
 
-    partial void OnIsBusyChanged(bool value) => _LoadIfDeferred();
+    partial void OnIsHeldChanged(bool value) => LootEditor.IsHeld = value;
 
     private void _LoadIfDeferred()
     {
-        if (!_isLoadDeferred || IsEditingLoot || IsBusy)
+        if (!_isLoadDeferred || LootEditor.IsOpen || IsBusy)
             return;
 
         _isLoadDeferred = false;
@@ -408,44 +403,20 @@ public sealed partial class RunLootViewModel : ViewModelBase
     private Task ToggleCaptureExcludedAsync(RunLootCaptureRowViewModel row) => ToggleExcludedAsync(row);
 
     [RelayCommand]
-    private void BeginLootEdit()
-    {
-        LootText = _AsPasteText();
-        LootTextRefusal = null;
-        IsEditingLoot = true;
-    }
-
-    [RelayCommand]
-    private void CancelLootEdit()
-    {
-        IsEditingLoot = false;
-        LootText = null;
-        LootTextRefusal = null;
-    }
-
-    /// <summary>Reading it happens as it is typed so "done" can be greyed with the reason beside it, rather than
-    /// accepting the box and quietly dropping the row that could not be read.</summary>
-    partial void OnLootTextChanged(string? value) =>
-        LootTextRefusal = _sde is null || string.IsNullOrWhiteSpace(value)
-            ? null
-            : InventoryTextReading.Read(value, _sde).Refusal;
+    private void BeginLootEdit() => LootEditor.Open(_AsPasteText());
 
     /// <summary>
     /// The written-out list becomes the loot: one capture of its own, with every capture it was written from
     /// excluded. The truth underneath stays entries and never text — the text is derivable from the rows, and a
     /// stored copy of it would be a second answer that can drift from the one the saved run is rebuilt out of.
     /// </summary>
-    public async Task<bool> ReplaceLootWithTextAsync(CancellationToken cancellationToken = default)
-    {
-        if (RunId is not { } runId || _sde is null || string.IsNullOrWhiteSpace(LootText) || !CanCorrect)
-            return false;
+    public Task<bool> ReplaceLootWithTextAsync(CancellationToken cancellationToken = default) =>
+        CanCorrect ? LootEditor.FinishAsync(cancellationToken) : Task.FromResult(false);
 
-        InventoryTextReading reading = InventoryTextReading.Read(LootText, _sde);
-        if (reading.Lines.Count == 0)
-        {
-            LootTextRefusal = reading.Refusal ?? "Nothing in this text reads as an EVE inventory listing.";
-            return false;
-        }
+    private async Task<string?> _StoreLootListAsync(InventoryTextReading reading, CancellationToken cancellationToken)
+    {
+        if (RunId is not { } runId || !CanCorrect)
+            return "This loot cannot be changed right now.";
 
         IsBusy = true;
         try
@@ -463,14 +434,9 @@ public sealed partial class RunLootViewModel : ViewModelBase
                     LootKind = LootKind.Gained
                 })]), cancellationToken);
             if (!stored.IsSuccess)
-            {
-                LootTextRefusal = stored.Messages.Count > 0 ? stored.Messages[0].Text : "This list was not stored.";
-                return false;
-            }
+                return stored.Messages.Count > 0 ? stored.Messages[0].Text : "This list was not stored.";
 
-            IsEditingLoot = false;
-            LootText = null;
-            LootTextRefusal = null;
+            LootEditor.Close();
             await RefreshAsync(cancellationToken);
         }
         finally
@@ -479,13 +445,8 @@ public sealed partial class RunLootViewModel : ViewModelBase
         }
 
         LootCorrected?.Invoke();
-        return true;
+        return null;
     }
-
-    /// <summary>The "done" button. Greyed on <see cref="CanFinishLootEdit"/> rather than refusing after the click.
-    /// </summary>
-    [RelayCommand]
-    private Task FinishLootEditAsync() => ReplaceLootWithTextAsync();
 
     /// <summary>The list in the form EVE itself copies — name, tab, quantity — so what comes out of the box can go
     /// straight back into it, and a row can be pasted in from the game beside the ones already there. One row per

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Headless.XUnit;
@@ -10,16 +11,19 @@ using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Client.ViewModels.Runs;
 using EveUtils.Client.ViewModels.Runs.Sections;
 using EveUtils.Shared.Cqrs;
+using EveUtils.Shared.Data;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Market.Entities;
 using EveUtils.Shared.Modules.Market.Repositories;
 using EveUtils.Shared.Modules.Market.Services;
 using EveUtils.Shared.Modules.Runs.Commands;
 using EveUtils.Shared.Modules.Runs.Dtos;
+using EveUtils.Shared.Modules.Runs.Entities;
 using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Runs.Isk;
 using EveUtils.Shared.Modules.Runs.Queries;
 using EveUtils.Shared.Modules.Sde;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using IDispatcher = EveUtils.Shared.Cqrs.IDispatcher;
@@ -177,7 +181,7 @@ public sealed class ConsumablesTests
         await detail.LoadAsync();
         var consumables = (ConsumablesDetailSectionViewModel)Assert.Single(
             detail.Sections, section => section is ConsumablesDetailSectionViewModel);
-        ActivityLootLineViewModel consumableRow = Assert.Single(consumables.Rows);
+        ActivityLootLineViewModel consumableRow = Assert.Single(Assert.Single(consumables.Characters).Lines);
         Assert.Equal("2×", consumableRow.QuantityText);
         Assert.Equal("-10,000,000 ISK", consumables.CostText);
     }
@@ -201,12 +205,13 @@ public sealed class ConsumablesTests
         ActivityOverviewRowDto row = Assert.Single((await dispatcher.Query(new GetActivityOverviewQuery())).Value!);
         ActivityDetailViewModel detail = await _DetailAsync(instance, dispatcher, row);
 
-        ActivityLootLineViewModel filament = Assert.Single(detail.Consumables().Rows);
+        ConsumablesCharacterViewModel pilot = Assert.Single(detail.Consumables().Characters);
+        ActivityLootLineViewModel filament = Assert.Single(pilot.Lines);
         Assert.Equal(60000, filament.ItemTypeId);
         Assert.Equal("Agitated Dark Filament", filament.Name);
         Assert.Equal("2×", filament.QuantityText);
         Assert.Equal("10,000,000", filament.AmountText);
-        Assert.Equal("Test Pilot", filament.OwnerText);
+        Assert.Equal("Test Pilot", pilot.CharacterText);
         Assert.True(filament.IsLost);
 
         ActivityLootViewModel loot = detail.Loot().LootOverview;
@@ -270,9 +275,134 @@ public sealed class ConsumablesTests
         Assert.Equal("-5,000,000 ISK", model.LootOverview.ConsumedIskDisplay);
     }
 
+    // ── ET-334: what a pilot spent is rewritten by hand, the way loot is ──────────────────────────────
+
+    /// <summary>
+    /// A fleetmate used the filament: the pilot sets his own to 0, and NET, TOTAL ISK and the overview row lose its
+    /// cost — nothing moves to anyone else. Red without the change: a saved run's filament count could not be written
+    /// at all, and the run went on charging 10,000,000 ISK.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task RewritingConsumables_WithTheFilamentAtZero_TakesItsCostOffNetAndTheOverviewTotal()
+    {
+        using var instance = TestClientInstance.Create(services => services.AddSingleton<ISdeAccessor>(_Sde()));
+        await _PriceAsync(instance, (34, 10_000_000), (60000, 5_000_000));
+        IDispatcher dispatcher = instance.Services.GetRequiredService<IDispatcher>();
+        await _SaveAbyssalAsync(dispatcher, filamentCount: 2, lootQuantity: 3);
+        ActivityDetailViewModel detail = await _DetailAsync(instance, dispatcher, await _OverviewRowAsync(dispatcher));
+
+        await _RewriteConsumablesAsync(detail, "Agitated Dark Filament\t0", "30,000,000 ISK");
+
+        Assert.Equal("30,000,000 ISK", detail.Loot().LootOverview.NetIskDisplay);
+        Assert.Empty(Assert.Single(detail.Consumables().Characters).Lines);
+        Assert.Equal(30_000_000m, (await _OverviewRowAsync(dispatcher)).Isk.Total);
+    }
+
+    /// <summary>
+    /// A drone lost in the pocket, written out beside the filament: valued by type id, taken off NET once, and never
+    /// counted as loot. Red without the change: the drone was nowhere in the run's cost (TOTAL stayed 20,000,000), and
+    /// read as spent loot it would have come off twice.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task RewritingConsumables_WithADroneAdded_ValuesItAndTakesItOffOnce()
+    {
+        using var instance = TestClientInstance.Create(services => services.AddSingleton<ISdeAccessor>(_Sde()));
+        await _PriceAsync(instance, (34, 10_000_000), (60000, 5_000_000), (2488, 100_000));
+        IDispatcher dispatcher = instance.Services.GetRequiredService<IDispatcher>();
+        await _SaveAbyssalAsync(dispatcher, filamentCount: 2, lootQuantity: 3);
+        ActivityDetailViewModel detail = await _DetailAsync(instance, dispatcher, await _OverviewRowAsync(dispatcher));
+
+        await _RewriteConsumablesAsync(detail, "Agitated Dark Filament\t2\nHobgoblin II\t5", "19,500,000 ISK");
+
+        ActivityLootLineViewModel drone = Assert.Single(Assert.Single(detail.Consumables().Characters).Lines,
+            line => line.ItemTypeId == 2488);
+        Assert.Equal("500,000", drone.AmountText);
+        ActivityLootViewModel loot = detail.Loot().LootOverview;
+        Assert.Equal("30,000,000 ISK", loot.LootIskDisplay);
+        Assert.Equal("-10,500,000 ISK", loot.ConsumedIskDisplay);
+        Assert.Equal("19,500,000 ISK", loot.NetIskDisplay);
+        Assert.Equal("-10,500,000 ISK", detail.Consumables().CostText);
+        Assert.Equal(19_500_000m, (await _OverviewRowAsync(dispatcher)).Isk.Total);
+    }
+
+    /// <summary>The rewritten list is the run's from then on, read back the same by a screen opened afresh. Red without
+    /// the change: a new screen read the count SAVE confirmed and no drone.</summary>
+    [AvaloniaFact]
+    public async Task RewrittenConsumables_ReadBackTheSame_OnAScreenOpenedAfresh()
+    {
+        using var instance = TestClientInstance.Create(services => services.AddSingleton<ISdeAccessor>(_Sde()));
+        await _PriceAsync(instance, (34, 10_000_000), (60000, 5_000_000), (2488, 100_000));
+        IDispatcher dispatcher = instance.Services.GetRequiredService<IDispatcher>();
+        await _SaveAbyssalAsync(dispatcher, filamentCount: 2, lootQuantity: 3);
+        await _RewriteConsumablesAsync(await _DetailAsync(instance, dispatcher, await _OverviewRowAsync(dispatcher)),
+            "Agitated Dark Filament\t1\nHobgoblin II\t5", "24,500,000 ISK");
+
+        ActivityDetailViewModel reopened = await _DetailAsync(instance, dispatcher, await _OverviewRowAsync(dispatcher));
+
+        Assert.Equal(["Agitated Dark Filament 1×", "Hobgoblin II 5×"],
+            Assert.Single(reopened.Consumables().Characters).Lines.Select(line => $"{line.Name} {line.QuantityText}"));
+        Assert.Equal("24,500,000 ISK", reopened.TotalIskText);
+    }
+
+    /// <summary>A published run carries what its pilot spent: the same wire the loot travels on, read back into the
+    /// same cost on the other side. Red without the change: the payload held the confirmed count only, and a fleetmate's
+    /// client charged the run 10,000,000 instead of 5,500,000.</summary>
+    [AvaloniaFact]
+    public async Task RewrittenConsumables_TravelWithThePublishedRun()
+    {
+        using var instance = TestClientInstance.Create(services => services.AddSingleton<ISdeAccessor>(_Sde()));
+        await _PriceAsync(instance, (34, 10_000_000), (60000, 5_000_000), (2488, 100_000));
+        IDispatcher dispatcher = instance.Services.GetRequiredService<IDispatcher>();
+        Guid runId = await _SaveAbyssalAsync(dispatcher, filamentCount: 2, lootQuantity: 3);
+        Assert.True((await dispatcher.Send(new SetRunConsumablesManualCommand(runId,
+        [
+            new RunLootEntryInput { ItemTypeId = 60000, Name = "Agitated Dark Filament", Quantity = 1, LootKind = LootKind.Lost },
+            new RunLootEntryInput { ItemTypeId = 2488, Name = "Hobgoblin II", Quantity = 5, LootKind = LootKind.Lost }
+        ]))).IsSuccess);
+
+        string json = JsonSerializer.Serialize(new RunWirePayload
+        {
+            Run = RunWireData.FromEntity(await _StoredRunAsync(instance, runId)), SentAtUnixMilliseconds = 0
+        });
+        Run received = Assert.IsType<RunWirePayload>(JsonSerializer.Deserialize<RunWirePayload>(json)).Run.ToEntity();
+
+        RunIskFacts facts = RunIskFactsReader.From(received, received.Parameters,
+            new Dictionary<int, double> { [34] = 10_000_000, [60000] = 5_000_000, [2488] = 100_000 },
+            RunIskFactsReader.OresOf([received], _Sde()));
+        Assert.Equal(5_500_000m, facts.ConsumableIskCost);
+        Assert.Equal(30_000_000m, facts.LootIskNet);
+    }
+
+    private static async Task<ActivityOverviewRowDto> _OverviewRowAsync(IDispatcher dispatcher) =>
+        Assert.Single((await dispatcher.Query(new GetActivityOverviewQuery())).Value!);
+
+    private static async Task _RewriteConsumablesAsync(ActivityDetailViewModel detail, string text, string expectedTotal)
+    {
+        ConsumablesCharacterViewModel pilot = Assert.Single(detail.Consumables().Characters);
+        pilot.BeginEditCommand.Execute(null);
+        pilot.Editor.Text = text;
+        Assert.True(await pilot.Editor.FinishAsync());
+        await ActivityWindowHarness.WaitUntil(() => detail.TotalIskText == expectedTotal);
+    }
+
+    private static async Task<Run> _StoredRunAsync(TestClientInstance instance, Guid runId)
+    {
+        await using ClientDbContext db = await instance.Services
+            .GetRequiredService<IDbContextFactory<ClientDbContext>>().CreateDbContextAsync();
+        return await db.Set<Run>().AsNoTracking()
+            .Include(run => run.LootCaptures).ThenInclude(capture => capture.Entries)
+            .Include(run => run.BountyEntries)
+            .Include(run => run.EnemyObservations)
+            .Include(run => run.Parameters)
+            .Include(run => run.MiningEntries)
+            .Include(run => run.AttendanceEntries)
+            .SingleAsync(run => run.Id == runId);
+    }
+
     private static FakeSdeAccessor _Sde() => new FakeSdeAccessor()
         .Add(60000, "Agitated Dark Filament", 1979, 8)
-        .Add(34, "Tritanium", 18, 4);
+        .Add(34, "Tritanium", 18, 4)
+        .Add(2488, "Hobgoblin II", 100, 18);
 
     private static Task _PriceAsync(TestClientInstance instance, params (int TypeId, double Price)[] prices) =>
         instance.Services.GetRequiredService<IMarketPriceRepository>().ReplaceAllAsync(
@@ -283,7 +413,7 @@ public sealed class ConsumablesTests
             })
         ]);
 
-    private static async Task _SaveAbyssalAsync(IDispatcher dispatcher, int filamentCount, long lootQuantity)
+    private static async Task<Guid> _SaveAbyssalAsync(IDispatcher dispatcher, int filamentCount, long lootQuantity)
     {
         DateTime startedAtUtc = new(2026, 9, 22, 18, 0, 0, DateTimeKind.Utc);
         Result<Guid> started = await dispatcher.Send(
@@ -314,6 +444,7 @@ public sealed class ConsumablesTests
                 }
             ], [], [], [.. parameters]));
         Assert.True(saved.IsSuccess);
+        return started.Value;
     }
 
     private static async Task<ActivityDetailViewModel> _DetailAsync(

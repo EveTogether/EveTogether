@@ -589,10 +589,12 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
                 new ActivityRunRowViewModel(run, _NameOf,
                     _FaceOf(run.CharacterId, CharacterNameResolver.Resolve(run.CharacterNameSnapshot, run.CharacterId, _NameOf)),
                     activity.IskByCharacter?.GetValueOrDefault(run.CharacterId)))];
-            // The lines a pilot actually kept: a capture they excluded is not loot, and the activity's own LootIskNet
-            // already leaves it out, so counting it here would put an item count beside a figure that never held it.
+            // The lines a pilot actually kept: a capture they excluded is not loot, nor is what they spent, and the
+            // activity's own LootIskNet already leaves both out, so counting them here would put an item count beside a
+            // figure that never held them.
             int lootItems = activity.Runs
-                .SelectMany(run => run.LootCaptures.Where(capture => !capture.IsExcluded))
+                .SelectMany(run => run.LootCaptures.Where(capture => !capture.IsExcluded
+                                                                     && capture.Role is not LootCaptureRole.Consumed))
                 .Sum(capture => capture.Entries.Count);
             return new RunsPaneDetail(crew, lootItems, activity.LootIskNet, null);
         }, cancellationToken);

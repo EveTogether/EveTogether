@@ -33,7 +33,8 @@ internal sealed class SetRunLootManualCommandHandler(
             .OrderBy(candidate => candidate.CapturedAtUtc)
             .ToListAsync(cancellationToken);
 
-        RunLootCapture? manual = captures.FirstOrDefault(candidate => candidate.Source is LootCaptureSource.Manual);
+        RunLootCapture? manual = captures.FirstOrDefault(candidate => candidate.Source is LootCaptureSource.Manual
+                                                                     && candidate.Role is not LootCaptureRole.Consumed);
         if (manual is null)
         {
             manual = new RunLootCapture { Id = Guid.CreateVersion7(), RunId = command.RunId, Source = LootCaptureSource.Manual };
@@ -66,7 +67,8 @@ internal sealed class SetRunLootManualCommandHandler(
 
         // Excluded and not deleted: the captures the list was written from stay readable underneath it, which is the
         // only way to read back what the correction actually changed.
-        foreach (RunLootCapture superseded in captures.Where(candidate => candidate.Id != manual.Id))
+        foreach (RunLootCapture superseded in captures.Where(candidate => candidate.Id != manual.Id
+                                                                            && candidate.Role is not LootCaptureRole.Consumed))
             superseded.IsExcluded = true;
 
         await db.SaveChangesAsync(cancellationToken);

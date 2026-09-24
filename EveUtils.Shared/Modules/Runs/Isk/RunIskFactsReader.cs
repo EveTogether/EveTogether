@@ -19,10 +19,15 @@ internal static class RunIskFactsReader
         decimal? gained = KnownLootValue(loot, LootKind.Gained, prices);
         decimal? lost = KnownLootValue(loot, LootKind.Lost, prices);
         int? filamentCount = _ParsedInt(all, RunParameterKey.AbyssalFilamentCount);
-        decimal? consumableCost = filamentCount is > 0 && FilamentTypeId(all) is { } typeId
+        decimal? filamentCost = filamentCount is > 0 && FilamentTypeId(all) is { } typeId
             && prices.TryGetValue(typeId, out double price)
             ? (decimal)price * filamentCount.Value
             : null;
+        IReadOnlyList<LootTallyLine> spent = Spent(run);
+        decimal? spentCost = KnownLootValue(spent, LootKind.Lost, prices);
+        decimal? consumableCost = filamentCost is null && spentCost is null
+            ? null
+            : filamentCost.GetValueOrDefault() + spentCost.GetValueOrDefault();
         return new RunIskFacts
         {
             CharacterId = run.CharacterId,
@@ -30,7 +35,7 @@ internal static class RunIskFactsReader
             LootIskNet = gained is null && lost is null ? null : gained.GetValueOrDefault() - lost.GetValueOrDefault(),
             HasLoot = loot.Count > 0,
             ConsumableIskCost = consumableCost,
-            HasConsumables = filamentCount is > 0,
+            HasConsumables = filamentCount is > 0 || spent.Count > 0,
             MiningIskValue = MiningValue(run.MiningEntries, ores, prices),
             HasMining = run.MiningEntries.Count > 0,
             Parameters = [.. all.Select(parameter => new RunIskParameter(
@@ -102,6 +107,14 @@ internal static class RunIskFactsReader
         && int.TryParse(value, out int parsed)
             ? parsed
             : null;
+
+    /// <summary>What the run's pilot wrote out as spent besides the filament (ET-334), priced like the filament and
+    /// the loot by type id and never counted as loot.</summary>
+    public static IReadOnlyList<LootTallyLine> Spent(Run run) =>
+        [.. run.LootCaptures
+            .Where(capture => capture.Role is LootCaptureRole.Consumed && !capture.IsExcluded)
+            .SelectMany(capture => capture.Entries)
+            .Select(entry => new LootTallyLine(entry.ItemTypeId, entry.Quantity, entry.Volume, LootKind.Lost))];
 
     // Counted per run, not per activity: a starting cargo hold belongs to the run it was pasted on, and two grouped
     // runs each have their own. The rule itself is LootTally's, shared with the open window.

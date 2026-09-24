@@ -30,7 +30,7 @@ public static class LootTally
     {
         (int before, int after) = Ends(captures);
         if (before < 0)
-            return [.. captures.Where(capture => !capture.IsExcluded).SelectMany(capture => capture.Lines)];
+            return [.. captures.Where(_IsLoot).SelectMany(capture => capture.Lines)];
 
         // A starting hold with nothing after it is a run that has not been counted yet, not a run that lost its
         // whole cargo.
@@ -52,11 +52,16 @@ public static class LootTally
     private static int _LastCountedAfter(IReadOnlyList<LootTallyCapture> captures, int before)
     {
         for (int index = captures.Count - 1; index > before; index--)
-            if (!captures[index].IsExcluded)
+            if (_IsLoot(captures[index]))
                 return index;
 
         return -1;
     }
+
+    /// <summary>What a pilot spent (ET-334) sits beside the loot and never inside it: not a moment of the run's cargo,
+    /// so neither loot on its own nor the hold a difference ends on.</summary>
+    private static bool _IsLoot(LootTallyCapture capture) =>
+        !capture.IsExcluded && capture.Role is not LootCaptureRole.Consumed;
 
     private static IReadOnlyList<LootTallyLine> _Difference(LootTallyCapture before, LootTallyCapture after)
     {
