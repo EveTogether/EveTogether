@@ -119,8 +119,9 @@ public sealed class EsiKillmailImporter(IEsiClient esi, ILocalKillmailRepository
         }
 
         List<int> ownCharacterIds = [.. characters
-            .Where(character => character.EsiCharacterId is { } id && mailCharacterIds.Contains(id))
-            .Select(character => character.EsiCharacterId!.Value)];
+            .Select(character => character.EsiCharacterId)
+            .OfType<int>()
+            .Where(mailCharacterIds.Contains)];
         if (ownCharacterIds.Count == 0)
         {
             return new KillmailImportResult(KillmailImportStatus.NoOwnCharacter, 0, "None of your characters is on this killmail.");
