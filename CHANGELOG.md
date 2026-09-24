@@ -13,6 +13,14 @@ taken from the matching `## vX.Y.Z` section below.
 
 ## [Unreleased]
 
+- **Added: a lost ship is linked to the run you lost it in.** When a loss comes in, EVE Together looks for the one run
+  of that character that was going at the time, in the same system (any abyssal run for a loss in the abyss) and with
+  the same ship as the run's fit, and links the two; a pod lost within a minute follows its ship. When more than one
+  run fits, it links none rather than guess. The run's total ISK then takes off the ship and everything that was in it,
+  destroyed or dropped, at the cached market price, the same on the overview, the detail screen and the day total. An
+  abyssal run shows FAILED, any other run SHIP LOST. A new LINKED LOSS block on the detail screen shows the ship, fit,
+  final blow and why it was linked, and lets you move the loss to another run or unlink it; your choice is never
+  undone. The loss stays on your computer and is not sent along when you publish a run to a server.
 - **Changed: the local EVE database now also carries regions, NPC corporations and factions.** No visible change
   yet — this is groundwork for the upcoming kill/loss overview, so a killmail's system, region and NPC attacker
   resolve from your own machine instead of another lookup to CCP's servers. Because the database format changed,
