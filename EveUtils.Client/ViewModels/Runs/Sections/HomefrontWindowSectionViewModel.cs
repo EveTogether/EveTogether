@@ -202,7 +202,7 @@ public sealed partial class HomefrontWindowSectionViewModel : RunWindowSection
     };
 
     [RelayCommand]
-    private void SetOutcome(HomefrontOutcome outcome)
+    private async Task SetOutcomeAsync(HomefrontOutcome outcome)
     {
         if (!CanDecide)
             return;
@@ -210,7 +210,13 @@ public sealed partial class HomefrontWindowSectionViewModel : RunWindowSection
         Outcome = outcome;
         OutcomeIsFromGameLog = false;
         _isOutcomeSetByHand = true;
-        _NoteChangeByHand();
+        // Awaited (ET-287, ET-375): the write used to be fire-and-forget, which was effectively synchronous while
+        // Microsoft.Data.Sqlite's "async" API did its work inline — a reader right after this call always saw the
+        // pick already stored. Once ET-287 moved the write onto a real background thread, that was no longer true:
+        // the run's own automatic default write (Completed, from a fresh run or the "pale shadow" gamelog line)
+        // could still land after this one, with a later clock-based SetAtUtc, and silently win. Awaiting here makes
+        // "a click goes over whatever stands" true again.
+        await _NoteChangeByHandAsync();
     }
 
     [RelayCommand(CanExecute = nameof(_CanIncreaseWave))]
@@ -230,7 +236,7 @@ public sealed partial class HomefrontWindowSectionViewModel : RunWindowSection
 
         CompletedWaveCount = count;
         _isOutcomeSetByHand = true;
-        _NoteChangeByHand();
+        _ = _NoteChangeByHandAsync();
     }
 
     /// <summary>A click is stored the moment it is made (I1, SetRunAttendanceCommand): never held here until a bundle
@@ -240,13 +246,40 @@ public sealed partial class HomefrontWindowSectionViewModel : RunWindowSection
     // list it wrote was worked out before that click, and must not mark the click as written.
     private int _handChangeCount;
 
-    private void _NoteChangeByHand()
+    private async Task _NoteChangeByHandAsync()
     {
         _handChangeCount++;
         _isChangedByHand = true;
         _changedSinceUtc ??= _nowUtc;
+        // _WriteUnderGateAsync silently drops any write, forced included, until _own is loaded and _stored has been
+        // read once (ET-287, ET-375). Both used to finish inline by the time a real click could ever happen; no
+        // longer guaranteed off the UI thread, so a forced write reads them itself here — straight off the store,
+        // not through _LoadOwnAsync/_ReadStoredIfDueAsync's own "already running, skip" guards, which a tick's own
+        // unawaited attempt may still be holding without this call having any way to wait on that one instead.
+        if (!_isOwnLoaded)
+        {
+            _own = await Task.Run(() => AttendanceRoster.OwnCharacterIdsAsync(Context.Services));
+            _isOwnLoaded = true;
+        }
+        if (_storedReadAtUtc is null && Context.RunId is { } runId && Context.Services.GetService<CqrsDispatcher>() is not null)
+        {
+            string? groupCode = Context.GroupCode;
+            Result<RunAttendanceDecision?> read = await Task.Run(async () =>
+            {
+                using IServiceScope scope = Context.Services.CreateScope();
+                return await scope.ServiceProvider.GetRequiredService<CqrsDispatcher>()
+                    .Query(new GetRunAttendanceQuery(groupCode, runId));
+            });
+            if (read.IsSuccess)
+            {
+                _stored = read.Value;
+                _storedReadAtUtc = _nowUtc;
+                if (_stored is { } stored && stored.SetAtUtc > _lastSetAtUtc)
+                    _lastSetAtUtc = stored.SetAtUtc;
+            }
+        }
         _Rebuild(_nowUtc);
-        _ = _WriteIfDueAsync(_nowUtc, isForced: true);
+        await _WriteIfDueAsync(_nowUtc, isForced: true);
     }
 
     /// <summary>What the pilot typed over the table's figure for <paramref name="characterId"/>, or null when they
@@ -351,7 +384,7 @@ public sealed partial class HomefrontWindowSectionViewModel : RunWindowSection
             return;
 
         NotOnRosterCount = count;
-        _NoteChangeByHand();
+        _ = _NoteChangeByHandAsync();
     }
 
     // ── Who decides ─────────────────────────────────────────────────────────────────────────────────
@@ -710,7 +743,7 @@ public sealed partial class HomefrontWindowSectionViewModel : RunWindowSection
         else
             _overrides[row.CharacterId] = row.IsInSite;
 
-        _NoteChangeByHand();
+        _ = _NoteChangeByHandAsync();
     }
 
     /// <summary>A figure typed over the table's on a Local row (ET-271) — written onto that character's own run, and
