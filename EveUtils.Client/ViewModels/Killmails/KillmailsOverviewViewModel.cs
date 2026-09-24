@@ -49,6 +49,7 @@ namespace EveUtils.Client.ViewModels.Killmails;
 public sealed partial class KillmailsOverviewViewModel : ViewModelBase, IRefreshableModule
 {
     private readonly CqrsDispatcher _dispatcher;
+    private readonly IDialogService _dialogs;
     private readonly IServiceProvider _services;
     private readonly Func<int, string, Task> _allowScope;
     private readonly ISdeAccessor _sde;
@@ -67,10 +68,11 @@ public sealed partial class KillmailsOverviewViewModel : ViewModelBase, IRefresh
     /// finishes was superseded by a later character switch and its result is thrown away instead of applied.</summary>
     private int _readVersion;
 
-    public KillmailsOverviewViewModel(CqrsDispatcher dispatcher, IServiceProvider services,
+    public KillmailsOverviewViewModel(CqrsDispatcher dispatcher, IDialogService dialogs, IServiceProvider services,
         IReadOnlyList<Character> characters, Func<int, string, Task> allowScope)
     {
         _dispatcher = dispatcher;
+        _dialogs = dialogs;
         _services = services;
         _allowScope = allowScope;
         _sde = services.GetRequiredService<ISdeAccessor>();
@@ -353,9 +355,14 @@ public sealed partial class KillmailsOverviewViewModel : ViewModelBase, IRefresh
         _ => "NPC"
     };
 
-    // ET-333 hands in the real delegate that opens the killmail detail dialog; until then the row's OpenCommand is a
-    // no-op, the same seam ActivityOverviewRowViewModel._openDetail gives RUNS before its own detail screen existed.
-    private static Task _OpenDetailAsync(KillmailRowViewModel row) => Task.CompletedTask;
+    // A row is the way into ET-333's detail screen — the same seam RunsOverviewViewModel._OpenDetailAsync opens
+    // ACTIVITY from. The screen reads itself once it is routed (moduleId dedupes a mail opened twice), so nothing is
+    // fetched here.
+    private Task _OpenDetailAsync(KillmailRowViewModel row)
+    {
+        _dialogs.ShowKillmailDetail(new KillmailDetailViewModel(_dispatcher, _dialogs, _services, row.CharacterId, row.KillmailId));
+        return Task.CompletedTask;
+    }
 
     private void _RefreshTotals()
     {

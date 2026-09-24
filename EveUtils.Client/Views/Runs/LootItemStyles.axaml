@@ -90,6 +90,37 @@
         <Setter Property="Foreground" Value="{StaticResource MagentaBrush}"/>
     </Style>
 
+    <!-- ── Killmail badges (ET-333) ── DESTROYED/DROPPED on a FIT item line, TOP DAMAGE/YOU on an ATTACKERS row
+         (FINAL BLOW reuses Border.badge.role above). -->
+    <Style Selector="Border.badge.destroyed">
+        <Setter Property="Background" Value="#14EF5A5A"/>
+        <Setter Property="BorderBrush" Value="#66EF5A5A"/>
+    </Style>
+    <Style Selector="Border.badge.destroyed > TextBlock">
+        <Setter Property="Foreground" Value="{StaticResource RedBrush}"/>
+    </Style>
+    <Style Selector="Border.badge.dropped">
+        <Setter Property="Background" Value="#144ADE80"/>
+        <Setter Property="BorderBrush" Value="#664ADE80"/>
+    </Style>
+    <Style Selector="Border.badge.dropped > TextBlock">
+        <Setter Property="Foreground" Value="{StaticResource GreenBrush}"/>
+    </Style>
+    <Style Selector="Border.badge.top">
+        <Setter Property="Background" Value="#14F5B042"/>
+        <Setter Property="BorderBrush" Value="#66F5B042"/>
+    </Style>
+    <Style Selector="Border.badge.top > TextBlock">
+        <Setter Property="Foreground" Value="{StaticResource ValueBrush}"/>
+    </Style>
+    <Style Selector="Border.badge.me">
+        <Setter Property="Background" Value="#1AF5B042"/>
+        <Setter Property="BorderBrush" Value="#77F5B042"/>
+    </Style>
+    <Style Selector="Border.badge.me > TextBlock">
+        <Setter Property="Foreground" Value="{StaticResource ValueBrush}"/>
+    </Style>
+
     <!-- ── Per character ── the name and subtotal heading every block, LOOT's and CONSUMABLES' alike. -->
     <Style Selector="TextBlock.charname">
         <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>

@@ -17,6 +17,11 @@ release notes, not this file.
 
 ## [Unreleased]
 
+- **Added: opening a killmail shows its full detail.** Double-click a row in KILLMAILS, or press OPEN KILLMAIL on a
+  linked loss, to see the victim, the fit split into what was destroyed and what dropped, every attacker with their
+  ship, weapon, damage and share, and the total value at today's prices. OPEN FIT reconstructs the fit as it was flown
+  and opens it read-only in FIT DETAIL, the same way a fleet composition's fit does. A linked loss shows the run it
+  belongs to with OPEN RUN, LINK TO OTHER RUN and UNLINK; a kill says plainly that kills are not linked to runs.
 - **Added: a KILLMAILS window with your own kills and losses.** Reached from the rail like RUNS, it can dock as a tab
   or float as its own window. Pick a character, filter to All, Kills, Losses or Not linked to a run, or search by
   ship, pilot or system; totals show kills, losses, ISK destroyed, ISK lost and efficiency. Mails are grouped per day,

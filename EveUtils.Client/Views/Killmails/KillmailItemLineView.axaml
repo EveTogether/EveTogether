@@ -1,0 +1,36 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vk="using:EveUtils.Client.ViewModels.Killmails"
+             x:Class="EveUtils.Client.Views.Killmails.KillmailItemLineView"
+             x:DataType="vk:KillmailDetailItemRowViewModel">
+
+    <!-- One FIT-section item line (ET-333): the ActivityLootLineView look (icon, name, quantity, value), with a
+         DESTROYED/DROPPED badge instead of SPENT/EXCLUDED. Styles: LootItemStyles.axaml. -->
+    <UserControl.Styles>
+        <StyleInclude Source="avares://EveUtils.Client/Views/Runs/LootItemStyles.axaml"/>
+    </UserControl.Styles>
+
+    <Border Classes="itemrow detailrow" Classes.top="{Binding IsTopValue}">
+        <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="6">
+            <Border Classes="icontile">
+                <TextBlock Text="{Binding Initial}" FontSize="10" FontWeight="SemiBold"
+                           Foreground="{DynamicResource AccentBrightBrush}"
+                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6"
+                        VerticalAlignment="Center" ClipToBounds="True">
+                <TextBlock Classes="itemname" Text="{Binding Name}"/>
+                <TextBlock Classes="meta" Text="{Binding MetaHint}"
+                           IsVisible="{Binding MetaHint, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+                <Border Classes="badge destroyed" IsVisible="{Binding IsDestroyed}">
+                    <TextBlock Text="DESTROYED"/>
+                </Border>
+                <Border Classes="badge dropped" IsVisible="{Binding !IsDestroyed}">
+                    <TextBlock Text="DROPPED"/>
+                </Border>
+            </StackPanel>
+            <TextBlock Grid.Column="2" Classes="money" MinWidth="44" Text="{Binding QuantityText}"/>
+            <TextBlock Grid.Column="3" Classes="money" MinWidth="104" Text="{Binding ValueText}"/>
+        </Grid>
+    </Border>
+</UserControl>
