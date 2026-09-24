@@ -177,7 +177,7 @@ public class FleetMemberAvailabilityTests
         await new SetFleetMemberAvailabilityCommandHandler(repo).Handle(
             new SetFleetMemberAvailabilityCommand(kaskaId, FleetMemberAvailability.SignedOff, "can't make it", Kaska), ct);
 
-        var result = await new StartFleetCommandHandler(repo, harness).Handle(new StartFleetCommand(fleetId, Owner), ct);
+        var result = await new StartFleetCommandHandler(repo, harness, new InProcessEventBus()).Handle(new StartFleetCommand(fleetId, Owner), ct);
 
         Assert.True(result.IsSuccess);
         // Only Tessa is notified: the creator is skipped because they pressed start, the external has no inbox,
@@ -201,7 +201,7 @@ public class FleetMemberAvailabilityTests
         await handler.Handle(new SetFleetMemberAvailabilityCommand(kaskaId, FleetMemberAvailability.SignedOff, "can't make it", Kaska), ct);
         await handler.Handle(new SetFleetMemberAvailabilityCommand(tessaId, FleetMemberAvailability.Available, null, Tessa), ct);
 
-        await new StartFleetCommandHandler(repo, harness).Handle(new StartFleetCommand(fleetId, Owner), ct);
+        await new StartFleetCommandHandler(repo, harness, new InProcessEventBus()).Handle(new StartFleetCommand(fleetId, Owner), ct);
 
         var kaska = await repo.GetMemberAsync(kaskaId, ct);
         Assert.Equal(FleetMemberAvailability.NotSet, kaska!.Availability);
@@ -223,7 +223,7 @@ public class FleetMemberAvailabilityTests
         await new SetFleetMemberAvailabilityCommandHandler(repo).Handle(
             new SetFleetMemberAvailabilityCommand(kaskaId, FleetMemberAvailability.SignedOff, null, Kaska), ct);
 
-        await new StartFleetCommandHandler(repo, harness).Handle(new StartFleetCommand(fleetId, Owner), ct);
+        await new StartFleetCommandHandler(repo, harness, new InProcessEventBus()).Handle(new StartFleetCommand(fleetId, Owner), ct);
 
         Assert.True(await repo.IsMemberAsync(fleetId, Kaska, ct));
     }

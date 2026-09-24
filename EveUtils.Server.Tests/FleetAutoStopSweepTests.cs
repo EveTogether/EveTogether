@@ -65,7 +65,7 @@ public class FleetAutoStopSweepTests
             {
                 case StopFleetCommand stop:
                     Stops.Add(stop);
-                    var handler = new StopFleetCommandHandler(repository, this);
+                    var handler = new StopFleetCommandHandler(repository, this, new InProcessEventBus());
                     return (TResult)(object)await handler.Handle(stop, cancellationToken);
                 case EnqueueMessageCommand message:
                     Messages.Add(message);

@@ -1,12 +1,15 @@
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Messaging;
+using EveUtils.Shared.Modules.Fleet.Dtos;
 using EveUtils.Shared.Modules.Fleet.Entities;
+using EveUtils.Shared.Modules.Fleet.Enums;
+using EveUtils.Shared.Modules.Fleet.Events;
 using EveUtils.Shared.Modules.Fleet.Repositories;
 using FleetEntity = EveUtils.Shared.Modules.Fleet.Entities.Fleet;
 
 namespace EveUtils.Shared.Modules.Fleet.Commands;
 
-internal sealed class CreateFleetCommandHandler(IFleetRepository repository)
+internal sealed class CreateFleetCommandHandler(IFleetRepository repository, IEventBus eventBus)
     : ICommandHandler<CreateFleetCommand, Result<long>>
 {
     public async Task<Result<long>> Handle(CreateFleetCommand command, CancellationToken cancellationToken = default)
@@ -47,6 +50,8 @@ internal sealed class CreateFleetCommandHandler(IFleetRepository repository)
         var wingId = await repository.AddWingAsync(new FleetWing { FleetId = id, Name = "Wing 1" }, cancellationToken);
         await repository.AddSquadAsync(new FleetSquad { WingId = wingId, Name = "Squad 1" }, cancellationToken);
 
+        await eventBus.PublishAsync(
+            new FleetChangedEvent(new FleetChangePayload(id, FleetChangeKind.Created)), EventTarget.Local, cancellationToken);
         return Result<long>.Success(id);
     }
 }

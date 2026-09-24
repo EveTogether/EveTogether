@@ -72,6 +72,7 @@ public sealed partial class FleetRosterViewModel : ObservableObject, IDisposable
     // already showing. Matched on identity, never on value: two changes that describe the same pilot are still two
     // pieces of news, and only the one this window raised itself may be skipped.
     private readonly List<FleetRosterChange> _ownAnnouncements = [];
+    private readonly OwnFleetActions _ownActions = new();
 
     // The can-fly verdict per member id, recomputed each reload from the member's assigned fit + cached skills.
     private IReadOnlyDictionary<long, MemberSkillBadge> _skillBadges = new Dictionary<long, MemberSkillBadge>();
@@ -207,7 +208,7 @@ public sealed partial class FleetRosterViewModel : ObservableObject, IDisposable
             return;
         }
 
-        if (change.FleetId == _fleet.Id)
+        if (change.FleetId == _fleet.Id && !_ownActions.Covers(change.FleetId))
             _ = ReloadAsync();
     }
 
@@ -1442,7 +1443,7 @@ public sealed partial class FleetRosterViewModel : ObservableObject, IDisposable
         if (choice == FleetStartChoice.Cancel)
             return;
 
-        var started = await _fleets.StartFleetAsync(_fleet.Id);
+        var started = await _ownActions.RunAsync(_fleet.Id, () => _fleets.StartFleetAsync(_fleet.Id));
         if (!started.Ok)
         {
             StatusMessage = $"Start failed: {started.Message}";
@@ -1558,7 +1559,7 @@ public sealed partial class FleetRosterViewModel : ObservableObject, IDisposable
 
     private async Task StopFleetAsync()
     {
-        var stopped = await _fleets.StopFleetAsync(_fleet.Id);
+        var stopped = await _ownActions.RunAsync(_fleet.Id, () => _fleets.StopFleetAsync(_fleet.Id));
         if (stopped.Ok)
         {
             UpdateActivationLabel(FleetActivation.Forming);
@@ -1583,7 +1584,7 @@ public sealed partial class FleetRosterViewModel : ObservableObject, IDisposable
     /// </summary>
     private async Task ConcludeFleetAsync()
     {
-        var concluded = await _fleets.ConcludeFleetAsync(_fleet.Id);
+        var concluded = await _ownActions.RunAsync(_fleet.Id, () => _fleets.ConcludeFleetAsync(_fleet.Id));
         if (concluded.Ok)
         {
             UpdateActivationLabel(FleetActivation.Concluded);
