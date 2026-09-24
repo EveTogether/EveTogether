@@ -1,14 +1,20 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
+using EveUtils.Client.Fleet;
 using EveUtils.Client.Formatting;
+using EveUtils.Client.Killmails;
 using EveUtils.Shared.Messaging;
+using EveUtils.Shared.Modules.Esi;
 using EveUtils.Shared.Modules.Killmails;
 using EveUtils.Shared.Modules.Killmails.Dtos;
 using EveUtils.Shared.Modules.Killmails.Entities;
 using EveUtils.Shared.Modules.Killmails.Queries;
+using EveUtils.Shared.Modules.Killmails.Repositories;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Runs.Isk;
+using EveUtils.Shared.Modules.Settings.Repositories;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace EveUtils.Client.ViewModels.Runs.Sections;
 
@@ -23,6 +29,11 @@ public sealed partial class LossDetailSectionViewModel(RunDetailSectionServices 
     [ObservableProperty] private string? _emptyText;
 
     private bool _hasLoss;
+
+    // Built once, from whatever RunDetailSectionServices.Services can resolve — a section built without an
+    // IServiceProvider (or the tests that pass every dependency as null) falls back to the SDE-only names below.
+    private KillmailNames? _names;
+    private bool _namesBuilt;
 
     // From the stored breakdown rather than the losses read below: the screen places its sections before that read,
     // and a linked loss always leaves a SHIP LOSS share, priced or not.
@@ -43,6 +54,21 @@ public sealed partial class LossDetailSectionViewModel(RunDetailSectionServices 
         Result<IReadOnlyList<RunLossDto>> read = await services.Dispatcher.Query(
             new GetRunLossesQuery([.. detail.Runs.Select(run => run.RunId)]), cancellationToken);
         IReadOnlyList<RunLossDto> losses = read.IsSuccess && read.Value is { } value ? value : [];
+
+        if (!_namesBuilt)
+        {
+            _names = _BuildNames();
+            _namesBuilt = true;
+        }
+
+        if (_names is { } names)
+        {
+            await names.HydrateAsync(
+                [.. losses.Select(loss => loss.FinalBlow?.CharacterId).OfType<int>()],
+                [.. losses.Select(loss => loss.FinalBlow?.CorporationId).OfType<int>()],
+                [],
+                cancellationToken);
+        }
 
         Losses.Clear();
         foreach (RunLossDto loss in losses)
@@ -77,14 +103,15 @@ public sealed partial class LossDetailSectionViewModel(RunDetailSectionServices 
         _ => "the only run of this pilot at that time, place and hull"
     };
 
-    // The one place a final blow is named. ponytail: a player shows as an id until ET-336's KillmailNames is wired in
-    // here with one HydrateAsync per read; NPC corporations and factions already come from the SDE.
+    // The one place a final blow is named: a player through KillmailNames (ET-336, hydrated above), an NPC
+    // corporation or faction from the SDE — the same split KillmailsOverviewViewModel draws (ET-332).
     private string _FinalBlowText(KillmailFinalBlowDto finalBlow)
     {
         string who = finalBlow switch
         {
-            { CharacterId: { } character } => $"character {character}",
-            { CorporationId: { } corporation } => services.Sde?.GetNpcCorporationName(corporation) ?? $"corporation {corporation}",
+            { CharacterId: { } character } => _names?.NameOf(character) ?? $"character {character}",
+            { CorporationId: { } corporation } =>
+                _names?.NameOf(corporation) ?? services.Sde?.GetNpcCorporationName(corporation) ?? $"corporation {corporation}",
             { FactionId: { } faction } => services.Sde?.GetFactionName(faction) ?? $"faction {faction}",
             _ => "unknown"
         };
@@ -92,4 +119,27 @@ public sealed partial class LossDetailSectionViewModel(RunDetailSectionServices 
     }
 
     private string _TypeName(int typeId) => services.Sde?.GetType(typeId)?.Name ?? $"type {typeId}";
+
+    // Every dependency here is optional, like the rest of this section (RunDetailSectionServices' own rule): missing
+    // any one of them means no live player-name resolution, not a crash — _FinalBlowText falls back to the bare id.
+    private KillmailNames? _BuildNames()
+    {
+        if (services.Services is not { } provider || services.Sde is not { } sde)
+        {
+            return null;
+        }
+
+        IEsiAffiliationResolver? affiliation = provider.GetService<IEsiAffiliationResolver>();
+        IKillmailEntityNameRepository? repository = provider.GetService<IKillmailEntityNameRepository>();
+        ISettingRepository? settings = provider.GetService<ISettingRepository>();
+        if (affiliation is null || repository is null || settings is null)
+        {
+            return null;
+        }
+
+        Dictionary<int, string> ownNames = (services.OwnCharacterIds ?? new HashSet<long>())
+            .ToDictionary(id => (int)id, id => services.NameOf?.Invoke(id) ?? id.ToString());
+        return new KillmailNames(ownNames, provider.GetService<IExternalCharacterLookup>(), affiliation, sde, repository,
+            settings, provider.GetService<TimeProvider>() ?? TimeProvider.System);
+    }
 }

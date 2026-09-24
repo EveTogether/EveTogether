@@ -1,0 +1,57 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vk="using:EveUtils.Client.ViewModels.Killmails"
+             x:Class="EveUtils.Client.Views.Killmails.KillmailRowView"
+             x:DataType="vk:KillmailRowViewModel">
+
+    <!-- One killmail as the KILLMAILS overview lists it (ET-332): the RUNS row grid (ActivityRowView.axaml,
+         18,40,18,*,84,100,24) widened in the fifth column for a pilot's name instead of a crew stack. Kill/loss and
+         ISK sign each draw as two overlapping TextBlocks rather than a new style class, so this row needs nothing
+         from RunsWindow.axaml beyond the shared row styles (rowtime/rowsite/rowline/rowfigure) StyleInclude already
+         brings in. -->
+    <Border Height="36" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource DividerBrush}">
+        <Panel>
+            <Border Classes="rowspine"/>
+            <Button Classes="activityrow" Command="{Binding OpenCommand}">
+                <Grid Margin="22,0,14,0" ColumnDefinitions="18,40,18,*,150,100,24" ColumnSpacing="8">
+                    <TextBlock Grid.Column="1" Classes="rowtime" Text="{Binding TimeText}"/>
+
+                    <TextBlock Grid.Column="2" HorizontalAlignment="Center" VerticalAlignment="Center"
+                               IsVisible="{Binding !IsLoss}" Foreground="{StaticResource GreenBrush}" Text="{Binding KindGlyph}"/>
+                    <TextBlock Grid.Column="2" HorizontalAlignment="Center" VerticalAlignment="Center"
+                               IsVisible="{Binding IsLoss}" Foreground="{StaticResource RedBrush}" Text="{Binding KindGlyph}"/>
+
+                    <StackPanel Grid.Column="3" VerticalAlignment="Center" Spacing="1">
+                        <TextBlock Classes="rowsite" Text="{Binding ShipText}"/>
+                        <DockPanel Height="15">
+                            <Border DockPanel.Dock="Left" Classes="chip dim" Margin="0,0,7,0" IsVisible="{Binding IsAbyssal}">
+                                <TextBlock Text="ABYSSAL"/>
+                            </Border>
+                            <TextBlock DockPanel.Dock="Left" Classes="rowline" Text="{Binding SystemLineText}"
+                                       ToolTip.Tip="{Binding SecurityText}"/>
+                            <Border DockPanel.Dock="Left" Classes="chip warn" Margin="7,0,0,0" IsVisible="{Binding ShowNotLinkedChip}">
+                                <TextBlock Text="{Binding NotLinkedChipText}"/>
+                            </Border>
+                            <Border DockPanel.Dock="Left" Classes="chip dim" Margin="7,0,0,0" IsVisible="{Binding ShowLinkedChip}">
+                                <TextBlock Text="LINKED"/>
+                            </Border>
+                            <TextBlock DockPanel.Dock="Left" Classes="rowline" Margin="7,0,0,0" Text="{Binding AttackerCountText}"/>
+                        </DockPanel>
+                    </StackPanel>
+
+                    <TextBlock Grid.Column="4" Classes="rowline" HorizontalAlignment="Right" VerticalAlignment="Center"
+                               TextTrimming="CharacterEllipsis" Text="{Binding CounterpartyName}"/>
+
+                    <TextBlock Grid.Column="5" Classes="rowfigure" VerticalAlignment="Center"
+                               IsVisible="{Binding !IsLoss}" Text="{Binding IskText}"/>
+                    <TextBlock Grid.Column="5" Classes="rowfigure" VerticalAlignment="Center"
+                               IsVisible="{Binding IsLoss}" Foreground="{StaticResource RedBrush}" Text="{Binding IskText}"/>
+
+                    <TextBlock Grid.Column="6" HorizontalAlignment="Center" VerticalAlignment="Center"
+                               Foreground="{StaticResource TextDimBrush}" IsVisible="{Binding ShowLinkedChip}"
+                               Text="&#x26d3;" ToolTip.Tip="Linked to a run"/>
+                </Grid>
+            </Button>
+        </Panel>
+    </Border>
+</UserControl>

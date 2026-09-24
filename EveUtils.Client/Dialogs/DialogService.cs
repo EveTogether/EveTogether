@@ -10,6 +10,7 @@ using EveUtils.Client.Runs;
 using EveUtils.Client.ViewModels;
 using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Client.ViewModels.FitBrowser;
+using EveUtils.Client.ViewModels.Killmails;
 using EveUtils.Client.ViewModels.Runs;
 using EveUtils.Client.Views;
 using EveUtils.Shared.Modules.Esi;
@@ -522,6 +523,13 @@ public sealed class DialogService : IDialogService, ISingletonService
         _Observe(viewModel.LoadAsync(), "this screen could not be read");
         return Route(new RunsWindow(viewModel), "RUNS", "runs", "runs", MaterialIconKind.RocketLaunchOutline)
             as RunsOverviewViewModel ?? viewModel;
+    }
+
+    public KillmailsOverviewViewModel ShowKillmails(KillmailsOverviewViewModel viewModel)
+    {
+        _Observe(viewModel.LoadAsync(), "this screen could not be read");
+        return Route(new KillmailsWindow(viewModel), "KILLMAILS", "killmails", "killmails", MaterialIconKind.SkullOutline)
+            as KillmailsOverviewViewModel ?? viewModel;
     }
 
     /// <summary>A modal dialog rather than a docked module (ET-163 nazorg): filling in a run is a moment, not a
