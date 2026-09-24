@@ -46,6 +46,8 @@ release notes, not this file.
 - **Fixed: a fit's stats no longer count a ship skill your character has not trained as level I.** With a
   character's own skills selected, an untrained hull skill still gave its first level of bonus (a Ferox without Caldari
   Battlecruiser showed 304.8 instead of 290.3 DPS); it now gives none, the same as a skill at level 0.
+- **Fixed: the installed Windows app now has its icon.** The EVE Together badge was missing from the executable, so
+  the desktop shortcut, taskbar and Start menu entry showed a generic blank icon.
 - **Added: you can now remove a character.** Until now a character you had added stayed in the list for good. Its
   settings have a Remove character button at the bottom: two clicks and it is decoupled from every server, its EVE
   sign-in is revoked at CCP, and its skills, implants, killmails, messages, cached metrics and tokens are deleted from

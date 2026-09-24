@@ -75,6 +75,10 @@ jobs:
           $exe = Join-Path $env:OUTPUT_DIR 'EveUtils.Client.exe'
           if (Test-Path $exe) { Rename-Item $exe "$env:APP_NAME.exe" }
 
+      - name: Verify the app icon is embedded
+        shell: pwsh
+        run: pwsh -File scripts/verify-app-icon.ps1 -Exe (Join-Path $env:OUTPUT_DIR "$env:APP_NAME.exe")
+
       - name: Install vpk
         shell: bash
         run: dotnet tool install -g vpk --version ${{ env.VPK_VERSION }}
