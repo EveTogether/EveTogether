@@ -13,6 +13,21 @@ public interface IServerAuthRepository
 
     Task<SyncedCharacter> UpsertSyncedAsync(int esiCharacterId, string characterName, EncryptedToken refreshToken, IReadOnlyList<string>? grantedScopes = null, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<SyncedCharacter>> ListSyncedAsync(CancellationToken cancellationToken = default);
+    /// <summary>The characters that still have at least one session — the only ones whose server token is worth keeping fresh.</summary>
+    Task<IReadOnlyList<SyncedCharacter>> ListSyncedWithSessionsAsync(CancellationToken cancellationToken = default);
+    /// <summary>
+    /// Stores a refreshed token on a character that still exists. Unlike <see cref="UpsertSyncedAsync"/> it never creates
+    /// the row: false means the character was deleted while the refresh was in flight, and nothing was written back.
+    /// </summary>
+    Task<bool> UpdateSyncedTokenAsync(int esiCharacterId, string characterName, EncryptedToken refreshToken, IReadOnlyList<string> grantedScopes, CancellationToken cancellationToken = default);
+    /// <summary>
+    /// Deletes the character when it has no session left and returns the row as it was, so its token can be revoked at
+    /// CCP. Null when it still has one (another machine is coupled) or is already gone. The check and the delete are one
+    /// statement, so a session issued in between keeps the character.
+    /// </summary>
+    Task<SyncedCharacter?> DeleteSyncedIfWithoutSessionAsync(int syncedCharacterId, CancellationToken cancellationToken = default);
+    /// <summary>Deletes every character without a session, as <see cref="DeleteSyncedIfWithoutSessionAsync"/> does for one.</summary>
+    Task<IReadOnlyList<SyncedCharacter>> DeleteSyncedWithoutSessionAsync(CancellationToken cancellationToken = default);
     Task RecordRefreshFailureAsync(int esiCharacterId, DateTimeOffset failedAt, int failureCount, CancellationToken cancellationToken = default);
 
     Task AddSessionAsync(ServerSession session, CancellationToken cancellationToken = default);

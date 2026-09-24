@@ -97,6 +97,62 @@ internal sealed class ServerAuthRepository(IDbContextFactory<SharedDbContext> co
         return await db.Set<SyncedCharacter>().AsNoTracking().OrderBy(c => c.CharacterName).ToListAsync(cancellationToken);
     }
 
+    public async Task<IReadOnlyList<SyncedCharacter>> ListSyncedWithSessionsAsync(CancellationToken cancellationToken = default)
+    {
+        await using var db = await contextFactory.CreateDbContextAsync(cancellationToken);
+        return await db.Set<SyncedCharacter>().AsNoTracking()
+            .Where(c => db.Set<ServerSession>().Any(s => s.SyncedCharacterId == c.Id))
+            .OrderBy(c => c.CharacterName)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<bool> UpdateSyncedTokenAsync(int esiCharacterId, string characterName, EncryptedToken refreshToken, IReadOnlyList<string> grantedScopes, CancellationToken cancellationToken = default)
+    {
+        await using var db = await contextFactory.CreateDbContextAsync(cancellationToken);
+        var scopesJson = System.Text.Json.JsonSerializer.Serialize(grantedScopes);
+        var now = DateTimeOffset.UtcNow;
+        var updated = await db.Set<SyncedCharacter>()
+            .Where(c => c.EsiCharacterId == esiCharacterId)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(c => c.CharacterName, characterName)
+                .SetProperty(c => c.RefreshTokenCipher, refreshToken.Cipher)
+                .SetProperty(c => c.RefreshTokenNonce, refreshToken.Nonce)
+                .SetProperty(c => c.RefreshTokenTag, refreshToken.Tag)
+                .SetProperty(c => c.GrantedScopesJson, scopesJson)
+                .SetProperty(c => c.LastRefreshedAt, now)
+                .SetProperty(c => c.LastFailedAt, (DateTimeOffset?)null)
+                .SetProperty(c => c.FailureCount, 0), cancellationToken);
+        return updated > 0;
+    }
+
+    public async Task<SyncedCharacter?> DeleteSyncedIfWithoutSessionAsync(int syncedCharacterId, CancellationToken cancellationToken = default)
+    {
+        await using var db = await contextFactory.CreateDbContextAsync(cancellationToken);
+        var character = await db.Set<SyncedCharacter>().AsNoTracking().FirstOrDefaultAsync(c => c.Id == syncedCharacterId, cancellationToken);
+        if (character is null)
+            return null;
+        return await _DeleteIfWithoutSessionAsync(db, character, cancellationToken) ? character : null;
+    }
+
+    public async Task<IReadOnlyList<SyncedCharacter>> DeleteSyncedWithoutSessionAsync(CancellationToken cancellationToken = default)
+    {
+        await using var db = await contextFactory.CreateDbContextAsync(cancellationToken);
+        var candidates = await db.Set<SyncedCharacter>().AsNoTracking()
+            .Where(c => !db.Set<ServerSession>().Any(s => s.SyncedCharacterId == c.Id))
+            .ToListAsync(cancellationToken);
+
+        List<SyncedCharacter> deleted = [];
+        foreach (var candidate in candidates)
+            if (await _DeleteIfWithoutSessionAsync(db, candidate, cancellationToken))
+                deleted.Add(candidate);
+        return deleted;
+    }
+
+    private static async Task<bool> _DeleteIfWithoutSessionAsync(SharedDbContext db, SyncedCharacter character, CancellationToken cancellationToken) =>
+        await db.Set<SyncedCharacter>()
+            .Where(c => c.Id == character.Id && !db.Set<ServerSession>().Any(s => s.SyncedCharacterId == c.Id))
+            .ExecuteDeleteAsync(cancellationToken) > 0;
+
     public async Task RecordRefreshFailureAsync(int esiCharacterId, DateTimeOffset failedAt, int failureCount, CancellationToken cancellationToken = default)
     {
         await using var db = await contextFactory.CreateDbContextAsync(cancellationToken);

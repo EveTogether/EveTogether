@@ -1,3 +1,4 @@
+using EveUtils.Server.Auth;
 using EveUtils.Shared.Modules.Esi;
 using EveUtils.Shared.Modules.ServerAuth.Entities;
 using EveUtils.Shared.Modules.ServerAuth.Repositories;
@@ -53,12 +54,16 @@ public sealed class ServerTokenRefreshService(
         var repository = scope.ServiceProvider.GetRequiredService<IServerAuthRepository>();
         var protector = scope.ServiceProvider.GetRequiredService<ITokenProtector>();
 
-        var synced = await repository.ListSyncedAsync(cancellationToken);
+        var releaser = scope.ServiceProvider.GetRequiredService<SyncedCharacterReleaser>();
+
+        // A character without a session has nobody left to serve; keeping its token fresh is what kept a decoupled
+        // player's grant alive on the server (ET-344).
+        var synced = await repository.ListSyncedWithSessionsAsync(cancellationToken);
         foreach (var character in synced)
         {
             if (IsDevSeed(character, protector)) continue;
             if (ShouldRefresh(character))
-                await TryRefreshAsync(character, repository, protector, cancellationToken);
+                await TryRefreshAsync(character, repository, protector, releaser, cancellationToken);
         }
     }
 
@@ -66,6 +71,7 @@ public sealed class ServerTokenRefreshService(
         SyncedCharacter character,
         IServerAuthRepository repository,
         ITokenProtector protector,
+        SyncedCharacterReleaser releaser,
         CancellationToken cancellationToken)
     {
         try
@@ -79,13 +85,24 @@ public sealed class ServerTokenRefreshService(
             var identity = await jwtValidator
                 .ValidateAsync(tokens.AccessToken, esiOptions.ClientId, cancellationToken);
 
-            var newEncrypted = protector.Protect(tokens.RefreshToken ?? refreshToken);
-            await repository.UpsertSyncedAsync(
+            var latestRefreshToken = tokens.RefreshToken ?? refreshToken;
+            var stored = await repository.UpdateSyncedTokenAsync(
                 character.EsiCharacterId,
                 character.CharacterName,
-                newEncrypted,
+                protector.Protect(latestRefreshToken),
                 identity.GrantedScopes,
                 cancellationToken);
+
+            if (!stored)
+            {
+                // Released while this refresh was in flight. Writing back would bring the row and its token back, and
+                // CCP may have handed out a new refresh token that nothing holds a record of any more.
+                logger.LogInformation(
+                    "Synced character {Name} ({Id}) was released during its token refresh; nothing was stored.",
+                    character.CharacterName, character.EsiCharacterId);
+                await releaser.RevokeAtCcpAsync(latestRefreshToken, character.CharacterName, character.EsiCharacterId, cancellationToken);
+                return;
+            }
 
             logger.LogInformation(
                 "Server token refreshed for {Name} ({Id}).",
