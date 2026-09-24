@@ -20,6 +20,7 @@ using EveUtils.Client.ViewModels.FitBrowser;
 using EveUtils.Client.ViewModels.Home;
 using EveUtils.Client.ViewModels.Killmails;
 using EveUtils.Client.ViewModels.Runs;
+using EveUtils.Client.ViewModels.Skills;
 using EveUtils.Client.Esi;
 using EveUtils.Client.EveSettings;
 using EveUtils.Client.Platform;
@@ -129,6 +130,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         ["app-logs"] = "logs",
         ["settings"] = "settings",
         ["runs"] = "runs",
+        ["skills"] = "skills",
     };
 
     private const int RecentlyClosedModulesCapacity = 10;
@@ -270,6 +272,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
     public bool IsInboxActive => ActiveModule == "inbox";
     public bool IsLogsActive => ActiveModule == "logs";
     public bool IsCompositionsActive => ActiveModule == "compositions";
+    public bool IsSkillsActive => ActiveModule == "skills";
     public bool IsToolsActive => ActiveModule == "tools";
 
     /// <summary>Lit for the runs overview and for a single activity's detail alike: both are tagged "runs", and a
@@ -319,6 +322,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         OnPropertyChanged(nameof(IsInboxActive));
         OnPropertyChanged(nameof(IsLogsActive));
         OnPropertyChanged(nameof(IsCompositionsActive));
+        OnPropertyChanged(nameof(IsSkillsActive));
         OnPropertyChanged(nameof(IsToolsActive));
         OnPropertyChanged(nameof(IsRunsActive));
     }
@@ -344,6 +348,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
             case "runs": await OpenRunsAsync(); break;
             case "runs-start": await OpenManualRunStartAsync(); break;
             case "killmails": await OpenKillmailsAsync(); break;
+            case "skills": await OpenSkillsAsync(); break;
             case "inbox": OpenInbox(); break;
             case "logs": OpenLogs(); break;
             case "settings": await OpenSettings(); break;
@@ -445,7 +450,8 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
             OpenCharacterDpsOverlay,
             (characterId, scope) => ReAuthenticateAsync(characterId, [scope]),
             characterId => ReAuthenticateAsync(characterId),
-            () => ImportFittingsCommand.ExecuteAsync(null)), Characters, Fittings, Inbox);
+            () => ImportFittingsCommand.ExecuteAsync(null),
+            characterId => _ = OpenSkillsAsync(characterId)), Characters, Fittings, Inbox);
 
         SetupLocalFittingsTab();
 
@@ -635,6 +641,22 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         if (_services is null || _dialogs is null)
             return;
         _dialogs.ShowCompositions(new CompositionsViewModel(_services));
+    }
+
+    /// <summary>Opens the SKILLS module (ET-16) as a hosted module, like RUNS. Launched from the rail (no specific
+    /// character — SkillsWindowViewModel falls back to the last one used) or from a pilot row on HOME (this
+    /// character, AC2). If SKILLS is already open, re-opening it re-selects the running instance (ET-48 pattern) —
+    /// <paramref name="startingCharacterId"/> is then applied to that instance directly, so a pilot row still lands
+    /// on the right character instead of being silently ignored.</summary>
+    private async Task OpenSkillsAsync(int? startingCharacterId = null)
+    {
+        if (_services is null || _dialogs is null)
+            return;
+
+        var fresh = new SkillsWindowViewModel(_services, startingCharacterId);
+        var shown = _dialogs.ShowSkills(fresh);
+        if (startingCharacterId is { } characterId && !ReferenceEquals(shown, fresh))
+            await shown.GoToCharacterAsync(characterId);
     }
 
     /// <summary>Opens the message inbox — non-modal so deliveries keep arriving while it is open.</summary>

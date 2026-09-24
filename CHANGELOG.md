@@ -37,6 +37,16 @@ entries under `[Unreleased]` below that were not there yet at the previous night
   server is never asked for its fleets there, so those fleets used to be missing without a word. The fleet list now
   shows one line per server, such as "Catbank is not connected to <server> — its fleets are not shown here", naming
   every character in that position. The line disappears as soon as they are all connected.
+- **Added: SKILLS module.** A new rail entry between COMP and TOOLS reads one character's skills at a time, picked
+  from a header combobox (the same row CharacterPickerWindow uses, with a search field once you have 9 or more
+  characters). CATALOGUE lists every skill group with how many of its skills are injected, and — per group — each
+  skill's level pips plus either the trained mark, its queued target level, or the plain time to the next level, with
+  the SDE's own description and a per-level SP/time breakdown in a 400 px detail pane. TRAINING QUEUE shows only the
+  rows still ahead of you (a row ESI already finished never lingers), with the queue-left duration read straight from
+  ESI's own dates, and a paused queue (training stopped) shows ≈ estimates instead of invented dates. The header's
+  total skill points come from ESI's own `total_sp` rather than a sum over trained levels. PLANS and OPTIMISE are
+  placeholder tabs for now. CharacterPickerWindow (ET-184) itself gained the same search field, from the row
+  component the two now share.
 - **Changed: compositions update live in every open window.** Creating, editing or deleting a composition now refreshes
   the COMPOSITIONS list straight away, for your local library and for a server's shared one — including changes other
   pilots make. An open composition editor quietly picks up changes made elsewhere as long as you have not edited

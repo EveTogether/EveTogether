@@ -1,0 +1,137 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vs="using:EveUtils.Client.ViewModels.Skills"
+             xmlns:sk="using:EveUtils.Client.Views.Skills"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="1200" d:DesignHeight="700"
+             x:Class="EveUtils.Client.Views.Skills.SkillsQueuePane"
+             x:DataType="vs:SkillsQueueViewModel">
+
+    <UserControl.Styles>
+        <Style Selector="TextBlock.qstatlabel">
+            <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+            <Setter Property="FontSize" Value="10"/>
+            <Setter Property="LetterSpacing" Value="1.2"/>
+        </Style>
+        <Style Selector="TextBlock.qstatvalue">
+            <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+
+        <Style Selector="ListBox.queuelist">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+        </Style>
+        <Style Selector="ListBox.queuelist ListBoxItem">
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+        </Style>
+        <Style Selector="ListBox.queuelist ListBoxItem:selected /template/ ContentPresenter">
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+        <Style Selector="Border.queuerow">
+            <Setter Property="Padding" Value="8,5"/>
+            <Setter Property="BorderThickness" Value="0,0,0,1"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}"/>
+        </Style>
+        <Style Selector="Border.queuerow.selected">
+            <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
+        </Style>
+        <Style Selector="Border.queuerow:pointerover">
+            <Setter Property="Background" Value="{DynamicResource BgRowHoverBrush}"/>
+        </Style>
+        <Style Selector="TextBlock.qpips">
+            <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="TextBlock.qcell">
+            <Setter Property="FontSize" Value="10.5"/>
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+            <Setter Property="TextAlignment" Value="Right"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="Border.trainingbadge">
+            <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
+            <Setter Property="Padding" Value="5,1"/>
+        </Style>
+        <Style Selector="Border.trainingbadge > TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+            <Setter Property="FontSize" Value="9"/>
+            <Setter Property="LetterSpacing" Value="1"/>
+        </Style>
+    </UserControl.Styles>
+
+    <Grid ColumnDefinitions="*,400">
+        <DockPanel Grid.Column="0">
+            <!-- REMAP/OPTIMISE are S6 (ET-354) — the summary stops at what TRAINING QUEUE itself owns. -->
+            <Border DockPanel.Dock="Top" Padding="14,10" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource BorderBrush}">
+                <Grid ColumnDefinitions="*,*,*,*">
+                    <StackPanel Grid.Column="0" Spacing="2">
+                        <TextBlock Classes="qstatlabel" Text="TRAINING NOW"/>
+                        <TextBlock Classes="qstatvalue" Text="{Binding TrainingNowText}"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" Spacing="2">
+                        <TextBlock Classes="qstatlabel" Text="QUEUE LEFT"/>
+                        <TextBlock Classes="qstatvalue" Text="{Binding QueueLeftText}"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="2" Spacing="2">
+                        <TextBlock Classes="qstatlabel" Text="SKILLS"/>
+                        <TextBlock Classes="qstatvalue" Text="{Binding SkillCountText}"/>
+                        <TextBlock Classes="hint" Text="{Binding DistinctSkillsText}"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="3" Spacing="2">
+                        <TextBlock Classes="qstatlabel" Text="SP IN QUEUE"/>
+                        <TextBlock Classes="qstatvalue" Text="{Binding SpInQueueText}"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <TextBlock DockPanel.Dock="Top" Classes="hint" Margin="14,10" Text="Nothing queued for this character."
+                       IsVisible="{Binding !HasQueue}"/>
+
+            <ScrollViewer IsVisible="{Binding HasQueue}">
+                <ListBox Classes="queuelist" ItemsSource="{Binding Rows}"
+                         SelectedItem="{Binding SelectedRow, Mode=TwoWay}">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate x:DataType="vs:SkillQueueRowViewModel">
+                            <Border Classes="queuerow" Classes.selected="{Binding IsSelected}">
+                                <Grid ColumnDefinitions="30,70,*,110,84,120,84" ColumnSpacing="8">
+                                    <TextBlock Grid.Column="0" Classes="qcell" Text="{Binding Position}"/>
+                                    <TextBlock Grid.Column="1" Classes="qpips" Text="{Binding PipsText}"/>
+                                    <TextBlock Grid.Column="2" FontSize="11.5" TextTrimming="CharacterEllipsis"
+                                               Foreground="{StaticResource TextBrightBrush}" Text="{Binding SkillText}"/>
+                                    <TextBlock Grid.Column="3" Classes="qcell" TextAlignment="Left"
+                                               Foreground="{StaticResource TextDimBrush}" Text="{Binding GroupName}"/>
+                                    <TextBlock Grid.Column="4" Classes="qcell" Text="{Binding ThisLevelText}"/>
+                                    <TextBlock Grid.Column="5" Classes="qcell" Text="{Binding EndsText}"/>
+                                    <Panel Grid.Column="6">
+                                        <Border Classes="trainingbadge" HorizontalAlignment="Right" IsVisible="{Binding IsTraining}">
+                                            <TextBlock Text="TRAINING"/>
+                                        </Border>
+                                        <TextBlock Classes="qcell" Text="{Binding FromNowText}" IsVisible="{Binding !IsTraining}"/>
+                                    </Panel>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </ScrollViewer>
+        </DockPanel>
+
+        <!-- The 400 px pane, same as CATALOGUE (ET-16). -->
+        <Border Grid.Column="1" BorderThickness="1,0,0,0" BorderBrush="{DynamicResource BorderBrush}">
+            <Panel>
+                <TextBlock Classes="hint" Margin="14" TextWrapping="Wrap" HorizontalAlignment="Center"
+                           VerticalAlignment="Center" Text="Pick a row to see its detail."
+                           IsVisible="{Binding SelectedDetail, Converter={x:Static ObjectConverters.IsNull}}"/>
+                <Panel IsVisible="{Binding SelectedDetail, Converter={x:Static ObjectConverters.IsNotNull}}">
+                    <sk:SkillDetailPane DataContext="{Binding SelectedDetail}"/>
+                </Panel>
+            </Panel>
+        </Border>
+    </Grid>
+</UserControl>

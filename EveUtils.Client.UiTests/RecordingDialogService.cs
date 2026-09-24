@@ -10,6 +10,7 @@ using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Client.ViewModels.FitBrowser;
 using EveUtils.Client.ViewModels.Killmails;
 using EveUtils.Client.ViewModels.Runs;
+using EveUtils.Client.ViewModels.Skills;
 using EveUtils.Shared.Modules.Esi;
 using EveUtils.Shared.Modules.Fittings.Dtos;
 
@@ -359,6 +360,12 @@ public sealed class RecordingDialogService : IDialogService
     public KillmailsOverviewViewModel? LastKillmails { get; private set; }
 
     public KillmailsOverviewViewModel ShowKillmails(KillmailsOverviewViewModel viewModel) => LastKillmails = viewModel;
+
+    /// <summary>The SKILLS module the module launcher asked for, or null — a hook to drive it without standing up
+    /// the real window (ET-16).</summary>
+    public SkillsWindowViewModel? LastSkills { get; private set; }
+
+    public SkillsWindowViewModel ShowSkills(SkillsWindowViewModel viewModel) => LastSkills = viewModel;
 
     /// <summary>The killmail detail screen the shell was asked to open, or null — a hook to drive it without
     /// standing up the real window (ET-333).</summary>

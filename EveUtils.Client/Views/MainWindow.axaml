@@ -254,6 +254,13 @@
                                 <TextBlock Text="COMP" FontSize="9" LetterSpacing="1" HorizontalAlignment="Center"/>
                             </StackPanel>
                         </Button>
+                        <Button Classes="railitem" Classes.active="{Binding IsSkillsActive}"
+                                Command="{Binding LaunchModuleCommand}" CommandParameter="skills" ToolTip.Tip="Skills">
+                            <StackPanel HorizontalAlignment="Center" Spacing="5">
+                                <mi:MaterialIcon Classes="rail" Kind="SchoolOutline"/>
+                                <TextBlock Text="SKILLS" FontSize="9" LetterSpacing="1" HorizontalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
                         <!-- Tools: a list of stand-alone tools, not one button that happens to have a menu. EVE
                              Settings Sync is the first; more hang under the same flyout as they arrive. -->
                         <Button Classes="railitem" Classes.active="{Binding IsToolsActive}" x:Name="ToolsRailItem"

@@ -1,0 +1,91 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vs="using:EveUtils.Client.ViewModels.Skills"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="400" d:DesignHeight="600"
+             x:Class="EveUtils.Client.Views.Skills.SkillDetailPane"
+             x:DataType="vs:SkillDetailViewModel">
+
+    <!-- The 400 px pane beside CATALOGUE and TRAINING QUEUE alike (ET-16), styled the same as RunsActivityPane:
+         its own styles, since it renders inside two different tab hosts. -->
+    <UserControl.Styles>
+        <Style Selector="TextBlock.label">
+            <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+            <Setter Property="FontSize" Value="10"/>
+            <Setter Property="LetterSpacing" Value="1.4"/>
+        </Style>
+        <Style Selector="TextBlock.pipsbig">
+            <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="LetterSpacing" Value="2"/>
+        </Style>
+        <Style Selector="Border.dsec">
+            <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}"/>
+            <Setter Property="BorderThickness" Value="0,0,0,1"/>
+            <Setter Property="Padding" Value="0,10"/>
+        </Style>
+        <Style Selector="Grid.levelrow TextBlock">
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="TextBlock.trainedmark">
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+        </Style>
+    </UserControl.Styles>
+
+    <Panel>
+        <!-- Nothing picked has no placeholder here: the host tab shows its own "pick a skill" text instead and
+             keeps this control out of the tree entirely (same rule RunsActivityPane's own doc comment states). -->
+        <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+            <StackPanel Margin="14,12">
+                <TextBlock Classes="label" Text="{Binding GroupName}"/>
+                <TextBlock FontSize="15" FontWeight="Medium" Margin="0,3,0,0"
+                           Foreground="{StaticResource TextBrightBrush}" Text="{Binding Name}"/>
+                <TextBlock Classes="hint" Margin="0,2,0,0" Text="{Binding AttributesText}"/>
+
+                <Border Classes="dsec" Margin="0,10,0,0">
+                    <StackPanel Spacing="4">
+                        <TextBlock Classes="pipsbig" Text="{Binding PipsText}"/>
+                        <TextBlock Classes="hint" Text="{Binding CurrentLevel, StringFormat='Level {0}'}"/>
+                    </StackPanel>
+                </Border>
+
+                <Border Classes="dsec" IsVisible="{Binding HasDescription}">
+                    <StackPanel Spacing="4">
+                        <TextBlock Classes="label" Text="DESCRIPTION"/>
+                        <TextBlock TextWrapping="Wrap" FontSize="11.5" Foreground="{StaticResource TextBrush}"
+                                   Text="{Binding Description}"/>
+                    </StackPanel>
+                </Border>
+
+                <Border Classes="dsec">
+                    <StackPanel Spacing="6">
+                        <TextBlock Classes="label" Text="LEVELS"/>
+                        <ItemsControl ItemsSource="{Binding Levels}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vs:SkillLevelRowViewModel">
+                                    <Grid Classes="levelrow" Margin="0,3" ColumnDefinitions="20,70,*">
+                                        <TextBlock Grid.Column="0" Classes.trainedmark="{Binding IsTrained}"
+                                                   Text="{Binding RomanLevel}"/>
+                                        <TextBlock Grid.Column="1" Foreground="{StaticResource TextDimBrush}"
+                                                   Text="{Binding TotalSp, StringFormat='{}{0:N0}'}"/>
+                                        <TextBlock Grid.Column="2" Text="{Binding StatusText}"
+                                                   Classes.trainedmark="{Binding IsTrained}"/>
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+
+                <StackPanel Spacing="4" Margin="0,10,0,0">
+                    <TextBlock Classes="label" Text="TRAINING RATE"/>
+                    <TextBlock FontSize="11.5" Foreground="{StaticResource TextBrush}" Text="{Binding TrainingRateText}"/>
+                </StackPanel>
+            </StackPanel>
+        </ScrollViewer>
+    </Panel>
+</UserControl>
