@@ -277,7 +277,7 @@ public sealed class MiningWindowSectionViewModel : RunWindowSection
     {
         if (_isPricing
             || Context.Services.GetService<ISdeAccessor>() is not { IsAvailable: true } sde
-            || Context.Services.GetService<IAppraisalProvider>() is not { } appraisal)
+            || Context.Services.GetService<IAppraisalProviderSelector>() is not { } appraisalSelector)
             return;
 
         if (_pricesAskedAtUtc is { } askedAt && (_nowUtc - askedAt >= PriceRetryInterval || _nowUtc < askedAt))
@@ -299,7 +299,7 @@ public sealed class MiningWindowSectionViewModel : RunWindowSection
         _pricesAskedAtUtc = _nowUtc;
         try
         {
-            Result<AppraisalOutcome> valued = await Task.Run(() => appraisal.AppraiseAsync(
+            Result<AppraisalOutcome> valued = await Task.Run(() => appraisalSelector.AppraiseWithFallbackAsync(
                 [.. typeIds.Select(id => new AppraisalLine(id, string.Empty, 1))]));
             if (!valued.IsSuccess)
                 return;

@@ -10,8 +10,11 @@ using CommunityToolkit.Mvvm.Input;
 using EveUtils.Client.Clipboard;
 using EveUtils.Client.Dialogs;
 using EveUtils.Client.Formatting;
+using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Modules.Market.Services;
+using EveUtils.Shared.Modules.Market.Services.Implementations;
 using EveUtils.Shared.Modules.Sde;
+using EveUtils.Shared.Modules.Settings.Commands;
 
 namespace EveUtils.Client.ViewModels;
 
@@ -30,22 +33,106 @@ public partial class AppraisalViewModel : ViewModelBase
 
     private readonly ISdeAccessor _sde;
     private readonly IDialogService? _dialogs;
+    private readonly IEveWorkbenchKeyStore? _eveWorkbenchKeyStore;
+    private readonly IDispatcher? _dispatcher;
 
-    public AppraisalViewModel(IEnumerable<IAppraisalProvider> providers, ISdeAccessor sde, IDialogService? dialogs = null)
+    /// <param name="selector">The user's persisted provider choice (ET-364). Applied once it resolves, after the
+    /// synchronous default below — a selector cannot be awaited from a constructor, and the tool opens with
+    /// something selected either way rather than empty while that read is in flight.</param>
+    /// <param name="eveWorkbenchKeyStore">Lets the EVE Workbench personal access token be set from this tool's own
+    /// screen. Null hides that field — the same "no service, no action" rule every other optional dependency here
+    /// follows.</param>
+    /// <param name="dispatcher">Lets <see cref="MakeSelectionDefaultCommand"/> persist a pick as the default for
+    /// every other consumer; null hides that command, leaving the picker session-only as it always was.</param>
+    public AppraisalViewModel(IEnumerable<IAppraisalProvider> providers, ISdeAccessor sde, IDialogService? dialogs = null,
+        IAppraisalProviderSelector? selector = null, IEveWorkbenchKeyStore? eveWorkbenchKeyStore = null,
+        IDispatcher? dispatcher = null)
     {
         _sde = sde;
         _dialogs = dialogs;
+        _eveWorkbenchKeyStore = eveWorkbenchKeyStore;
+        _dispatcher = dispatcher;
         Providers = [.. providers.OrderBy(provider => provider.DisplayName, StringComparer.Ordinal)];
         SelectedProvider = Providers.FirstOrDefault();
+        ShowEveWorkbenchToken = eveWorkbenchKeyStore is not null
+            && Providers.Any(provider => provider.Id == EveWorkbenchAppraisalProvider.ProviderId);
+        if (selector is not null)
+            _ = _ApplyPersistedSelectionAsync(selector);
+        if (eveWorkbenchKeyStore is not null)
+            _ = _RefreshEveWorkbenchTokenStatusAsync(eveWorkbenchKeyStore);
+    }
+
+    private async Task _ApplyPersistedSelectionAsync(IAppraisalProviderSelector selector)
+    {
+        if (await selector.SelectAsync() is { } chosen && Providers.FirstOrDefault(p => p.Id == chosen.Id) is { } match)
+            SelectedProvider = match;
     }
 
     /// <summary>The price sources that are installed. The picker for them stays hidden while there is only one —
     /// this is the only place in the tool that knows providers can be plural.</summary>
     public IReadOnlyList<IAppraisalProvider> Providers { get; }
 
-    [ObservableProperty] private IAppraisalProvider? _selectedProvider;
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(MakeSelectionDefaultCommand))]
+    private IAppraisalProvider? _selectedProvider;
 
     public bool ShowProviderPicker => Providers.Count > 1;
+
+    [ObservableProperty] private string _defaultProviderStatus = string.Empty;
+
+    private bool CanMakeSelectionDefault => _dispatcher is not null && SelectedProvider is not null;
+
+    /// <summary>Persists the picked provider as the default every other consumer reads through
+    /// <see cref="IAppraisalProviderSelector"/> (ET-364) — the picker above stays a session override on its own;
+    /// this is the explicit, awaited action that makes a pick outlive this window.</summary>
+    [RelayCommand(CanExecute = nameof(CanMakeSelectionDefault))]
+    private async Task MakeSelectionDefaultAsync()
+    {
+        if (_dispatcher is null || SelectedProvider is not { } provider) return;
+        await _dispatcher.Send(new SetSettingCommand(AppraisalProviderSelector.SettingKey, provider.Id));
+        DefaultProviderStatus = $"{provider.DisplayName} is now the default for every screen.";
+    }
+
+    /// <summary>Whether the EVE Workbench token field is offered — only once that provider is installed and a key
+    /// store was given to write it to.</summary>
+    public bool ShowEveWorkbenchToken { get; }
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(SaveEveWorkbenchTokenCommand))]
+    private string _eveWorkbenchTokenInput = string.Empty;
+
+    [ObservableProperty] private string _eveWorkbenchTokenStatus = string.Empty;
+
+    private async Task _RefreshEveWorkbenchTokenStatusAsync(IEveWorkbenchKeyStore keyStore)
+    {
+        var hasToken = !string.IsNullOrEmpty(await keyStore.GetTokenAsync());
+        EveWorkbenchTokenStatus = hasToken
+            ? "A personal access token is configured."
+            : "No personal access token is configured — EVE Workbench falls back to the ESI average.";
+    }
+
+    private bool CanSaveEveWorkbenchToken => !string.IsNullOrWhiteSpace(EveWorkbenchTokenInput);
+
+    /// <summary>Encrypts and stores the pasted token (ET-364), then clears the box — the plaintext is never kept on
+    /// screen once it has been saved, matching the "never shown" rule the token itself is under.</summary>
+    [RelayCommand(CanExecute = nameof(CanSaveEveWorkbenchToken))]
+    private async Task SaveEveWorkbenchTokenAsync()
+    {
+        if (_eveWorkbenchKeyStore is null) return;
+        await _eveWorkbenchKeyStore.SetTokenAsync(EveWorkbenchTokenInput);
+        EveWorkbenchTokenInput = string.Empty;
+        await _RefreshEveWorkbenchTokenStatusAsync(_eveWorkbenchKeyStore);
+    }
+
+    /// <summary>Deletes the stored token (ET-364) — EVE Workbench then answers "no token configured" until a new
+    /// one is saved, and the automatic pricing paths fall back to the ESI average.</summary>
+    [RelayCommand]
+    private async Task ClearEveWorkbenchTokenAsync()
+    {
+        if (_eveWorkbenchKeyStore is null) return;
+        await _eveWorkbenchKeyStore.SetTokenAsync(null);
+        await _RefreshEveWorkbenchTokenStatusAsync(_eveWorkbenchKeyStore);
+    }
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(AppraiseCommand))]

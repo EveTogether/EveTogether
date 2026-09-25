@@ -13,7 +13,10 @@ namespace EveUtils.Shared.Modules.Market.Services.Implementations;
 /// </summary>
 internal sealed class MarketPriceAppraisalProvider(IMarketPriceRepository prices) : IAppraisalProvider, ISingletonService
 {
-    public string Id => "market-prices";
+    /// <summary>The default provider <see cref="IAppraisalProviderSelector"/> falls back to.</summary>
+    public const string ProviderId = "market-prices";
+
+    public string Id => ProviderId;
 
     public string DisplayName => "ESI average price";
 

@@ -696,7 +696,10 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         _dialogs.ShowAppraisal(new AppraisalViewModel(
             _services.GetRequiredService<IEnumerable<IAppraisalProvider>>(),
             _services.GetRequiredService<ISdeAccessor>(),
-            _dialogs));
+            _dialogs,
+            _services.GetService<IAppraisalProviderSelector>(),
+            _services.GetService<IEveWorkbenchKeyStore>(),
+            _services.GetService<IDispatcher>()));
     }
 
     /// <summary>Opens the runs screen (ET-161) — the only place in the app a saved run can be read back, and the

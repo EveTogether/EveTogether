@@ -12,6 +12,7 @@ using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Runs.Isk;
 using EveUtils.Shared.Modules.Sde;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace EveUtils.Client.ViewModels.Runs.Sections;
 
@@ -71,10 +72,15 @@ public sealed partial class MiningDetailSectionViewModel(RunDetailSectionService
 
         Dictionary<int, double> prices = new();
         int[] typeIds = [.. resolved.Select(r => r.Ore?.TypeId).OfType<int>().Distinct()];
-        if (typeIds.Length > 0 && services.Appraisal is { } appraisal)
+        // ET-364: the selector (the user's chosen provider, with a fallback to ESI average) takes priority;
+        // services.Appraisal only still matters for a caller that never set Services.
+        IAppraisalProviderSelector? selector = services.Services?.GetService<IAppraisalProviderSelector>();
+        if (typeIds.Length > 0 && (selector is not null || services.Appraisal is not null))
         {
-            Result<AppraisalOutcome> valued = await appraisal.AppraiseAsync(
-                [.. typeIds.Select(id => new AppraisalLine(id, string.Empty, 1))], cancellationToken);
+            List<AppraisalLine> lines = [.. typeIds.Select(id => new AppraisalLine(id, string.Empty, 1))];
+            Result<AppraisalOutcome> valued = selector is not null
+                ? await selector.AppraiseWithFallbackAsync(lines, cancellationToken)
+                : await services.Appraisal!.AppraiseAsync(lines, cancellationToken);
             if (valued.IsSuccess)
                 foreach (AppraisalRow row in valued.Value!.Rows)
                     if (row.Price?.Estimate is { } estimate)
