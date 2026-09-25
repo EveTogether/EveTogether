@@ -356,6 +356,12 @@ public sealed class DialogService : IDialogService, ISingletonService
         return await _Over(new FitEsfImportWindow()).ShowDialog<string?>(_owner);
     }
 
+    public async Task<string?> ImportSkillPlanTextAsync(string? initialText = null)
+    {
+        if (_owner is null) return null;
+        return await _Over(new SkillPlanTextImportWindow(initialText)).ShowDialog<string?>(_owner);
+    }
+
     public async Task<FitMetadataDraft?> EditFitMetadataAsync(FitMetadataDraft current)
     {
         if (_owner is null) return null;

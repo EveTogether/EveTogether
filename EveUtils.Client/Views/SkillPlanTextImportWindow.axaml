@@ -1,0 +1,32 @@
+<v:ChromedWindow xmlns="https://github.com/avaloniaui" xmlns:v="using:EveUtils.Client.Views"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="480" d:DesignHeight="400"
+        x:Class="EveUtils.Client.Views.SkillPlanTextImportWindow"
+        Width="480" Height="420" MinWidth="360" MinHeight="280"
+        WindowStartupLocation="CenterOwner"
+        Title="Import Skill Plan">
+
+    <DockPanel Margin="16">
+        <StackPanel DockPanel.Dock="Top" Spacing="4" Margin="0,0,0,10">
+            <TextBlock Text="Import from text" FontWeight="Bold" FontSize="14"
+                       Foreground="{StaticResource TextBrightBrush}"/>
+            <TextBlock Text="One &quot;Skill N&quot; per line, level as a roman or arabic numeral. Skill names are resolved from the local SDE."
+                       FontSize="11" Foreground="{DynamicResource TextAccentBrush}" TextWrapping="Wrap"/>
+        </StackPanel>
+
+        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right"
+                    Spacing="8" Margin="0,12,0,0">
+            <Button Content="Cancel" Click="OnCancel" MinWidth="80"/>
+            <Button Content="Import" Click="OnImport" Classes="accent" MinWidth="80"/>
+        </StackPanel>
+
+        <TextBox x:Name="TextBoxInput" AcceptsReturn="True" AcceptsTab="False"
+                 TextWrapping="NoWrap" FontFamily="Cascadia Code,Consolas,Menlo,monospace"
+                 VerticalContentAlignment="Top" VerticalAlignment="Stretch"
+                 ScrollViewer.VerticalScrollBarVisibility="Auto"
+                 ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                 PlaceholderText="Shield Command 1&#x0a;Shield Command 2&#x0a;…"/>
+    </DockPanel>
+</v:ChromedWindow>

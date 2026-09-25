@@ -139,6 +139,11 @@ public sealed class RecordingDialogService : IDialogService
     }
     public Task<string?> ImportFitEsfLinkAsync() => throw NotUsed();
 
+    /// <summary>What IMPORT FROM TEXT (skill plan, ET-355) returns. Null (the default) stands for the user cancelling it.</summary>
+    public string? ImportSkillPlanTextResult { get; set; }
+
+    public Task<string?> ImportSkillPlanTextAsync(string? initialText = null) => Task.FromResult(ImportSkillPlanTextResult);
+
     /// <summary>Stub for the edit-fit-metadata dialog: set to inspect the prefilled draft and drive the result.
     /// Defaults to returning null (cancel), so a flow that unexpectedly edits doesn't silently mutate.</summary>
     public Func<FitMetadataDraft, Task<FitMetadataDraft?>>? OnEditFitMetadata { get; set; }
