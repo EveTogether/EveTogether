@@ -488,7 +488,12 @@ message FleetCompositionEntryDto {
   optional int32 entry_min_count = 3;
   int32 sort_order = 4;
   FitReferenceDto fit = 5;
+  repeated SkillMinimumDto skill_minimums = 6;   // doctrine skill minimum on top of the fit (ET-353)
 }
+message SkillMinimumDto { int32 skill_type_id = 1; int32 level = 2; }
+// Wrapper so an edit can tell "replace with this list (possibly empty)" from "not sent": a message field has
+// presence, a bare repeated field does not, and an older client's edit must leave the minimums alone.
+message SkillMinimumListDto { repeated SkillMinimumDto items = 1; }
 message FleetCompositionRoleDto {
   int64 id = 1;
   int64 composition_id = 2;
@@ -516,7 +521,7 @@ message EditFleetCompositionRoleRequest { int64 role_id = 1; string role_name = 
 message RemoveFleetCompositionRoleRequest { int64 role_id = 1; }
 message ReorderFleetCompositionRolesRequest { int64 composition_id = 1; repeated int64 ordered_role_ids = 2; }
 
-message AddFleetCompositionEntryRequest { int64 role_id = 1; FitReferenceDto fit = 2; optional int32 entry_min_count = 3; }
-message EditFleetCompositionEntryRequest { int64 entry_id = 1; optional int32 entry_min_count = 2; }
+message AddFleetCompositionEntryRequest { int64 role_id = 1; FitReferenceDto fit = 2; optional int32 entry_min_count = 3; repeated SkillMinimumDto skill_minimums = 4; }
+message EditFleetCompositionEntryRequest { int64 entry_id = 1; optional int32 entry_min_count = 2; optional SkillMinimumListDto skill_minimums = 3; }
 message RemoveFleetCompositionEntryRequest { int64 entry_id = 1; }
 message ReorderFleetCompositionEntriesRequest { int64 role_id = 1; repeated int64 ordered_entry_ids = 2; }

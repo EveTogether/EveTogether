@@ -37,6 +37,8 @@ public interface IFleetCompositionRepository : IFleetCompositionReader
 
     Task<long> AddEntryAsync(FleetCompositionEntry entry, CancellationToken cancellationToken = default);
 
+    /// <summary>Persists an entry's per-fit minimum, sort order and skill minimums (the owned rows are made to match
+    /// <see cref="FleetCompositionEntry.SkillMinimums"/>). The fit snapshot never changes. No-op if it is gone.</summary>
     Task UpdateEntryAsync(FleetCompositionEntry entry, CancellationToken cancellationToken = default);
 
     /// <summary>Removes a single fit-entry by its primary key. No-op if it is gone.</summary>
