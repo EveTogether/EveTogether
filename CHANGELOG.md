@@ -21,6 +21,13 @@ entries under `[Unreleased]` below that were not there yet at the previous night
   PASTE LINK stored the loss but skipped two things the automatic feed always does for it: linking it to the run it
   happened in — so it never counted as FAILED or added to TOTAL ISK — and telling an already open KILLMAILS window
   about it, which only picked up the pasted mail after being reopened. Both now happen exactly like the feed.
+- **Added: PLANS in the SKILLS module.** Build a skill plan for a character from a single skill, from any fit in your
+  local or shared library, or from any published item — prerequisites are added automatically, and levels you have
+  already trained are left off. Order the plan "fly first" (default), "shortest first" or "by attribute"; a
+  prerequisite always trains before the skill that needs it. The total time, an end date and a "✈ flyable after"
+  milestone are shown for the fit that seeded the plan, and a level already in your training queue is marked. COPY AS
+  TEXT and IMPORT FROM TEXT move a plan as plain text (one "Skill N" per line). A plan lives only on this machine and
+  is never sent anywhere.
 - **Added: pasting a killmail's own clipboard text shows it right away, marked provisional.** PASTE LINK in KILLMAILS
   now also accepts the plain "Copy" text from a killmail window, not just a link — useful the moment a kill happens,
   before ESI has it. The row appears immediately, marked "FROM CLIPBOARD · WAITING FOR ESI", with no run link and no
