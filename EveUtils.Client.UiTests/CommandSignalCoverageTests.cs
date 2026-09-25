@@ -26,6 +26,9 @@ using EveUtils.Shared.Modules.Runs.Events;
 using EveUtils.Shared.Modules.Settings.Commands;
 using EveUtils.Shared.Modules.Ships.Commands;
 using EveUtils.Shared.Modules.Ships.Events;
+using EveUtils.Shared.Modules.Skills.Plans.Commands;
+using EveUtils.Shared.Modules.Skills.Plans.Enums;
+using EveUtils.Shared.Modules.Skills.Plans.Events;
 using EveUtils.Shared.Modules.Sync.Commands;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -59,7 +62,8 @@ public sealed class CommandSignalCoverageTests
         ["Fleet.Composition"] = typeof(CompositionChangedEvent),
         ["Fittings"] = typeof(FittingsChangedEvent),
         ["Killmails"] = typeof(KillmailsChangedEvent),
-        ["Ships"] = typeof(ShipAddedEvent)
+        ["Ships"] = typeof(ShipAddedEvent),
+        ["Skills.Plans"] = typeof(SkillPlansChangedEvent)
     };
 
     /// <summary>Commands that change nothing anyone has to hear about, each with the reason. An entry here is a claim a
@@ -539,7 +543,43 @@ public sealed class CommandSignalCoverageTests
 
         [typeof(AddShipCommand)] = (dispatcher, cancellationToken) =>
             Task.FromResult(new Act(async () => await dispatcher.Send(new AddShipCommand("Guardian", "Cruiser", 11_000_000m), cancellationToken),
-                published => published is ShipAddedEvent { Data.Name: "Guardian" }))
+                published => published is ShipAddedEvent { Data.Name: "Guardian" })),
+
+        [typeof(CreateSkillPlanCommand)] = (dispatcher, cancellationToken) => Task.FromResult(new Act(
+            async () => await dispatcher.Send(new CreateSkillPlanCommand(Owner, "Signal plan"), cancellationToken),
+            published => published is SkillPlansChangedEvent { Data: { CharacterId: Owner, Kind: SkillPlansChangeKind.PlanCreated } })),
+
+        [typeof(RenameSkillPlanCommand)] = async (dispatcher, cancellationToken) =>
+        {
+            int planId = await _SkillPlanAsync(dispatcher, cancellationToken);
+            return new Act(() => dispatcher.Send(new RenameSkillPlanCommand(Owner, planId, "Renamed plan"), cancellationToken),
+                published => published is SkillPlansChangedEvent { Data: { CharacterId: Owner, Kind: SkillPlansChangeKind.PlanRenamed } });
+        },
+
+        [typeof(DeleteSkillPlanCommand)] = async (dispatcher, cancellationToken) =>
+        {
+            int planId = await _SkillPlanAsync(dispatcher, cancellationToken);
+            return new Act(() => dispatcher.Send(new DeleteSkillPlanCommand(Owner, planId), cancellationToken),
+                published => published is SkillPlansChangedEvent { Data: { CharacterId: Owner, Kind: SkillPlansChangeKind.PlanDeleted } });
+        },
+
+        [typeof(AddSkillPlanRowsCommand)] = async (dispatcher, cancellationToken) =>
+        {
+            int planId = await _SkillPlanAsync(dispatcher, cancellationToken);
+            return new Act(async () => await dispatcher.Send(new AddSkillPlanRowsCommand(
+                    Owner, planId, SkillPlanRowSource.Skill, null, [new SkillPlanRowDraft(3300, 4, "Signal Skill")]), cancellationToken),
+                published => published is SkillPlansChangedEvent { Data: { CharacterId: Owner, Kind: SkillPlansChangeKind.RowsAdded } });
+        },
+
+        [typeof(RemoveSkillPlanRowCommand)] = async (dispatcher, cancellationToken) =>
+        {
+            int planId = await _SkillPlanAsync(dispatcher, cancellationToken);
+            Result<int> added = await dispatcher.Send(new AddSkillPlanRowsCommand(
+                Owner, planId, SkillPlanRowSource.Skill, null, [new SkillPlanRowDraft(3300, 4, "Signal Skill")]), cancellationToken);
+            Assert.True(added.IsSuccess);
+            return new Act(() => dispatcher.Send(new RemoveSkillPlanRowCommand(Owner, planId, 3300, 4), cancellationToken),
+                published => published is SkillPlansChangedEvent { Data: { CharacterId: Owner, Kind: SkillPlansChangeKind.RowRemoved } });
+        }
     };
 
     public static TheoryData<string> CommandsWithAScenario()
@@ -678,6 +718,13 @@ public sealed class CommandSignalCoverageTests
             RawText = "signal",
             CreatedAtUtc = now
         };
+    }
+
+    private static async Task<int> _SkillPlanAsync(IDispatcher dispatcher, CancellationToken cancellationToken)
+    {
+        Result<int> created = await dispatcher.Send(new CreateSkillPlanCommand(Owner, "Signal plan"), cancellationToken);
+        Assert.True(created.IsSuccess);
+        return created.Value;
     }
 
     private static Predicate<IIntegrationEvent> _NamesComposition(long compositionId) =>
