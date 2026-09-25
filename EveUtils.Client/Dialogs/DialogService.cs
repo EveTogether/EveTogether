@@ -13,7 +13,9 @@ using EveUtils.Client.ViewModels.FitBrowser;
 using EveUtils.Client.ViewModels.Killmails;
 using EveUtils.Client.ViewModels.Runs;
 using EveUtils.Client.ViewModels.Skills;
+using EveUtils.Client.ViewModels.Skills.WhatIf;
 using EveUtils.Client.Views;
+using EveUtils.Client.Views.Skills;
 using EveUtils.Shared.Modules.Esi;
 using EveUtils.Shared.Modules.Fittings.Dtos;
 using EveUtils.Shared.Modules.Fleet.Entities;
@@ -566,6 +568,18 @@ public sealed class DialogService : IDialogService, ISingletonService
         viewModel.CloseRequested += result => tcs.TrySetResult(result);
         var window = new EscalationDialogWindow(viewModel);
         window.Closed += (_, _) => tcs.TrySetResult(false);
+        _Over(window).ShowDialog(_owner);
+        return tcs.Task;
+    }
+
+    public Task ShowSkillPlanShareAsync(SkillPlanShareDialogViewModel viewModel)
+    {
+        if (_owner is null) return Task.CompletedTask;
+
+        var tcs = new TaskCompletionSource();
+        viewModel.CloseRequested += () => tcs.TrySetResult();
+        var window = new SkillPlanShareDialogWindow(viewModel);
+        window.Closed += (_, _) => tcs.TrySetResult();
         _Over(window).ShowDialog(_owner);
         return tcs.Task;
     }

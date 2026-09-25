@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vs="using:EveUtils.Client.ViewModels.Skills.Plans"
+             xmlns:sk="using:EveUtils.Client.Views.Skills"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d" d:DesignWidth="1200" d:DesignHeight="700"
@@ -74,6 +75,12 @@
             <Button Content="COPY AS TEXT" Command="{Binding CopyAsTextCommand}"/>
             <Button Content="IMPORT FROM TEXT" Command="{Binding ImportFromTextCommand}"/>
         </StackPanel>
+
+        <!-- WHAT IF (ET-358) -->
+        <Border DockPanel.Dock="Bottom" Margin="0,10,0,0"
+                IsVisible="{Binding WhatIf, Converter={x:Static ObjectConverters.IsNotNull}}">
+            <sk:SkillsWhatIfPane DataContext="{Binding WhatIf}"/>
+        </Border>
 
         <!-- The row table -->
         <ScrollViewer HorizontalScrollBarVisibility="Disabled">

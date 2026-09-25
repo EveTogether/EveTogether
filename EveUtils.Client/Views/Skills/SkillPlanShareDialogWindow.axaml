@@ -1,0 +1,28 @@
+<v:ChromedWindow xmlns="https://github.com/avaloniaui" xmlns:v="using:EveUtils.Client.Views"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:EveUtils.Client.ViewModels.Skills.WhatIf"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="380"
+        x:Class="EveUtils.Client.Views.Skills.SkillPlanShareDialogWindow"
+        x:DataType="vm:SkillPlanShareDialogViewModel"
+        Width="380" SizeToContent="Height" CanResize="False"
+        WindowStartupLocation="CenterOwner"
+        Title="{Binding PlanName, StringFormat='SHARE {0}'}">
+
+    <StackPanel Margin="16" Spacing="10">
+        <Button HorizontalAlignment="Stretch" Content="COPY AS TEXT" Command="{Binding CopyAsTextCommand}"/>
+        <Button HorizontalAlignment="Stretch" Content="PUT IT IN THE DOCTRINE" Command="{Binding PutInDoctrineCommand}"/>
+
+        <StackPanel Orientation="Horizontal" Spacing="8">
+            <Button HorizontalAlignment="Stretch" Content="EVE WORKBENCH" IsEnabled="{Binding IsEwbEnabled}"/>
+            <TextBlock Classes="hint" VerticalAlignment="Center" Text="{Binding EwbHint}"/>
+        </StackPanel>
+
+        <TextBlock Classes="hint" TextWrapping="Wrap"
+                   IsVisible="{Binding StatusMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                   Text="{Binding StatusMessage}"/>
+
+        <Button HorizontalAlignment="Right" Content="CLOSE" Command="{Binding CloseCommand}"/>
+    </StackPanel>
+</v:ChromedWindow>

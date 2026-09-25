@@ -11,6 +11,7 @@ using CommunityToolkit.Mvvm.Input;
 using EveUtils.Client.Dialogs;
 using EveUtils.Client.Skills;
 using EveUtils.Client.ViewModels.FitBrowser;
+using EveUtils.Client.ViewModels.Skills.WhatIf;
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Modules.Dogma;
 using EveUtils.Shared.Modules.Fittings.Dtos;
@@ -51,6 +52,10 @@ public sealed partial class SkillsPlansViewModel : ObservableObject
     [ObservableProperty] private string _levelsText = "";
     [ObservableProperty] private string _flyableAfterText = "";
     [ObservableProperty] private string? _statusMessage;
+
+    /// <summary>The WHAT IF panel for <see cref="SelectedPlan"/> (ET-358) — null without a plan, a validator or
+    /// dogma access (design-time preview, or a character whose SDE dependencies never loaded).</summary>
+    [ObservableProperty] private SkillsWhatIfViewModel? _whatIf;
 
     public SkillsPlansViewModel(IServiceProvider services, SkillsCharacterSnapshot snapshot, int characterId)
     {
@@ -309,6 +314,7 @@ public sealed partial class SkillsPlansViewModel : ObservableObject
             TotalTimeText = "";
             LevelsText = "";
             FlyableAfterText = "";
+            WhatIf = null;
             return;
         }
 
@@ -360,5 +366,11 @@ public sealed partial class SkillsPlansViewModel : ObservableObject
         TotalTimeText = ordered.Count == 0 ? "Nothing to train" : $"{SkillQueueStanding.Until(cumulative)} · done {_snapshot.Now.Add(cumulative):ddd d MMM HH:mm}";
         LevelsText = $"{ordered.Count} level{(ordered.Count == 1 ? "" : "s")}";
         FlyableAfterText = flyableAfterText ?? "—";
+
+        WhatIf = ordered.Count == 0 ? null : new SkillsWhatIfViewModel(_services, _dialogs, _snapshot, _characterId, plan.Name, ordered, _dogma);
+        if (WhatIf is not null && _validator is not null)
+        {
+            await WhatIf.LoadOtherCharactersAsync(_validator, _dogma, cancellationToken);
+        }
     }
 }

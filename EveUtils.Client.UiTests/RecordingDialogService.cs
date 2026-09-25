@@ -11,6 +11,7 @@ using EveUtils.Client.ViewModels.FitBrowser;
 using EveUtils.Client.ViewModels.Killmails;
 using EveUtils.Client.ViewModels.Runs;
 using EveUtils.Client.ViewModels.Skills;
+using EveUtils.Client.ViewModels.Skills.WhatIf;
 using EveUtils.Shared.Modules.Esi;
 using EveUtils.Shared.Modules.Fittings.Dtos;
 
@@ -475,6 +476,16 @@ public sealed class RecordingDialogService : IDialogService
     public void ShowFleetMetrics(FleetMetricsViewModel viewModel) => OpenedFleetMetrics.Add(viewModel);
     public Task ShowSdeUpdateAsync(SdeProgressViewModel viewModel) => throw NotUsed();
     public void SwitchMode() { }
+
+    /// <summary>The last skill-plan SHARE dialog shown, or null — how a test asserts WHAT IF opened it without a
+    /// real window (ET-358).</summary>
+    public SkillPlanShareDialogViewModel? LastSkillPlanShare { get; private set; }
+
+    public Task ShowSkillPlanShareAsync(SkillPlanShareDialogViewModel viewModel)
+    {
+        LastSkillPlanShare = viewModel;
+        return Task.CompletedTask;
+    }
 
     private static NotSupportedException NotUsed() =>
         new("RecordingDialogService: this dialog is not expected in the fleet request-to-join picker test.");

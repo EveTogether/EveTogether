@@ -43,11 +43,15 @@ public sealed partial class CompositionEditorViewModel : ObservableObject, IDisp
     private readonly long? _compositionId;
     private readonly Guid _newCompositionId = Guid.NewGuid();
     private readonly IDisposable? _changeSubscription;
+    // ET-358 "put it in the doctrine": a plan's target levels, applied to the first entry a fresh editor gets
+    // added through AddFit and cleared right after — nowhere else touches this, so an editor opened the ordinary
+    // way never carries one, and a second (or a batch-picked) fit never repeats the first entry's minimums.
+    private IReadOnlyList<SkillMinimum>? _prefillSkillMinimums;
     private FleetCompositionDetail? _snapshot;
     private bool _isSaving;
 
     private CompositionEditorViewModel(IServiceProvider services, IFleetCompositionClient client, FleetCompositionDetail? snapshot,
-        bool isReadOnly = false)
+        bool isReadOnly = false, string? suggestedName = null, IReadOnlyList<SkillMinimum>? prefillSkillMinimums = null)
     {
         _services = services;
         _client = client;
@@ -57,10 +61,13 @@ public sealed partial class CompositionEditorViewModel : ObservableObject, IDisp
         _validator = services.GetService<IFitValidator>();
         _compositionId = snapshot?.Composition.Id;
         IsReadOnly = isReadOnly;
+        _prefillSkillMinimums = prefillSkillMinimums;
         SkillNames = _LoadSkillNames(services.GetService<ISdeAccessor>());
 
         if (snapshot is not null)
             _Load(snapshot);
+        else if (suggestedName is not null)
+            Name = suggestedName;
 
         Roles.CollectionChanged += _OnRolesChanged;
         _Recompute();
@@ -71,9 +78,14 @@ public sealed partial class CompositionEditorViewModel : ObservableObject, IDisp
 
     public void Dispose() => _changeSubscription?.Dispose();
 
-    /// <summary>A blank editor that creates a new composition through <paramref name="client"/> on save.</summary>
-    public static CompositionEditorViewModel ForNew(IServiceProvider services, IFleetCompositionClient client) =>
-        new(services, client, snapshot: null);
+    /// <summary>A blank editor that creates a new composition through <paramref name="client"/> on save.
+    /// <paramref name="suggestedName"/> and <paramref name="prefillSkillMinimums"/> seed the editor for a caller
+    /// that already knows what it wants in it (ET-358's "put it in the doctrine"): the name box opens filled in,
+    /// and the first fit added through <see cref="AddFitCommand"/> starts with those DOCTRINE MINIMUM rows instead
+    /// of empty ones. Neither is sent anywhere until the pilot presses SAVE.</summary>
+    public static CompositionEditorViewModel ForNew(IServiceProvider services, IFleetCompositionClient client,
+        string? suggestedName = null, IReadOnlyList<SkillMinimum>? prefillSkillMinimums = null) =>
+        new(services, client, snapshot: null, suggestedName: suggestedName, prefillSkillMinimums: prefillSkillMinimums);
 
     /// <summary>An editor pre-filled from an existing composition graph, edited in place on save.</summary>
     public static CompositionEditorViewModel ForExisting(IServiceProvider services, IFleetCompositionClient client, FleetCompositionDetail detail) =>
@@ -147,7 +159,8 @@ public sealed partial class CompositionEditorViewModel : ObservableObject, IDisp
         {
             if (role.Entries.Any(e => string.Equals(e.Fit.ContentHash, fit.ContentHash, StringComparison.OrdinalIgnoreCase)))
                 continue;
-            role.Add(_NewEntry(id: null, fit, entryMinCount: null, skillMinimums: []));
+            role.Add(_NewEntry(id: null, fit, entryMinCount: null, skillMinimums: _prefillSkillMinimums ?? []));
+            _prefillSkillMinimums = null; // only the very first entry added anywhere in this editor gets it
         }
         _Recompute();
     }
