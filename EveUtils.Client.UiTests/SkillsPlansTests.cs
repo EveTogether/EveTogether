@@ -51,8 +51,10 @@ public sealed class SkillsPlansTests
         var result = SkillPlanRowFactory.FromFit(validator, [Ship, Module], trained, "Test Fit");
 
         // A requires level 4 (from B's prerequisite, beating the module's direct 2) — levels 2,3,4 (not 1: already trained).
-        Assert.Equal([(SkillA, 2), (SkillA, 3), (SkillA, 4), (SkillB, 1), (SkillB, 2), (SkillB, 3)],
-            result.Rows.Select(r => (r.SkillTypeId, r.Level)).ToList());
+        // The set, not the sequence: SkillPlanOrdering (tested separately) owns display order, not this expansion step.
+        Assert.Equal(
+            new HashSet<(int, int)> { (SkillA, 2), (SkillA, 3), (SkillA, 4), (SkillB, 1), (SkillB, 2), (SkillB, 3) },
+            result.Rows.Select(r => (r.SkillTypeId, r.Level)).ToHashSet());
         Assert.Null(result.Message);
 
         // A level already trained (1) never appears among the rows — the trained-level filter this test guards.
