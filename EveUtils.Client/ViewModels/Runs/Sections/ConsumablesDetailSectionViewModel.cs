@@ -118,16 +118,20 @@ public sealed partial class ConsumablesDetailSectionViewModel(RunDetailSectionSe
     private async Task _LoadPricesAsync(IEnumerable<int> typeIds, CancellationToken cancellationToken)
     {
         int[] wanted = [.. typeIds.Where(typeId => typeId > 0).Distinct()];
-        // ET-364: the selector (the user's chosen provider, with a fallback to ESI average) takes priority;
-        // services.Appraisal only still matters for a caller that never set Services.
-        IAppraisalProviderSelector? selector = services.Services?.GetService<IAppraisalProviderSelector>();
-        if (wanted.Length == 0 || (selector is null && services.Appraisal is null))
+        if (wanted.Length == 0)
             return;
 
         List<AppraisalLine> lines = [.. wanted.Select(typeId => new AppraisalLine(typeId, string.Empty, 1))];
-        Result<AppraisalOutcome> valued = selector is not null
-            ? await selector.AppraiseWithFallbackAsync(lines, cancellationToken)
-            : await services.Appraisal!.AppraiseAsync(lines, cancellationToken);
+        // ET-364: the selector (the user's chosen provider, with a fallback to ESI average) takes priority;
+        // services.Appraisal only still matters for a caller that never set Services.
+        Result<AppraisalOutcome> valued;
+        if (services.Services?.GetService<IAppraisalProviderSelector>() is { } selector)
+            valued = await selector.AppraiseWithFallbackAsync(lines, cancellationToken);
+        else if (services.Appraisal is { } appraisal)
+            valued = await appraisal.AppraiseAsync(lines, cancellationToken);
+        else
+            return;
+
         if (!valued.IsSuccess || valued.Value is not { } outcome)
             return;
 
