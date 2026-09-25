@@ -17,6 +17,13 @@ public interface IAppraisalProvider
     string DisplayName { get; }
 
     /// <summary>
+    /// Whether this provider can be asked right now — true for every provider that needs no key, false for one
+    /// that does and has none configured (ET-364). <see cref="IAppraisalProviderSelector"/> skips an unavailable
+    /// provider rather than choosing it and then failing.
+    /// </summary>
+    Task<bool> IsAvailableAsync(CancellationToken cancellationToken = default) => Task.FromResult(true);
+
+    /// <summary>
     /// Values every line. Failure is the expected answer when the source has nothing to say at all — an unfilled
     /// price cache, an unreachable service — so the caller can report that rather than a total of zero. A line the
     /// source simply has no price for comes back as a row with no price, not as a failure.

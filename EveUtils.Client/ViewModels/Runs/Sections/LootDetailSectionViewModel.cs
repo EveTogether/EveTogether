@@ -3,8 +3,10 @@ using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using EveUtils.Client.Formatting;
+using EveUtils.Shared.Modules.Market.Services;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Enums;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace EveUtils.Client.ViewModels.Runs.Sections;
 
@@ -19,7 +21,10 @@ public sealed partial class LootDetailSectionViewModel : RunDetailSection
     {
         _services = services;
         LootOverview = new ActivityLootViewModel(
-            () => new RunLootViewModel(services.Dispatcher, services.Appraisal, services.Sde, services.Images),
+            // ET-364: the selector (when the app wired one through Services) picks up the user's chosen provider
+            // fresh each price refresh; services.Appraisal only still matters for callers that never set Services.
+            () => new RunLootViewModel(services.Dispatcher, services.Appraisal, services.Sde, services.Images,
+                services.Services?.GetService<IAppraisalProviderSelector>()),
             services.Portraits);
         LootOverview.LootCorrected += RaiseActivityCorrected;
     }

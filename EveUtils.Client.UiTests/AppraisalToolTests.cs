@@ -414,14 +414,15 @@ public sealed class AppraisalToolTests(ITestOutputHelper output)
     public void ProviderPicker_StaysHiddenWithOneSource_AndAppearsWithASecond()
     {
         using var instance = _NewInstance(_Minerals());
-        var single = _BuildTool(instance);
+        var installed = instance.Services.GetRequiredService<IEnumerable<IAppraisalProvider>>();
+        var marketPrices = installed.Single(provider => provider.Id == "market-prices");
+        var single = new AppraisalViewModel([marketPrices], instance.Services.GetRequiredService<ISdeAccessor>());
 
         Assert.Single(single.Providers);
         Assert.False(single.ShowProviderPicker);
         Assert.Equal("market-prices", single.SelectedProvider!.Id);
 
-        var installed = instance.Services.GetRequiredService<IEnumerable<IAppraisalProvider>>();
-        var both = new AppraisalViewModel([.. installed, new StubProvider()],
+        var both = new AppraisalViewModel([marketPrices, new StubProvider()],
             instance.Services.GetRequiredService<ISdeAccessor>());
 
         Assert.Equal(2, both.Providers.Count);
@@ -501,7 +502,8 @@ public sealed class AppraisalToolTests(ITestOutputHelper output)
 
         var dialogs = (RecordingDialogService)instance.Services.GetRequiredService<IDialogService>();
         Assert.NotNull(dialogs.LastAppraisal);
-        Assert.Single(dialogs.LastAppraisal!.Providers);   // the provider arrived through DI, not through a new-up
+        // The providers arrived through DI, not through a new-up (ET-364 added EVE Workbench as a second one).
+        Assert.Equal(2, dialogs.LastAppraisal!.Providers.Count);
     }
 
     /// <summary>
