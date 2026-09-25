@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using EveUtils.Client.Dialogs;
 using EveUtils.Client.Imaging;
+using EveUtils.Client.Skills;
 using EveUtils.Client.Skills.Plans;
 using EveUtils.Client.ViewModels.Skills.Plans;
 using EveUtils.Shared.Identity;
@@ -15,6 +16,7 @@ using EveUtils.Shared.Modules.Implants.Repositories;
 using EveUtils.Shared.Modules.Sde;
 using EveUtils.Shared.Modules.Settings.Repositories;
 using EveUtils.Shared.Modules.Skills.Entities;
+using EveUtils.Shared.Modules.Skills.Events;
 using EveUtils.Shared.Modules.Skills.Plans.Events;
 using EveUtils.Shared.Modules.Skills.Repositories;
 using Microsoft.Extensions.DependencyInjection;
@@ -47,8 +49,10 @@ public sealed partial class SkillsWindowViewModel : ObservableObject, IRefreshab
     private readonly ICharacterPortraitProvider? _portraits;
     private readonly ILogger<SkillsWindowViewModel>? _logger;
     private readonly SkillPlansChangeFeed? _plansFeed;
+    private readonly SkillsChangeFeed? _skillsFeed;
     private readonly int? _startingCharacterId;
     private IDisposable? _plansFeedSubscription;
+    private IDisposable? _skillsFeedSubscription;
 
     private IReadOnlyList<Character> _characters = [];
     private bool _suppressSelectionApply; // set while _SelectCharacterAsync syncs SelectedCharacterOption back onto itself
@@ -100,11 +104,17 @@ public sealed partial class SkillsWindowViewModel : ObservableObject, IRefreshab
         _portraits = services.GetService<ICharacterPortraitProvider>();
         _logger = services.GetService<ILogger<SkillsWindowViewModel>>();
         _plansFeed = services.GetService<SkillPlansChangeFeed>();
+        _skillsFeed = services.GetService<SkillsChangeFeed>();
         _startingCharacterId = startingCharacterId;
         _plansFeedSubscription = _plansFeed?.Subscribe(_OnPlansChangedAsync);
+        _skillsFeedSubscription = _skillsFeed?.Subscribe(_OnSkillsChangedAsync);
     }
 
-    public void Dispose() => _plansFeedSubscription?.Dispose();
+    public void Dispose()
+    {
+        _plansFeedSubscription?.Dispose();
+        _skillsFeedSubscription?.Dispose();
+    }
 
     // A plan changed on this or another window — reload PLANS only when it is about the character showing right now;
     // a change for a different character updates that character's tab next time it is selected instead (LoadAsync).
@@ -116,6 +126,33 @@ public sealed partial class SkillsWindowViewModel : ObservableObject, IRefreshab
         }
 
         return Task.CompletedTask;
+    }
+
+    // A background skill import (SkillRefreshService's poll, or any other ImportAsync call) landed for the character
+    // this window shows right now — rebuild TRAINING QUEUE, OPTIMISE and the header SP text the way a manual F5
+    // would (ET-387). Deliberately narrower than a full reselect: SkillRefreshService re-imports every registered
+    // character every 120s, so routing this through _SelectCharacterAsync would rebuild CATALOGUE and PLANS on the
+    // same cadence and reset whatever skill or plan the pilot has selected there — an import never touches either.
+    private async Task _OnSkillsChangedAsync(IReadOnlyList<SkillsChangedEvent> events)
+    {
+        if (SelectedCharacterId is not { } current || !events.Any(e => e.Data.CharacterId == current))
+        {
+            return;
+        }
+
+        var snapshot = await _BuildSnapshotAsync(current, CancellationToken.None);
+        var (queue, optimise) = await Task.Run(() =>
+            (new SkillsQueueViewModel(snapshot), new SkillsOptimiseViewModel(snapshot, _dogma)));
+        if (SelectedCharacterId != current)
+        {
+            return; // the pilot switched characters while this reload was in flight — the new selection covers it
+        }
+
+        queue.GoToOptimise = () => SelectedTabIndex = OptimiseTabIndex;
+        queue.RemapLineText = optimise.RemapLineText;
+        Queue = queue;
+        Optimise = optimise;
+        _ApplyTotalSp(snapshot);
     }
 
     public async Task LoadAsync(CancellationToken cancellationToken = default)
@@ -270,18 +307,7 @@ public sealed partial class SkillsWindowViewModel : ObservableObject, IRefreshab
             SelectedCharacterOption = CharacterOptions.FirstOrDefault(o => o.CharacterId == characterId);
             _suppressSelectionApply = false;
 
-            // AC6: straight from ESI total_sp/unallocated_sp — never a sum over trained levels. Null only when this
-            // character's skills have never been imported — a clear placeholder rather than a blank header.
-            if (snapshot.Attributes is { } attrs)
-            {
-                TotalSpText = $"{attrs.TotalSp.ToString("N0", CultureInfo.InvariantCulture)} Total Skill Points";
-                UnallocatedSpText = $"{attrs.UnallocatedSp.ToString("N0", CultureInfo.InvariantCulture)} unallocated skill points";
-            }
-            else
-            {
-                TotalSpText = "Total Skill Points not imported yet";
-                UnallocatedSpText = "";
-            }
+            _ApplyTotalSp(snapshot);
             Catalogue = catalogue;
             Queue = queue;
             Plans = plans;
@@ -304,6 +330,22 @@ public sealed partial class SkillsWindowViewModel : ObservableObject, IRefreshab
         finally
         {
             IsLoading = false;
+        }
+    }
+
+    // AC6: straight from ESI total_sp/unallocated_sp — never a sum over trained levels. Null only when this
+    // character's skills have never been imported — a clear placeholder rather than a blank header.
+    private void _ApplyTotalSp(SkillsCharacterSnapshot snapshot)
+    {
+        if (snapshot.Attributes is { } attrs)
+        {
+            TotalSpText = $"{attrs.TotalSp.ToString("N0", CultureInfo.InvariantCulture)} Total Skill Points";
+            UnallocatedSpText = $"{attrs.UnallocatedSp.ToString("N0", CultureInfo.InvariantCulture)} unallocated skill points";
+        }
+        else
+        {
+            TotalSpText = "Total Skill Points not imported yet";
+            UnallocatedSpText = "";
         }
     }
 

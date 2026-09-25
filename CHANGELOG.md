@@ -23,6 +23,9 @@ entries under `[Unreleased]` below that were not there yet at the previous night
   it is only saved on SAVE. A shared composition carries its minimums to everyone on the server; a local one keeps
   them on this machine. The readiness list in COMP gains a TO MIN column: a character that can fly the fit but is
   still under the minimum shows as "flies", with the training time to reach the minimum.
+- **Fixed: an open SKILLS window now updates on its own when a background skill refresh lands for the character it
+  is showing**, instead of keeping the CATALOGUE, TRAINING QUEUE, PLANS and OPTIMISE tabs frozen on whatever they
+  read when the window was last (re-)opened.
 - **Fixed: a killmail pasted from a link now joins its run and shows up in an open KILLMAILS window right away.**
   PASTE LINK stored the loss but skipped two things the automatic feed always does for it: linking it to the run it
   happened in — so it never counted as FAILED or added to TOTAL ISK — and telling an already open KILLMAILS window
