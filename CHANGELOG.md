@@ -17,6 +17,13 @@ entries under `[Unreleased]` below that were not there yet at the previous night
 
 ## [Unreleased]
 
+- **Added: WHAT IF panel in PLANS.** For the selected plan and character, five scenarios and the date each finishes:
+  the queue as it stands today, training the plan first, the same plan with the fastest attribute remap, and that
+  remap plus a matched +4 or +5 implant set. A SHARE dialog next to it offers COPY AS TEXT, PUT IT IN THE DOCTRINE
+  (opens the composition editor with the plan's skills pre-filled as a DOCTRINE MINIMUM, saved only when you press
+  SAVE there), and EVE Workbench, shown disabled for now. A two-line summary says how many of your other characters
+  can already fly the plan's target levels today and how soon the nearest of the rest gets there. Nothing here is
+  saved by itself — it is a calculator, not a write path.
 - **Added: doctrine skill minimums per fit.** In the composition editor every fit entry now has a DOCTRINE MINIMUM
   section: pick a skill and a level (I–V) a pilot must have on top of what the fit itself requires. Each row shows
   what the fit already needs, and says "no effect" when the minimum asks nothing extra. Like the rest of the editor

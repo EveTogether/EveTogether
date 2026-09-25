@@ -377,4 +377,9 @@ public interface IDialogService
 
     /// <summary>Re-render the open module set after a dock/float switch — migrates modules to the new mode.</summary>
     void SwitchMode();
+
+    /// <summary>Opens the SHARE dialog for a skill plan (ET-358): COPY AS TEXT, PUT IT IN THE DOCTRINE (the ET-353
+    /// composition editor) and the disabled EVE Workbench option. Modal; completes once the view model raises
+    /// <see cref="ViewModels.Skills.WhatIf.SkillPlanShareDialogViewModel.CloseRequested"/>.</summary>
+    Task ShowSkillPlanShareAsync(ViewModels.Skills.WhatIf.SkillPlanShareDialogViewModel viewModel);
 }
