@@ -27,7 +27,9 @@ namespace EveUtils.Client.Views;
 /// App settings, shown as a hostable module: a docked tab in docked mode, a floating window otherwise.
 /// A left-hand category list (General / Interface / Privacy / Integrations) switches the visible content panel on
 /// the right; each panel groups its settings under sub-headings. Save applies everything at once through the
-/// <see cref="_onApply"/> callback (the caller persists + applies live); Cancel/close applies nothing. Control
+/// <see cref="_onApply"/> callback (the caller persists + applies live), waits for it, and stays open with a
+/// "Saved."/"Could not save" status line (ET-376) — only Cancel and the close button close the window. Re-import
+/// is the one exception: it still saves-and-closes, since the SDE popup it triggers takes over the screen. Control
 /// references are cached at construction so the handlers keep working after the module host re-parents the content
 /// into a tab (which clears the window's own content).
 /// </summary>
@@ -41,8 +43,10 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
 
     // The channel actually in force when this window opened (ET-339) — what "Check now" asks about. It follows
     // Save/Cancel's own rule: nothing the operator has not saved yet takes effect, so a pending, unsaved flip of
-    // the segmented control does not change what Check now checks.
-    private readonly UpdateChannel _effectiveChannel;
+    // the segmented control does not change what Check now checks. Updated after a successful save (ET-376):
+    // since Save no longer closes the window, a "Check now" click after saving must see the channel just saved,
+    // not the one that was in force when the window opened.
+    private UpdateChannel _effectiveChannel;
 
     // Cached at construction (the instances survive the module host re-parenting; FindControl on the window would
     // return null once the content is stolen for a docked tab).
@@ -78,6 +82,9 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
     private TextBlock _shortcutMessageBlock = null!;
     private CheckBox _globalSaveRunBox = null!;
     private TextBlock _globalSaveRunUnsupportedBlock = null!, _globalSaveRunMessageBlock = null!;
+    private TextBlock? _saveStatusBlock;
+    private Button? _saveButton;
+    private Button? _cancelButton;
 
     // Keyboard shortcuts (ET-209): each row persists itself the moment it changes, independent of this window's own
     // Save/Cancel — conflicts have to be visible immediately, not deferred to a batch Save the user might cancel.
@@ -167,6 +174,9 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
         _globalSaveRunBox = this.FindControl<CheckBox>("GlobalSaveRunBox")!;
         _globalSaveRunUnsupportedBlock = this.FindControl<TextBlock>("GlobalSaveRunUnsupportedBlock")!;
         _globalSaveRunMessageBlock = this.FindControl<TextBlock>("GlobalSaveRunMessageBlock")!;
+        _saveStatusBlock = this.FindControl<TextBlock>("SaveStatusBlock");
+        _saveButton = this.FindControl<Button>("SaveButton");
+        _cancelButton = this.FindControl<Button>("CancelButton");
         BuildShortcutRows();
         SetUpGlobalSaveRunToggle();
 
@@ -459,9 +469,14 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
 
     private void OnCancel(object? sender, RoutedEventArgs e) => RequestClose();
 
-    private async void OnSave(object? sender, RoutedEventArgs e) => await ApplyAndCloseAsync(reimportSde: false);
+    // ET-376: Save stays open — the window only closes via the close button (Cancel) or re-import (below). This
+    // is the one path with a visible "Saved."/"Could not save" outcome, so the write is always awaited, never
+    // fire-and-forget.
+    private async void OnSave(object? sender, RoutedEventArgs e) => await ApplyAndStayOpenAsync();
 
     // Saves the current settings too (so nothing is lost), and signals the caller to run a forced SDE re-import.
+    // Still closes immediately: the SDE popup that follows takes over the screen, and this window's own SDE label
+    // would go stale the moment re-import starts anyway.
     private async void OnReimportSde(object? sender, RoutedEventArgs e) => await ApplyAndCloseAsync(reimportSde: true);
 
     private async Task ApplyAndCloseAsync(bool reimportSde)
@@ -476,6 +491,69 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
 
         if (_onApply is not null)
             await _onApply(result);
+    }
+
+    // The window stays open: the write is awaited before any confirmation shows (never fire-and-forget). Save and
+    // Cancel are both disabled for the duration — Save so a double-click cannot start a second apply, Cancel so
+    // closing the window mid-save can no longer hide the very outcome this window now stays open to show.
+    private async Task ApplyAndStayOpenAsync()
+    {
+        var result = BuildResult(reimportSde: false);
+
+        if (_saveButton is not null)
+        {
+            _saveButton.IsEnabled = false;
+        }
+        if (_cancelButton is not null)
+        {
+            _cancelButton.IsEnabled = false;
+        }
+        if (_saveStatusBlock is not null)
+        {
+            _saveStatusBlock.IsVisible = false;
+        }
+
+        try
+        {
+            if (_clipboardWatch is not null && _clipboardWatch.IsSupported)
+            {
+                await _clipboardWatch.SetEnabledAsync(_watchClipboardBox.IsChecked ?? false);
+            }
+
+            if (_onApply is not null)
+            {
+                await _onApply(result);
+            }
+
+            // The channel just saved is now the one in force — "Check now" must ask about it, not the channel
+            // that was in force when the window opened (see _effectiveChannel).
+            _effectiveChannel = _channelNightlyButton?.IsChecked == true ? UpdateChannel.Nightly : UpdateChannel.Stable;
+
+            if (_saveStatusBlock is not null)
+            {
+                _saveStatusBlock.Text = "Saved.";
+                _saveStatusBlock.IsVisible = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            if (_saveStatusBlock is not null)
+            {
+                _saveStatusBlock.Text = $"Could not save: {ex.Message}";
+                _saveStatusBlock.IsVisible = true;
+            }
+        }
+        finally
+        {
+            if (_saveButton is not null)
+            {
+                _saveButton.IsEnabled = true;
+            }
+            if (_cancelButton is not null)
+            {
+                _cancelButton.IsEnabled = true;
+            }
+        }
     }
 
     private void RequestClose()
