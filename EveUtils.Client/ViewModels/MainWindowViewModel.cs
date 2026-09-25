@@ -26,6 +26,7 @@ using EveUtils.Client.EveSettings;
 using EveUtils.Client.Platform;
 using EveUtils.Client.Skills;
 using EveUtils.Client.Implants;
+using EveUtils.Shared.Modules.Dogma;
 using EveUtils.Shared.Modules.Skills.Repositories;
 using EveUtils.Shared.Modules.Implants.Repositories;
 using EveUtils.Shared.Modules.Settings.Repositories;
@@ -952,7 +953,9 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
             _services.GetService<IToastService>(),                    // toast on a refused module activation (cloak conflict)
             onEditMetadata,                                           // in-place edit of the fit's name/notes/tags (local fits)
             _refreshServerFitBrowserTab,                              // refresh the browser's server tab after a share (null if the browser was never opened this session)
-            metadata?.Name);                                          // fit-metadata: the stored name, which RawJson does not carry after a rename
+            metadata?.Name,                                           // fit-metadata: the stored name, which RawJson does not carry after a rename
+            _services.GetService<IDogmaCalculator>(),                 // ET-356: SKILL IMPACT… scan engine
+            _dialogs.ShowSkillImpact);                                // ET-356: SKILL IMPACT… entry point
         await viewModel.InitializeAsync();
         _dialogs.ShowFitDetail(viewModel);
         _ = viewModel.LoadImagesAsync();   // opt-in CCP images pop in after the window shows

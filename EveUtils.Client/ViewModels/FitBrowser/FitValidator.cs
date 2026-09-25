@@ -5,6 +5,7 @@ using EveUtils.Shared.DependencyInjection;
 using EveUtils.Shared.Modules.Dogma;
 using EveUtils.Shared.Modules.Fittings.Dtos;
 using EveUtils.Shared.Modules.Sde;
+using EveUtils.Shared.Modules.Skills;
 
 namespace EveUtils.Client.ViewModels.FitBrowser;
 
@@ -26,6 +27,51 @@ public sealed class FitValidator(IDogmaDataAccessor data) : IFitValidator, ISing
     public IReadOnlyList<SkillGap> ValidateSkills(EsiFitting fit, IReadOnlyDictionary<int, int> trainedSkills) =>
         _SkillGaps(fit, trainedSkills);
 
+    public IReadOnlyList<SkillGap> SkillRequirements(
+        IEnumerable<int> seedTypeIds, IEnumerable<SkillMinimum>? extra, IReadOnlyDictionary<int, int> trained)
+    {
+        // Same recursive prerequisite-closure walk as _SkillGaps below, generalized: the seed types contribute their
+        // own requiredSkillN attributes exactly as a fit's ship + items do, and extra minimums fold in the same way
+        // a fitted type's required skill would — including their own expansion, so a candidate skill's prerequisites
+        // are priced too.
+        var required = new Dictionary<int, int>();
+        var toExpand = new Queue<int>();
+
+        void Require(int skillTypeId, int level)
+        {
+            if (required.TryGetValue(skillTypeId, out var current))
+            {
+                if (level > current)
+                    required[skillTypeId] = level;
+            }
+            else
+            {
+                required[skillTypeId] = level;
+                toExpand.Enqueue(skillTypeId);
+            }
+        }
+
+        foreach (var typeId in seedTypeIds)
+            foreach (var (skillTypeId, level) in _RequiredSkills(typeId))
+                Require(skillTypeId, level);
+
+        foreach (var minimum in extra ?? [])
+            Require(minimum.SkillTypeId, minimum.Level);
+
+        while (toExpand.Count > 0)
+            foreach (var (skillTypeId, level) in _RequiredSkills(toExpand.Dequeue()))
+                Require(skillTypeId, level);
+
+        var gaps = new List<SkillGap>();
+        foreach (var (skillTypeId, requiredLevel) in required)
+        {
+            var currentLevel = trained.GetValueOrDefault(skillTypeId);
+            if (currentLevel < requiredLevel)
+                gaps.Add(new SkillGap(skillTypeId, requiredLevel, currentLevel));
+        }
+        return gaps;
+    }
+
     private static IReadOnlyList<ResourceOverload> _Overloads(FitStats stats)
     {
         var overloads = new List<ResourceOverload>();
@@ -43,48 +89,16 @@ public sealed class FitValidator(IDogmaDataAccessor data) : IFitValidator, ISing
         return overloads;
     }
 
+    // Every fitted type (ship + modules + charges + drones) seeds SkillRequirements' RECURSIVE required-skill walk —
+    // each required skill carries its own prerequisite skills (e.g. Amarr Carrier needs Capital Ships IV, which needs
+    // Jump Drive Operation V) — accumulating the highest level each skill is needed at. This matches EVE's in-game
+    // "Skills Required", which lists the whole prerequisite closure, not just the directly-fitted ones.
     private IReadOnlyList<SkillGap> _SkillGaps(EsiFitting fit, IReadOnlyDictionary<int, int> trainedSkills)
     {
-        // Collect every fitted type (ship + modules + charges + drones), then expand the required-skill tree
-        // RECURSIVELY — each required skill carries its own prerequisite skills (e.g. Amarr Carrier needs Capital Ships
-        // IV, which needs Jump Drive Operation V) — accumulating the highest level each skill is needed at. This matches
-        // EVE's in-game "Skills Required", which lists the whole prerequisite closure, not just the directly-fitted ones.
-        var required = new Dictionary<int, int>();
-        var toExpand = new Queue<int>();
-
-        void Require(int skillTypeId, int level)
-        {
-            if (required.TryGetValue(skillTypeId, out var current))
-            {
-                if (level > current)
-                    required[skillTypeId] = level;   // a higher prerequisite level wins; the skill is already queued
-            }
-            else
-            {
-                required[skillTypeId] = level;
-                toExpand.Enqueue(skillTypeId);        // expand this skill's own prerequisites once
-            }
-        }
-
         var fittedTypes = new HashSet<int> { fit.ShipTypeId };
         foreach (var item in fit.Items)
             fittedTypes.Add(item.TypeId);
-        foreach (var typeId in fittedTypes)
-            foreach (var (skillTypeId, level) in _RequiredSkills(typeId))
-                Require(skillTypeId, level);
-
-        while (toExpand.Count > 0)
-            foreach (var (skillTypeId, level) in _RequiredSkills(toExpand.Dequeue()))
-                Require(skillTypeId, level);
-
-        var gaps = new List<SkillGap>();
-        foreach (var (skillTypeId, requiredLevel) in required)
-        {
-            var currentLevel = trainedSkills.GetValueOrDefault(skillTypeId);
-            if (currentLevel < requiredLevel)
-                gaps.Add(new SkillGap(skillTypeId, requiredLevel, currentLevel));
-        }
-        return gaps;
+        return SkillRequirements(fittedTypes, null, trainedSkills);
     }
 
     // The (skill type, required level) pairs a type declares, from the index-aligned requiredSkillN / requiredSkillNLevel
