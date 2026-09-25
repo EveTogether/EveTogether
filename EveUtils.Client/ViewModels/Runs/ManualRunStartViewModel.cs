@@ -19,6 +19,7 @@ using EveUtils.Shared.Modules.Runs.Control;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Runs.Grouping;
+using EveUtils.Shared.Modules.Runs.Queries;
 using EveUtils.Shared.Modules.Sde;
 using EveUtils.Shared.Modules.Sde.Dtos;
 using EveUtils.Shared.Modules.Settings.Commands;
@@ -147,6 +148,11 @@ public partial class ManualRunStartViewModel : ViewModelBase
             && Enum.TryParse(stored, out ActivityKind kind)
             && ActivityKinds.Contains(kind))
             SelectedActivityKind = kind;
+
+        Result<IReadOnlyList<UncataloguedSiteSuggestionDto>> earlierSites =
+            await _dispatcher.Query(new GetUncataloguedSiteSuggestionsQuery());
+        if (earlierSites.IsSuccess)
+            _earlierSites = earlierSites.Value ?? [];
 
         // ET-270: same fleet-first priority as the clipboard offers (OwnCharacterPickMemory) — skipped outright
         // when this dialog was opened for a specific character's own card (see _restoreAnchorCharacterId).
@@ -373,6 +379,8 @@ public partial class ManualRunStartViewModel : ViewModelBase
     {
         SiteQuery = string.Empty;
         SelectedOption = null;
+        SelectedSuggestion = null;
+        SelectedSiteGroup = null;
         MissionName = string.Empty;
         MissionAgentName = string.Empty;
         MissionIsk = null;
@@ -386,8 +394,12 @@ public partial class ManualRunStartViewModel : ViewModelBase
     }
 
     [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(StartCommand))]
     [NotifyPropertyChangedFor(nameof(SiteResults))]
     [NotifyPropertyChangedFor(nameof(HasSiteResults))]
+    [NotifyPropertyChangedFor(nameof(SuggestionResults))]
+    [NotifyPropertyChangedFor(nameof(HasSuggestionResults))]
+    [NotifyPropertyChangedFor(nameof(AsksSiteGroup))]
     private string _siteQuery = string.Empty;
 
     /// <summary>Built through <see cref="SdeSitePickerOption.From"/> — the one presentation this picker shares with
@@ -402,6 +414,7 @@ public partial class ManualRunStartViewModel : ViewModelBase
     [NotifyCanExecuteChangedFor(nameof(StartCommand))]
     [NotifyPropertyChangedFor(nameof(SelectedSite))]
     [NotifyPropertyChangedFor(nameof(HasSelectedSite))]
+    [NotifyPropertyChangedFor(nameof(AsksSiteGroup))]
     private SdeSitePickerOption? _selectedOption;
 
     /// <summary>The site behind the picked option — what <see cref="StartAsync"/> reads; the label in
@@ -409,6 +422,115 @@ public partial class ManualRunStartViewModel : ViewModelBase
     public SdeSite? SelectedSite => SelectedOption?.Site;
 
     public bool HasSelectedSite => SelectedOption is not null;
+
+    /// <summary>The scanner groups a site typed in by hand can be filed under — the six site rows of
+    /// <see cref="RunTypeCatalogue"/>, whose names are exactly the group text <c>RunTypeResolver</c> resolves a run's
+    /// type from. Asked, never derived from the typed name.</summary>
+    public IReadOnlyList<string> SiteGroups { get; } =
+    [
+        .. new[] { RunTypeId.CombatSite, RunTypeId.DataSite, RunTypeId.RelicSite, RunTypeId.GasSite, RunTypeId.OreSite, RunTypeId.Wormhole }
+            .Select(id => RunTypeCatalogue.For(id).Name)
+    ];
+
+    private IReadOnlyList<UncataloguedSiteSuggestionDto> _earlierSites = [];
+
+    /// <summary>Sites earlier runs recorded that the catalogue does not have (exploration relic and data sites are
+    /// never published in the SDE), matching what is typed and left out wherever the catalogue has the same name —
+    /// the catalogue wins. Picking one starts with the group that run recorded, so no group is asked.</summary>
+    public IReadOnlyList<UncataloguedSiteSuggestionDto> SuggestionResults
+    {
+        get
+        {
+            string typed = SiteQuery.Trim();
+            if (typed.Length == 0)
+                return [];
+
+            HashSet<string> catalogueNames = [.. SiteResults.Select(option => option.Site.Name)];
+            return [.. _earlierSites.Where(suggestion =>
+                suggestion.SiteName.Contains(typed, StringComparison.OrdinalIgnoreCase)
+                && !catalogueNames.Contains(suggestion.SiteName, StringComparer.OrdinalIgnoreCase))];
+        }
+    }
+
+    public bool HasSuggestionResults => SuggestionResults.Count > 0;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(StartCommand))]
+    [NotifyPropertyChangedFor(nameof(HasSelectedSuggestion))]
+    [NotifyPropertyChangedFor(nameof(AsksSiteGroup))]
+    private UncataloguedSiteSuggestionDto? _selectedSuggestion;
+
+    public bool HasSelectedSuggestion => SelectedSuggestion is not null;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(StartCommand))]
+    private string? _selectedSiteGroup;
+
+    // One pick at a time: a suggestion and a catalogue row are two answers to the same question.
+    partial void OnSelectedOptionChanged(SdeSitePickerOption? value)
+    {
+        if (value is not null)
+            SelectedSuggestion = null;
+    }
+
+    partial void OnSelectedSuggestionChanged(UncataloguedSiteSuggestionDto? value)
+    {
+        if (value is not null)
+            SelectedOption = null;
+    }
+
+    /// <summary>Whether a typed name still needs the pilot to say which kind of site it is — the one extra click of
+    /// the exception. Not asked when a pick answers it, or when the name already is one the catalogue or an earlier
+    /// run knows.</summary>
+    public bool AsksSiteGroup => NeedsSite && SiteQuery.Trim().Length > 0 && !_HasKnownSite(SiteQuery.Trim());
+
+    private bool _HasKnownSite(string typed) =>
+        SelectedOption is not null || SelectedSuggestion is not null
+        || _ExactCatalogueMatches(typed).Count > 0 || _ExactEarlierSite(typed) is not null;
+
+    private IReadOnlyList<SdeSitePickerOption> _ExactCatalogueMatches(string typed) =>
+        [.. SiteResults.Where(option => string.Equals(option.Site.Name, typed, StringComparison.OrdinalIgnoreCase))];
+
+    private UncataloguedSiteSuggestionDto? _ExactEarlierSite(string typed) =>
+        _earlierSites.FirstOrDefault(suggestion => string.Equals(suggestion.SiteName, typed, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>What names the run for a site kind, in the order the ticket asked for: a picked catalogue site or
+    /// suggestion, then an exact catalogue name (unambiguous only — two genuinely different sites under one name are
+    /// the pilot's pick, never a guess), then an exact earlier-run name, and only then the typed name as free text,
+    /// filed under the group the pilot chose. Null while any of that is still missing.</summary>
+    private SiteChoice? _ResolveSiteChoice()
+    {
+        if (!NeedsSite)
+            return null;
+
+        if (SelectedSite is { } picked)
+            return SiteChoice.Catalogue(picked);
+        if (SelectedSuggestion is { } suggestion)
+            return SiteChoice.Earlier(suggestion);
+
+        string typed = SiteQuery.Trim();
+        if (typed.Length == 0)
+            return null;
+
+        IReadOnlyList<SdeSitePickerOption> exact = _ExactCatalogueMatches(typed);
+        if (exact.Count > 0)
+            return exact is [{ } only] ? SiteChoice.Catalogue(only.Site) : null;
+        if (_ExactEarlierSite(typed) is { } earlier)
+            return SiteChoice.Earlier(earlier);
+
+        return SelectedSiteGroup is { } group ? SiteChoice.FreeText(typed, group) : null;
+    }
+
+    private sealed record SiteChoice(int SiteTypeId, string Name, SiteTypeSource Source, string? SignatureGroup)
+    {
+        public static SiteChoice Catalogue(SdeSite site) => new(site.DungeonId, site.Name, SiteTypeSource.Site, null);
+
+        public static SiteChoice Earlier(UncataloguedSiteSuggestionDto suggestion) =>
+            new(0, suggestion.SiteName, SiteTypeSource.Uncatalogued, suggestion.SignatureGroup);
+
+        public static SiteChoice FreeText(string name, string signatureGroup) =>
+            new(0, name, SiteTypeSource.Uncatalogued, signatureGroup);
+    }
 
     [ObservableProperty] private bool _isBackdated;
 
@@ -428,7 +550,7 @@ public partial class ManualRunStartViewModel : ViewModelBase
     public event Action? CloseRequested;
 
     private bool CanStart => SelectedCharacters.Count > 0
-        && (!NeedsSite || SelectedSite is not null)
+        && (!NeedsSite || _ResolveSiteChoice() is not null)
         && (!NeedsMissionName || !string.IsNullOrWhiteSpace(MissionName));
 
     [RelayCommand(CanExecute = nameof(CanStart))]
@@ -459,17 +581,19 @@ public partial class ManualRunStartViewModel : ViewModelBase
         int siteTypeId;
         string? name;
         SiteTypeSource siteTypeSource;
+        string? signatureGroup = null;
         if (NeedsMissionName)
         {
             siteTypeId = 0;
             name = MissionName;
             siteTypeSource = SiteTypeSource.Mission;
         }
-        else if (SelectedSite is { } site)
+        else if (_ResolveSiteChoice() is { } site)
         {
-            siteTypeId = site.DungeonId;
+            siteTypeId = site.SiteTypeId;
             name = site.Name;
-            siteTypeSource = SiteTypeSource.Site;
+            siteTypeSource = site.Source;
+            signatureGroup = site.SignatureGroup;
         }
         else if (HasOptionalLocationName)
         {
@@ -523,6 +647,7 @@ public partial class ManualRunStartViewModel : ViewModelBase
             SolarSystemId: agent?.SolarSystemId,
             GroupCode: groupCode,
             SiteTypeSource: siteTypeSource,
+            SignatureGroupSnapshot: signatureGroup,
             Origin: RunOrigin.Manual,
             CharacterNameSnapshot: pilot.Name,
             AgentId: agent?.AgentId,
@@ -559,6 +684,7 @@ public partial class ManualRunStartViewModel : ViewModelBase
                 SolarSystemId: agent?.SolarSystemId,
                 GroupCode: groupCode,
                 SiteTypeSource: siteTypeSource,
+                SignatureGroupSnapshot: signatureGroup,
                 Origin: RunOrigin.Manual,
                 CharacterNameSnapshot: extra.Name,
                 AgentId: agent?.AgentId,

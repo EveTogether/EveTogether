@@ -2,6 +2,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:EveUtils.Client.ViewModels.Runs"
         xmlns:sde="using:EveUtils.Shared.Modules.Sde.Dtos"
+        xmlns:dto="using:EveUtils.Shared.Modules.Runs.Dtos"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d" d:DesignWidth="520"
@@ -53,7 +54,10 @@
              rather than left empty: a required field that can never be filled is what kept START grey. -->
         <StackPanel Spacing="3" IsVisible="{Binding NeedsSite}">
             <TextBlock Classes="label" Text="SITE"/>
-            <TextBox PlaceholderText="Search the site catalogue…" Text="{Binding SiteQuery}"/>
+            <!-- The catalogue never has exploration relic and data sites (CCP does not publish them in the SDE), so a
+                 name that is not in it can still be started: earlier runs suggest theirs with the group they recorded,
+                 and anything else typed asks for its group below. -->
+            <TextBox PlaceholderText="Search the catalogue, or type a site name…" Text="{Binding SiteQuery}"/>
             <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" MaxHeight="160"
                     IsVisible="{Binding HasSiteResults}">
                 <ListBox ItemsSource="{Binding SiteResults}" SelectedItem="{Binding SelectedOption}">
@@ -64,9 +68,39 @@
                     </ListBox.ItemTemplate>
                 </ListBox>
             </Border>
+            <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" MaxHeight="120"
+                    IsVisible="{Binding HasSuggestionResults}">
+                <ListBox ItemsSource="{Binding SuggestionResults}" SelectedItem="{Binding SelectedSuggestion}">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate x:DataType="dto:UncataloguedSiteSuggestionDto">
+                            <TextBlock FontSize="11">
+                                <Run Text="{Binding SiteName}"/><Run Text=" — earlier run · "/><Run Text="{Binding SignatureGroup}"/>
+                            </TextBlock>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </Border>
             <TextBlock Text="{Binding SelectedSite.Name, StringFormat='Selected: {0}'}"
                        IsVisible="{Binding HasSelectedSite}" FontSize="11"
                        Foreground="{DynamicResource TextAccentBrush}"/>
+            <TextBlock Text="{Binding SelectedSuggestion.SiteName, StringFormat='Selected: {0}'}"
+                       IsVisible="{Binding HasSelectedSuggestion}" FontSize="11"
+                       Foreground="{DynamicResource TextAccentBrush}"/>
+            <StackPanel Spacing="3" Margin="0,4,0,0" IsVisible="{Binding AsksSiteGroup}">
+                <TextBlock Classes="label" Text="KIND OF SITE"/>
+                <ListBox ItemsSource="{Binding SiteGroups}" SelectedItem="{Binding SelectedSiteGroup}">
+                    <ListBox.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel/>
+                        </ItemsPanelTemplate>
+                    </ListBox.ItemsPanel>
+                    <ListBox.ItemTemplate>
+                        <DataTemplate x:DataType="x:String">
+                            <TextBlock Text="{Binding}" FontSize="11"/>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </StackPanel>
         </StackPanel>
 
         <!-- A mission is named by a typed name, not a catalogue lookup (ET-255) — freely typed either way. Picking
