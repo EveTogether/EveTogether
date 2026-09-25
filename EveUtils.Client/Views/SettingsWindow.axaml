@@ -11,11 +11,15 @@
 
     <DockPanel>
 
-        <!-- Footer: Save / Cancel (applies everything on Save; cancel/close applies nothing) -->
+        <!-- Footer: Save / Cancel. Save applies everything, waits for it, and stays open with a status line
+             (ET-376); the sole exception is re-import (OnReimportSde), which still closes because the SDE popup
+             takes over the screen. Cancel/close applies nothing. -->
         <Border DockPanel.Dock="Bottom" Classes="panel-header" BorderThickness="0,1,0,0" Padding="16,10">
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
-                <Button Content="Cancel" Click="OnCancel"/>
-                <Button Content="Save" Click="OnSave" Classes="accent"/>
+                <TextBlock x:Name="SaveStatusBlock" IsVisible="False" VerticalAlignment="Center" FontSize="11"
+                           Opacity="0.8" Margin="0,0,8,0"/>
+                <Button x:Name="CancelButton" Content="Cancel" Click="OnCancel"/>
+                <Button x:Name="SaveButton" Content="Save" Click="OnSave" Classes="accent"/>
             </StackPanel>
         </Border>
 
