@@ -13,6 +13,7 @@ using EveUtils.Shared.Modules.Fleet.Queries;
 using EveUtils.Shared.Modules.Fleet.Repositories;
 using EveUtils.Shared.Modules.Messaging.Commands;
 using EveUtils.Shared.Modules.ServerAuth.Repositories;
+using EveUtils.Shared.Modules.Skills;
 using Grpc.Core;
 using GrpcFleets = EveUtils.Grpc.Fleets;
 using FleetEntity = EveUtils.Shared.Modules.Fleet.Entities.Fleet;
@@ -703,11 +704,14 @@ public sealed class FleetsGrpcService(
 
     public override Task<CreateStructureReply> AddFleetCompositionEntry(AddFleetCompositionEntryRequest request, ServerCallContext context) =>
         AddToCompositionAsync(context, character => dispatcher.Send(new AddFleetCompositionEntryCommand(
-            request.RoleId, FromFitDto(request.Fit), request.HasEntryMinCount ? request.EntryMinCount : null, character), context.CancellationToken));
+            request.RoleId, FromFitDto(request.Fit), request.HasEntryMinCount ? request.EntryMinCount : null, character,
+            FromSkillMinimumDtos(request.SkillMinimums)), context.CancellationToken));
 
     public override Task<FleetActionReply> EditFleetCompositionEntry(EditFleetCompositionEntryRequest request, ServerCallContext context) =>
         MutateCompositionAsync(context, "Saved.", character => dispatcher.Send(new EditFleetCompositionEntryCommand(
-            request.EntryId, request.HasEntryMinCount ? request.EntryMinCount : null, character), context.CancellationToken));
+            request.EntryId, request.HasEntryMinCount ? request.EntryMinCount : null, character,
+            // Absent (an older client) = leave the minimums alone; present, even empty = replace them.
+            request.SkillMinimums is { } minimums ? FromSkillMinimumDtos(minimums.Items) : null), context.CancellationToken));
 
     public override Task<FleetActionReply> RemoveFleetCompositionEntry(RemoveFleetCompositionEntryRequest request, ServerCallContext context) =>
         MutateCompositionAsync(context, "Removed.", character => dispatcher.Send(
@@ -772,6 +776,7 @@ public sealed class FleetsGrpcService(
                 };
                 if (entry.EntryMinCount is int entryMin)
                     entryDto.EntryMinCount = entryMin;
+                entryDto.SkillMinimums.Add(entry.SkillMinimums.Select(m => new SkillMinimumDto { SkillTypeId = m.SkillTypeId, Level = m.Level }));
                 roleDto.Entries.Add(entryDto);
             }
 
@@ -796,6 +801,9 @@ public sealed class FleetsGrpcService(
             dto.ServerSharedFitId = serverSharedFitId;
         return dto;
     }
+
+    private static IReadOnlyList<SkillMinimum> FromSkillMinimumDtos(IEnumerable<SkillMinimumDto> dtos) =>
+        [.. dtos.Select(dto => new SkillMinimum(dto.SkillTypeId, dto.Level))];
 
     private static FitReference FromFitDto(FitReferenceDto? dto)
     {
