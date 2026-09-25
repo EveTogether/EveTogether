@@ -97,6 +97,45 @@ public sealed class RunLootTallyTests
         Assert.Equal(23, summary.LootItemCount);   // 20 gained + 3 spent, not the 112 pieces that were captured
     }
 
+    /// <summary>ET-384 AC1: an unchanged type in both holds is no loot line at all, even sitting beside one that did
+    /// change — the difference is worked out per type id, not by whether the hold changed as a whole.</summary>
+    [Fact]
+    public void Count_WithAnUnchangedTypeBesideAChangedOne_OnlyTheChangedTypeCounts()
+    {
+        LootTallyCapture before = new(LootCaptureRole.CargoBefore, IsExcluded: false,
+            [new LootTallyLine(28668, 100, Volume: null, LootKind.Gained), new LootTallyLine(52, 1, Volume: null, LootKind.Gained)]);
+        LootTallyCapture after = new(LootCaptureRole.CargoAfter, IsExcluded: false,
+        [
+            new LootTallyLine(28668, 100, Volume: null, LootKind.Gained),
+            new LootTallyLine(52, 1, Volume: null, LootKind.Gained),
+            new LootTallyLine(60, 5, Volume: null, LootKind.Gained)
+        ]);
+
+        LootTallyLine line = Assert.Single(LootTally.Count([before, after]));
+        Assert.Equal(60, line.ItemTypeId);
+        Assert.Equal(5L, line.Quantity);
+        Assert.Equal(LootKind.Gained, line.LootKind);
+    }
+
+    /// <summary>ET-384 AC3: two stacks of the same type in the ending hold add up to the same total the starting
+    /// hold carried as one stack, so the type cancels out exactly like it would for a single stack.</summary>
+    [Fact]
+    public void Count_WithASplitStackInTheEndingHold_SumsItBeforeSubtracting()
+    {
+        LootTallyCapture before = new(LootCaptureRole.CargoBefore, IsExcluded: false,
+            [new LootTallyLine(28668, 100, Volume: null, LootKind.Gained)]);
+        LootTallyCapture after = new(LootCaptureRole.CargoAfter, IsExcluded: false,
+        [
+            new LootTallyLine(28668, 60, Volume: null, LootKind.Gained),
+            new LootTallyLine(28668, 40, Volume: null, LootKind.Gained),
+            new LootTallyLine(60, 5, Volume: null, LootKind.Gained)
+        ]);
+
+        LootTallyLine line = Assert.Single(LootTally.Count([before, after]));
+        Assert.Equal(60, line.ItemTypeId);
+        Assert.Equal(5L, line.Quantity);
+    }
+
     private static LootTallyCapture _Hold(LootCaptureRole role, long quantity) =>
         new(role, IsExcluded: false, quantity == 0 ? [] : [new LootTallyLine(34, quantity, Volume: null, LootKind.Gained)]);
 
