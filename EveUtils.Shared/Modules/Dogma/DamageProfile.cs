@@ -24,4 +24,20 @@ public sealed record DamageProfile(double Em, double Th, double Kin, double Exp)
             return Uniform;
         return new DamageProfile(Em / sum, Th / sum, Kin / sum, Exp / sum);
     }
+
+    /// <summary>One layer's EHP: hit points divided by weighted resonance. An all-zero profile returns raw HP;
+    /// both fitted ships and SDE NPCs use this formula.</summary>
+    public double WeightedEhp(double hitPoints, double emResonance, double thResonance, double kinResonance, double expResonance)
+    {
+        if (hitPoints <= 0)
+        {
+            return 0;
+        }
+        if (Em + Th + Kin + Exp <= 0)
+        {
+            return hitPoints;
+        }
+        var weightedResonance = Em * emResonance + Th * thResonance + Kin * kinResonance + Exp * expResonance;
+        return weightedResonance > 0 ? hitPoints / weightedResonance : 0;
+    }
 }

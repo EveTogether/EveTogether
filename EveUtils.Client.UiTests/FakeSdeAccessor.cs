@@ -186,6 +186,8 @@ public sealed class FakeSdeAccessor : ISdeAccessor
 
     public DamageProfile? GetNpcDamageProfile(int typeId) => null;
 
+    public NpcEwarProfile? GetNpcEwarProfile(int typeId) => null;
+
     public IReadOnlyList<SdeSite> SearchSites(string? nameQuery = null, int? archetypeId = null, int? factionId = null) =>
         string.IsNullOrWhiteSpace(nameQuery)
             ? _sites
