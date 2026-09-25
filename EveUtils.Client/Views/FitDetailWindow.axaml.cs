@@ -20,6 +20,7 @@ public partial class FitDetailWindow : ChromedWindow, IHostableModuleWindow
     private static readonly DataFormat<string> ChargeFormat = DataFormat.CreateInProcessFormat<string>("eveutils-charge-type-id");
 
     public Action? CloseRequested { get; set; }
+    public Action? DockRequested { get; set; }
 
     public FitDetailWindow()
     {

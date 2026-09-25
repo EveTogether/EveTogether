@@ -15,6 +15,7 @@ namespace EveUtils.Client.Views;
 public partial class CompositionEditorWindow : ChromedWindow, IHostableModuleWindow
 {
     public Action? CloseRequested { get; set; }
+    public Action? DockRequested { get; set; }
 
     public CompositionEditorWindow() => AvaloniaXamlLoader.Load(this);
 

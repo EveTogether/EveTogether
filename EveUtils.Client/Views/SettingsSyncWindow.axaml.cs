@@ -18,6 +18,7 @@ namespace EveUtils.Client.Views;
 public partial class SettingsSyncWindow : ChromedWindow, IHostableModuleWindow
 {
     public Action? CloseRequested { get; set; }
+    public Action? DockRequested { get; set; }
 
     /// <summary>Below this content width the backup column has to give way: the docked host inside a 1100-wide
     /// main window is a good 400px narrower than this tool's own window, and a fixed column eats the room the two

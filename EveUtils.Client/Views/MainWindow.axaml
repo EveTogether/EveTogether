@@ -173,7 +173,7 @@
                     <!-- Bottom: dock/float + chars toggles (always reachable) + (rail-only) window controls -->
                     <StackPanel x:Name="RailBottomBlock" DockPanel.Dock="Bottom" Spacing="0">
                         <Border Classes="rail-divider"/>
-                        <Button Classes="railitem" Command="{Binding ToggleDockModeCommand}"
+                        <Button x:Name="RailDockToggleButton" Classes="railitem" Command="{Binding ToggleDockModeCommand}"
                                 ToolTip.Tip="Dock / undock: switch all modules between the docked host and floating windows">
                             <StackPanel HorizontalAlignment="Center" Spacing="5">
                                 <mi:MaterialIcon Classes="rail" Kind="DockWindow"/>
@@ -542,10 +542,10 @@
                         </Button>
                         <TextBlock Grid.Column="2" Text="{Binding DockModeLabel}" Classes="label" FontSize="9"
                                    VerticalAlignment="Center" Margin="0,0,8,0"/>
-                        <Button Grid.Column="3" Classes="winbtn" Width="30"
-                                Command="{Binding ToggleDockModeCommand}"
-                                ToolTip.Tip="Dock / undock: switch all modules between the docked host and floating windows.">
-                            <mi:MaterialIcon Kind="DockWindow"/>
+                        <Button x:Name="PopOutTabButton" Grid.Column="3" Classes="winbtn" Width="30"
+                                Command="{Binding PopOutTabCommand}" IsEnabled="{Binding !IsHomeShown}"
+                                ToolTip.Tip="Pop out this tab into its own window.">
+                            <mi:MaterialIcon Kind="OpenInNew"/>
                         </Button>
                     </Grid>
                 </Border>

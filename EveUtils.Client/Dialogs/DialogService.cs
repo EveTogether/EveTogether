@@ -65,6 +65,9 @@ public sealed class DialogService : IDialogService, ISingletonService
     /// <summary>Re-render the open module set after a dock/float switch — migrates modules to the new mode (no orphans).</summary>
     public void SwitchMode() => _moduleHost.SwitchMode();
 
+    /// <inheritdoc/>
+    public void PopOut(HostTab tab) => _moduleHost.PopOut(tab);
+
     // Opens a non-modal feature window as a module: a docked tab, or a floating window — handled by the host.
     // The icon is the tab's, and is chosen per SCREEN rather than per rail group (ET-171): one fleet can put three
     // tabs in the strip and they all read "FLEET…", so a symbol shared by the whole group would separate nothing.

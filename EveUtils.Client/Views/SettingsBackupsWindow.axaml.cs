@@ -16,6 +16,7 @@ namespace EveUtils.Client.Views;
 public partial class SettingsBackupsWindow : ChromedWindow, IHostableModuleWindow
 {
     public Action? CloseRequested { get; set; }
+    public Action? DockRequested { get; set; }
 
     private const double WideLayoutWidth = 780;
 
