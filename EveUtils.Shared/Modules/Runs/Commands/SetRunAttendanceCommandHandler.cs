@@ -15,6 +15,11 @@ internal sealed class SetRunAttendanceCommandHandler(
     IDbContextFactory<ClientDbContext> contextFactory, IEventBus eventBus, IDispatcher dispatcher)
     : ICommandHandler<SetRunAttendanceCommand, Result<int>>
 {
+    // Serializes every attendance write app-wide (ET-287, ET-375): two windows on the same run now genuinely call
+    // this at the same instant and can collide on the Sqlite file ("database is locked") instead of leaving the
+    // StandingSetAtUtc check below to settle who wins — see PR for the full race.
+    private static readonly SemaphoreSlim _writeGate = new(1, 1);
+
     public async Task<Result<int>> Handle(SetRunAttendanceCommand command, CancellationToken cancellationToken = default)
     {
         bool byGroup = !string.IsNullOrEmpty(command.GroupCode);
@@ -25,15 +30,23 @@ internal sealed class SetRunAttendanceCommandHandler(
             return Result<int>.Failure(new ResultMessage(MessageSeverity.Error, MessageCodes.ValidationFailed,
                 "The number of pilots not on the roster cannot be negative.", "Runs"));
 
+        await _writeGate.WaitAsync(cancellationToken);
         try
         {
-            return await _WriteAsync(command, byGroup, cancellationToken);
+            try
+            {
+                return await _WriteAsync(command, byGroup, cancellationToken);
+            }
+            catch (DbUpdateException) when (byGroup)
+            {
+                // A start filed one of the characters this list backfills between the read and the write (I7, ET-274): the
+                // index let that one through, and the list is written again over the runs as they now are.
+                return await _WriteAsync(command, byGroup, cancellationToken);
+            }
         }
-        catch (DbUpdateException) when (byGroup)
+        finally
         {
-            // A start filed one of the characters this list backfills between the read and the write (I7, ET-274): the
-            // index let that one through, and the list is written again over the runs as they now are.
-            return await _WriteAsync(command, byGroup, cancellationToken);
+            _writeGate.Release();
         }
     }
 

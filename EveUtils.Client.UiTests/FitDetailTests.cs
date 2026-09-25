@@ -594,16 +594,18 @@ public class FitDetailTests
     }
 
     [Fact]
-    public async Task SkillGap_Estimate_ReflectsCharacterAttributesAndImplants()
+    public async Task SkillGap_Estimate_UnaffectedByImplantTypeIds_SinceEsiAttributesAreAlreadyEffective()
     {
+        // ET-349: ESI attributes already include implant bonuses, so Resolve() no longer adds them again — the
+        // implant list below can no longer change the rate. rate = Perception(20) + Willpower(20)/2 = 30 SP/min
+        // either way; 210.7k SP / 30 SP/min ≈ 4d 21h, identical for both calls (see PR for the full derivation).
         var withoutImplant = await SkillGapEstimateAsync([]);
-        var withImplant = await SkillGapEstimateAsync([30000]);   // +5 Perception implant raises the primary attribute
+        var withImplant = await SkillGapEstimateAsync([30000]);
 
         Assert.NotNull(withoutImplant);
         Assert.NotNull(withImplant);
         Assert.Contains("210.7k SP", withoutImplant);                 // SP to train IV→V at rank 1
-        Assert.Contains("210.7k SP", withImplant);                    // same SP — only the rate changed
-        Assert.NotEqual(withoutImplant, withImplant);                 // the implant shortened the Omega time
+        Assert.Equal(withoutImplant, withImplant);                    // same ESI attributes -> same rate -> same estimate
     }
 
     [AvaloniaFact]

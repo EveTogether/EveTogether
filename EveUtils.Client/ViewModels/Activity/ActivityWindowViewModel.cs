@@ -1844,8 +1844,10 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     /// guards its own read (ET-287): a lookup outliving one tick must not be started again by the next.</summary>
     private bool _isNamingActingCharacter;
 
-    /// <summary>Guards the unstarted-fleet lookup in <see cref="RefreshFleetCommandAsync"/> the same way (ET-287).</summary>
-    private bool _isCheckingUnstartedFleet;
+    /// <summary>Guards the unstarted-fleet lookup in <see cref="RefreshFleetCommandAsync"/> the same way (ET-287).
+    /// Holds the in-flight task itself (ET-375), not just a flag, so an awaiter joins a lookup already under way
+    /// instead of seeing the throttle interval and moving on with a stale notice.</summary>
+    private Task<(string? Name, int FormingCount)>? _unstartedFleetCheck;
 
     /// <summary>
     /// Offer what this run has looted to the fleet. Clock-driven like the rest of the window, and it only ever hands
@@ -2378,20 +2380,25 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             _unstartedFleetNoticeCheckedAtUtc = null;
         }
         // A text hint can wait briefly: checking every clock tick wastes work, but checking only once hides new fleets.
-        else if (_runCharacterId is not null && !_isCheckingUnstartedFleet
-                 && (_unstartedFleetNoticeCheckedAtUtc is null
+        // An awaiting caller also joins a lookup already under way (ET-375), not only a due interval — see the
+        // field's own doc comment above.
+        else if (_runCharacterId is not null
+                 && (_unstartedFleetCheck is not null || _unstartedFleetNoticeCheckedAtUtc is null
                      || nowUtc - _unstartedFleetNoticeCheckedAtUtc >= UnstartedFleetNoticeRefreshInterval))
         {
-            _unstartedFleetNoticeCheckedAtUtc = nowUtc;
-            _isCheckingUnstartedFleet = true;
+            if (_unstartedFleetCheck is null)
+            {
+                _unstartedFleetNoticeCheckedAtUtc = nowUtc;
+                // Off the UI thread (ET-287) — see _RefreshParticipantsAsync.
+                _unstartedFleetCheck = Task.Run(() => _UnstartedFleetNameAsync());
+            }
             try
             {
-                // Off the UI thread (ET-287) — see _RefreshParticipantsAsync.
-                (UnstartedFleetName, FormingFleetCount) = await Task.Run(() => _UnstartedFleetNameAsync());
+                (UnstartedFleetName, FormingFleetCount) = await _unstartedFleetCheck;
             }
             finally
             {
-                _isCheckingUnstartedFleet = false;
+                _unstartedFleetCheck = null;
             }
         }
     }
