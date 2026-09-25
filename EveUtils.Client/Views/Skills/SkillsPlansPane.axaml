@@ -32,7 +32,7 @@
 
     <DockPanel Margin="14,10">
         <!-- PLAN choice + plan actions + add actions -->
-        <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,Auto,Auto,Auto,*,Auto,Auto,Auto" ColumnSpacing="8" Margin="0,0,0,10">
+        <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,Auto,Auto,Auto,*,Auto,Auto,Auto,Auto" ColumnSpacing="8" Margin="0,0,0,10">
             <TextBlock Grid.Column="0" Classes="label" FontSize="10" VerticalAlignment="Center" Text="PLAN"/>
             <ComboBox Grid.Column="1" MinWidth="180" ItemsSource="{Binding Plans}" SelectedItem="{Binding SelectedPlan, Mode=TwoWay}"
                       DisplayMemberBinding="{Binding Name}"/>
@@ -41,6 +41,7 @@
             <Button Grid.Column="5" Content="+ SKILL" Command="{Binding AddSkillCommand}"/>
             <Button Grid.Column="6" Content="+ FROM FIT…" Command="{Binding AddFromFitCommand}"/>
             <Button Grid.Column="7" Content="+ FROM ITEM…" Command="{Binding AddFromItemCommand}"/>
+            <Button Grid.Column="8" Content="+ FROM DOCTRINE…" Command="{Binding AddFromDoctrineCommand}"/>
         </Grid>
 
         <Button DockPanel.Dock="Top" HorizontalAlignment="Left" Margin="0,0,0,10" Content="+ NEW PLAN" Command="{Binding CreatePlanCommand}"/>

@@ -15,6 +15,7 @@ using EveUtils.Client.ViewModels.Skills.WhatIf;
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Modules.Dogma;
 using EveUtils.Shared.Modules.Fittings.Dtos;
+using EveUtils.Shared.Modules.Fleet.Composition.Repositories;
 using EveUtils.Shared.Modules.Sde;
 using EveUtils.Shared.Modules.Skills;
 using EveUtils.Shared.Modules.Skills.Plans.Commands;
@@ -39,6 +40,7 @@ public sealed partial class SkillsPlansViewModel : ObservableObject
     private readonly IDogmaDataAccessor? _dogma;
     private readonly IDogmaCalculator? _calculator;
     private readonly IDialogService _dialogs;
+    private readonly IFleetCompositionReader _compositionReader;
     private readonly IServiceProvider _services;
     private readonly SkillsCharacterSnapshot _snapshot;
     private readonly int _characterId;
@@ -68,6 +70,7 @@ public sealed partial class SkillsPlansViewModel : ObservableObject
         _dogma = services.GetService<IDogmaDataAccessor>();
         _calculator = services.GetService<IDogmaCalculator>();
         _dialogs = services.GetRequiredService<IDialogService>();
+        _compositionReader = services.GetRequiredService<IFleetCompositionReader>();
         _snapshot = snapshot;
         _characterId = characterId;
         _characterName = characterName;
@@ -261,6 +264,72 @@ public sealed partial class SkillsPlansViewModel : ObservableObject
     }
 
     [RelayCommand]
+    private async Task AddFromDoctrine()
+    {
+        if (_validator is null)
+        {
+            return;
+        }
+
+        var picker = await DoctrinePickerViewModel.CreateAsync(_compositionReader);
+        var picked = await _dialogs.PickDoctrineEntryAsync(picker);
+        if (picked is null)
+        {
+            return;
+        }
+
+        var (seedTypeIds, error) = _SeedTypeIdsFromRawJson(picked.Entry.Fit.RawJson);
+        if (seedTypeIds is null)
+        {
+            StatusMessage = error;
+            return;
+        }
+
+        var skillMinimums = picked.Entry.SkillMinimums.Select(m => new SkillMinimum(m.SkillTypeId, m.Level)).ToList();
+        string label = $"{picked.CompositionName} · {picked.RoleName} · {picked.Entry.Fit.FitName}";
+        var result = SkillPlanRowFactory.FromDoctrine(_validator, seedTypeIds, skillMinimums, _snapshot.Levels, label);
+        await _AddRowsAsync(SkillPlanRowSource.Doctrine, picked.Entry.Id.ToString(CultureInfo.InvariantCulture), result);
+    }
+
+    /// <summary>Shared with the doctrine-flyable-milestone lookup in <see cref="_LoadRowsAsync"/> — a fit snapshot's
+    /// ship + items, deserialised the same way + FROM FIT already does.</summary>
+    private static (List<int>? SeedTypeIds, string? Error) _SeedTypeIdsFromRawJson(string rawJson)
+    {
+        EsiFitting? esiFitting;
+        try
+        {
+            esiFitting = JsonSerializer.Deserialize<EsiFitting>(rawJson);
+        }
+        catch (JsonException)
+        {
+            esiFitting = null;
+        }
+
+        if (esiFitting is null)
+        {
+            return (null, "This fit could not be read.");
+        }
+
+        var seedTypeIds = new List<int> { esiFitting.ShipTypeId };
+        seedTypeIds.AddRange(esiFitting.Items.Select(item => item.TypeId));
+        return (seedTypeIds, null);
+    }
+
+    /// <summary>Every distinct <paramref name="source"/> row's (SourceRef, label) pair, skipping the null SourceRef
+    /// a + SKILL add leaves behind — used by the doctrine milestone lookup in <see cref="_LoadRowsAsync"/>.</summary>
+    private static IEnumerable<(string SourceRef, string Label)> _RefsWithLabel(
+        IReadOnlyList<SkillPlanRow> stored, SkillPlanRowSource source, string defaultLabel)
+    {
+        foreach (var row in stored)
+        {
+            if (row.Source == source && row.SourceRef is { } sourceRef)
+            {
+                yield return (sourceRef, row.SourceLabel ?? defaultLabel);
+            }
+        }
+    }
+
+    [RelayCommand]
     private async Task RemoveRow(SkillPlanDisplayRow? row)
     {
         if (row?.Row is not { } stored || SelectedPlan is not { } plan)
@@ -362,6 +431,31 @@ public sealed partial class SkillsPlansViewModel : ObservableObject
             }
         }
 
+        var doctrineRefs = _RefsWithLabel(stored, SkillPlanRowSource.Doctrine, "doctrine entry").Distinct().ToList();
+        var doctrineMinimumMilestoneAfter = new Dictionary<int, string>();
+        var doctrineFlyableMilestoneAfter = new Dictionary<int, string>();
+        foreach (var (sourceRef, label) in doctrineRefs)
+        {
+            if (SkillPlanOrdering.DoctrineMinimumMilestoneIndex(ordered, sourceRef) is { } minIndex)
+            {
+                doctrineMinimumMilestoneAfter[minIndex] = label;
+            }
+
+            // The fit-required boundary needs the entry's current fit, re-read live (SourceRef is only the entry id) —
+            // a deleted entry just leaves this half of the pair off rather than failing the whole load.
+            if (_validator is not null && long.TryParse(sourceRef, out var entryId)
+                && await _compositionReader.GetEntryAsync(entryId, cancellationToken) is { } entry)
+            {
+                var (fitSeedTypeIds, _) = _SeedTypeIdsFromRawJson(entry.Fit.RawJson);
+                if (fitSeedTypeIds is not null
+                    && SkillPlanOrdering.DoctrineFlyableMilestoneIndex(ordered, sourceRef,
+                        SkillPlanRowFactory.RequiredLevelPairs(_validator, fitSeedTypeIds, _snapshot.Levels)) is { } flyIndex)
+                {
+                    doctrineFlyableMilestoneAfter[flyIndex] = label;
+                }
+            }
+        }
+
         var estimator = new SkillTrainingEstimator(_dogma);
         var cumulative = TimeSpan.Zero;
         string? flyableAfterText = null;
@@ -387,6 +481,16 @@ public sealed partial class SkillsPlansViewModel : ObservableObject
             {
                 flyableAfterText = SkillQueueStanding.Until(cumulative);
                 Rows.Add(SkillPlanDisplayRow.ForMilestone($"✈ {label} flyable after {flyableAfterText}"));
+            }
+
+            if (doctrineFlyableMilestoneAfter.TryGetValue(i, out var doctrineFitLabel))
+            {
+                Rows.Add(SkillPlanDisplayRow.ForMilestone($"✈ {doctrineFitLabel} flyable after {SkillQueueStanding.Until(cumulative)}"));
+            }
+
+            if (doctrineMinimumMilestoneAfter.TryGetValue(i, out var doctrineMinLabel))
+            {
+                Rows.Add(SkillPlanDisplayRow.ForMilestone($"◆ {doctrineMinLabel} doctrine minimum met after {SkillQueueStanding.Until(cumulative)}"));
             }
         }
 

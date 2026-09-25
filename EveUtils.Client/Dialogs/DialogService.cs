@@ -13,6 +13,7 @@ using EveUtils.Client.ViewModels.FitBrowser;
 using EveUtils.Client.ViewModels.Killmails;
 using EveUtils.Client.ViewModels.Runs;
 using EveUtils.Client.ViewModels.Skills;
+using EveUtils.Client.ViewModels.Skills.Plans;
 using EveUtils.Client.ViewModels.Skills.WhatIf;
 using EveUtils.Client.Views;
 using EveUtils.Client.Views.Skills;
@@ -485,6 +486,12 @@ public sealed class DialogService : IDialogService, ISingletonService
     {
         if (_owner is null) return null;
         return await _Over(new FitPickerWindow(viewModel)).ShowDialog<Fleet.FitReferenceInfo?>(_owner);
+    }
+
+    public async Task<DoctrineEntryPick?> PickDoctrineEntryAsync(DoctrinePickerViewModel viewModel)
+    {
+        if (_owner is null) return null;
+        return await _Over(new DoctrinePickerWindow(viewModel)).ShowDialog<DoctrineEntryPick?>(_owner);
     }
 
     public void ShowInbox(InboxViewModel viewModel)
