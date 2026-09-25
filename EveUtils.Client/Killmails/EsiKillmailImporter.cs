@@ -72,24 +72,7 @@ public sealed class EsiKillmailImporter(IEsiClient esi, ILocalKillmailReader kil
 
             await using AsyncServiceScope scope = scopes.CreateAsyncScope();
             IDispatcher dispatcher = scope.ServiceProvider.GetRequiredService<IDispatcher>();
-            Result stored = await dispatcher.Send(new StoreKillmailsCommand(characterId, fetched), cancellationToken);
-            if (!stored.IsSuccess)
-            {
-                return new KillmailImportResult(KillmailImportStatus.Failed, 0,
-                    stored.Messages.FirstOrDefault()?.Text ?? "Storing the killmails failed.");
-            }
-
-            if (fetched.Count > 0)
-            {
-                await _ReplaceProvisionalAsync(characterId, fetched, cancellationToken);
-            }
-
-            // Also without new mails: a loss nothing fitted before may fit a run stopped or fitted since.
-            Result<int> linked = await dispatcher.Send(new LinkKillmailsToRunsCommand(characterId), cancellationToken);
-            return linked.IsSuccess
-                ? KillmailImportResult.Ok(fetched.Count)
-                : new KillmailImportResult(KillmailImportStatus.Failed, fetched.Count,
-                    linked.Messages.FirstOrDefault()?.Text ?? "Linking losses to their runs failed.");
+            return await _StoreAndLinkAsync(dispatcher, characterId, fetched, 0, cancellationToken);
         }
         finally
         {
@@ -102,7 +85,7 @@ public sealed class EsiKillmailImporter(IEsiClient esi, ILocalKillmailReader kil
     /// the 5-minute cache on <c>/characters/{id}/killmails/recent/</c>. Stored for every own character on the mail,
     /// victim or attacker; refused with nothing stored when none of them are. <see cref="StoreKillmailsCommand"/>
     /// already skips a mail already known for that character, so a mail the feed later re-discovers (or already found
-    /// first) never duplicates.
+    /// first) never duplicates. Links to runs the same as <see cref="ImportAsync"/> (ET-331, ET-374).
     /// </summary>
     public async Task<KillmailImportResult> ImportOneAsync(int killmailId, string hash, CancellationToken cancellationToken = default)
     {
@@ -132,33 +115,57 @@ public sealed class EsiKillmailImporter(IEsiClient esi, ILocalKillmailReader kil
             return new KillmailImportResult(KillmailImportStatus.NoOwnCharacter, 0, "None of your characters is on this killmail.");
         }
 
+        IDispatcher dispatcher = scope.ServiceProvider.GetRequiredService<IDispatcher>();
         var stored = 0;
         foreach (int characterId in ownCharacterIds)
         {
             SemaphoreSlim gate = _importGates.GetOrAdd(characterId, _ => new SemaphoreSlim(1, 1));
             await gate.WaitAsync(cancellationToken);
-            LocalKillmail entity = _ToEntity(characterId, hash, killmail);
+            KillmailImportResult outcome;
             try
             {
-                Result result = await scope.ServiceProvider.GetRequiredService<IDispatcher>()
-                    .Send(new StoreKillmailsCommand(characterId, [entity]), cancellationToken);
-                if (!result.IsSuccess)
-                {
-                    return new KillmailImportResult(KillmailImportStatus.Failed, stored,
-                        result.Messages.FirstOrDefault()?.Text ?? "Storing the killmail failed.");
-                }
-
-                stored++;
+                outcome = await _StoreAndLinkAsync(dispatcher, characterId, [_ToEntity(characterId, hash, killmail)], stored, cancellationToken);
             }
             finally
             {
                 gate.Release();
             }
 
-            await _ReplaceProvisionalAsync(characterId, [entity], cancellationToken);
+            if (!outcome.IsSuccess)
+            {
+                return outcome;
+            }
+
+            stored = outcome.ImportedCount;
         }
 
         return KillmailImportResult.Ok(stored);
+    }
+
+    // Shared by ImportAsync and ImportOneAsync (ET-374): store, replace any matching provisional row (ET-340), then
+    // run the ET-331 link pass for the same character, so a pasted link joins a run exactly like the feed does.
+    private async Task<KillmailImportResult> _StoreAndLinkAsync(IDispatcher dispatcher, int characterId,
+        IReadOnlyList<LocalKillmail> killmails, int alreadyStored, CancellationToken cancellationToken)
+    {
+        Result stored = await dispatcher.Send(new StoreKillmailsCommand(characterId, killmails), cancellationToken);
+        if (!stored.IsSuccess)
+        {
+            return new KillmailImportResult(KillmailImportStatus.Failed, alreadyStored,
+                stored.Messages.FirstOrDefault()?.Text ?? "Storing the killmails failed.");
+        }
+
+        if (killmails.Count > 0)
+        {
+            await _ReplaceProvisionalAsync(characterId, killmails, cancellationToken);
+        }
+
+        // Also without new mails: a loss nothing fitted before may fit a run stopped or fitted since.
+        Result<int> linked = await dispatcher.Send(new LinkKillmailsToRunsCommand(characterId), cancellationToken);
+        int total = alreadyStored + killmails.Count;
+        return linked.IsSuccess
+            ? KillmailImportResult.Ok(total)
+            : new KillmailImportResult(KillmailImportStatus.Failed, total,
+                linked.Messages.FirstOrDefault()?.Text ?? "Linking losses to their runs failed.");
     }
 
     // ET-340: matches a provisional row on time/ship/victim. Victim name resolves locally only — character

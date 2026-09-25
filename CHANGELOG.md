@@ -17,6 +17,10 @@ entries under `[Unreleased]` below that were not there yet at the previous night
 
 ## [Unreleased]
 
+- **Fixed: a killmail pasted from a link now joins its run and shows up in an open KILLMAILS window right away.**
+  PASTE LINK stored the loss but skipped two things the automatic feed always does for it: linking it to the run it
+  happened in — so it never counted as FAILED or added to TOTAL ISK — and telling an already open KILLMAILS window
+  about it, which only picked up the pasted mail after being reopened. Both now happen exactly like the feed.
 - **Added: pasting a killmail's own clipboard text shows it right away, marked provisional.** PASTE LINK in KILLMAILS
   now also accepts the plain "Copy" text from a killmail window, not just a link — useful the moment a kill happens,
   before ESI has it. The row appears immediately, marked "FROM CLIPBOARD · WAITING FOR ESI", with no run link and no

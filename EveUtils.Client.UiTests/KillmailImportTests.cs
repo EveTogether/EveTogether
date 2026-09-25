@@ -6,13 +6,19 @@ using System.Net.Http;
 using System.Threading.Tasks;
 using EveUtils.Client.Esi.Testing;
 using EveUtils.Client.Killmails;
+using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Data;
 using EveUtils.Shared.Identity;
+using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Esi;
 using EveUtils.Shared.Modules.Esi.Http;
 using EveUtils.Shared.Modules.Killmails;
 using EveUtils.Shared.Modules.Killmails.Entities;
+using EveUtils.Shared.Modules.Killmails.Enums;
+using EveUtils.Shared.Modules.Killmails.Events;
 using EveUtils.Shared.Modules.Killmails.Repositories;
+using EveUtils.Shared.Modules.Runs.Commands;
+using EveUtils.Shared.Modules.Runs.Enums;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -335,6 +341,52 @@ public sealed class KillmailImportTests : IDisposable
 
         var afterFeed = Assert.Single(await Repository.GetForCharacterAsync(CharacterId, TestContext.Current.CancellationToken));
         Assert.Equal(KillmailLinkSource.Manual, afterFeed.LinkSource);
+    }
+
+    // ET-374 AC1: a pasted link for a loss during a run links it to that run, same as the feed (ET-331) — without
+    // the fix ImportOneAsync never runs the link pass, so RunId stays null.
+    [Fact]
+    public async Task ImportOneAsync_LinksALossToItsRun_LikeTheFeedDoes()
+    {
+        await _instance.Services.GetRequiredService<ICharacterRegistry>()
+            .AddOrUpdateAsync(new Character("Test Pilot", CharacterId), TestContext.Current.CancellationToken);
+        IDispatcher dispatcher = _instance.Services.GetRequiredService<IDispatcher>();
+        var startedAtUtc = new DateTime(2026, 9, 20, 11, 30, 0, DateTimeKind.Utc);
+        var stoppedAtUtc = startedAtUtc.AddMinutes(20);
+        Result<Guid> started = await dispatcher.Send(
+            new StartRunCommand(CharacterId, ActivityKind.Site, startedAtUtc, 0, null, 30000142), TestContext.Current.CancellationToken);
+        await dispatcher.Send(new SaveRunCommand(started.Value, stoppedAtUtc, stoppedAtUtc, [], [], [], []),
+            TestContext.Current.CancellationToken);
+        var lossAtUtc = stoppedAtUtc.AddSeconds(60);
+        _routes["/killmails/1/hash1/"] = () => Json(200, $$"""
+            {"killmail_id":1,"killmail_time":"{{lossAtUtc:O}}","solar_system_id":30000142,
+             "victim":{"character_id":{{CharacterId}},"ship_type_id":587,"damage_taken":1,"items":[]},
+             "attackers":[{"character_id":88,"damage_done":1,"final_blow":true}]}
+            """);
+        var (client, _, _) = _Pipeline(EsiAuthorization.Authorized("token"));
+
+        await new EsiKillmailImporter(client, Repository, Scopes).ImportOneAsync(1, "hash1", TestContext.Current.CancellationToken);
+
+        var stored = Assert.Single(await Repository.GetForCharacterAsync(CharacterId, TestContext.Current.CancellationToken));
+        Assert.Equal(started.Value, stored.RunId);
+    }
+
+    // ET-374 AC2: a pasted link fires the same signal the feed does, so a second open KILLMAILS window reloads
+    // without needing to be reopened.
+    [Fact]
+    public async Task ImportOneAsync_PublishesKillmailsChangedEvent()
+    {
+        await _instance.Services.GetRequiredService<ICharacterRegistry>()
+            .AddOrUpdateAsync(new Character("Attacker Pilot", CharacterId), TestContext.Current.CancellationToken);
+        List<KillmailsChangedEvent> heard = [];
+        _instance.Services.GetRequiredService<IEventBus>().Subscribe<KillmailsChangedEvent>(published => heard.Add(published));
+        _routes["/killmails/1/hash1/"] = () => Json(200, _Killmail(1));
+        var (client, _, _) = _Pipeline(EsiAuthorization.Authorized("token"));
+
+        await new EsiKillmailImporter(client, Repository, Scopes).ImportOneAsync(1, "hash1", TestContext.Current.CancellationToken);
+
+        KillmailsChangedEvent change = Assert.Single(heard);
+        Assert.Equal((CharacterId, KillmailsChangeKind.Imported), (change.Data.CharacterId, change.Data.Kind));
     }
 
     // ET-338 AC7: an ESI error (a wrong hash, a time-out) reports a readable failure and stores nothing half-filled.
