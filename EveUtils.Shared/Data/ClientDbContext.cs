@@ -8,6 +8,7 @@ using EveUtils.Shared.Modules.Messaging.Entities;
 using EveUtils.Shared.Modules.Runs;
 using EveUtils.Shared.Modules.Settings;
 using EveUtils.Shared.Modules.Skills;
+using EveUtils.Shared.Modules.Skills.Plans;
 using EveUtils.Shared.Modules.Implants;
 using EveUtils.Shared.Modules.Killmails;
 using EveUtils.Shared.Transport;
@@ -25,6 +26,7 @@ public sealed class ClientDbContext(DbContextOptions<ClientDbContext> options) :
         SettingsModule.ConfigureModel(modelBuilder);           // client-only settings
         MarketModule.ConfigureModel(modelBuilder);             // client-only cached ESI market prices
         SkillsModule.ConfigureModel(modelBuilder);             // client-only imported character skills
+        SkillPlansModule.ConfigureModel(modelBuilder);         // client-only skill plans (never synced, D-179)
         ImplantsModule.ConfigureModel(modelBuilder);           // client-only imported character implants
         FittingsModule.ConfigureClientModel(modelBuilder);     // client-local fittings
         RunsModule.ConfigureClientModel(modelBuilder);         // client-local activity runs and derived summaries

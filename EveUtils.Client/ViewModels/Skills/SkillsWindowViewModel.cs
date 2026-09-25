@@ -8,10 +8,13 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using EveUtils.Client.Dialogs;
 using EveUtils.Client.Imaging;
+using EveUtils.Client.Skills.Plans;
+using EveUtils.Client.ViewModels.Skills.Plans;
 using EveUtils.Shared.Identity;
 using EveUtils.Shared.Modules.Sde;
 using EveUtils.Shared.Modules.Settings.Repositories;
 using EveUtils.Shared.Modules.Skills.Entities;
+using EveUtils.Shared.Modules.Skills.Plans.Events;
 using EveUtils.Shared.Modules.Skills.Repositories;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -20,13 +23,14 @@ using SkillQueueStanding = EveUtils.Client.ViewModels.Home.SkillQueueStanding;
 namespace EveUtils.Client.ViewModels.Skills;
 
 /// <summary>
-/// SKILLS module (ET-16): one screen, one character at a time, picked from the header — CATALOGUE and TRAINING
-/// QUEUE are built. PLANS and OPTIMISE are placeholder tabs; their content lands in S5/S6.
+/// SKILLS module (ET-16, ET-355): one screen, one character at a time, picked from the header — CATALOGUE,
+/// TRAINING QUEUE and PLANS are built. OPTIMISE is a placeholder tab; its content lands in S6.
 /// </summary>
-public sealed partial class SkillsWindowViewModel : ObservableObject, IRefreshableModule
+public sealed partial class SkillsWindowViewModel : ObservableObject, IRefreshableModule, IDisposable
 {
     public const string LastCharacterSettingKey = "skills.last-character";
 
+    private readonly IServiceProvider _services;
     private readonly ICharacterRegistry _registry;
     private readonly ICharacterSkillRepository _skillRepository;
     private readonly ICharacterSkillQueueRepository _queueRepository;
@@ -35,7 +39,9 @@ public sealed partial class SkillsWindowViewModel : ObservableObject, IRefreshab
     private readonly ISettingRepository? _settings;
     private readonly ICharacterPortraitProvider? _portraits;
     private readonly ILogger<SkillsWindowViewModel>? _logger;
+    private readonly SkillPlansChangeFeed? _plansFeed;
     private readonly int? _startingCharacterId;
+    private IDisposable? _plansFeedSubscription;
 
     private IReadOnlyList<Character> _characters = [];
     private bool _suppressSelectionApply; // set while _SelectCharacterAsync syncs SelectedCharacterOption back onto itself
@@ -49,6 +55,7 @@ public sealed partial class SkillsWindowViewModel : ObservableObject, IRefreshab
     [ObservableProperty] private int _selectedTabIndex;
     [ObservableProperty] private SkillsCatalogueViewModel? _catalogue;
     [ObservableProperty] private SkillsQueueViewModel? _queue;
+    [ObservableProperty] private SkillsPlansViewModel? _plans;
     [ObservableProperty] private bool _isLoading;
     [ObservableProperty] private string? _statusMessage;
 
@@ -73,6 +80,7 @@ public sealed partial class SkillsWindowViewModel : ObservableObject, IRefreshab
     /// on, or the first in the character column's own order.</param>
     public SkillsWindowViewModel(IServiceProvider services, int? startingCharacterId)
     {
+        _services = services;
         _registry = services.GetRequiredService<ICharacterRegistry>();
         _skillRepository = services.GetRequiredService<ICharacterSkillRepository>();
         _queueRepository = services.GetRequiredService<ICharacterSkillQueueRepository>();
@@ -81,7 +89,23 @@ public sealed partial class SkillsWindowViewModel : ObservableObject, IRefreshab
         _settings = services.GetService<ISettingRepository>();
         _portraits = services.GetService<ICharacterPortraitProvider>();
         _logger = services.GetService<ILogger<SkillsWindowViewModel>>();
+        _plansFeed = services.GetService<SkillPlansChangeFeed>();
         _startingCharacterId = startingCharacterId;
+        _plansFeedSubscription = _plansFeed?.Subscribe(_OnPlansChangedAsync);
+    }
+
+    public void Dispose() => _plansFeedSubscription?.Dispose();
+
+    // A plan changed on this or another window — reload PLANS only when it is about the character showing right now;
+    // a change for a different character updates that character's tab next time it is selected instead (LoadAsync).
+    private Task _OnPlansChangedAsync(IReadOnlyList<SkillPlansChangedEvent> events)
+    {
+        if (Plans is not null && events.Any(e => e.Data.CharacterId == SelectedCharacterId))
+        {
+            return Plans.LoadAsync();
+        }
+
+        return Task.CompletedTask;
     }
 
     public async Task LoadAsync(CancellationToken cancellationToken = default)
@@ -212,6 +236,8 @@ public sealed partial class SkillsWindowViewModel : ObservableObject, IRefreshab
             // rule RunsOverviewViewModel and KillmailsOverviewViewModel hold themselves to for their own reads.
             var (catalogue, queue) = await Task.Run(() =>
                 (new SkillsCatalogueViewModel(snapshot), new SkillsQueueViewModel(snapshot)), cancellationToken);
+            var plans = new SkillsPlansViewModel(_services, snapshot, characterId);
+            await plans.LoadAsync(cancellationToken);
 
             if (version != _selectionVersion)
             {
@@ -245,6 +271,7 @@ public sealed partial class SkillsWindowViewModel : ObservableObject, IRefreshab
             }
             Catalogue = catalogue;
             Queue = queue;
+            Plans = plans;
             StatusMessage = null;
 
             if (_settings is not null)

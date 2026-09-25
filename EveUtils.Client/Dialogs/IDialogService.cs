@@ -92,6 +92,10 @@ public interface IDialogService
     /// link decodes through the same fit-text importer.</summary>
     Task<string?> ImportFitEsfLinkAsync();
 
+    /// <summary>IMPORT FROM TEXT dialog for a skill plan (ET-355): returns the pasted text, or null if
+    /// cancelled/empty. Parsing (<c>SkillPlanTextCodec</c>) and storing are the caller's job.</summary>
+    Task<string?> ImportSkillPlanTextAsync(string? initialText = null);
+
     /// <summary>Edit-fit-metadata dialog (fit-metadata): prefilled with the fit's current name/description/tags, returns
     /// the edited <see cref="FitMetadataDraft"/> on Save or null on cancel. The fit's modules/identity are untouched.</summary>
     Task<FitMetadataDraft?> EditFitMetadataAsync(FitMetadataDraft current);

@@ -22,7 +22,7 @@ internal static class WriteRepositoryGuard
 
     /// <summary>The modules whose commands publish a change signal, as <c>CommandSignalCoverageTests</c> maps them.</summary>
     private static readonly string[] SignallingModules =
-        ["Runs", "Fleet", "Fleet.Composition", "Fittings", "Killmails", "Messaging", "Ships"];
+        ["Runs", "Fleet", "Fleet.Composition", "Fittings", "Killmails", "Messaging", "Ships", "Skills.Plans"];
 
     public static bool IsWriteRepository(Type type) =>
         type.IsInterface
