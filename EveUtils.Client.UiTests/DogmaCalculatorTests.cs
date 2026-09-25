@@ -3,6 +3,7 @@ using EveUtils.Client.ViewModels.FitBrowser;
 using EveUtils.Shared.Modules.Dogma;
 using EveUtils.Shared.Modules.Sde.Dtos;
 using EveUtils.Shared.Modules.Skills;
+using EveUtils.Shared.Modules.Skills.Plans.Commands;
 using Xunit;
 
 namespace EveUtils.Client.UiTests;
@@ -1195,22 +1196,27 @@ public class DogmaCalculatorTests
     // "module states matter to the scan" (A1) rather than a skill whose effect would show up regardless of state.
     private const int SpeedImpactSkill = 33098;
 
-    private static (FakeDogmaDataAccessor Data, FitInput Input) SkillImpactFixture(
-        Dictionary<int, int> levels, ModuleState propState)
+    private static (FakeDogmaDataAccessor Data, FitInput Input) SkillImpactFixture(Dictionary<int, int> levels,
+        ModuleState propState, IReadOnlyList<SdeDogmaAttribute>? extraShipAttributes = null,
+        IReadOnlyList<SdeDogmaAttribute>? extraHullSkillAttributes = null)
     {
         const int ferox = 16227, railgun = 3186, antimatter = 21904, mediumHybridTurret = 3304, propmod = 6001;
         const int speedBonus = 9101;
+        var shipAttributes = new List<SdeDogmaAttribute>
+        {
+            new(743, 10), new(745, 5),
+            new(DogmaAttributeIds.MaxVelocity, 120),
+            new(DogmaAttributeIds.Mass, 2_100_000),
+        };
+        shipAttributes.AddRange(extraShipAttributes ?? []);
         var data = new FakeDogmaDataAccessor()
             .Attribute(DogmaAttributeIds.SpeedBoostFactor, 0, stackable: false)
             .Attribute(speedBonus, 0, stackable: true)
-            .Type(ferox, 419, 6,
-                new SdeDogmaAttribute(743, 10), new SdeDogmaAttribute(745, 5),
-                new SdeDogmaAttribute(DogmaAttributeIds.MaxVelocity, 120),
-                new SdeDogmaAttribute(DogmaAttributeIds.Mass, 2_100_000))
+            .Type(ferox, 419, 6, shipAttributes.ToArray())
             .TypeEffect(ferox, 5334).TypeEffect(ferox, 6177)
             .Effect(5334, 0, new ModifierInfo(ModifierFunc.LocationRequiredSkillModifier, ModifierDomain.ShipId, 6, DogmaAttributeIds.MaxRange, 743, null, mediumHybridTurret))
             .Effect(6177, 0, new ModifierInfo(ModifierFunc.LocationRequiredSkillModifier, ModifierDomain.ShipId, 6, DogmaAttributeIds.DamageMultiplier, 745, null, mediumHybridTurret))
-            .Type(CaldariBattlecruiser, 257, 16)
+            .Type(CaldariBattlecruiser, 257, 16, (extraHullSkillAttributes ?? []).ToArray())
             .TypeEffect(CaldariBattlecruiser, 5286).TypeEffect(CaldariBattlecruiser, 5287)
             .Effect(5286, 0, new ModifierInfo(ModifierFunc.ItemModifier, ModifierDomain.ShipId, 0, 743, DogmaAttributeIds.SkillLevel, null, null))
             .Effect(5287, 0, new ModifierInfo(ModifierFunc.ItemModifier, ModifierDomain.ShipId, 0, 745, DogmaAttributeIds.SkillLevel, null, null))
@@ -1350,6 +1356,236 @@ public class DogmaCalculatorTests
         await staleLoad;
 
         Assert.Equal(changesAfterFreshLoad, changeCount);
+    }
+
+    // ── ET-357: SkillTargetsCalculator (can fly / optimal ±III / max / curve) ──────────────────────────
+    // Extends the fixture above with the data-driven align-time chain (DogmaPatches; wired manually since the fake
+    // accessor has no patch layer — same recipe as AlignTime_FoldsConstantTimesAgilityTimesMassOverMillion above), a
+    // uniform SP/min rate so a level's cost compares purely by its SP size, a CPU-hungry module (A2's greedy fit-check,
+    // optionally requiring AlignSkillId — A1/A3's "held at a higher level") and two more movers: AlignSkillId (reduces
+    // ship agility, so AlignTime — lower is better) and CpuManagementSkillId (raises ship CpuOutput, the fitting mover
+    // can fly's own greedy resolves an overload against).
+    private const int CpuHeavyModule = 90003;
+    private const int AlignSkillId = 90011;
+    private const int CpuManagementSkillId = 90012;
+    private const int AlignBonusAttribute = 90020;
+    private const int CpuBonusAttribute = 90021;
+    private const int Agility = 70;
+    private const int AlignTimeMillion = 90022;
+    private const double AlignTimeConstant = 1.3862943611198906;   // -ln(0.25)
+
+    private static readonly SdeDogmaAttribute[] UniformSpRate =
+    [
+        new(DogmaAttributeIds.SkillPrimaryAttribute, DogmaAttributeIds.Perception),
+        new(DogmaAttributeIds.SkillSecondaryAttribute, DogmaAttributeIds.Willpower),
+    ];
+
+    // Perception 20 / Willpower 17 -> 28.5 SP/min for every skill in this fixture (rank defaults to 1) — uniform so a
+    // level's cost is comparable purely by its skill-point size (250 * sqrt(32)^(level-1)).
+    private static readonly CharacterAttributeSet TestAttributes = new(0, 0, 0, 20, 17);
+
+    private static (FakeDogmaDataAccessor Data, FitInput Input) SkillTargetsFixture(Dictionary<int, int> trained,
+        double shipCpuOutput, double shipPowerOutput, double moduleCpu, double modulePower,
+        bool requireAlignSkill = false, double antimatterDamage = 10)
+    {
+        ModifierInfo Self(int op, int modified, int modifying) =>
+            new(ModifierFunc.ItemModifier, ModifierDomain.ItemId, op, modified, modifying, null, null);
+
+        var (data, input) = SkillImpactFixture(trained, ModuleState.Active,
+            [
+                new SdeDogmaAttribute(DogmaAttributeIds.CpuOutput, shipCpuOutput),
+                new SdeDogmaAttribute(DogmaAttributeIds.PowerOutput, shipPowerOutput),
+                new SdeDogmaAttribute(Agility, 5.0),
+            ],
+            UniformSpRate);
+
+        data.Attribute(DogmaAttributeIds.AlignTime, AlignTimeConstant, stackable: true)
+            .Attribute(AlignTimeMillion, 1_000_000, stackable: true)
+            .TypeEffect(input.ShipTypeId, DogmaAttributeIds.AlignTime)
+            .Effect(DogmaAttributeIds.AlignTime, 0,
+                Self(4, DogmaAttributeIds.AlignTime, Agility),
+                Self(4, DogmaAttributeIds.AlignTime, DogmaAttributeIds.Mass),
+                Self(5, DogmaAttributeIds.AlignTime, AlignTimeMillion));
+
+        var cpuHeavyAttributes = new List<SdeDogmaAttribute>
+        {
+            new(DogmaAttributeIds.Cpu, moduleCpu), new(DogmaAttributeIds.Power, modulePower),
+        };
+        if (requireAlignSkill)
+        {
+            cpuHeavyAttributes.Add(new SdeDogmaAttribute(DogmaAttributeIds.RequiredSkill[0], AlignSkillId));
+            cpuHeavyAttributes.Add(new SdeDogmaAttribute(DogmaAttributeIds.RequiredSkillLevel[0], 4));
+        }
+
+        WithCpuPowerLoad(data, CpuHeavyModule)
+            .Type(CpuHeavyModule, 60, 7, cpuHeavyAttributes.ToArray())
+            .Type(AlignSkillId, 9000, 16, [.. UniformSpRate, new SdeDogmaAttribute(AlignBonusAttribute, -5)])
+            .TypeEffect(AlignSkillId, 930).TypeEffect(AlignSkillId, 931)
+            .Effect(930, 0, new ModifierInfo(ModifierFunc.ItemModifier, ModifierDomain.ItemId, 0, AlignBonusAttribute, DogmaAttributeIds.SkillLevel, null, null))
+            .Effect(931, 0, new ModifierInfo(ModifierFunc.ItemModifier, ModifierDomain.ShipId, 6, Agility, AlignBonusAttribute, null, null))
+            .Type(CpuManagementSkillId, 9000, 16, [.. UniformSpRate, new SdeDogmaAttribute(CpuBonusAttribute, 30)])
+            .TypeEffect(CpuManagementSkillId, 940).TypeEffect(CpuManagementSkillId, 941)
+            .Effect(940, 0, new ModifierInfo(ModifierFunc.ItemModifier, ModifierDomain.ItemId, 0, CpuBonusAttribute, DogmaAttributeIds.SkillLevel, null, null))
+            .Effect(941, 0, new ModifierInfo(ModifierFunc.ItemModifier, ModifierDomain.ShipId, 6, DogmaAttributeIds.CpuOutput, CpuBonusAttribute, null, null));
+
+        // A5: antimatterDamage scales TurretDps (baseline 2.0 * damage / 10) into "large stat" territory, disparate
+        // from AlignTime's single-digit-second scale, without touching any of this fixture's other proven values.
+        if (input.Modules[0].ChargeTypeId is { } antimatterId && Math.Abs(antimatterDamage - 10) > 1e-9)
+            data.Type(antimatterId, 85, 8, new SdeDogmaAttribute(114, antimatterDamage));
+
+        var withCpuModule = input with { Modules = [.. input.Modules, new ModuleInput(CpuHeavyModule, ModuleState.Online)] };
+        return (data, withCpuModule);
+    }
+
+    private static async Task<SkillTargetsResult> CalculateTargetsAsync(FakeDogmaDataAccessor data, FitInput input,
+        Dictionary<int, int> trained, IReadOnlyList<SkillImpactStat> selectedStats)
+    {
+        var calculator = CalculatorFor(data);
+        var validator = new FitValidator(data);
+        var scanner = new SkillImpactScanner(calculator, data);
+        var scan = await scanner.ScanAsync(input, trained, TestContext.Current.CancellationToken);
+        var targets = new SkillTargetsCalculator(calculator, validator, new SkillTrainingEstimator(data), TestAttributes);
+        return await targets.CalculateAsync(input, trained, scan, selectedStats, TestContext.Current.CancellationToken);
+    }
+
+    // A1, with its counter-proof: can fly ⊆ optimal ⊆ max as level sets, time and score strictly increasing, and a
+    // skill can fly already needs higher than III (AlignSkillId, forced to IV by the fitted module's own SDE
+    // requirement) keeps that higher level in optimal instead of being lowered to III.
+    [Fact]
+    public async Task SkillTargets_ThreeCards_AreNestedAndKeepAHigherCanFlyRequirement()
+    {
+        var trained = new Dictionary<int, int>();
+        var (data, input) = SkillTargetsFixture(trained, shipCpuOutput: 1000, shipPowerOutput: 1000,
+            moduleCpu: 1, modulePower: 1, requireAlignSkill: true);
+
+        var result = await CalculateTargetsAsync(data, input, trained, [SkillImpactStat.Dps, SkillImpactStat.AlignTime]);
+
+        // Can fly also carries the fit's own turret/propulsion group requirements (the railgun and the prop module
+        // each declare one, unrelated to this test) — asserted by presence, not full-list equality, same as optimal/max.
+        Assert.Contains(result.CanFly.Levels, level => level.SkillTypeId == AlignSkillId && level.Level == 4);
+        Assert.DoesNotContain(result.CanFly.Levels, level => level.SkillTypeId == CaldariBattlecruiser);
+        Assert.Contains(result.Optimal.Levels, level => level.SkillTypeId == AlignSkillId && level.Level == 4);
+        Assert.Contains(result.Optimal.Levels, level => level.SkillTypeId == CaldariBattlecruiser && level.Level == 3);
+        Assert.Contains(result.Max.Levels, level => level.SkillTypeId == AlignSkillId && level.Level == 5);
+        Assert.Contains(result.Max.Levels, level => level.SkillTypeId == CaldariBattlecruiser && level.Level == 5);
+        Assert.True(result.CanFly.TrainingTime < result.Optimal.TrainingTime);
+        Assert.True(result.Optimal.TrainingTime < result.Max.TrainingTime);
+        Assert.Equal(0, result.CanFly.Score);
+        Assert.InRange(result.Optimal.Score, 0.01, 0.99);
+        Assert.Equal(1, result.Max.Score, 3);
+    }
+
+    // A2, with its counter-proof: a CPU shortfall solved by exactly one fitting level is in can fly, and a PG
+    // shortfall no fitting mover in this fixture can resolve is reported instead of silently ignored.
+    [Fact]
+    public async Task SkillTargets_CanFly_ResolvesCpuShortfallGreedily_AndReportsAnUnresolvablePgShortfall()
+    {
+        var trained = new Dictionary<int, int>();
+
+        var (resolvedData, resolvedInput) = SkillTargetsFixture(trained, shipCpuOutput: 20, shipPowerOutput: 1000, moduleCpu: 25, modulePower: 1);
+        var resolved = await CalculateTargetsAsync(resolvedData, resolvedInput, trained, [SkillImpactStat.Dps]);
+        Assert.True(resolved.CanFly.Fits);
+        Assert.Contains(resolved.CanFly.Levels, level => level.SkillTypeId == CpuManagementSkillId && level.Level == 1);
+
+        var (shortData, shortInput) = SkillTargetsFixture(trained, shipCpuOutput: 1000, shipPowerOutput: 5, moduleCpu: 1, modulePower: 50);
+        var short_ = await CalculateTargetsAsync(shortData, shortInput, trained, [SkillImpactStat.Dps]);
+        Assert.False(short_.CanFly.Fits);
+        Assert.Contains(short_.CanFly.Shortfalls, shortfall => shortfall.Resource == SkillImpactStat.FreePg && shortfall.Shortfall > 0);
+    }
+
+    // A3, with its counter-proof: can fly is byte-for-byte the same whether the pilot picked one stat or three —
+    // only optimal and max (which target the chosen stats' own movers) grow with the selection.
+    [Fact]
+    public async Task SkillTargets_CanFly_IsIndependentOfTheChosenStats()
+    {
+        var trained = new Dictionary<int, int>();
+        var (data, input) = SkillTargetsFixture(trained, shipCpuOutput: 1000, shipPowerOutput: 1000,
+            moduleCpu: 1, modulePower: 1, requireAlignSkill: true);
+
+        var narrow = await CalculateTargetsAsync(data, input, trained, [SkillImpactStat.Dps]);
+        var wide = await CalculateTargetsAsync(data, input, trained,
+            [SkillImpactStat.Dps, SkillImpactStat.AlignTime, SkillImpactStat.FreeCpu]);
+
+        Assert.Equal(narrow.CanFly.Levels, wide.CanFly.Levels);
+        Assert.NotEqual(narrow.Optimal.Levels.Count, wide.Optimal.Levels.Count);
+        Assert.NotEqual(narrow.Max.Levels.Count, wide.Max.Levels.Count);
+    }
+
+    // A4, with its counter-proof: three movers (Dps, FreeCpu, AlignTime), one with several remaining levels — the
+    // curve's own observed score-per-hour never increases step to step. A ranking on raw Δscore instead of Δscore
+    // per hour would let a slow, big-Δscore pick outrank a fast, small-Δscore one later in the walk, breaking this.
+    [Fact]
+    public async Task SkillTargets_Curve_StepScorePerHour_NeverIncreases()
+    {
+        var trained = new Dictionary<int, int> { [CaldariBattlecruiser] = 4, [CpuManagementSkillId] = 2, [AlignSkillId] = 3 };
+        var (data, input) = SkillTargetsFixture(trained, shipCpuOutput: 1000, shipPowerOutput: 1000, moduleCpu: 1, modulePower: 1);
+
+        var result = await CalculateTargetsAsync(data, input, trained,
+            [SkillImpactStat.Dps, SkillImpactStat.FreeCpu, SkillImpactStat.AlignTime]);
+
+        var points = result.Curve.Points;
+        Assert.True(points.Count >= 3);
+        var timeline = new[] { (Score: 0.0, Time: TimeSpan.Zero) }
+            .Concat(points.Select(point => (point.Score, Time: point.CumulativeTime))).ToList();
+        var ratios = Enumerable.Range(1, points.Count)
+            .Select(i => (timeline[i].Score - timeline[i - 1].Score) / (timeline[i].Time - timeline[i - 1].Time).TotalHours)
+            .ToList();
+
+        Assert.Equal(ratios.OrderDescending(), ratios);
+    }
+
+    // A5, with its counter-proof: DPS (hundreds) and AlignTime (single-digit seconds) both reach half their own
+    // can-fly-to-max range well before the curve ends. A raw sum instead of the share would let DPS's much larger
+    // raw numbers crowd out every AlignTime pick until DPS is exhausted, pushing align's own 50% to the far end.
+    [Fact]
+    public async Task SkillTargets_Curve_NormalizedShare_LetsASmallStatKeepPaceWithALargeOne()
+    {
+        var trained = new Dictionary<int, int>();
+        var (data, input) = SkillTargetsFixture(trained, shipCpuOutput: 1000, shipPowerOutput: 1000,
+            moduleCpu: 1, modulePower: 1, antimatterDamage: 2000);
+
+        var result = await CalculateTargetsAsync(data, input, trained, [SkillImpactStat.Dps, SkillImpactStat.AlignTime]);
+
+        var points = result.Curve.Points;
+        int dpsCrossing = points.ToList().FindIndex(point => point.StatShares[SkillImpactStat.Dps] >= 0.5);
+        int alignCrossing = points.ToList().FindIndex(point => point.StatShares[SkillImpactStat.AlignTime] >= 0.5);
+
+        Assert.InRange(dpsCrossing, 0, points.Count / 2);
+        Assert.InRange(alignCrossing, 0, points.Count / 2);
+    }
+
+    // A6, with its counter-proof: ADD TO PLAN on the MAX card sends exactly that card's still-untrained levels —
+    // never a level the character already has, which a card sent whole (instead of its filtered Levels) would.
+    [Fact]
+    public async Task SkillTargets_AddToPlanCommand_SendsExactlyTheCardsUntrainedLevels()
+    {
+        var trained = new Dictionary<int, int> { [CaldariBattlecruiser] = 2 };
+        var (data, input) = SkillTargetsFixture(trained, shipCpuOutput: 1000, shipPowerOutput: 1000, moduleCpu: 1, modulePower: 1);
+        var calculator = CalculatorFor(data);
+        var validator = new FitValidator(data);
+        var estimator = new SkillTrainingEstimator(data);
+        var scanner = new SkillImpactScanner(calculator, data);
+        var targetsCalculator = new SkillTargetsCalculator(calculator, validator, estimator, TestAttributes);
+
+        IReadOnlyList<SkillPlanRowDraft>? sentRows = null;
+        Task AddToPlan(IReadOnlyList<SkillPlanRowDraft> rows, string _)
+        {
+            sentRows = rows;
+            return Task.CompletedTask;
+        }
+
+        var vm = new SkillImpactViewModel(scanner, validator, estimator, TestAttributes, FallbackNameResolver.Instance,
+            "skill-impact:test", "Sin Krah", "Ferox", input, trained, targetsCalculator, AddToPlan);
+        vm.Chips.Single(chip => chip.Stat == SkillImpactStat.Dps).IsSelected = true;
+
+        await vm.LoadAsync(TestContext.Current.CancellationToken);
+
+        Assert.NotNull(vm.MaxCard);
+        vm.MaxCard.AddToPlanCommand.Execute(null);
+
+        Assert.NotNull(sentRows);
+        Assert.Contains(sentRows, row => row.SkillTypeId == CaldariBattlecruiser && row.Level == 5);
+        Assert.DoesNotContain(sentRows, row => row.SkillTypeId == CaldariBattlecruiser && row.Level <= 2);
     }
 
     private sealed class CountingCalculator(IDogmaCalculator inner) : IDogmaCalculator

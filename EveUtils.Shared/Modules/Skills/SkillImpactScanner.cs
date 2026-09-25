@@ -27,7 +27,7 @@ public sealed class SkillImpactScanner(IDogmaCalculator calculator, IDogmaDataAc
     public async Task<SkillImpactResult> ScanAsync(
         FitInput baseInput, IReadOnlyDictionary<int, int> trainedLevels, CancellationToken cancellationToken = default)
     {
-        var baseValues = _ReadStats(await calculator.CalculateAsync(baseInput, cancellationToken));
+        var baseValues = ReadStats(await calculator.CalculateAsync(baseInput, cancellationToken));
 
         var entries = new List<SkillImpactEntry>();
         foreach (var skillTypeId in data.GetSkillTypeIds())
@@ -36,7 +36,7 @@ public sealed class SkillImpactScanner(IDogmaCalculator calculator, IDogmaDataAc
             if (currentLevel >= 5)
                 continue;
 
-            var atFive = _ReadStats(await calculator.CalculateAsync(
+            var atFive = ReadStats(await calculator.CalculateAsync(
                 _WithLevel(baseInput, trainedLevels, skillTypeId, 5), cancellationToken));
             var moved = baseValues.Keys.Where(stat => Math.Abs(baseValues[stat] - atFive[stat]) > Epsilon).ToList();
             if (moved.Count == 0)
@@ -45,7 +45,7 @@ public sealed class SkillImpactScanner(IDogmaCalculator calculator, IDogmaDataAc
             var nextLevel = currentLevel + 1;
             var atNext = nextLevel == 5
                 ? atFive
-                : _ReadStats(await calculator.CalculateAsync(
+                : ReadStats(await calculator.CalculateAsync(
                     _WithLevel(baseInput, trainedLevels, skillTypeId, nextLevel), cancellationToken));
 
             entries.Add(new SkillImpactEntry(skillTypeId, currentLevel,
@@ -77,7 +77,7 @@ public sealed class SkillImpactScanner(IDogmaCalculator calculator, IDogmaDataAc
             if (level < 5)
                 continue;
 
-            var atZero = _ReadStats(await calculator.CalculateAsync(
+            var atZero = ReadStats(await calculator.CalculateAsync(
                 _WithLevel(baseInput, trainedLevels, skillTypeId, 0), cancellationToken));
             foreach (var stat in stillStats)
                 if (Math.Abs(baseValues[stat] - atZero[stat]) > Epsilon)
@@ -93,7 +93,9 @@ public sealed class SkillImpactScanner(IDogmaCalculator calculator, IDogmaDataAc
         return baseInput with { Skills = SkillSource.From(levels) };
     }
 
-    private static Dictionary<SkillImpactStat, double> _ReadStats(FitResult result)
+    // The fifteen D3 stats off a computed fit — public so ET-357's SkillTargetsCalculator reads the same values
+    // the impact scan itself ranks against, instead of a second copy of the weapon-contribution/ship-attribute picks.
+    public static Dictionary<SkillImpactStat, double> ReadStats(FitResult result)
     {
         var d = result.Derived;
         var stats = new Dictionary<SkillImpactStat, double>

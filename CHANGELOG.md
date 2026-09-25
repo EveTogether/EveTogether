@@ -17,6 +17,15 @@ entries under `[Unreleased]` below that were not there yet at the previous night
 
 ## [Unreleased]
 
+- **Added: three skill-training targets in SKILL IMPACT… — can fly, optimal ±III and max.** With at least one
+  OPTIMISE FOR stat picked, three cards show the levels, training time and skill points to fly the fit at all
+  (prerequisites plus the cheapest fitting skills if it overloads CPU or power grid — or "This fit does not fit at
+  any skill level" when no amount of training fixes it), to have every chosen stat's movers at least at III, and to
+  have them all at V, each with the chosen stats as a percentage of what's achievable between can fly and max. A
+  curve plots that percentage against cumulative training time, greedily picking the next level with the best gain
+  per hour, with markers where optimal and 100% are reached. ADD TO PLAN on a card, and a new "+" next to each
+  impact row, add straight to a skill plan. PLANS' + FROM FIT… now opens this view instead of adding a fit's raw
+  prerequisites directly, so the fitting-skill fix and the three targets are available from there too.
 - **Added: WHAT IF panel in PLANS.** For the selected plan and character, five scenarios and the date each finishes:
   the queue as it stands today, training the plan first, the same plan with the fastest attribute remap, and that
   remap plus a matched +4 or +5 implant set. A SHARE dialog next to it offers COPY AS TEXT, PUT IT IN THE DOCTRINE

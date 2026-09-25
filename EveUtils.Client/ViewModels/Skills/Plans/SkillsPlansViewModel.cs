@@ -37,10 +37,12 @@ public sealed partial class SkillsPlansViewModel : ObservableObject
     private readonly ISkillPlanReader _reader;
     private readonly IFitValidator? _validator;
     private readonly IDogmaDataAccessor? _dogma;
+    private readonly IDogmaCalculator? _calculator;
     private readonly IDialogService _dialogs;
     private readonly IServiceProvider _services;
     private readonly SkillsCharacterSnapshot _snapshot;
     private readonly int _characterId;
+    private readonly string _characterName;
     private readonly CharacterAttributeSet _attributes;
 
     public ObservableCollection<SkillPlan> Plans { get; } = [];
@@ -57,16 +59,18 @@ public sealed partial class SkillsPlansViewModel : ObservableObject
     /// dogma access (design-time preview, or a character whose SDE dependencies never loaded).</summary>
     [ObservableProperty] private SkillsWhatIfViewModel? _whatIf;
 
-    public SkillsPlansViewModel(IServiceProvider services, SkillsCharacterSnapshot snapshot, int characterId)
+    public SkillsPlansViewModel(IServiceProvider services, SkillsCharacterSnapshot snapshot, int characterId, string characterName = "")
     {
         _services = services;
         _dispatcher = services.GetRequiredService<IDispatcher>();
         _reader = services.GetRequiredService<ISkillPlanReader>();
         _validator = services.GetService<IFitValidator>();
         _dogma = services.GetService<IDogmaDataAccessor>();
+        _calculator = services.GetService<IDogmaCalculator>();
         _dialogs = services.GetRequiredService<IDialogService>();
         _snapshot = snapshot;
         _characterId = characterId;
+        _characterName = characterName;
         // Base attributes only, no attribute implants folded in — the same simplification SkillsCharacterSnapshot
         // itself makes for CATALOGUE/TRAINING QUEUE's own SP/min figures (SkillAttributeLookup reads base values).
         _attributes = snapshot.Attributes is { } a
@@ -196,10 +200,13 @@ public sealed partial class SkillsPlansViewModel : ObservableObject
         await _AddRowsAsync(SkillPlanRowSource.Item, typeId.ToString(CultureInfo.InvariantCulture), result);
     }
 
+    // ET-357 D1: + FROM FIT opens a fit picker, then the fit's own SKILL IMPACT window — can fly / optimal ±III / max,
+    // with a curve — instead of adding the raw prerequisite closure straight to the plan. ADD TO PLAN there (and the
+    // "+" per impact row) write through the same AddSkillPlanRowsCommand this tab's other actions use, Source Fit.
     [RelayCommand]
     private async Task AddFromFit()
     {
-        if (_validator is null)
+        if (_validator is null || _dogma is null || _calculator is null)
         {
             return;
         }
@@ -227,10 +234,30 @@ public sealed partial class SkillsPlansViewModel : ObservableObject
             return;
         }
 
-        var seedTypeIds = new List<int> { esiFitting.ShipTypeId };
-        seedTypeIds.AddRange(esiFitting.Items.Select(item => item.TypeId));
-        var result = SkillPlanRowFactory.FromFit(_validator, seedTypeIds, _snapshot.Levels, fit.FitName);
-        await _AddRowsAsync(SkillPlanRowSource.Fit, fit.ContentHash, result);
+        var modules = FitInputMapper.BuildModules(esiFitting, _snapshot.Sde, _dogma);
+        var baseInput = new FitInput(esiFitting.ShipTypeId, modules, SkillSource.From(_snapshot.Levels), FitInputMapper.BuildDrones(esiFitting));
+        var scanner = new SkillImpactScanner(_calculator, _dogma);
+        var estimator = new SkillTrainingEstimator(_dogma);
+        var targetsCalculator = new SkillTargetsCalculator(_calculator, _validator, estimator, _attributes);
+
+        var viewModel = new SkillImpactViewModel(scanner, _validator, estimator, _attributes,
+            FitNameResolverFactory.For(_services), $"skill-impact:plan-fit:{fit.ContentHash}", _characterName, fit.FitName,
+            baseInput, _snapshot.Levels, targetsCalculator, (rows, sourceLabel) => _AddPlanRowsAsync(SkillPlanRowSource.Fit, fit.ContentHash, rows, sourceLabel));
+        _dialogs.ShowSkillImpact(viewModel);
+        await viewModel.LoadAsync();
+    }
+
+    // The write both ET-357's per-card ADD TO PLAN and its per-row "+" call into — same command as every other
+    // + action on this tab, so a plan edited from the SKILL IMPACT window follows the same reload/message path.
+    private async Task _AddPlanRowsAsync(SkillPlanRowSource source, string? sourceRef, IReadOnlyList<SkillPlanRowDraft> rows, string sourceLabel)
+    {
+        if (rows.Count == 0)
+        {
+            StatusMessage = $"Nothing to add for {sourceLabel} — every required skill is already trained.";
+            return;
+        }
+
+        await _AddRowsAsync(source, sourceRef, new SkillPlanBuildResult(rows, null));
     }
 
     [RelayCommand]

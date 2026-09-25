@@ -143,6 +143,7 @@ public sealed class FitDetailWindowViewModel : ViewModelBase
     // feature) disables the button; the trained-levels/module-state snapshot always comes from this window's own
     // current selection, never a second source of truth.
     private readonly SkillImpactScanner? _skillImpactScanner;
+    private readonly IDogmaCalculator? _calculator;
     private readonly Action<SkillImpactViewModel>? _onShowSkillImpact;
 
     // Skill-gap SP + Omega training-time estimate: the selected character's effective attributes (base + the
@@ -391,6 +392,7 @@ public sealed class FitDetailWindowViewModel : ViewModelBase
         // ET-356: the same engine + data accessor the validator and the stats provider use, so a skill-impact scan
         // reads identical dogma to the fit-detail's own numbers. Null (no engine data yet) disables the entry point.
         _skillImpactScanner = data is null || calculator is null ? null : new SkillImpactScanner(calculator, data);
+        _calculator = calculator;
         // fit-metadata: the stored name wins over the one still standing in RawJson, which renaming leaves alone
         // (same rule as the browser's rows). _ApplyMetadata keeps the header in step during an in-place edit.
         Name = string.IsNullOrWhiteSpace(name) ? fit.Name : name;
@@ -515,8 +517,16 @@ public sealed class FitDetailWindowViewModel : ViewModelBase
         // Keyed on the character too, not just the fit: switching SKILLS to a different character while a SKILL
         // IMPACT tab is already open must land in its own tab, not silently refocus the previous character's stale
         // one (ModuleHostService.Open treats a re-used module id as "already open" and drops the new view model).
+        // ET-357: the three target cards need the same validator/estimator/attributes the row list already has, plus
+        // the calculator itself — opened from FIT DETAIL there is no selected PLANS plan to write to, so ADD TO PLAN
+        // stays disabled here (addToPlan: null); PLANS' own + FROM FIT (SkillsPlansViewModel) supplies it.
+        SkillTargetsCalculator? targetsCalculator = _calculator is not null && _validator is not null
+            && _trainingEstimator is not null && _effectiveAttributes is not null
+            ? new SkillTargetsCalculator(_calculator, _validator, _trainingEstimator, _effectiveAttributes)
+            : null;
         var viewModel = new SkillImpactViewModel(_skillImpactScanner, _validator, _trainingEstimator, _effectiveAttributes,
-            _names, $"skill-impact:{ModuleId}:{characterId}", SelectedSkillMode!.Label, ShipName, _BuildBaseFitInput(), _trainedSkills);
+            _names, $"skill-impact:{ModuleId}:{characterId}", SelectedSkillMode!.Label, ShipName, _BuildBaseFitInput(),
+            _trainedSkills, targetsCalculator);
         _onShowSkillImpact(viewModel);
         return viewModel.LoadAsync();
     }

@@ -11,8 +11,37 @@
         Title="SKILL IMPACT">
 
     <!-- ET-356: which skills move this fit, for the character and module states the fit-detail window opened it
-         with. Layout follows KillmailDetailWindow — a header, a filter row, then a scrolling list. -->
+         with. Layout follows KillmailDetailWindow — a header, a filter row, then a scrolling list.
+         ET-357: with at least one OPTIMISE FOR chip picked, three target cards (can fly / optimal ±III / max) and
+         the greedy training curve appear above the ranked list. -->
     <DockPanel MaxWidth="1040">
+        <DockPanel.Resources>
+            <DataTemplate x:Key="TargetCardTemplate" DataType="vf:SkillTargetCardViewModel">
+                <Border Padding="10" BorderThickness="1" BorderBrush="{DynamicResource DividerBrush}">
+                    <StackPanel Spacing="3">
+                        <TextBlock Classes="label" Text="{Binding Title}"/>
+                        <TextBlock FontSize="12" Text="{Binding TimeText}"/>
+                        <TextBlock Classes="hint" Margin="0" Text="{Binding DateText}"/>
+                        <TextBlock Classes="hint" Margin="0" Text="{Binding SpText}"/>
+                        <TextBlock Classes="hint" Margin="0" Text="{Binding LevelsText}"/>
+                        <TextBlock FontSize="12" FontWeight="SemiBold" Text="{Binding ScorePercentText}"/>
+                        <ItemsControl ItemsSource="{Binding StatShares}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="vf:SkillTargetStatShareViewModel">
+                                    <TextBlock Classes="hint" Margin="0" FontSize="10.5">
+                                        <Run Text="{Binding Label}"/><Run Text=" "/><Run Text="{Binding PercentText}"/>
+                                    </TextBlock>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <TextBlock Classes="hint" Margin="0" TextWrapping="Wrap" Text="{Binding FitCheckText}" IsVisible="{Binding Fits}"/>
+                        <TextBlock Foreground="{DynamicResource RedBrush}" FontSize="10.5" TextWrapping="Wrap"
+                                   Text="{Binding FitCheckText}" IsVisible="{Binding !Fits}"/>
+                        <Button Content="ADD TO PLAN" IsVisible="{Binding CanAddToPlan}" Command="{Binding AddToPlanCommand}"/>
+                    </StackPanel>
+                </Border>
+            </DataTemplate>
+        </DockPanel.Resources>
 
         <Border DockPanel.Dock="Top" Padding="14,12" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource BorderBrush}">
             <StackPanel Spacing="4">
@@ -43,29 +72,52 @@
 
         <TextBlock DockPanel.Dock="Top" Classes="hint" Margin="14,8" Text="Scanning…" IsVisible="{Binding IsLoading}"/>
 
+        <Border DockPanel.Dock="Top" Padding="14,10" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource DividerBrush}"
+                IsVisible="{Binding CanFlyCard, Converter={x:Static ObjectConverters.IsNotNull}}">
+            <StackPanel Spacing="8">
+                <TextBlock Classes="hint" Text="Computing skill targets…" IsVisible="{Binding IsLoadingTargets}"/>
+                <TextBlock Classes="hint" Foreground="{DynamicResource RedBrush}" Text="{Binding TargetsErrorMessage}"
+                           IsVisible="{Binding TargetsErrorMessage, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+                <Grid ColumnDefinitions="*,*,*" ColumnSpacing="10">
+                    <ContentControl Grid.Column="0" Content="{Binding CanFlyCard}" ContentTemplate="{StaticResource TargetCardTemplate}"/>
+                    <ContentControl Grid.Column="1" Content="{Binding OptimalCard}" ContentTemplate="{StaticResource TargetCardTemplate}"/>
+                    <ContentControl Grid.Column="2" Content="{Binding MaxCard}" ContentTemplate="{StaticResource TargetCardTemplate}"/>
+                </Grid>
+                <StackPanel Orientation="Horizontal" Spacing="14" IsVisible="{Binding Curve, Converter={x:Static ObjectConverters.IsNotNull}}">
+                    <TextBlock Classes="hint" Margin="0" Text="{Binding Curve.StepsText}"/>
+                    <TextBlock Classes="hint" Margin="0" Text="{Binding Curve.OptimalMarkerText}"/>
+                    <TextBlock Classes="hint" Margin="0" Text="{Binding Curve.HundredPercentMarkerText}"/>
+                </StackPanel>
+            </StackPanel>
+        </Border>
+
         <ScrollViewer>
-            <ItemsControl ItemsSource="{Binding Rows}">
-                <ItemsControl.ItemTemplate>
-                    <DataTemplate DataType="vf:SkillImpactRowViewModel">
-                        <Border Padding="14,8" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource DividerBrush}">
-                            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
-                                <StackPanel>
-                                    <TextBlock FontSize="12" Text="{Binding SkillName}"/>
-                                    <TextBlock Classes="hint" Margin="0" Text="{Binding CurrentLevel}"/>
-                                </StackPanel>
-                                <ItemsControl Grid.Column="1" ItemsSource="{Binding Gains}">
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate DataType="vf:SkillImpactStatGain">
-                                            <TextBlock FontFamily="{StaticResource MonoFont}" FontSize="10.5" Text="{Binding DisplayText}"/>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-                                <TextBlock Grid.Column="2" Classes="hint" Margin="0" Text="{Binding TrainingTimeText}"/>
-                            </Grid>
-                        </Border>
-                    </DataTemplate>
-                </ItemsControl.ItemTemplate>
-            </ItemsControl>
+            <StackPanel>
+                <ItemsControl ItemsSource="{Binding Rows}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="vf:SkillImpactRowViewModel">
+                            <Border Padding="14,8" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource DividerBrush}">
+                                <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="10">
+                                    <StackPanel>
+                                        <TextBlock FontSize="12" Text="{Binding SkillName}"/>
+                                        <TextBlock Classes="hint" Margin="0" Text="{Binding CurrentLevel}"/>
+                                    </StackPanel>
+                                    <ItemsControl Grid.Column="1" ItemsSource="{Binding Gains}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate DataType="vf:SkillImpactStatGain">
+                                                <TextBlock FontFamily="{StaticResource MonoFont}" FontSize="10.5" Text="{Binding DisplayText}"/>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                    <TextBlock Grid.Column="2" Classes="hint" Margin="0" Text="{Binding TrainingTimeText}"/>
+                                    <Button Grid.Column="3" Content="+" ToolTip.Tip="Add to plan"
+                                            Command="{Binding AddToPlanCommand}" IsVisible="{Binding CanAddToPlan}"/>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
         </ScrollViewer>
     </DockPanel>
 </v:ChromedWindow>
