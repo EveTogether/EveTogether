@@ -171,7 +171,7 @@ internal sealed class FleetCompositionRepository(IDbContextFactory<SharedDbConte
             .FirstOrDefaultAsync(e => e.Id == entryId, cancellationToken);
     }
 
-    public async Task UpdateEntryAsync(FleetCompositionEntry entry, CancellationToken cancellationToken = default)
+    public async Task UpdateEntryAsync(FleetCompositionEntry entry, bool replaceSkillMinimums, CancellationToken cancellationToken = default)
     {
         await using var db = await contextFactory.CreateDbContextAsync(cancellationToken);
         var tracked = await db.Set<FleetCompositionEntry>().FirstOrDefaultAsync(e => e.Id == entry.Id, cancellationToken);
@@ -182,6 +182,11 @@ internal sealed class FleetCompositionRepository(IDbContextFactory<SharedDbConte
 
         tracked.EntryMinCount = entry.EntryMinCount;
         tracked.SortOrder = entry.SortOrder;
+        if (!replaceSkillMinimums)
+        {
+            await db.SaveChangesAsync(cancellationToken);
+            return;
+        }
 
         // Diff the owned rows on the tracked entry: a detached Update would mark a new row Modified (no row to
         // update) and never delete a dropped one.

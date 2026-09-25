@@ -173,7 +173,7 @@ public sealed partial class CompositionEditorViewModel : ObservableObject, IDisp
             return;
         }
 
-        entry.AddSkillMinimum(skillTypeId, _resolver.TypeName(skillTypeId), entry.NewSkillLevelIndex + 1);
+        entry.AddSkillMinimum(skillTypeId, _resolver.TypeName(skillTypeId), Math.Clamp(entry.NewSkillLevelIndex + 1, 1, 5));
         entry.NewSkillText = "";
         Status = "";
     }
@@ -375,7 +375,9 @@ public sealed partial class CompositionEditorViewModel : ObservableObject, IDisp
                 var snapEntry = snapRole.Entries.FirstOrDefault(e => e.Id == entry.Id);
                 if (snapEntry is null || entry.EntryMinCount != snapEntry.EntryMinCount
                     || !_SameSkillMinimums(entry.SkillMinimumList, snapEntry.SkillMinimums))
+                {
                     return true;
+                }
             }
         }
 

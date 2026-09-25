@@ -38,7 +38,9 @@ internal sealed class EditFleetCompositionEntryCommandHandler(
             entry.SkillMinimums = CompositionSkillMinimums.ToEntities(command.SkillMinimums);
         }
 
-        await repository.UpdateEntryAsync(entry, cancellationToken);
+        // Only a command that carries minimums writes them; otherwise the list read above could put back rows another
+        // client changed in the meantime.
+        await repository.UpdateEntryAsync(entry, replaceSkillMinimums: command.SkillMinimums is not null, cancellationToken);
         await changes.PublishAsync(composition.Id, CompositionChangeKind.Edited, cancellationToken);
         return Result.Success();
     }

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using CommunityToolkit.Mvvm.ComponentModel;
 using EveUtils.Client.Skills;
@@ -30,7 +31,7 @@ public sealed partial class EditorSkillMinimumViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(Level), nameof(FitHint), nameof(HasNoEffect))]
     private int _levelIndex;
 
-    public int Level => LevelIndex + 1;
+    public int Level => Math.Clamp(LevelIndex + 1, 1, 5);
 
     /// <summary>The minimum is not above what the fit requires, so it changes nothing for anyone.</summary>
     public bool HasNoEffect => Level <= FitLevel;
