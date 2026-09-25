@@ -26,6 +26,11 @@ entries under `[Unreleased]` below that were not there yet at the previous night
   per hour, with markers where optimal and 100% are reached. ADD TO PLAN on a card, and a new "+" next to each
   impact row, add straight to a skill plan. PLANS' + FROM FIT… now opens this view instead of adding a fit's raw
   prerequisites directly, so the fitting-skill fix and the three targets are available from there too.
+- **Added: + FROM DOCTRINE… in PLANS.** Pick a composition, a role and one of its entries, and the plan gets the
+  entry's fit plus its doctrine skill minimums as one source — prerequisites included, same as every other + button.
+  A second milestone, "◆ doctrine minimum met", lands after the last minimum-only level, next to "✈ flyable" after
+  the last level the fit itself needs. The composition list is read-only (`IFleetCompositionReader`); nothing here
+  ever writes to a composition.
 - **Added: WHAT IF panel in PLANS.** For the selected plan and character, five scenarios and the date each finishes:
   the queue as it stands today, training the plan first, the same plan with the fastest attribute remap, and that
   remap plus a matched +4 or +5 implant set. A SHARE dialog next to it offers COPY AS TEXT, PUT IT IN THE DOCTRINE

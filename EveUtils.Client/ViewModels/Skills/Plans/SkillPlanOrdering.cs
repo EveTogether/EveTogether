@@ -51,12 +51,29 @@ public static class SkillPlanOrdering
 
     /// <summary>The index in <paramref name="ordered"/> of the last row belonging to <paramref name="sourceRef"/>
     /// (a + FROM FIT add's fit identity) — where the "✈ flyable" milestone goes (AC3). Null when no row carries it.</summary>
-    public static int? FlyableMilestoneIndex(IReadOnlyList<SkillPlanRow> ordered, string sourceRef)
+    public static int? FlyableMilestoneIndex(IReadOnlyList<SkillPlanRow> ordered, string sourceRef) =>
+        _LastMatchIndex(ordered, row => row.Source == SkillPlanRowSource.Fit && row.SourceRef == sourceRef);
+
+    /// <summary>The index in <paramref name="ordered"/> of the last row belonging to a + FROM DOCTRINE add's
+    /// <paramref name="sourceRef"/> (the composition entry) — where the "◆ doctrine minimum met" milestone goes
+    /// (ET-386 AC3), always at or after <see cref="DoctrineFlyableMilestoneIndex"/>. Null when no row carries it.</summary>
+    public static int? DoctrineMinimumMilestoneIndex(IReadOnlyList<SkillPlanRow> ordered, string sourceRef) =>
+        _LastMatchIndex(ordered, row => row.Source == SkillPlanRowSource.Doctrine && row.SourceRef == sourceRef);
+
+    /// <summary>The index in <paramref name="ordered"/> of the last row belonging to a + FROM DOCTRINE add's
+    /// <paramref name="sourceRef"/> that the fit itself required — not only its skill minimums — where the
+    /// "✈ flyable" milestone goes for that add (ET-386 AC3). Null when no row carries it.</summary>
+    public static int? DoctrineFlyableMilestoneIndex(IReadOnlyList<SkillPlanRow> ordered, string sourceRef,
+        IReadOnlySet<(int SkillTypeId, int Level)> fitRequiredLevels) =>
+        _LastMatchIndex(ordered, row => row.Source == SkillPlanRowSource.Doctrine && row.SourceRef == sourceRef
+            && fitRequiredLevels.Contains((row.SkillTypeId, row.Level)));
+
+    private static int? _LastMatchIndex(IReadOnlyList<SkillPlanRow> ordered, Func<SkillPlanRow, bool> predicate)
     {
         int index = -1;
         for (int i = 0; i < ordered.Count; i++)
         {
-            if (ordered[i].Source == SkillPlanRowSource.Fit && ordered[i].SourceRef == sourceRef)
+            if (predicate(ordered[i]))
             {
                 index = i;
             }

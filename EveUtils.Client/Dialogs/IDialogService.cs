@@ -382,4 +382,12 @@ public interface IDialogService
     /// composition editor) and the disabled EVE Workbench option. Modal; completes once the view model raises
     /// <see cref="ViewModels.Skills.WhatIf.SkillPlanShareDialogViewModel.CloseRequested"/>.</summary>
     Task ShowSkillPlanShareAsync(ViewModels.Skills.WhatIf.SkillPlanShareDialogViewModel viewModel);
+
+    /// <summary>
+    /// + FROM DOCTRINE… picker (ET-386): choose a composition, a role, then one of its entries — the view model
+    /// reads only through <see cref="EveUtils.Shared.Modules.Fleet.Composition.Repositories.IFleetCompositionReader"/>
+    /// (ET-383 guard), never the composition's write-repository. Returns the picked entry plus its composition/role
+    /// names, or null if cancelled.
+    /// </summary>
+    Task<ViewModels.Skills.Plans.DoctrineEntryPick?> PickDoctrineEntryAsync(ViewModels.Skills.Plans.DoctrinePickerViewModel viewModel);
 }

@@ -26,23 +26,32 @@ public static class SkillPlanRowFactory
         IFitValidator validator, int skillTypeId, int level, IReadOnlyDictionary<int, int> trained, string skillName) =>
         _Build(validator, [], [new SkillMinimum(skillTypeId, level)], trained, skillName);
 
+    /// <summary>From a doctrine entry (ET-386): the fit's own gaps plus its skill minimums' gaps, prerequisites
+    /// included — the fit-required (skill, level) pairs alone are <see cref="RequiredLevelPairs"/>, used to place the
+    /// ✈ flyable milestone before the later ◆ doctrine minimum met milestone.</summary>
+    public static SkillPlanBuildResult FromDoctrine(IFitValidator validator, IReadOnlyList<int> seedTypeIds,
+        IReadOnlyList<SkillMinimum> skillMinimums, IReadOnlyDictionary<int, int> trained, string sourceLabel) =>
+        _Build(validator, seedTypeIds, skillMinimums, trained, sourceLabel);
+
+    /// <summary>Every (skillTypeId, level) pair <paramref name="seedTypeIds"/> requires on its own, with no extra
+    /// minimums folded in — the fit-required half of a doctrine add's two milestones (ET-386).</summary>
+    public static IReadOnlySet<(int SkillTypeId, int Level)> RequiredLevelPairs(
+        IFitValidator validator, IReadOnlyList<int> seedTypeIds, IReadOnlyDictionary<int, int> trained) =>
+        _ExpandGaps(validator.SkillRequirements(seedTypeIds, extra: null, trained)).ToHashSet();
+
     private static SkillPlanBuildResult _Build(IFitValidator validator, IReadOnlyList<int> seedTypeIds,
         IReadOnlyList<SkillMinimum>? extra, IReadOnlyDictionary<int, int> trained, string sourceLabel)
     {
         IReadOnlyList<SkillGap> gaps = validator.SkillRequirements(seedTypeIds, extra, trained);
-        var rows = new List<SkillPlanRowDraft>();
-        foreach (var gap in gaps)
-        {
-            for (int level = gap.CurrentLevel + 1; level <= gap.RequiredLevel; level++)
-            {
-                rows.Add(new SkillPlanRowDraft(gap.SkillTypeId, level, sourceLabel));
-            }
-        }
+        var rows = _ExpandGaps(gaps).Select(pair => new SkillPlanRowDraft(pair.SkillTypeId, pair.Level, sourceLabel)).ToList();
 
         return rows.Count == 0
             ? new SkillPlanBuildResult(rows, $"Nothing to add for {sourceLabel} — every required skill is already trained.")
             : new SkillPlanBuildResult(rows, null);
     }
+
+    private static IEnumerable<(int SkillTypeId, int Level)> _ExpandGaps(IReadOnlyList<SkillGap> gaps) =>
+        gaps.SelectMany(gap => Enumerable.Range(gap.CurrentLevel + 1, gap.RequiredLevel - gap.CurrentLevel), (gap, level) => (gap.SkillTypeId, level));
 }
 
 /// <param name="Message">Set instead of an empty <paramref name="Rows"/> silently doing nothing (ET-355 AC2) —

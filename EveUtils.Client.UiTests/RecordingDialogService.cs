@@ -11,6 +11,7 @@ using EveUtils.Client.ViewModels.FitBrowser;
 using EveUtils.Client.ViewModels.Killmails;
 using EveUtils.Client.ViewModels.Runs;
 using EveUtils.Client.ViewModels.Skills;
+using EveUtils.Client.ViewModels.Skills.Plans;
 using EveUtils.Client.ViewModels.Skills.WhatIf;
 using EveUtils.Shared.Modules.Esi;
 using EveUtils.Shared.Modules.Fittings.Dtos;
@@ -303,6 +304,12 @@ public sealed class RecordingDialogService : IDialogService
         _ => Task.FromResult<FitReferenceInfo?>(null);
 
     public Task<FitReferenceInfo?> PickFitAsync(FitPickerViewModel viewModel) => OnPickFit(viewModel);
+
+    /// <summary>Returns the doctrine entry the picker "selects" (or null to cancel). Default: cancel.</summary>
+    public Func<DoctrinePickerViewModel, Task<DoctrineEntryPick?>> OnPickDoctrineEntry { get; set; } =
+        _ => Task.FromResult<DoctrineEntryPick?>(null);
+
+    public Task<DoctrineEntryPick?> PickDoctrineEntryAsync(DoctrinePickerViewModel viewModel) => OnPickDoctrineEntry(viewModel);
     public void ShowInbox(InboxViewModel viewModel) => throw NotUsed();
     public void ShowLogs(ClientLogViewModel viewModel) => throw NotUsed();
     public void ShowEsiMetrics(EsiMetricsViewModel viewModel) => throw NotUsed();
