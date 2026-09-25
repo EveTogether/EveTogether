@@ -21,6 +21,7 @@ using EveUtils.Shared.Modules.Esi;
 using EveUtils.Shared.Modules.Gamelog.Aggregation;
 using EveUtils.Shared.Modules.Killmails;
 using EveUtils.Shared.Modules.Killmails.Dtos;
+using EveUtils.Shared.Modules.Killmails.Entities;
 using EveUtils.Shared.Modules.Killmails.Enums;
 using EveUtils.Shared.Modules.Killmails.Queries;
 using EveUtils.Shared.Modules.Killmails.Repositories;
@@ -75,6 +76,11 @@ public sealed partial class KillmailsOverviewViewModel : ViewModelBase, IRefresh
     private readonly KillmailShowFilterTileViewModel _notLinkedFilter;
 
     private IReadOnlyList<KillmailRowViewModel> _allRows = [];
+
+    /// <summary>ET-340: rows parsed from pasted clipboard text, not yet confirmed by a real ESI mail — merged into
+    /// <see cref="Days"/> alongside <c>_allRows</c>, but never into it: they carry no ISK and no run link, so keeping
+    /// them out of <c>_allRows</c> keeps every existing total, count and SHOW filter reading only confirmed mails.</summary>
+    private IReadOnlyList<KillmailRowViewModel> _provisionalRows = [];
 
     /// <summary>Bumped at the start of every <see cref="_ReadAsync"/>; a read whose stamp no longer matches when it
     /// finishes was superseded by a later character switch and its result is thrown away instead of applied.</summary>
@@ -188,22 +194,35 @@ public sealed partial class KillmailsOverviewViewModel : ViewModelBase, IRefresh
     [RelayCommand]
     private Task RefreshAsync() => _ReadAsync();
 
-    /// <summary>PASTE LINK (ET-338): reads an ESI killmail link or an in-game <c>killReport:</c> link off the
-    /// clipboard and imports it directly, bypassing the 5-minute cache on the character feed. The clipboard watch
-    /// (<see cref="EveUtils.Client.Clipboard.ClipboardWatchService"/>) is opt-in, so this button is the route that
-    /// works for a pilot who never turned it on.</summary>
+    /// <summary>PASTE LINK (ET-338 + ET-340): reads an ESI killmail link, an in-game <c>killReport:</c> link, or the
+    /// killmail's own "Copy" clipboard text off the clipboard. A link wins when both are present, imported directly
+    /// and bypassing the 5-minute cache on the character feed; the text falls back to a provisional row, replaced
+    /// once the real mail lands. The clipboard watch (<see cref="EveUtils.Client.Clipboard.ClipboardWatchService"/>)
+    /// is opt-in, so this button is the route that works for a pilot who never turned it on.</summary>
     [RelayCommand]
     private async Task PasteLinkAsync()
     {
         IDialogService? dialogs = _services.GetService<IDialogService>();
         string? text = dialogs is null ? null : await dialogs.GetClipboardTextAsync();
-        if (string.IsNullOrWhiteSpace(text) || !KillmailLink.TryParse(text, out int killmailId, out string hash))
+        if (string.IsNullOrWhiteSpace(text))
         {
-            _services.GetService<IToastService>()?.Show("No killmail link on the clipboard",
-                "Copy an ESI killmail link or an in-game killmail chat link, then paste again.", ToastKind.Error);
+            _services.GetService<IToastService>()?.Show("No killmail on the clipboard",
+                "Copy an ESI killmail link, an in-game killmail chat link, or the killmail's own \"Copy\" text, then paste again.",
+                ToastKind.Error);
             return;
         }
 
+        if (KillmailLink.TryParse(text, out int killmailId, out string hash))
+        {
+            await _PasteLinkAsync(killmailId, hash);
+            return;
+        }
+
+        await _PasteTextAsync(text);
+    }
+
+    private async Task _PasteLinkAsync(int killmailId, string hash)
+    {
         IsBusy = true;
         KillmailImportResult result;
         try
@@ -222,6 +241,29 @@ public sealed partial class KillmailsOverviewViewModel : ViewModelBase, IRefresh
         }
 
         _services.GetService<IToastService>()?.Show($"Killmail {killmailId} imported", null, ToastKind.Success);
+        await _RefreshCharactersAndReadAsync();
+    }
+
+    private async Task _PasteTextAsync(string text)
+    {
+        IsBusy = true;
+        ProvisionalKillmailImportResult result;
+        try
+        {
+            result = await _services.GetRequiredService<ProvisionalKillmailImporter>().ImportAsync(text);
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+
+        if (result.Status != ProvisionalKillmailImportStatus.Imported)
+        {
+            _services.GetService<IToastService>()?.Show("Killmail not imported", result.Message, ToastKind.Error);
+            return;
+        }
+
+        _services.GetService<IToastService>()?.Show("Killmail added", "Provisional — waiting for the real mail.", ToastKind.Success);
         await _RefreshCharactersAndReadAsync();
     }
 
@@ -317,6 +359,7 @@ public sealed partial class KillmailsOverviewViewModel : ViewModelBase, IRefresh
         {
             NeedsAccess = character is not null;
             _allRows = [];
+            _provisionalRows = [];
             if (character is not null)
             {
                 character.Count = 0;
@@ -335,7 +378,8 @@ public sealed partial class KillmailsOverviewViewModel : ViewModelBase, IRefresh
             // The dispatcher call, the SDE lookups and KillmailNames.HydrateAsync are all synchronous-under-the-hood
             // SQLite work (plus HydrateAsync's own ESI calls) — one Task.Run for the whole read, the same reason
             // RunsOverviewViewModel keeps its own reads off the UI thread entirely.
-            (Result<IReadOnlyList<KillmailOverviewRowDto>> result, IReadOnlyList<KillmailRowViewModel> rows) =
+            (Result<IReadOnlyList<KillmailOverviewRowDto>> result, IReadOnlyList<KillmailRowViewModel> rows,
+                IReadOnlyList<KillmailRowViewModel> provisionalRows) =
                 await Task.Run(() => _ReadAndBuildAsync(characterId, cancellationToken), cancellationToken);
 
             if (version != _readVersion)
@@ -347,12 +391,14 @@ public sealed partial class KillmailsOverviewViewModel : ViewModelBase, IRefresh
             {
                 StatusMessage = result.Messages.Count > 0 ? result.Messages[0].Text : "The killmails could not be read.";
                 _allRows = [];
+                _provisionalRows = [];
                 character.Count = 0;
                 _ShowEmpty();
                 return;
             }
 
             _allRows = rows;
+            _provisionalRows = provisionalRows;
             character.Count = _allRows.Count;
             _RefreshTotals();
             _ApplyFilter();
@@ -366,6 +412,7 @@ public sealed partial class KillmailsOverviewViewModel : ViewModelBase, IRefresh
             {
                 StatusMessage = $"The killmails could not be read: {exception.Message}";
                 _allRows = [];
+                _provisionalRows = [];
                 character.Count = 0;
                 _ShowEmpty();
             }
@@ -379,14 +426,14 @@ public sealed partial class KillmailsOverviewViewModel : ViewModelBase, IRefresh
         }
     }
 
-    private async Task<(Result<IReadOnlyList<KillmailOverviewRowDto>> Result, IReadOnlyList<KillmailRowViewModel> Rows)> _ReadAndBuildAsync(
-        int characterId, CancellationToken cancellationToken)
+    private async Task<(Result<IReadOnlyList<KillmailOverviewRowDto>> Result, IReadOnlyList<KillmailRowViewModel> Rows,
+        IReadOnlyList<KillmailRowViewModel> ProvisionalRows)> _ReadAndBuildAsync(int characterId, CancellationToken cancellationToken)
     {
         Result<IReadOnlyList<KillmailOverviewRowDto>> result =
             await _dispatcher.Query(new GetKillmailsOverviewQuery(characterId), cancellationToken);
         if (!result.IsSuccess)
         {
-            return (result, []);
+            return (result, [], []);
         }
 
         IReadOnlyList<KillmailOverviewRowDto> dtos = result.Value ?? [];
@@ -402,7 +449,11 @@ public sealed partial class KillmailsOverviewViewModel : ViewModelBase, IRefresh
                 .Select(dto => dto.VictimAllianceId).OfType<int>()],
             cancellationToken);
 
-        return (result, [.. dtos.Select(_BuildRow)]);
+        IReadOnlyList<KillmailRowViewModel> provisionalRows = _services.GetService<IProvisionalKillmailReader>() is { } repository
+            ? [.. (await repository.GetForCharacterAsync(characterId, cancellationToken)).Select(_BuildProvisionalRow)]
+            : [];
+
+        return (result, [.. dtos.Select(_BuildRow)], provisionalRows);
     }
 
     private KillmailRowViewModel _BuildRow(KillmailOverviewRowDto dto)
@@ -415,6 +466,12 @@ public sealed partial class KillmailsOverviewViewModel : ViewModelBase, IRefresh
         string counterparty = dto.IsLoss ? _FinalBlowName(dto.FinalBlow) : _VictimName(dto);
         return new KillmailRowViewModel(dto, shipName, systemName, system?.RegionName, isAbyssal, securityText,
             counterparty, _clock.LocalTimeZone, _OpenDetailAsync);
+    }
+
+    private KillmailRowViewModel _BuildProvisionalRow(ProvisionalKillmail provisional)
+    {
+        string shipName = _sde.GetType(provisional.VictimShipTypeId)?.Name ?? $"type {provisional.VictimShipTypeId}";
+        return new KillmailRowViewModel(provisional, shipName, _clock.LocalTimeZone);
     }
 
     private string _VictimName(KillmailOverviewRowDto dto) =>
@@ -490,8 +547,11 @@ public sealed partial class KillmailsOverviewViewModel : ViewModelBase, IRefresh
             scoped = scoped.Where(row => row.Matches(needle));
         }
 
+        // ET-340: a provisional row is always shown, regardless of SHOW filter or search — it is neither a kill nor
+        // a loss to filter by, and it has nothing yet to search on beyond what the badge already says.
         Days.Clear();
-        foreach (IGrouping<DateOnly, KillmailRowViewModel> group in scoped.GroupBy(row => row.Day).OrderByDescending(group => group.Key))
+        foreach (IGrouping<DateOnly, KillmailRowViewModel> group in scoped.Concat(_provisionalRows)
+                     .GroupBy(row => row.Day).OrderByDescending(group => group.Key))
         {
             Days.Add(new KillmailDayViewModel(group.Key, [.. group.OrderByDescending(row => row.KillmailTimeUtc)]));
         }

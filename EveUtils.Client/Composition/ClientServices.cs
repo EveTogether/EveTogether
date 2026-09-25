@@ -113,6 +113,7 @@ public static class ClientServices
         services.AddSingleton<IEsiImplantImporter>(sp =>
             new EsiImplantImporter(sp.GetRequiredService<IEsiClient>(), sp.GetRequiredService<ICharacterImplantRepository>())); // implants import
         services.AddSingleton<EsiKillmailImporter>(); // kills + losses import (the repository auto-registers)
+        services.AddSingleton<ProvisionalKillmailImporter>(); // ET-340: clipboard-text killmail import (the repository auto-registers)
         services.AddSingleton(TimeProvider.System); // injectable clock
         services.AddSingleton<IThemeService, ThemeService>(); // runtime faction theming (live swap + persistence)
         services.AddSingleton<Calendar.IWeekStartService, Calendar.WeekStartService>(); // week-start setting (live swap + persistence)

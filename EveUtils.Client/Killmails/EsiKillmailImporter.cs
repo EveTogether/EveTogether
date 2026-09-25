@@ -79,6 +79,11 @@ public sealed class EsiKillmailImporter(IEsiClient esi, ILocalKillmailReader kil
                     stored.Messages.FirstOrDefault()?.Text ?? "Storing the killmails failed.");
             }
 
+            if (fetched.Count > 0)
+            {
+                await _ReplaceProvisionalAsync(characterId, fetched, cancellationToken);
+            }
+
             // Also without new mails: a loss nothing fitted before may fit a run stopped or fitted since.
             Result<int> linked = await dispatcher.Send(new LinkKillmailsToRunsCommand(characterId), cancellationToken);
             return linked.IsSuccess
@@ -132,10 +137,11 @@ public sealed class EsiKillmailImporter(IEsiClient esi, ILocalKillmailReader kil
         {
             SemaphoreSlim gate = _importGates.GetOrAdd(characterId, _ => new SemaphoreSlim(1, 1));
             await gate.WaitAsync(cancellationToken);
+            LocalKillmail entity = _ToEntity(characterId, hash, killmail);
             try
             {
                 Result result = await scope.ServiceProvider.GetRequiredService<IDispatcher>()
-                    .Send(new StoreKillmailsCommand(characterId, [_ToEntity(characterId, hash, killmail)]), cancellationToken);
+                    .Send(new StoreKillmailsCommand(characterId, [entity]), cancellationToken);
                 if (!result.IsSuccess)
                 {
                     return new KillmailImportResult(KillmailImportStatus.Failed, stored,
@@ -148,9 +154,46 @@ public sealed class EsiKillmailImporter(IEsiClient esi, ILocalKillmailReader kil
             {
                 gate.Release();
             }
+
+            await _ReplaceProvisionalAsync(characterId, [entity], cancellationToken);
         }
 
         return KillmailImportResult.Ok(stored);
+    }
+
+    // ET-340: matches a provisional row on time/ship/victim. Victim name resolves locally only — character
+    // registry, then the ET-336 name cache — never a fresh ESI call.
+    // ponytail: unresolved name leaves the row standing (ticket's own accepted ceiling).
+    private async Task _ReplaceProvisionalAsync(int characterId, IReadOnlyList<LocalKillmail> killmails, CancellationToken cancellationToken)
+    {
+        await using AsyncServiceScope scope = scopes.CreateAsyncScope();
+        IReadOnlyList<Character> characters = await scope.ServiceProvider.GetRequiredService<ICharacterRegistry>().GetAllAsync(cancellationToken);
+        IKillmailEntityNameRepository names = scope.ServiceProvider.GetRequiredService<IKillmailEntityNameRepository>();
+        IDispatcher dispatcher = scope.ServiceProvider.GetRequiredService<IDispatcher>();
+
+        List<int> victimIds = [.. killmails.Select(killmail => killmail.VictimCharacterId).OfType<int>().Distinct()];
+        IReadOnlyDictionary<long, KillmailEntityName> cachedNames = victimIds.Count > 0
+            ? await names.GetManyAsync([.. victimIds.Select(id => (long)id)], cancellationToken)
+            : new Dictionary<long, KillmailEntityName>();
+
+        foreach (LocalKillmail killmail in killmails)
+        {
+            if (killmail.VictimCharacterId is not { } victimId)
+            {
+                continue;
+            }
+
+            string? victimName = characters.FirstOrDefault(character => character.EsiCharacterId == victimId)?.Name
+                ?? (cachedNames.TryGetValue(victimId, out KillmailEntityName? cached) ? cached.Name : null);
+            if (victimName is null)
+            {
+                continue;
+            }
+
+            await dispatcher.Send(
+                new RemoveMatchingProvisionalKillmailCommand(characterId, killmail.KillmailTimeUtc, killmail.VictimShipTypeId, victimName),
+                cancellationToken);
+        }
     }
 
     private static LocalKillmail _ToEntity(int characterId, string hash, EsiKillmail killmail) => new()
