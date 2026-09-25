@@ -11,6 +11,7 @@ using Grpc.Core;
 using GrpcFleets = EveUtils.Grpc.Fleets;
 using EveUtils.Shared.DependencyInjection;
 using EveUtils.Shared.Transport;
+using EveUtils.Shared.Modules.Skills;
 
 namespace EveUtils.Client.Transport;
 
@@ -514,21 +515,29 @@ public sealed class FleetClient(
     }
 
     public Task<(bool Ok, string Message, long Id)> AddFleetCompositionEntryAsync(
-        string serverAddress, long roleId, FitReferenceInfo fit, int? entryMinCount, int actingCharacterId = 0, CancellationToken cancellationToken = default)
+        string serverAddress, long roleId, FitReferenceInfo fit, int? entryMinCount, IReadOnlyList<SkillMinimum> skillMinimums,
+        int actingCharacterId = 0, CancellationToken cancellationToken = default)
     {
         var request = new AddFleetCompositionEntryRequest { RoleId = roleId, Fit = ToFitDto(fit) };
         if (entryMinCount is int min)
             request.EntryMinCount = min;
+        request.SkillMinimums.AddRange(ToSkillMinimumDtos(skillMinimums));
         return CreateStructureAsync(serverAddress, actingCharacterId, (client, headers) =>
             client.AddFleetCompositionEntryAsync(request, headers, cancellationToken: cancellationToken), cancellationToken);
     }
 
     public Task<(bool Ok, string Message)> EditFleetCompositionEntryAsync(
-        string serverAddress, long entryId, int? entryMinCount, int actingCharacterId = 0, CancellationToken cancellationToken = default)
+        string serverAddress, long entryId, int? entryMinCount, IReadOnlyList<SkillMinimum>? skillMinimums,
+        int actingCharacterId = 0, CancellationToken cancellationToken = default)
     {
         var request = new EditFleetCompositionEntryRequest { EntryId = entryId };
         if (entryMinCount is int min)
             request.EntryMinCount = min;
+        // Null leaves the field unset, so the server keeps the stored minimums; a list (even empty) replaces them.
+        if (skillMinimums is not null)
+        {
+            request.SkillMinimums = new SkillMinimumListDto { Items = { ToSkillMinimumDtos(skillMinimums) } };
+        }
         return ActionAsync(serverAddress, actingCharacterId, (client, headers) =>
             client.EditFleetCompositionEntryAsync(request, headers, cancellationToken: cancellationToken), cancellationToken);
     }
@@ -574,7 +583,11 @@ public sealed class FleetClient(
         dto.RoleId,
         dto.HasEntryMinCount ? dto.EntryMinCount : null,
         dto.SortOrder,
-        MapFit(dto.Fit));
+        MapFit(dto.Fit),
+        [.. dto.SkillMinimums.Select(m => new SkillMinimum(m.SkillTypeId, m.Level))]);
+
+    private static IEnumerable<SkillMinimumDto> ToSkillMinimumDtos(IReadOnlyList<SkillMinimum> minimums) =>
+        minimums.Select(m => new SkillMinimumDto { SkillTypeId = m.SkillTypeId, Level = m.Level });
 
     private static FitReferenceInfo MapFit(FitReferenceDto dto) => new(
         dto.ShipTypeId,

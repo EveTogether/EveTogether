@@ -38,12 +38,12 @@ public class FitPickerSingleModeTests
         FitReferenceInfo Fit(string name, int ship, string hash) => new(ship, name, "{}", hash, null, null);
         var dps = new FleetCompositionRoleInfo(1, 1, "DPS", 40, 0, new[]
         {
-            new FleetCompositionEntryInfo(1, 1, null, 0, Fit("Muninn — Kite", 12005, "h-muninn")),
-            new FleetCompositionEntryInfo(2, 1, null, 1, Fit("Eagle — Rail", 12011, "h-eagle"))
+            new FleetCompositionEntryInfo(1, 1, null, 0, Fit("Muninn — Kite", 12005, "h-muninn"), []),
+            new FleetCompositionEntryInfo(2, 1, null, 1, Fit("Eagle — Rail", 12011, "h-eagle"), [])
         });
         var logi = new FleetCompositionRoleInfo(2, 1, "Logistics", null, 1, new[]
         {
-            new FleetCompositionEntryInfo(3, 2, 3, 0, Fit("Guardian — Armor", 11987, "h-guardian"))
+            new FleetCompositionEntryInfo(3, 2, 3, 0, Fit("Guardian — Armor", 11987, "h-guardian"), [])
         });
         return new FleetCompositionDetail(
             new FleetCompositionInfo(1, "Homefront Vanguard", null, Owner, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow),

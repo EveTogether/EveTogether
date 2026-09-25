@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using EveUtils.Client.Transport;
+using EveUtils.Shared.Modules.Skills;
 
 namespace EveUtils.Client.Fleet;
 
@@ -44,11 +45,12 @@ public sealed class ServerFleetCompositionClient(IFleetTransportClient transport
     public Task<(bool Ok, string Message)> ReorderRolesAsync(long compositionId, IReadOnlyList<long> orderedRoleIds) =>
         transport.ReorderFleetCompositionRolesAsync(serverAddress, compositionId, orderedRoleIds, actingCharacterId);
 
-    public Task<(bool Ok, string Message, long Id)> AddEntryAsync(long roleId, FitReferenceInfo fit, int? entryMinCount) =>
-        transport.AddFleetCompositionEntryAsync(serverAddress, roleId, fit, entryMinCount, actingCharacterId);
+    public Task<(bool Ok, string Message, long Id)> AddEntryAsync(long roleId, FitReferenceInfo fit, int? entryMinCount,
+        IReadOnlyList<SkillMinimum> skillMinimums) =>
+        transport.AddFleetCompositionEntryAsync(serverAddress, roleId, fit, entryMinCount, skillMinimums, actingCharacterId);
 
-    public Task<(bool Ok, string Message)> EditEntryAsync(long entryId, int? entryMinCount) =>
-        transport.EditFleetCompositionEntryAsync(serverAddress, entryId, entryMinCount, actingCharacterId);
+    public Task<(bool Ok, string Message)> EditEntryAsync(long entryId, int? entryMinCount, IReadOnlyList<SkillMinimum>? skillMinimums) =>
+        transport.EditFleetCompositionEntryAsync(serverAddress, entryId, entryMinCount, skillMinimums, actingCharacterId);
 
     public Task<(bool Ok, string Message)> RemoveEntryAsync(long entryId) =>
         transport.RemoveFleetCompositionEntryAsync(serverAddress, entryId, actingCharacterId);

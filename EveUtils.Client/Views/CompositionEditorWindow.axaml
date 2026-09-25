@@ -108,69 +108,111 @@
                             <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
                                     Background="#08FFFFFF" Margin="0,0,0,11">
                                 <StackPanel>
-                                    <!-- role header -->
-                                    <Border BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1"
-                                            Background="#10FFFFFF" Padding="11,9">
-                                        <Grid ColumnDefinitions="Auto,9,Auto,10,Auto,Auto,*,Auto">
-                                            <Border Grid.Column="0" Width="7" Height="7" CornerRadius="2" VerticalAlignment="Center"
-                                                    Background="{DynamicResource AccentBrush}"/>
-                                            <TextBox Grid.Column="2" Text="{Binding RoleName}" FontSize="13" FontWeight="SemiBold" Width="160"
-                                                     IsReadOnly="{Binding #EditorRoot.((vm:CompositionEditorViewModel)DataContext).IsReadOnly}"/>
-                                            <TextBlock Grid.Column="4" Classes="minlabel" Text="GROUP MIN" Margin="0,0,7,0"/>
-                                            <TextBox Grid.Column="5" Classes="num" Text="{Binding GroupMinText}" PlaceholderText="—"
-                                                     IsReadOnly="{Binding #EditorRoot.((vm:CompositionEditorViewModel)DataContext).IsReadOnly}"/>
-                                            <Button Grid.Column="7" Classes="danger" ToolTip.Tip="Remove this role"
-                                                    IsVisible="{Binding #EditorRoot.((vm:CompositionEditorViewModel)DataContext).IsEditable}"
-                                                    Command="{Binding #EditorRoot.((vm:CompositionEditorViewModel)DataContext).RemoveRoleCommand}"
-                                                    CommandParameter="{Binding}">
-                                                <mi:MaterialIcon Classes="icon-sm" Kind="Close"/>
-                                            </Button>
-                                        </Grid>
-                                    </Border>
-                                    <!-- entries -->
-                                    <StackPanel Margin="11,9" Spacing="6">
-                                        <ItemsControl ItemsSource="{Binding Entries}">
-                                            <ItemsControl.ItemTemplate>
-                                                <DataTemplate x:DataType="vm:EditorEntryViewModel">
-                                                    <Border BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1"
-                                                            Background="#06FFFFFF" Padding="10,6" Margin="0,0,0,6">
-                                                        <Grid ColumnDefinitions="Auto,10,*,Auto,Auto,Auto,Auto">
-                                                            <!-- hull in a faction-coloured hexagon, matching the compositions overview -->
-                                                            <Panel Grid.Column="0" Width="36" Height="40" VerticalAlignment="Center">
-                                                                <Path Data="M18,0 L36,10 L36,30 L18,40 L0,30 L0,10 Z"
-                                                                      Fill="{DynamicResource HexBrandBrush}"/>
-                                                                <Panel Width="32" Height="36" HorizontalAlignment="Center" VerticalAlignment="Center">
-                                                                    <Panel.Clip>
-                                                                        <PathGeometry Figures="M16,0 L32,9 L32,27 L16,36 L0,27 L0,9 Z"/>
-                                                                    </Panel.Clip>
-                                                                    <Border Background="{DynamicResource AccentSoftBrush}"/>
-                                                                    <Image Source="{Binding HullImage}" IsVisible="{Binding HasHullImage}" Stretch="UniformToFill"/>
+                                        <!-- role header -->
+                                        <Border BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1"
+                                                Background="#10FFFFFF" Padding="11,9">
+                                            <Grid ColumnDefinitions="Auto,9,Auto,10,Auto,Auto,*,Auto">
+                                                <Border Grid.Column="0" Width="7" Height="7" CornerRadius="2" VerticalAlignment="Center"
+                                                        Background="{DynamicResource AccentBrush}"/>
+                                                <TextBox Grid.Column="2" Text="{Binding RoleName}" FontSize="13" FontWeight="SemiBold" Width="160"
+                                                         IsReadOnly="{Binding #EditorRoot.((vm:CompositionEditorViewModel)DataContext).IsReadOnly}"/>
+                                                <TextBlock Grid.Column="4" Classes="minlabel" Text="GROUP MIN" Margin="0,0,7,0"/>
+                                                <TextBox Grid.Column="5" Classes="num" Text="{Binding GroupMinText}" PlaceholderText="—"
+                                                         IsReadOnly="{Binding #EditorRoot.((vm:CompositionEditorViewModel)DataContext).IsReadOnly}"/>
+                                                <Button Grid.Column="7" Classes="danger" ToolTip.Tip="Remove this role"
+                                                        IsVisible="{Binding #EditorRoot.((vm:CompositionEditorViewModel)DataContext).IsEditable}"
+                                                        Command="{Binding #EditorRoot.((vm:CompositionEditorViewModel)DataContext).RemoveRoleCommand}"
+                                                        CommandParameter="{Binding}">
+                                                    <mi:MaterialIcon Classes="icon-sm" Kind="Close"/>
+                                                </Button>
+                                            </Grid>
+                                        </Border>
+                                        <!-- entries -->
+                                        <StackPanel Margin="11,9" Spacing="6">
+                                            <ItemsControl ItemsSource="{Binding Entries}">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate x:DataType="vm:EditorEntryViewModel">
+                                                        <Border BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1"
+                                                                Background="#06FFFFFF" Padding="10,6" Margin="0,0,0,6">
+                                                            <StackPanel>
+                                                            <Grid ColumnDefinitions="Auto,10,*,Auto,Auto,Auto,Auto">
+                                                                <!-- hull in a faction-coloured hexagon, matching the compositions overview -->
+                                                                <Panel Grid.Column="0" Width="36" Height="40" VerticalAlignment="Center">
+                                                                    <Path Data="M18,0 L36,10 L36,30 L18,40 L0,30 L0,10 Z"
+                                                                          Fill="{DynamicResource HexBrandBrush}"/>
+                                                                    <Panel Width="32" Height="36" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                                        <Panel.Clip>
+                                                                            <PathGeometry Figures="M16,0 L32,9 L32,27 L16,36 L0,27 L0,9 Z"/>
+                                                                        </Panel.Clip>
+                                                                        <Border Background="{DynamicResource AccentSoftBrush}"/>
+                                                                        <Image Source="{Binding HullImage}" IsVisible="{Binding HasHullImage}" Stretch="UniformToFill"/>
+                                                                    </Panel>
                                                                 </Panel>
-                                                            </Panel>
-                                                            <StackPanel Grid.Column="2" VerticalAlignment="Center" Spacing="1">
-                                                                <TextBlock Text="{Binding FitName}" FontSize="12" FontWeight="SemiBold"
-                                                                           Foreground="{StaticResource TextBrightBrush}"/>
-                                                                <TextBlock Text="{Binding HullName}" Classes="label" FontSize="9"/>
+                                                                <StackPanel Grid.Column="2" VerticalAlignment="Center" Spacing="1">
+                                                                    <TextBlock Text="{Binding FitName}" FontSize="12" FontWeight="SemiBold"
+                                                                               Foreground="{StaticResource TextBrightBrush}"/>
+                                                                    <TextBlock Text="{Binding HullName}" Classes="label" FontSize="9"/>
+                                                                </StackPanel>
+                                                                <Button Grid.Column="3" Content="DETAIL" FontSize="8" Classes="accent" Margin="0,0,10,0"
+                                                                        VerticalAlignment="Center" ToolTip.Tip="Open fit detail"
+                                                                        Command="{Binding #EditorRoot.((vm:CompositionEditorViewModel)DataContext).OpenFitDetailCommand}"
+                                                                        CommandParameter="{Binding}"/>
+                                                                <TextBlock Grid.Column="4" Classes="minlabel" Text="MIN. NEEDED" Margin="0,0,7,0"
+                                                                           VerticalAlignment="Center"
+                                                                           ToolTip.Tip="Minimum number of this fit the composition needs"/>
+                                                                <TextBox Grid.Column="5" Classes="num" Text="{Binding MinText}" PlaceholderText="—"
+                                                                         VerticalAlignment="Center"
+                                                                         ToolTip.Tip="Minimum number of this fit the composition needs"
+                                                                         IsReadOnly="{Binding #EditorRoot.((vm:CompositionEditorViewModel)DataContext).IsReadOnly}"/>
+                                                                <Button Grid.Column="6" Classes="danger" Margin="6,0,0,0"
+                                                                        VerticalAlignment="Center" ToolTip.Tip="Remove this fit"
+                                                                        IsVisible="{Binding #EditorRoot.((vm:CompositionEditorViewModel)DataContext).IsEditable}"
+                                                                        Command="{Binding #EditorRoot.((vm:CompositionEditorViewModel)DataContext).RemoveEntryCommand}"
+                                                                        CommandParameter="{Binding}">
+                                                                    <mi:MaterialIcon Classes="icon-sm" Kind="Close"/>
+                                                                </Button>
+                                                            </Grid>
+                                                            <!-- doctrine skill minimum: on top of what the fit requires, tentative until save -->
+                                                            <StackPanel Margin="46,8,0,2" Spacing="4">
+                                                                <TextBlock Classes="minlabel" Text="DOCTRINE MINIMUM"
+                                                                           ToolTip.Tip="Skill levels a pilot needs on top of what the fit requires"/>
+                                                                <ItemsControl ItemsSource="{Binding SkillMinimums}">
+                                                                    <ItemsControl.ItemTemplate>
+                                                                        <DataTemplate x:DataType="vm:EditorSkillMinimumViewModel">
+                                                                            <Grid ColumnDefinitions="*,Auto,Auto,Auto" Margin="0,0,0,3">
+                                                                                <TextBlock Grid.Column="0" Text="{Binding SkillName}" FontSize="11"
+                                                                                           VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                                                                <TextBlock Grid.Column="1" Text="{Binding FitHint}" Classes="label" FontSize="9"
+                                                                                           Margin="8,0" VerticalAlignment="Center"/>
+                                                                                <ComboBox Grid.Column="2" FontSize="10" MinWidth="58" VerticalAlignment="Center"
+                                                                                          ItemsSource="{x:Static vm:EditorSkillMinimumViewModel.LevelOptions}"
+                                                                                          SelectedIndex="{Binding LevelIndex}"
+                                                                                          IsEnabled="{Binding #EditorRoot.((vm:CompositionEditorViewModel)DataContext).IsEditable}"/>
+                                                                                <Button Grid.Column="3" Classes="danger" Margin="6,0,0,0" VerticalAlignment="Center"
+                                                                                        ToolTip.Tip="Remove this minimum"
+                                                                                        IsVisible="{Binding #EditorRoot.((vm:CompositionEditorViewModel)DataContext).IsEditable}"
+                                                                                        Command="{Binding $parent[ItemsControl].((vm:EditorEntryViewModel)DataContext).RemoveSkillMinimumCommand}"
+                                                                                        CommandParameter="{Binding}">
+                                                                                    <mi:MaterialIcon Classes="icon-sm" Kind="Close"/>
+                                                                                </Button>
+                                                                            </Grid>
+                                                                        </DataTemplate>
+                                                                    </ItemsControl.ItemTemplate>
+                                                                </ItemsControl>
+                                                                <Grid ColumnDefinitions="*,6,Auto,6,Auto"
+                                                                      IsVisible="{Binding #EditorRoot.((vm:CompositionEditorViewModel)DataContext).IsEditable}">
+                                                                    <AutoCompleteBox Grid.Column="0" FontSize="11" FilterMode="ContainsOrdinal" MinimumPrefixLength="2"
+                                                                                     PlaceholderText="Add a skill…" Text="{Binding NewSkillText}"
+                                                                                     ItemsSource="{Binding #EditorRoot.((vm:CompositionEditorViewModel)DataContext).SkillNames}"/>
+                                                                    <ComboBox Grid.Column="2" FontSize="10" MinWidth="58" VerticalAlignment="Center"
+                                                                              ItemsSource="{x:Static vm:EditorSkillMinimumViewModel.LevelOptions}"
+                                                                              SelectedIndex="{Binding NewSkillLevelIndex}"/>
+                                                                    <Button Grid.Column="4" Content="+ MINIMUM" FontSize="8" Classes="accent" VerticalAlignment="Center"
+                                                                            Command="{Binding #EditorRoot.((vm:CompositionEditorViewModel)DataContext).AddSkillMinimumCommand}"
+                                                                            CommandParameter="{Binding}"/>
+                                                                </Grid>
                                                             </StackPanel>
-                                                            <Button Grid.Column="3" Content="DETAIL" FontSize="8" Classes="accent" Margin="0,0,10,0"
-                                                                    VerticalAlignment="Center" ToolTip.Tip="Open fit detail"
-                                                                    Command="{Binding #EditorRoot.((vm:CompositionEditorViewModel)DataContext).OpenFitDetailCommand}"
-                                                                    CommandParameter="{Binding}"/>
-                                                            <TextBlock Grid.Column="4" Classes="minlabel" Text="MIN. NEEDED" Margin="0,0,7,0"
-                                                                       VerticalAlignment="Center"
-                                                                       ToolTip.Tip="Minimum number of this fit the composition needs"/>
-                                                            <TextBox Grid.Column="5" Classes="num" Text="{Binding MinText}" PlaceholderText="—"
-                                                                     VerticalAlignment="Center"
-                                                                     ToolTip.Tip="Minimum number of this fit the composition needs"
-                                                                     IsReadOnly="{Binding #EditorRoot.((vm:CompositionEditorViewModel)DataContext).IsReadOnly}"/>
-                                                            <Button Grid.Column="6" Classes="danger" Margin="6,0,0,0"
-                                                                    VerticalAlignment="Center" ToolTip.Tip="Remove this fit"
-                                                                    IsVisible="{Binding #EditorRoot.((vm:CompositionEditorViewModel)DataContext).IsEditable}"
-                                                                    Command="{Binding #EditorRoot.((vm:CompositionEditorViewModel)DataContext).RemoveEntryCommand}"
-                                                                    CommandParameter="{Binding}">
-                                                                <mi:MaterialIcon Classes="icon-sm" Kind="Close"/>
-                                                            </Button>
-                                                        </Grid>
+                                                        </StackPanel>
                                                     </Border>
                                                 </DataTemplate>
                                             </ItemsControl.ItemTemplate>
