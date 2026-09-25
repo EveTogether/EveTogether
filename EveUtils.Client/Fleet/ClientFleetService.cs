@@ -16,6 +16,7 @@ using EveUtils.Shared.Modules.Fleet.Enums;
 using EveUtils.Shared.Modules.Fleet.Queries;
 using EveUtils.Shared.Modules.Fleet.Repositories;
 using Microsoft.Extensions.DependencyInjection;
+using EveUtils.Shared.Modules.Skills;
 
 namespace EveUtils.Client.Fleet;
 
@@ -207,11 +208,13 @@ public sealed class ClientFleetService(IServiceScopeFactory scopeFactory) : ISin
     public Task<Result> ReorderCompositionRolesAsync(long compositionId, IReadOnlyList<long> orderedRoleIds, int actingCharacterId, CancellationToken cancellationToken = default)
         => DispatchAsync(d => d.Send(new ReorderFleetCompositionRolesCommand(compositionId, orderedRoleIds, actingCharacterId), cancellationToken));
 
-    public Task<Result<long>> AddCompositionEntryAsync(long roleId, FitReference fit, int? entryMinCount, int actingCharacterId, CancellationToken cancellationToken = default)
-        => DispatchAsync(d => d.Send(new AddFleetCompositionEntryCommand(roleId, fit, entryMinCount, actingCharacterId), cancellationToken));
+    public Task<Result<long>> AddCompositionEntryAsync(long roleId, FitReference fit, int? entryMinCount, IReadOnlyList<SkillMinimum> skillMinimums,
+        int actingCharacterId, CancellationToken cancellationToken = default)
+        => DispatchAsync(d => d.Send(new AddFleetCompositionEntryCommand(roleId, fit, entryMinCount, actingCharacterId, skillMinimums), cancellationToken));
 
-    public Task<Result> EditCompositionEntryAsync(long entryId, int? entryMinCount, int actingCharacterId, CancellationToken cancellationToken = default)
-        => DispatchAsync(d => d.Send(new EditFleetCompositionEntryCommand(entryId, entryMinCount, actingCharacterId), cancellationToken));
+    public Task<Result> EditCompositionEntryAsync(long entryId, int? entryMinCount, IReadOnlyList<SkillMinimum>? skillMinimums,
+        int actingCharacterId, CancellationToken cancellationToken = default)
+        => DispatchAsync(d => d.Send(new EditFleetCompositionEntryCommand(entryId, entryMinCount, actingCharacterId, skillMinimums), cancellationToken));
 
     public Task<Result> RemoveCompositionEntryAsync(long entryId, int actingCharacterId, CancellationToken cancellationToken = default)
         => DispatchAsync(d => d.Send(new RemoveFleetCompositionEntryCommand(entryId, actingCharacterId), cancellationToken));

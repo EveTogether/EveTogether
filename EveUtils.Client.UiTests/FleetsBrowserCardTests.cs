@@ -30,8 +30,8 @@ public class FleetsBrowserCardTests
 
     private static FleetCompositionDetail Doctrine()
     {
-        var muninn = new FleetCompositionEntryInfo(501, 1, null, 0, Fit("Muninn — Kite", "h-muninn"));
-        var guardian = new FleetCompositionEntryInfo(601, 2, 3, 0, Fit("Guardian — Armor", "h-guardian"));
+        var muninn = new FleetCompositionEntryInfo(501, 1, null, 0, Fit("Muninn — Kite", "h-muninn"), []);
+        var guardian = new FleetCompositionEntryInfo(601, 2, 3, 0, Fit("Guardian — Armor", "h-guardian"), []);
         var dps = new FleetCompositionRoleInfo(1, 9, "DPS", 40, 0, [muninn]);
         var logistics = new FleetCompositionRoleInfo(2, 9, "Logistics", 5, 1, [guardian]);
         return new FleetCompositionDetail(
@@ -81,7 +81,7 @@ public class FleetsBrowserCardTests
         // A doctrine whose only minimum is DPS ≥ 2, met by the two DPS pilots on entry 501.
         var lowBar = new FleetCompositionDetail(
             new FleetCompositionInfo(9, "Low bar", null, 999, DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch),
-            [new FleetCompositionRoleInfo(1, 9, "DPS", 2, 0, [new FleetCompositionEntryInfo(501, 1, null, 0, Fit("Muninn — Kite", "h-muninn"))])]);
+            [new FleetCompositionRoleInfo(1, 9, "DPS", 2, 0, [new FleetCompositionEntryInfo(501, 1, null, 0, Fit("Muninn — Kite", "h-muninn"), [])])]);
         Assert.True(CompositionFillBuilder.AllMinimaMet(lowBar, ThreeMembers()));
     }
 

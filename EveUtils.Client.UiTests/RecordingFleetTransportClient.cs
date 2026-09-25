@@ -6,6 +6,7 @@ using EveUtils.Client.Fleet;
 using EveUtils.Client.Transport;
 using EveUtils.Shared.Modules.Fleet.Dtos;
 using EveUtils.Shared.Modules.Fleet.Entities;
+using EveUtils.Shared.Modules.Skills;
 
 namespace EveUtils.Client.UiTests;
 
@@ -305,9 +306,20 @@ public sealed class RecordingFleetTransportClient : IFleetTransportClient
 
     public Task<(bool Ok, string Message)> ReorderFleetCompositionRolesAsync(string serverAddress, long compositionId, IReadOnlyList<long> orderedRoleIds, int actingCharacterId = 0, CancellationToken cancellationToken = default) => Accepted();
 
-    public Task<(bool Ok, string Message, long Id)> AddFleetCompositionEntryAsync(string serverAddress, long roleId, FitReferenceInfo fit, int? entryMinCount, int actingCharacterId = 0, CancellationToken cancellationToken = default) => Created();
+    public Task<(bool Ok, string Message, long Id)> AddFleetCompositionEntryAsync(string serverAddress, long roleId, FitReferenceInfo fit, int? entryMinCount, IReadOnlyList<SkillMinimum> skillMinimums, int actingCharacterId = 0, CancellationToken cancellationToken = default)
+    {
+        CompositionEntryCalls++;
+        return Created();
+    }
 
-    public Task<(bool Ok, string Message)> EditFleetCompositionEntryAsync(string serverAddress, long entryId, int? entryMinCount, int actingCharacterId = 0, CancellationToken cancellationToken = default) => Accepted();
+    public Task<(bool Ok, string Message)> EditFleetCompositionEntryAsync(string serverAddress, long entryId, int? entryMinCount, IReadOnlyList<SkillMinimum>? skillMinimums, int actingCharacterId = 0, CancellationToken cancellationToken = default)
+    {
+        CompositionEntryCalls++;
+        return Accepted();
+    }
+
+    /// <summary>Add + edit composition-entry calls that reached the transport.</summary>
+    public int CompositionEntryCalls { get; private set; }
 
     public Task<(bool Ok, string Message)> RemoveFleetCompositionEntryAsync(string serverAddress, long entryId, int actingCharacterId = 0, CancellationToken cancellationToken = default) => Accepted();
 

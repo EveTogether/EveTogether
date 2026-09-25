@@ -16,6 +16,11 @@ internal sealed class AddFleetCompositionEntryCommandHandler(
             return Result<long>.Failure(new ResultMessage(
                 MessageSeverity.Error, MessageCodes.ValidationFailed, "A fit with a ship and name is required.", "FleetComposition"));
 
+        if (CompositionSkillMinimums.Validate(command.SkillMinimums) is { } invalid)
+        {
+            return Result<long>.Failure(invalid);
+        }
+
         var role = await repository.GetRoleAsync(command.RoleId, cancellationToken);
         if (role is null)
             return Result<long>.Failure(new ResultMessage(
@@ -36,7 +41,8 @@ internal sealed class AddFleetCompositionEntryCommandHandler(
             RoleId = command.RoleId,
             Fit = command.Fit,
             EntryMinCount = command.EntryMinCount,
-            SortOrder = existing.Count
+            SortOrder = existing.Count,
+            SkillMinimums = CompositionSkillMinimums.ToEntities(command.SkillMinimums)
         }, cancellationToken);
 
         await changes.PublishAsync(composition.Id, CompositionChangeKind.Edited, cancellationToken);

@@ -285,21 +285,27 @@
                                     <TextBox Grid.Row="2" Text="{Binding SearchText}" PlaceholderText="{Binding SearchPlaceholder}"
                                              IsVisible="{Binding HasSearch}" FontSize="10" Margin="0,0,0,7"/>
                                     <Grid Grid.Row="3" RowDefinitions="Auto,*">
-                                        <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,3,0,5">
+                                        <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto" Margin="0,3,0,5">
                                             <TextBlock Text="CHARACTER" Classes="label" FontSize="9"/>
                                             <TextBlock Grid.Column="1" Text="TO FLY" Classes="label" FontSize="9"/>
+                                            <TextBlock Grid.Column="2" Text="TO MIN" Classes="label" FontSize="9" Width="64"
+                                                       TextAlignment="Right" IsVisible="{Binding HasSkillMinimums}"
+                                                       ToolTip.Tip="Training to the fit plus the doctrine skill minimum"/>
                                         </Grid>
                                         <ListBox Grid.Row="1" ItemsSource="{Binding VisibleCharacters}"
                                                  SelectedItem="{Binding SelectedCharacter}" ScrollViewer.VerticalScrollBarVisibility="Auto">
                                             <ListBox.ItemTemplate>
                                                 <DataTemplate x:DataType="vm:CompositionCharacterReadiness">
-                                                    <Grid ColumnDefinitions="*,Auto" Margin="2,4">
+                                                    <Grid ColumnDefinitions="*,Auto,Auto" Margin="2,4">
                                                         <StackPanel Orientation="Horizontal" Spacing="7">
                                                             <TextBlock Text="{Binding Name}" FontSize="11"/>
                                                             <TextBlock Text="{Binding StatusLabel}" Classes="label" FontSize="9"/>
                                                         </StackPanel>
                                                         <TextBlock Grid.Column="1" Text="{Binding ToFlyLabel}" FontSize="10"
                                                                    FontFamily="Consolas,monospace"/>
+                                                        <TextBlock Grid.Column="2" Text="{Binding ToMinLabel}" FontSize="10" Width="64"
+                                                                   TextAlignment="Right" FontFamily="Consolas,monospace"
+                                                                   IsVisible="{Binding $parent[ListBox].((vm:CompositionReadinessEntry)DataContext).HasSkillMinimums}"/>
                                                     </Grid>
                                                 </DataTemplate>
                                             </ListBox.ItemTemplate>
@@ -315,6 +321,8 @@
                                                         <TextBlock Text="{Binding Name}" FontSize="12" FontWeight="SemiBold"/>
                                                         <TextBlock Text="{Binding StatusLabel}" FontSize="10"/>
                                                         <TextBlock Text="{Binding ToFlyLabel, StringFormat='To fly: {0}'}" FontSize="11"/>
+                                                        <TextBlock Text="{Binding ToMinLabel, StringFormat='To minimum: {0}'}" FontSize="11"
+                                                                   IsVisible="{Binding HasSkillMinimums}"/>
                                                         <TextBlock Text="{Binding QueueSummary}" Classes="label" FontSize="10" TextWrapping="Wrap"/>
                                                         <ItemsControl ItemsSource="{Binding MissingSkills}">
                                                             <ItemsControl.ItemTemplate>

@@ -3,46 +3,207 @@ using System;
 using EveUtils.Shared.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
 
-namespace EveUtils.Migrations.Client.Sqlite.Migrations
+namespace EveUtils.Migrations.Server.Sqlite.Migrations
 {
-    [DbContext(typeof(ClientDbContext))]
-    partial class ClientDbContextModelSnapshot : ModelSnapshot
+    [DbContext(typeof(ServerDbContext))]
+    [Migration("20260925081404_AddCompositionEntrySkillMinimums")]
+    partial class AddCompositionEntrySkillMinimums
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.11");
 
-            modelBuilder.Entity("EveUtils.Shared.Identity.LocalCharacter", b =>
+            modelBuilder.Entity("EveUtils.Shared.Modules.AdminAuth.Entities.AdminUser", b =>
                 {
-                    b.Property<int>("EsiCharacterId")
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
 
-                    b.Property<string>("GrantedScopesJson")
-                        .IsRequired()
-                        .HasMaxLength(2000)
+                    b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("Name")
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTimeOffset?>("LastLoginAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("MustChangePassword")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("PasswordHash")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Username")
                         .IsRequired()
                         .HasMaxLength(255)
                         .HasColumnType("TEXT");
 
-                    b.Property<int>("SortOrder")
-                        .HasColumnType("INTEGER");
+                    b.Property<string>("UsernameNormalized")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("TEXT");
 
-                    b.HasKey("EsiCharacterId");
+                    b.HasKey("Id");
 
-                    b.HasIndex("SortOrder");
+                    b.HasIndex("UsernameNormalized")
+                        .IsUnique();
 
-                    b.ToTable("LocalCharacter");
+                    b.ToTable("AdminUser");
                 });
 
-            modelBuilder.Entity("EveUtils.Shared.Modules.Fittings.Entities.LocalFitting", b =>
+            modelBuilder.Entity("EveUtils.Shared.Modules.AdminAuth.Entities.AdminUserRole", b =>
+                {
+                    b.Property<int>("AdminUserId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("RoleId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("AdminUserId", "RoleId");
+
+                    b.HasIndex("RoleId");
+
+                    b.ToTable("AdminUserRole");
+                });
+
+            modelBuilder.Entity("EveUtils.Shared.Modules.AdminAuth.Entities.Role", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsSuperAdmin")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("Role");
+                });
+
+            modelBuilder.Entity("EveUtils.Shared.Modules.AdminAuth.Entities.RolePermission", b =>
+                {
+                    b.Property<int>("RoleId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("PermissionCode")
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("RoleId", "PermissionCode");
+
+                    b.ToTable("RolePermission");
+                });
+
+            modelBuilder.Entity("EveUtils.Shared.Modules.ApiKeys.Entities.ApiKey", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("ExpiresAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Label")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("LastUsedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("OwnerCharacterId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Prefix")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Scopes")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SecretHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Prefix")
+                        .IsUnique();
+
+                    b.ToTable("ApiKey");
+                });
+
+            modelBuilder.Entity("EveUtils.Shared.Modules.Backup.Entities.BackupDownload", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("AdminUserId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("AdminUsername")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AppVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("DownloadedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("BackupDownload");
+                });
+
+            modelBuilder.Entity("EveUtils.Shared.Modules.Fittings.Entities.SharedFit", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -53,45 +214,37 @@ namespace EveUtils.Migrations.Client.Sqlite.Migrations
                         .HasMaxLength(32)
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("Description")
-                        .HasMaxLength(2000)
-                        .HasColumnType("TEXT");
-
                     b.Property<int>("EsiFittingId")
                         .HasColumnType("INTEGER");
-
-                    b.Property<DateTimeOffset>("ImportedAt")
-                        .HasColumnType("TEXT");
 
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(255)
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("OwnerId")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("TEXT");
-
                     b.Property<string>("RawJson")
                         .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("SharedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("SharedByCharacterId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("SharedByCharacterName")
+                        .IsRequired()
+                        .HasMaxLength(255)
                         .HasColumnType("TEXT");
 
                     b.Property<int>("ShipTypeId")
                         .HasColumnType("INTEGER");
 
-                    b.Property<string>("Tags")
-                        .HasMaxLength(512)
-                        .HasColumnType("TEXT");
-
                     b.HasKey("Id");
 
                     b.HasIndex("ContentHash");
 
-                    b.HasIndex("OwnerId", "EsiFittingId")
-                        .IsUnique();
-
-                    b.ToTable("LocalFitting");
+                    b.ToTable("SharedFit");
                 });
 
             modelBuilder.Entity("EveUtils.Shared.Modules.Fleet.Composition.FleetComposition", b =>
@@ -106,9 +259,6 @@ namespace EveUtils.Migrations.Client.Sqlite.Migrations
                     b.Property<string>("Description")
                         .HasMaxLength(2000)
                         .HasColumnType("TEXT");
-
-                    b.Property<bool>("IsClientOnly")
-                        .HasColumnType("INTEGER");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -177,32 +327,6 @@ namespace EveUtils.Migrations.Client.Sqlite.Migrations
                     b.ToTable("FleetCompositionRole");
                 });
 
-            modelBuilder.Entity("EveUtils.Shared.Modules.Fleet.Entities.CachedExternalCharacter", b =>
-                {
-                    b.Property<int>("CharacterId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("Alliance")
-                        .HasMaxLength(255)
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("Corp")
-                        .HasMaxLength(255)
-                        .HasColumnType("TEXT");
-
-                    b.Property<long>("FetchedAtUnixMs")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("TEXT");
-
-                    b.HasKey("CharacterId");
-
-                    b.ToTable("CachedExternalCharacter");
-                });
-
             modelBuilder.Entity("EveUtils.Shared.Modules.Fleet.Entities.Fleet", b =>
                 {
                     b.Property<long>("Id")
@@ -245,9 +369,6 @@ namespace EveUtils.Migrations.Client.Sqlite.Migrations
 
                     b.Property<DateTimeOffset?>("FromTime")
                         .HasColumnType("TEXT");
-
-                    b.Property<bool>("IsClientOnly")
-                        .HasColumnType("INTEGER");
 
                     b.Property<bool>("IsFreeMove")
                         .HasColumnType("INTEGER");
@@ -550,208 +671,7 @@ namespace EveUtils.Migrations.Client.Sqlite.Migrations
                     b.ToTable("CombatSample");
                 });
 
-            modelBuilder.Entity("EveUtils.Shared.Modules.Implants.Entities.CharacterImplant", b =>
-                {
-                    b.Property<int>("CharacterId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("ImplantTypeId")
-                        .HasColumnType("INTEGER");
-
-                    b.HasKey("CharacterId", "ImplantTypeId");
-
-                    b.ToTable("CharacterImplant");
-                });
-
-            modelBuilder.Entity("EveUtils.Shared.Modules.Killmails.Entities.KillmailEntityName", b =>
-                {
-                    b.Property<long>("Id")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("Kind")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("Name")
-                        .HasColumnType("TEXT");
-
-                    b.Property<DateTime>("RefreshedAtUtc")
-                        .HasColumnType("TEXT");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("KillmailEntityName");
-                });
-
-            modelBuilder.Entity("EveUtils.Shared.Modules.Killmails.Entities.LocalKillmail", b =>
-                {
-                    b.Property<int>("CharacterId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("KillmailId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("DamageTaken")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("Hash")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<DateTime>("ImportedAtUtc")
-                        .HasColumnType("TEXT");
-
-                    b.Property<bool>("IsLoss")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<DateTime>("KillmailTimeUtc")
-                        .HasColumnType("TEXT");
-
-                    b.Property<int>("LinkSource")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<Guid?>("RunId")
-                        .HasColumnType("TEXT");
-
-                    b.Property<int>("SolarSystemId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int?>("VictimAllianceId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int?>("VictimCharacterId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int?>("VictimCorporationId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("VictimShipTypeId")
-                        .HasColumnType("INTEGER");
-
-                    b.HasKey("CharacterId", "KillmailId");
-
-                    b.HasIndex("RunId");
-
-                    b.ToTable("LocalKillmail");
-                });
-
-            modelBuilder.Entity("EveUtils.Shared.Modules.Killmails.Entities.LocalKillmailAttacker", b =>
-                {
-                    b.Property<int>("CharacterId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("KillmailId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("Ordinal")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int?>("AllianceId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int?>("AttackerCharacterId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int?>("CorporationId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("DamageDone")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int?>("FactionId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<bool>("FinalBlow")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int?>("ShipTypeId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int?>("WeaponTypeId")
-                        .HasColumnType("INTEGER");
-
-                    b.HasKey("CharacterId", "KillmailId", "Ordinal");
-
-                    b.ToTable("LocalKillmailAttacker");
-                });
-
-            modelBuilder.Entity("EveUtils.Shared.Modules.Killmails.Entities.LocalKillmailItem", b =>
-                {
-                    b.Property<int>("CharacterId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("KillmailId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("Flag")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("TypeId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<bool>("IsNested")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<long>("QuantityDestroyed")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<long>("QuantityDropped")
-                        .HasColumnType("INTEGER");
-
-                    b.HasKey("CharacterId", "KillmailId", "Flag", "TypeId", "IsNested");
-
-                    b.ToTable("LocalKillmailItem");
-                });
-
-            modelBuilder.Entity("EveUtils.Shared.Modules.Killmails.Entities.ProvisionalKillmail", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("TEXT");
-
-                    b.Property<int>("CharacterId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<DateTime>("CreatedAtUtc")
-                        .HasColumnType("TEXT");
-
-                    b.Property<DateTime>("KillmailTimeUtc")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("RawText")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("VictimName")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<int>("VictimShipTypeId")
-                        .HasColumnType("INTEGER");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("ProvisionalKillmail");
-                });
-
-            modelBuilder.Entity("EveUtils.Shared.Modules.Market.Entities.LocalMarketPrice", b =>
-                {
-                    b.Property<int>("TypeId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<double>("AdjustedPrice")
-                        .HasColumnType("REAL");
-
-                    b.Property<double>("AveragePrice")
-                        .HasColumnType("REAL");
-
-                    b.Property<DateTimeOffset>("UpdatedAt")
-                        .HasColumnType("TEXT");
-
-                    b.HasKey("TypeId");
-
-                    b.ToTable("LocalMarketPrice");
-                });
-
-            modelBuilder.Entity("EveUtils.Shared.Modules.Messaging.Entities.ClientInboxMessage", b =>
+            modelBuilder.Entity("EveUtils.Shared.Modules.Messaging.Entities.QueuedMessage", b =>
                 {
                     b.Property<long>("Id")
                         .ValueGeneratedOnAdd()
@@ -761,10 +681,10 @@ namespace EveUtils.Migrations.Client.Sqlite.Migrations
                         .HasMaxLength(4000)
                         .HasColumnType("TEXT");
 
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("TEXT");
+                    b.Property<long>("CreatedAt")
+                        .HasColumnType("INTEGER");
 
-                    b.Property<bool>("IsRead")
+                    b.Property<long>("ExpiresAt")
                         .HasColumnType("INTEGER");
 
                     b.Property<int>("Kind")
@@ -774,9 +694,6 @@ namespace EveUtils.Migrations.Client.Sqlite.Migrations
                         .HasMaxLength(16384)
                         .HasColumnType("TEXT");
 
-                    b.Property<DateTimeOffset>("ReceivedAt")
-                        .HasColumnType("TEXT");
-
                     b.Property<int>("RecipientCharacterId")
                         .HasColumnType("INTEGER");
 
@@ -784,13 +701,6 @@ namespace EveUtils.Migrations.Client.Sqlite.Migrations
                         .HasColumnType("INTEGER");
 
                     b.Property<int?>("SenderCharacterId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("ServerAddress")
-                        .HasMaxLength(255)
-                        .HasColumnType("TEXT");
-
-                    b.Property<long>("ServerMessageId")
                         .HasColumnType("INTEGER");
 
                     b.Property<int>("Status")
@@ -803,127 +713,25 @@ namespace EveUtils.Migrations.Client.Sqlite.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("RecipientCharacterId", "ServerMessageId")
-                        .IsUnique();
+                    b.HasIndex("ExpiresAt");
 
-                    b.ToTable("ClientInboxMessage");
+                    b.HasIndex("RecipientCharacterId", "Status");
+
+                    b.ToTable("QueuedMessage");
                 });
 
-            modelBuilder.Entity("EveUtils.Shared.Modules.Runs.Entities.ActivitySummary", b =>
+            modelBuilder.Entity("EveUtils.Shared.Modules.Permissions.Entities.PermissionToggle", b =>
                 {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
+                    b.Property<string>("Code")
+                        .HasMaxLength(128)
                         .HasColumnType("TEXT");
 
-                    b.Property<int>("ActivityKind")
+                    b.Property<bool>("Enabled")
                         .HasColumnType("INTEGER");
 
-                    b.Property<decimal>("BountyIsk")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("TEXT");
+                    b.HasKey("Code");
 
-                    b.Property<bool>("CompletenessUnknown")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<DateTime>("ComputedAtUtc")
-                        .HasColumnType("TEXT");
-
-                    b.Property<int>("DurationSeconds")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("EnemyTypeCount")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<decimal>("ExpectedPayoutIsk")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("GroupCode")
-                        .HasMaxLength(64)
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("IskContributions")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("IskContributionsByCharacter")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("IskSources")
-                        .HasMaxLength(255)
-                        .HasColumnType("TEXT");
-
-                    b.Property<int>("LootEntriesWithoutPrice")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<decimal?>("LootIskGained")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("TEXT");
-
-                    b.Property<decimal?>("LootIskLost")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("TEXT");
-
-                    b.Property<decimal?>("LootIskNet")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("TEXT");
-
-                    b.Property<int>("LootItemCount")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<decimal>("LootVolume")
-                        .HasPrecision(18, 3)
-                        .HasColumnType("TEXT");
-
-                    b.Property<int>("ParticipantCount")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("PayoutEligibleCount")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<Guid?>("RunId")
-                        .HasColumnType("TEXT");
-
-                    b.Property<int>("RunsIncluded")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("SignatureGroupSnapshot")
-                        .HasMaxLength(64)
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("SiteName")
-                        .HasMaxLength(255)
-                        .HasColumnType("TEXT");
-
-                    b.Property<int>("SiteTypeId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int?>("SolarSystemId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("SourceRevisionSum")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<DateTime>("StartedAtUtc")
-                        .HasColumnType("TEXT");
-
-                    b.Property<DateTime?>("StoppedAtUtc")
-                        .HasColumnType("TEXT");
-
-                    b.Property<decimal?>("TotalIsk")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("TEXT");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("GroupCode")
-                        .IsUnique();
-
-                    b.HasIndex("RunId")
-                        .IsUnique();
-
-                    b.HasIndex("StartedAtUtc");
-
-                    b.ToTable("ActivitySummary");
+                    b.ToTable("PermissionToggle");
                 });
 
             modelBuilder.Entity("EveUtils.Shared.Modules.Runs.Entities.Run", b =>
@@ -1071,9 +879,7 @@ namespace EveUtils.Migrations.Client.Sqlite.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("GroupCode", "CharacterId")
-                        .IsUnique()
-                        .HasFilter("\"GroupCode\" IS NOT NULL AND \"DeletedAtUtc\" IS NULL");
+                    b.HasIndex("GroupCode", "CharacterId");
 
                     b.ToTable("Run");
                 });
@@ -1168,27 +974,6 @@ namespace EveUtils.Migrations.Client.Sqlite.Migrations
                     b.HasIndex("RunId");
 
                     b.ToTable("RunEnemyObservation");
-                });
-
-            modelBuilder.Entity("EveUtils.Shared.Modules.Runs.Entities.RunGroupOrigin", b =>
-                {
-                    b.Property<string>("GroupCode")
-                        .HasMaxLength(64)
-                        .HasColumnType("TEXT");
-
-                    b.Property<long>("FleetId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<DateTime>("RecordedAtUtc")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("ServerAddress")
-                        .HasMaxLength(255)
-                        .HasColumnType("TEXT");
-
-                    b.HasKey("GroupCode");
-
-                    b.ToTable("RunGroupOrigin");
                 });
 
             modelBuilder.Entity("EveUtils.Shared.Modules.Runs.Entities.RunLootCapture", b =>
@@ -1334,28 +1119,119 @@ namespace EveUtils.Migrations.Client.Sqlite.Migrations
                     b.ToTable("RunParameter");
                 });
 
-            modelBuilder.Entity("EveUtils.Shared.Modules.Settings.Entities.ClientSetting", b =>
+            modelBuilder.Entity("EveUtils.Shared.Modules.ServerAuth.Entities.AllowedCharacter", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
 
-                    b.Property<string>("Key")
+                    b.Property<string>("CharacterName")
                         .IsRequired()
-                        .HasMaxLength(100)
+                        .HasMaxLength(255)
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("Value")
-                        .IsRequired()
-                        .HasMaxLength(4000)
+                    b.Property<int?>("EsiCharacterId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(255)
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("Key")
+                    b.ToTable("AllowedCharacter");
+                });
+
+            modelBuilder.Entity("EveUtils.Shared.Modules.ServerAuth.Entities.ServerSession", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("AccessTokenHash")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("IssuedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("LastHeartbeat")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("RefreshExpiresAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RefreshTokenHash")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("SyncedCharacterId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AccessTokenHash");
+
+                    b.HasIndex("RefreshTokenHash");
+
+                    b.HasIndex("SyncedCharacterId");
+
+                    b.ToTable("ServerSession");
+                });
+
+            modelBuilder.Entity("EveUtils.Shared.Modules.ServerAuth.Entities.SyncedCharacter", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("CharacterName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("EsiCharacterId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("FailureCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("GrantedScopesJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("LastFailedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("LastRefreshedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("PairedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<byte[]>("RefreshTokenCipher")
+                        .IsRequired()
+                        .HasColumnType("BLOB");
+
+                    b.Property<byte[]>("RefreshTokenNonce")
+                        .IsRequired()
+                        .HasColumnType("BLOB");
+
+                    b.Property<byte[]>("RefreshTokenTag")
+                        .IsRequired()
+                        .HasColumnType("BLOB");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EsiCharacterId")
                         .IsUnique();
 
-                    b.ToTable("ClientSetting");
+                    b.ToTable("SyncedCharacter");
                 });
 
             modelBuilder.Entity("EveUtils.Shared.Modules.Ships.Entities.Fitting", b =>
@@ -1403,232 +1279,57 @@ namespace EveUtils.Migrations.Client.Sqlite.Migrations
                     b.ToTable("Ship");
                 });
 
-            modelBuilder.Entity("EveUtils.Shared.Modules.Skills.Entities.CharacterAttributes", b =>
-                {
-                    b.Property<int>("CharacterId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<DateTimeOffset?>("AccruedRemapCooldownDate")
-                        .HasColumnType("TEXT");
-
-                    b.Property<int?>("BonusRemaps")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("Charisma")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("Intelligence")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<DateTimeOffset?>("LastRemapDate")
-                        .HasColumnType("TEXT");
-
-                    b.Property<int>("Memory")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("Perception")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<long>("TotalSp")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("UnallocatedSp")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("Willpower")
-                        .HasColumnType("INTEGER");
-
-                    b.HasKey("CharacterId");
-
-                    b.ToTable("CharacterAttributes");
-                });
-
-            modelBuilder.Entity("EveUtils.Shared.Modules.Skills.Entities.CharacterSkill", b =>
-                {
-                    b.Property<int>("CharacterId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("SkillTypeId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("Level")
-                        .HasColumnType("INTEGER");
-
-                    b.HasKey("CharacterId", "SkillTypeId");
-
-                    b.ToTable("CharacterSkill");
-                });
-
-            modelBuilder.Entity("EveUtils.Shared.Modules.Skills.Entities.CharacterSkillQueueEntry", b =>
-                {
-                    b.Property<int>("CharacterId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("QueuePosition")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<DateTimeOffset?>("FinishDate")
-                        .HasColumnType("TEXT");
-
-                    b.Property<int>("FinishedLevel")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("SkillTypeId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<DateTimeOffset?>("StartDate")
-                        .HasColumnType("TEXT");
-
-                    b.HasKey("CharacterId", "QueuePosition");
-
-                    b.ToTable("CharacterSkillQueueEntry");
-                });
-
-            modelBuilder.Entity("EveUtils.Shared.Modules.Skills.Plans.Entities.SkillPlan", b =>
+            modelBuilder.Entity("EveUtils.Shared.Modules.Sync.Entities.SyncLog", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
 
-                    b.Property<int>("CharacterId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<DateTime>("CreatedAtUtc")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("Name")
+                    b.Property<string>("EntityName")
                         .IsRequired()
                         .HasMaxLength(255)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("SyncedAtUtc")
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("CharacterId");
-
-                    b.ToTable("SkillPlan");
+                    b.ToTable("SyncLog");
                 });
 
-            modelBuilder.Entity("EveUtils.Shared.Modules.Skills.Plans.Entities.SkillPlanRow", b =>
+            modelBuilder.Entity("EveUtils.Shared.Modules.AdminAuth.Entities.AdminUserRole", b =>
                 {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER");
+                    b.HasOne("EveUtils.Shared.Modules.AdminAuth.Entities.AdminUser", "AdminUser")
+                        .WithMany("UserRoles")
+                        .HasForeignKey("AdminUserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
-                    b.Property<int>("Level")
-                        .HasColumnType("INTEGER");
+                    b.HasOne("EveUtils.Shared.Modules.AdminAuth.Entities.Role", "Role")
+                        .WithMany("UserRoles")
+                        .HasForeignKey("RoleId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
-                    b.Property<int>("PlanId")
-                        .HasColumnType("INTEGER");
+                    b.Navigation("AdminUser");
 
-                    b.Property<int>("Position")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("SkillTypeId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("Source")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("SourceLabel")
-                        .HasMaxLength(255)
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("SourceRef")
-                        .HasMaxLength(255)
-                        .HasColumnType("TEXT");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("PlanId", "Position");
-
-                    b.HasIndex("PlanId", "SkillTypeId", "Level")
-                        .IsUnique();
-
-                    b.ToTable("SkillPlanRow");
+                    b.Navigation("Role");
                 });
 
-            modelBuilder.Entity("EveUtils.Shared.Transport.ClientServerSession", b =>
+            modelBuilder.Entity("EveUtils.Shared.Modules.AdminAuth.Entities.RolePermission", b =>
                 {
-                    b.Property<string>("Address")
-                        .HasMaxLength(512)
-                        .HasColumnType("TEXT");
+                    b.HasOne("EveUtils.Shared.Modules.AdminAuth.Entities.Role", "Role")
+                        .WithMany("Permissions")
+                        .HasForeignKey("RoleId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
-                    b.Property<int>("CharacterId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("AccessToken")
-                        .IsRequired()
-                        .HasMaxLength(512)
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("CharacterName")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("RefreshToken")
-                        .IsRequired()
-                        .HasMaxLength(512)
-                        .HasColumnType("TEXT");
-
-                    b.Property<long>("SavedAtUnixMs")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("ServerSessionId")
-                        .HasColumnType("INTEGER");
-
-                    b.HasKey("Address", "CharacterId");
-
-                    b.ToTable("ClientServerSession");
-                });
-
-            modelBuilder.Entity("EveUtils.Shared.Transport.CoupledServer", b =>
-                {
-                    b.Property<string>("Address")
-                        .HasMaxLength(512)
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("CertFingerprint")
-                        .HasMaxLength(128)
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("Label")
-                        .HasMaxLength(255)
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("ServerName")
-                        .HasMaxLength(255)
-                        .HasColumnType("TEXT");
-
-                    b.HasKey("Address");
-
-                    b.ToTable("CoupledServer");
-                });
-
-            modelBuilder.Entity("EveUtils.Shared.Transport.PendingServerRevoke", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("AccessToken")
-                        .IsRequired()
-                        .HasMaxLength(512)
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("Address")
-                        .IsRequired()
-                        .HasMaxLength(512)
-                        .HasColumnType("TEXT");
-
-                    b.Property<int>("CharacterId")
-                        .HasColumnType("INTEGER");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("Address");
-
-                    b.ToTable("PendingServerRevoke");
+                    b.Navigation("Role");
                 });
 
             modelBuilder.Entity("EveUtils.Shared.Modules.Fleet.Composition.FleetCompositionEntry", b =>
@@ -1792,32 +1493,6 @@ namespace EveUtils.Migrations.Client.Sqlite.Migrations
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("EveUtils.Shared.Modules.Killmails.Entities.LocalKillmail", b =>
-                {
-                    b.HasOne("EveUtils.Shared.Modules.Runs.Entities.Run", null)
-                        .WithMany()
-                        .HasForeignKey("RunId")
-                        .OnDelete(DeleteBehavior.SetNull);
-                });
-
-            modelBuilder.Entity("EveUtils.Shared.Modules.Killmails.Entities.LocalKillmailAttacker", b =>
-                {
-                    b.HasOne("EveUtils.Shared.Modules.Killmails.Entities.LocalKillmail", null)
-                        .WithMany("Attackers")
-                        .HasForeignKey("CharacterId", "KillmailId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("EveUtils.Shared.Modules.Killmails.Entities.LocalKillmailItem", b =>
-                {
-                    b.HasOne("EveUtils.Shared.Modules.Killmails.Entities.LocalKillmail", null)
-                        .WithMany("Items")
-                        .HasForeignKey("CharacterId", "KillmailId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
             modelBuilder.Entity("EveUtils.Shared.Modules.Runs.Entities.RunAttendanceEntry", b =>
                 {
                     b.HasOne("EveUtils.Shared.Modules.Runs.Entities.Run", "Run")
@@ -1895,6 +1570,17 @@ namespace EveUtils.Migrations.Client.Sqlite.Migrations
                     b.Navigation("Run");
                 });
 
+            modelBuilder.Entity("EveUtils.Shared.Modules.ServerAuth.Entities.ServerSession", b =>
+                {
+                    b.HasOne("EveUtils.Shared.Modules.ServerAuth.Entities.SyncedCharacter", "SyncedCharacter")
+                        .WithMany()
+                        .HasForeignKey("SyncedCharacterId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("SyncedCharacter");
+                });
+
             modelBuilder.Entity("EveUtils.Shared.Modules.Ships.Entities.Fitting", b =>
                 {
                     b.HasOne("EveUtils.Shared.Modules.Ships.Entities.Ship", "Ship")
@@ -1906,11 +1592,16 @@ namespace EveUtils.Migrations.Client.Sqlite.Migrations
                     b.Navigation("Ship");
                 });
 
-            modelBuilder.Entity("EveUtils.Shared.Modules.Killmails.Entities.LocalKillmail", b =>
+            modelBuilder.Entity("EveUtils.Shared.Modules.AdminAuth.Entities.AdminUser", b =>
                 {
-                    b.Navigation("Attackers");
+                    b.Navigation("UserRoles");
+                });
 
-                    b.Navigation("Items");
+            modelBuilder.Entity("EveUtils.Shared.Modules.AdminAuth.Entities.Role", b =>
+                {
+                    b.Navigation("Permissions");
+
+                    b.Navigation("UserRoles");
                 });
 
             modelBuilder.Entity("EveUtils.Shared.Modules.Runs.Entities.Run", b =>

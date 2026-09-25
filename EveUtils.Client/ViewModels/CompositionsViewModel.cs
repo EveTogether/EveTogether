@@ -209,7 +209,7 @@ public sealed partial class CompositionsViewModel : ObservableObject, IRefreshab
         {
             foreach (FleetCompositionEntryInfo entry in role.Entries)
             {
-                ReadinessEntries.Add(calculator.Evaluate(role.RoleName, entry.Fit, snapshots));
+                ReadinessEntries.Add(calculator.Evaluate(role.RoleName, entry.Fit, entry.SkillMinimums, snapshots));
             }
         }
 
@@ -576,7 +576,7 @@ public sealed partial class CompositionsViewModel : ObservableObject, IRefreshab
 
             foreach (var entry in role.Entries)
             {
-                var (entryOk, entryMessage, _) = await target.AddEntryAsync(roleId, entry.Fit, entry.EntryMinCount);
+                var (entryOk, entryMessage, _) = await target.AddEntryAsync(roleId, entry.Fit, entry.EntryMinCount, entry.SkillMinimums);
                 if (!entryOk)
                     return (false, entryMessage);
             }
