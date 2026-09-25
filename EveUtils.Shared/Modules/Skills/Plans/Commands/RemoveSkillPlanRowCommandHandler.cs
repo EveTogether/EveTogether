@@ -11,7 +11,7 @@ internal sealed class RemoveSkillPlanRowCommandHandler(ISkillPlanRepository repo
 {
     public async Task<Result> Handle(RemoveSkillPlanRowCommand command, CancellationToken cancellationToken = default)
     {
-        bool removed = await repository.RemoveRowAsync(command.PlanId, command.SkillTypeId, command.Level, cancellationToken);
+        bool removed = await repository.RemoveRowAsync(command.CharacterId, command.PlanId, command.SkillTypeId, command.Level, cancellationToken);
         if (!removed)
         {
             return Result.Failure(new ResultMessage(MessageSeverity.Error, MessageCodes.NotFound,

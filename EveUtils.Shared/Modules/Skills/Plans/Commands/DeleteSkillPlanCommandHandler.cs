@@ -11,7 +11,7 @@ internal sealed class DeleteSkillPlanCommandHandler(ISkillPlanRepository reposit
 {
     public async Task<Result> Handle(DeleteSkillPlanCommand command, CancellationToken cancellationToken = default)
     {
-        bool deleted = await repository.DeleteAsync(command.PlanId, cancellationToken);
+        bool deleted = await repository.DeleteAsync(command.CharacterId, command.PlanId, cancellationToken);
         if (!deleted)
         {
             return Result.Failure(new ResultMessage(MessageSeverity.Error, MessageCodes.NotFound,

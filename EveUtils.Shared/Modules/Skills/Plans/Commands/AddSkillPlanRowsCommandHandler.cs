@@ -21,7 +21,7 @@ internal sealed class AddSkillPlanRowsCommandHandler(ISkillPlanRepository reposi
             SourceLabel = draft.SourceLabel
         }).ToList();
 
-        int added = await repository.AddRowsAsync(command.PlanId, rows, cancellationToken);
+        int added = await repository.AddRowsAsync(command.CharacterId, command.PlanId, rows, cancellationToken);
         if (added == 0)
         {
             return Result<int>.Success(0); // every row already in the plan — a no-op write publishes no signal

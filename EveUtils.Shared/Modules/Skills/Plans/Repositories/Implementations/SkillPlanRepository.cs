@@ -43,10 +43,10 @@ internal sealed class SkillPlanRepository(IDbContextFactory<SharedDbContext> con
         return plan.Id;
     }
 
-    public async Task<bool> RenameAsync(int planId, string name, CancellationToken cancellationToken = default)
+    public async Task<bool> RenameAsync(int characterId, int planId, string name, CancellationToken cancellationToken = default)
     {
         await using var db = await contextFactory.CreateDbContextAsync(cancellationToken);
-        var plan = await db.Set<SkillPlan>().FirstOrDefaultAsync(p => p.Id == planId, cancellationToken);
+        var plan = await db.Set<SkillPlan>().FirstOrDefaultAsync(p => p.Id == planId && p.CharacterId == characterId, cancellationToken);
         if (plan is null)
         {
             return false;
@@ -57,10 +57,10 @@ internal sealed class SkillPlanRepository(IDbContextFactory<SharedDbContext> con
         return true;
     }
 
-    public async Task<bool> DeleteAsync(int planId, CancellationToken cancellationToken = default)
+    public async Task<bool> DeleteAsync(int characterId, int planId, CancellationToken cancellationToken = default)
     {
         await using var db = await contextFactory.CreateDbContextAsync(cancellationToken);
-        var plan = await db.Set<SkillPlan>().FirstOrDefaultAsync(p => p.Id == planId, cancellationToken);
+        var plan = await db.Set<SkillPlan>().FirstOrDefaultAsync(p => p.Id == planId && p.CharacterId == characterId, cancellationToken);
         if (plan is null)
         {
             return false;
@@ -73,7 +73,8 @@ internal sealed class SkillPlanRepository(IDbContextFactory<SharedDbContext> con
         return true;
     }
 
-    public async Task<int> AddRowsAsync(int planId, IReadOnlyList<SkillPlanRow> rows, CancellationToken cancellationToken = default)
+    public async Task<int> AddRowsAsync(
+        int characterId, int planId, IReadOnlyList<SkillPlanRow> rows, CancellationToken cancellationToken = default)
     {
         if (rows.Count == 0)
         {
@@ -81,6 +82,12 @@ internal sealed class SkillPlanRepository(IDbContextFactory<SharedDbContext> con
         }
 
         await using var db = await contextFactory.CreateDbContextAsync(cancellationToken);
+        bool owned = await db.Set<SkillPlan>().AnyAsync(p => p.Id == planId && p.CharacterId == characterId, cancellationToken);
+        if (!owned)
+        {
+            return 0;
+        }
+
         var existing = await db.Set<SkillPlanRow>().Where(row => row.PlanId == planId).ToListAsync(cancellationToken);
         var have = new HashSet<(int SkillTypeId, int Level)>(existing.Select(row => (row.SkillTypeId, row.Level)));
         int nextPosition = existing.Count == 0 ? 0 : existing.Max(row => row.Position) + 1;
@@ -108,9 +115,15 @@ internal sealed class SkillPlanRepository(IDbContextFactory<SharedDbContext> con
         return toAdd.Count;
     }
 
-    public async Task<bool> RemoveRowAsync(int planId, int skillTypeId, int level, CancellationToken cancellationToken = default)
+    public async Task<bool> RemoveRowAsync(int characterId, int planId, int skillTypeId, int level, CancellationToken cancellationToken = default)
     {
         await using var db = await contextFactory.CreateDbContextAsync(cancellationToken);
+        bool owned = await db.Set<SkillPlan>().AnyAsync(p => p.Id == planId && p.CharacterId == characterId, cancellationToken);
+        if (!owned)
+        {
+            return false;
+        }
+
         var row = await db.Set<SkillPlanRow>().FirstOrDefaultAsync(
             r => r.PlanId == planId && r.SkillTypeId == skillTypeId && r.Level == level, cancellationToken);
         if (row is null)

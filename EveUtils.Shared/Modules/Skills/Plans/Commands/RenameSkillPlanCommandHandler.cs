@@ -11,7 +11,7 @@ internal sealed class RenameSkillPlanCommandHandler(ISkillPlanRepository reposit
 {
     public async Task<Result> Handle(RenameSkillPlanCommand command, CancellationToken cancellationToken = default)
     {
-        bool renamed = await repository.RenameAsync(command.PlanId, command.Name, cancellationToken);
+        bool renamed = await repository.RenameAsync(command.CharacterId, command.PlanId, command.Name, cancellationToken);
         if (!renamed)
         {
             return Result.Failure(new ResultMessage(MessageSeverity.Error, MessageCodes.NotFound,
