@@ -222,4 +222,40 @@ public class CompositionsViewModelTests
         TestCapture.Save(frame, "eveutils-compositions.png");
         window.Close();
     }
+
+    [AvaloniaFact]
+    public async Task ReadinessWindow_RendersCharacterCounts()
+    {
+        using var instance = TestClientInstance.Create();
+        await SeedCharacterAsync(instance.Services, Owner, "Pilot One");
+        await SeedCompositionAsync(instance.Services, Owner, "Ferox Fleet", 12, "Ferox · Rails");
+
+        var vm = new CompositionsViewModel(instance.Services);
+        await vm.ReloadAsync();
+        Assert.NotNull(vm.SelectedTab);
+        vm.SelectedComposition = Assert.Single(vm.SelectedTab.Compositions);
+        CompositionCharacterReadiness[] characters = Enumerable.Range(1, 12)
+            .Select(number => new CompositionCharacterReadiness($"Pilot {number}",
+                number == 1 ? CompositionReadinessStatus.Ready : CompositionReadinessStatus.NotYet,
+                number == 1 ? TimeSpan.Zero : TimeSpan.FromHours(number), [], ""))
+            .ToArray();
+        CompositionReadinessEntry entry = new("DPS", "Ferox · Rails", "Ferox", characters);
+        vm.ReadinessEntries.Add(entry);
+        vm.SelectedReadinessEntry = entry;
+
+        Assert.Equal("YOUR CHARACTERS · 12", entry.DetailCharactersLabel);
+        Assert.Equal("Search 12 characters…", entry.SearchPlaceholder);
+        Assert.Equal("✓ 1 ready", entry.ReadyLabel);
+        Assert.Equal("11 not yet", entry.NotYetLabel);
+
+        var window = new CompositionsWindow(vm);
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+
+        var frame = window.CaptureRenderedFrame();
+        Assert.NotNull(frame);
+        frame.Save(Path.Combine(Path.GetTempPath(), "et352-readiness.png"),
+            new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
+        window.Close();
+    }
 }

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -14,6 +15,11 @@ using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Fleet.Events;
 using EveUtils.Shared.Modules.Fleet.Composition.Repositories;
 using EveUtils.Client.Imaging;
+using EveUtils.Client.ViewModels.FitBrowser;
+using EveUtils.Shared.Modules.Sde;
+using EveUtils.Shared.Modules.Skills;
+using EveUtils.Shared.Modules.Skills.Repositories;
+using EveUtils.Shared.Modules.Skills.Entities;
 using EveUtils.Shared.Transport;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -57,8 +63,15 @@ public sealed partial class CompositionsViewModel : ObservableObject, IRefreshab
     public void Dispose() => _changeSubscription.Dispose();
 
     // Local changes and server pushes both arrive here, on the UI thread; a tab the batch touches twice reloads once.
-    private Task _OnCompositionsChangedAsync(IReadOnlyList<CompositionChangedEvent> changes) =>
-        Task.WhenAll(Tabs.Where(tab => changes.Any(tab.Shows)).Select(tab => tab.RefreshAfterChangeAsync()));
+    private Task _OnCompositionsChangedAsync(IReadOnlyList<CompositionChangedEvent> changes)
+    {
+        if (SelectedComposition is { } selected &&
+            changes.Any(change => SelectedTab?.Shows(change) == true && change.Data.CompositionId == selected.Id))
+        {
+            CloseReadiness();
+        }
+        return Task.WhenAll(Tabs.Where(tab => changes.Any(tab.Shows)).Select(tab => tab.RefreshAfterChangeAsync()));
+    }
 
     /// <summary>Local library first, then one tab per coupled server.</summary>
     public ObservableCollection<CompositionTabViewModel> Tabs { get; } = [];
@@ -66,13 +79,25 @@ public sealed partial class CompositionsViewModel : ObservableObject, IRefreshab
     [ObservableProperty] private CompositionTabViewModel? _selectedTab;
     [ObservableProperty] private string _searchText = "";
     [ObservableProperty] private string _statusMessage = "";
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasReadiness))]
+    private CompositionRowViewModel? _selectedComposition;
+    public bool HasReadiness => SelectedComposition is not null;
+    [ObservableProperty] private CompositionReadinessEntry? _selectedReadinessEntry;
+    public ObservableCollection<CompositionReadinessEntry> ReadinessEntries { get; } = [];
+    public TimeSpan LastReadinessElapsed { get; private set; }
 
     partial void OnSearchTextChanged(string value) => SelectedTab?.SetFilter(value);
 
     partial void OnSelectedTabChanged(CompositionTabViewModel? value)
     {
+        SelectedComposition = null;
+        SelectedReadinessEntry = null;
+        ReadinessEntries.Clear();
         if (value is null)
+        {
             return;
+        }
         value.SetFilter(SearchText);
         _ = value.EnsureLoadedAsync();
     }
@@ -130,6 +155,80 @@ public sealed partial class CompositionsViewModel : ObservableObject, IRefreshab
 
     [RelayCommand]
     private Task Refresh() => SelectedTab?.ReloadAsync() ?? Task.CompletedTask;
+
+    [RelayCommand]
+    private async Task ShowReadiness(CompositionRowViewModel? row)
+    {
+        if (row is null)
+        {
+            return;
+        }
+
+        FleetCompositionDetail? detail = await row.Client.GetAsync(row.Id);
+        if (detail is null)
+        {
+            StatusMessage = "Could not load this composition.";
+            return;
+        }
+
+        IDogmaDataAccessor? data = _services.GetService<IDogmaDataAccessor>();
+        ICharacterSkillRepository? skills = _services.GetService<ICharacterSkillRepository>();
+        ICharacterAttributesRepository? attributes = _services.GetService<ICharacterAttributesRepository>();
+        ICharacterSkillQueueRepository? queue = _services.GetService<ICharacterSkillQueueRepository>();
+        if (data is null || skills is null || attributes is null || queue is null)
+        {
+            StatusMessage = "Local skill data is unavailable.";
+            return;
+        }
+
+        Stopwatch clock = Stopwatch.StartNew();
+        CharacterAttributeResolver attributeResolver = new(data);
+        List<CompositionCharacterSnapshot> snapshots = [];
+        foreach (Character character in await _characters.GetAllAsync())
+        {
+            if (character.EsiCharacterId is not { } characterId)
+            {
+                continue;
+            }
+
+            bool hasScope = character.HasScope(SkillsScopeCatalog.ReadSkills);
+            bool hasQueueScope = character.HasScope(SkillsScopeCatalog.ReadSkillQueue);
+            IReadOnlyDictionary<int, int> levels = hasScope
+                ? await skills.GetLevelsAsync(characterId) : new Dictionary<int, int>();
+            CharacterAttributes? storedAttributes = hasScope ? await attributes.GetAsync(characterId) : null;
+            IReadOnlyList<CharacterSkillQueueEntry> storedQueue = hasQueueScope
+                ? await queue.GetForCharacterAsync(characterId) : [];
+            snapshots.Add(new CompositionCharacterSnapshot(character.Name, hasScope, hasQueueScope, levels,
+                storedAttributes is null ? null : attributeResolver.Resolve(storedAttributes, []), storedQueue));
+        }
+
+        CompositionReadinessCalculator calculator = new(new FitValidator(data),
+            new SkillTrainingEstimator(data), FitNameResolverFactory.For(_services));
+        ReadinessEntries.Clear();
+        foreach (FleetCompositionRoleInfo role in detail.Roles)
+        {
+            foreach (FleetCompositionEntryInfo entry in role.Entries)
+            {
+                ReadinessEntries.Add(calculator.Evaluate(role.RoleName, entry.Fit, snapshots));
+            }
+        }
+
+        LastReadinessElapsed = clock.Elapsed;
+        SelectedComposition = row;
+        SelectedReadinessEntry = ReadinessEntries.FirstOrDefault();
+        StatusMessage = "";
+    }
+
+    [RelayCommand]
+    private void SelectReadinessEntry(CompositionReadinessEntry? entry) => SelectedReadinessEntry = entry;
+
+    [RelayCommand]
+    private void CloseReadiness()
+    {
+        SelectedComposition = null;
+        SelectedReadinessEntry = null;
+        ReadinessEntries.Clear();
+    }
 
     /// <summary>Loads every local character's own client-only compositions into the Local tab.</summary>
     private async Task _LoadLocalTabAsync(CompositionTabViewModel tab)

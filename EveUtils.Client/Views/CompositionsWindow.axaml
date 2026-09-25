@@ -1,14 +1,15 @@
 <v:ChromedWindow xmlns="https://github.com/avaloniaui" xmlns:v="using:EveUtils.Client.Views"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:EveUtils.Client.ViewModels"
+        xmlns:fb="using:EveUtils.Client.ViewModels.FitBrowser"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:mi="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
-        mc:Ignorable="d" d:DesignWidth="780" d:DesignHeight="640"
+        mc:Ignorable="d" d:DesignWidth="1120" d:DesignHeight="700"
         x:Class="EveUtils.Client.Views.CompositionsWindow"
         x:DataType="vm:CompositionsViewModel"
         x:Name="CompositionsRoot"
-        Width="780" Height="640"
+        Width="1120" Height="700" MinWidth="900" MinHeight="540"
         WindowStartupLocation="CenterOwner"
         Title="Compositions">
 
@@ -63,7 +64,8 @@
             </Grid>
 
             <!-- Source tabs: Local + one per coupled server -->
-            <TabControl Grid.Row="2" ItemsSource="{Binding Tabs}" SelectedItem="{Binding SelectedTab}">
+            <TabControl Grid.Row="2" ItemsSource="{Binding Tabs}" SelectedItem="{Binding SelectedTab}"
+                        IsVisible="{Binding !HasReadiness}">
                 <TabControl.ItemTemplate>
                     <DataTemplate x:DataType="vm:CompositionTabViewModel">
                         <TextBlock Text="{Binding Title}" LetterSpacing="0.5"/>
@@ -185,6 +187,9 @@
                                                             <Button Content="VIEW" FontSize="9" IsVisible="{Binding !CanEdit}"
                                                                     Command="{Binding #CompositionsRoot.((vm:CompositionsViewModel)DataContext).OpenCompositionCommand}"
                                                                     CommandParameter="{Binding}"/>
+                                                            <Button Content="READINESS" FontSize="9"
+                                                                    Command="{Binding #CompositionsRoot.((vm:CompositionsViewModel)DataContext).ShowReadinessCommand}"
+                                                                    CommandParameter="{Binding}"/>
                                                             <Button Content="PUSH ↑" FontSize="9" IsVisible="{Binding IsLocal}" ToolTip.Tip="Push to a server"
                                                                     Command="{Binding #CompositionsRoot.((vm:CompositionsViewModel)DataContext).PushCompositionCommand}"
                                                                     CommandParameter="{Binding}"/>
@@ -209,6 +214,130 @@
                     </DataTemplate>
                 </TabControl.ContentTemplate>
             </TabControl>
+
+            <Grid Grid.Row="2" ColumnDefinitions="*,350" Margin="0,10,0,0" IsVisible="{Binding HasReadiness}">
+                <Grid Grid.Column="0" RowDefinitions="Auto,*" Margin="0,0,10,0">
+                    <Border Grid.Row="0" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1" Padding="8,7">
+                        <Grid ColumnDefinitions="Auto,*,Auto">
+                            <Button Grid.Column="0" Content="‹ LIBRARY" FontSize="10" Command="{Binding CloseReadinessCommand}"/>
+                            <TextBlock Grid.Column="1" Text="{Binding SelectedComposition.Name}" FontWeight="SemiBold"
+                                       FontSize="14" Margin="12,0" VerticalAlignment="Center"/>
+                            <TextBlock Grid.Column="2" Text="FIT READINESS" Classes="label" FontSize="10"
+                                       VerticalAlignment="Center"/>
+                        </Grid>
+                    </Border>
+                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                        <ItemsControl ItemsSource="{Binding ReadinessEntries}" Margin="8,12,0,0">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:CompositionReadinessEntry">
+                                    <Border Background="#FF242A28" BorderBrush="{DynamicResource BorderBrush}"
+                                            BorderThickness="1" Padding="12" Margin="0,0,0,10">
+                                        <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto,Auto,Auto">
+                                            <TextBlock Grid.Row="0" Grid.ColumnSpan="2" Text="{Binding RoleName}"
+                                                       Classes="label" FontSize="10" LetterSpacing="1.2"/>
+                                            <StackPanel Grid.Row="1" Grid.ColumnSpan="2" Orientation="Horizontal" Spacing="8" Margin="0,6,0,10">
+                                                <TextBlock Text="{Binding HullName}" FontSize="12" FontWeight="SemiBold"/>
+                                                <TextBlock Text="{Binding FitName}" FontSize="12"/>
+                                            </StackPanel>
+                                            <TextBlock Grid.Row="2" Grid.ColumnSpan="2" Text="{Binding CharactersLabel}"
+                                                       Classes="label" FontSize="10" LetterSpacing="1.2"/>
+                                            <StackPanel Grid.Row="3" Grid.ColumnSpan="2" Orientation="Horizontal" Spacing="6" Margin="0,5,0,0">
+                                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+                                                        Background="{DynamicResource AccentSoftBrush}" CornerRadius="4" Padding="7,3">
+                                                    <TextBlock Text="{Binding ReadyLabel}" FontSize="9" Foreground="{DynamicResource GreenBrush}"/>
+                                                </Border>
+                                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+                                                        Background="{DynamicResource AccentSoftBrush}" CornerRadius="4" Padding="7,3">
+                                                    <TextBlock Text="{Binding FliesLabel}" FontSize="9" Foreground="{DynamicResource AccentBrightBrush}"/>
+                                                </Border>
+                                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+                                                        Background="{DynamicResource AccentSoftBrush}" CornerRadius="4" Padding="7,3">
+                                                    <TextBlock Text="{Binding NotYetLabel}" FontSize="9" Foreground="{DynamicResource WarnBrush}"/>
+                                                </Border>
+                                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+                                                        Background="{DynamicResource AccentSoftBrush}" CornerRadius="4" Padding="7,3"
+                                                        IsVisible="{Binding HasUnknown}">
+                                                    <TextBlock Text="{Binding UnknownLabel}" FontSize="9" Foreground="{DynamicResource TextDimBrush}"/>
+                                                </Border>
+                                            </StackPanel>
+                                            <TextBlock Grid.Row="4" Text="{Binding NextToFlyLabel}" FontSize="10"
+                                                       Foreground="{DynamicResource TextAccentBrush}" Margin="0,6,0,0"/>
+                                            <Button Grid.Row="4" Grid.Column="1" Content="{Binding AllLabel}" FontSize="9"
+                                                    Command="{Binding #CompositionsRoot.((vm:CompositionsViewModel)DataContext).SelectReadinessEntryCommand}"
+                                                    CommandParameter="{Binding}"/>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </Grid>
+
+                <Border Grid.Column="1" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+                        Background="{DynamicResource BgPanelBrush}" Padding="12">
+                    <ContentControl Content="{Binding SelectedReadinessEntry}">
+                        <ContentControl.ContentTemplate>
+                            <DataTemplate x:DataType="vm:CompositionReadinessEntry">
+                                <Grid RowDefinitions="Auto,Auto,Auto,260,Auto,*">
+                                    <TextBlock Grid.Row="0" Text="{Binding FitName}" FontWeight="SemiBold" FontSize="13"/>
+                                    <TextBlock Grid.Row="1" Text="{Binding DetailCharactersLabel}" Classes="label"
+                                               FontSize="10" LetterSpacing="1.2" Margin="0,10,0,5"/>
+                                    <TextBox Grid.Row="2" Text="{Binding SearchText}" PlaceholderText="{Binding SearchPlaceholder}"
+                                             IsVisible="{Binding HasSearch}" FontSize="10" Margin="0,0,0,7"/>
+                                    <Grid Grid.Row="3" RowDefinitions="Auto,*">
+                                        <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,3,0,5">
+                                            <TextBlock Text="CHARACTER" Classes="label" FontSize="9"/>
+                                            <TextBlock Grid.Column="1" Text="TO FLY" Classes="label" FontSize="9"/>
+                                        </Grid>
+                                        <ListBox Grid.Row="1" ItemsSource="{Binding VisibleCharacters}"
+                                                 SelectedItem="{Binding SelectedCharacter}" ScrollViewer.VerticalScrollBarVisibility="Auto">
+                                            <ListBox.ItemTemplate>
+                                                <DataTemplate x:DataType="vm:CompositionCharacterReadiness">
+                                                    <Grid ColumnDefinitions="*,Auto" Margin="2,4">
+                                                        <StackPanel Orientation="Horizontal" Spacing="7">
+                                                            <TextBlock Text="{Binding Name}" FontSize="11"/>
+                                                            <TextBlock Text="{Binding StatusLabel}" Classes="label" FontSize="9"/>
+                                                        </StackPanel>
+                                                        <TextBlock Grid.Column="1" Text="{Binding ToFlyLabel}" FontSize="10"
+                                                                   FontFamily="Consolas,monospace"/>
+                                                    </Grid>
+                                                </DataTemplate>
+                                            </ListBox.ItemTemplate>
+                                        </ListBox>
+                                    </Grid>
+                                    <Border Grid.Row="4" BorderBrush="{DynamicResource DividerBrush}"
+                                            BorderThickness="0,1,0,0" Margin="0,12,0,10"/>
+                                    <ContentControl Grid.Row="5" Content="{Binding SelectedCharacter}">
+                                        <ContentControl.ContentTemplate>
+                                            <DataTemplate x:DataType="vm:CompositionCharacterReadiness">
+                                                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                                    <StackPanel Spacing="6">
+                                                        <TextBlock Text="{Binding Name}" FontSize="12" FontWeight="SemiBold"/>
+                                                        <TextBlock Text="{Binding StatusLabel}" FontSize="10"/>
+                                                        <TextBlock Text="{Binding ToFlyLabel, StringFormat='To fly: {0}'}" FontSize="11"/>
+                                                        <TextBlock Text="{Binding QueueSummary}" Classes="label" FontSize="10" TextWrapping="Wrap"/>
+                                                        <ItemsControl ItemsSource="{Binding MissingSkills}">
+                                                            <ItemsControl.ItemTemplate>
+                                                                <DataTemplate x:DataType="fb:SkillGapViewModel">
+                                                                    <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,2">
+                                                                        <TextBlock Text="{Binding Name}" FontSize="10"/>
+                                                                        <TextBlock Text="{Binding RequiredRoman}" Classes="label" FontSize="10"/>
+                                                                        <TextBlock Text="{Binding Estimate}" Classes="label" FontSize="10"/>
+                                                                    </StackPanel>
+                                                                </DataTemplate>
+                                                            </ItemsControl.ItemTemplate>
+                                                        </ItemsControl>
+                                                    </StackPanel>
+                                                </ScrollViewer>
+                                            </DataTemplate>
+                                        </ContentControl.ContentTemplate>
+                                    </ContentControl>
+                                </Grid>
+                            </DataTemplate>
+                        </ContentControl.ContentTemplate>
+                    </ContentControl>
+                </Border>
+            </Grid>
         </Grid>
     </DockPanel>
 </v:ChromedWindow>
