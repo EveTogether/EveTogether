@@ -60,7 +60,9 @@ public sealed class EsiSkillImporter(
             var attributes = await esi.GetAsync<EsiCharacterAttributes>($"/characters/{characterId}/attributes/",
                 characterId, [SkillsScopeCatalog.ReadSkills], cancellationToken);
             if (attributes is { IsSuccess: true, Value: not null })
-                await attributesRepository.ReplaceForCharacterAsync(_ToEntity(characterId, attributes.Value), cancellationToken);
+                await attributesRepository.ReplaceForCharacterAsync(
+                    _ToEntity(characterId, attributes.Value, skills.Value.TotalSp, skills.Value.UnallocatedSp),
+                    cancellationToken);
 
             return SkillImportResult.Ok(levels.Count);
         }
@@ -80,14 +82,16 @@ public sealed class EsiSkillImporter(
         FinishDate = entry.FinishDate
     };
 
-    private static CharacterAttributes _ToEntity(int characterId, EsiCharacterAttributes attributes) => new()
+    private static CharacterAttributes _ToEntity(int characterId, EsiCharacterAttributes attributes, long totalSp, int unallocatedSp) => new()
     {
         CharacterId = characterId,
         Charisma = attributes.Charisma,
         Intelligence = attributes.Intelligence,
         Memory = attributes.Memory,
         Perception = attributes.Perception,
-        Willpower = attributes.Willpower
+        Willpower = attributes.Willpower,
+        TotalSp = totalSp,
+        UnallocatedSp = unallocatedSp
     };
 
     private static SkillImportResult Failure(EsiError? error) => error?.Kind switch

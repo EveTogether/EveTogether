@@ -1,0 +1,122 @@
+<v:ChromedWindow xmlns="https://github.com/avaloniaui" xmlns:v="using:EveUtils.Client.Views"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vs="using:EveUtils.Client.ViewModels.Skills"
+        xmlns:sk="using:EveUtils.Client.Views.Skills"
+        xmlns:sh="using:EveUtils.Client.Views.Shared"
+        xmlns:dlg="using:EveUtils.Client.Dialogs"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="1200" d:DesignHeight="760"
+        x:Class="EveUtils.Client.Views.SkillsWindow"
+        x:DataType="vs:SkillsWindowViewModel"
+        Width="1200" Height="760" MinWidth="700" MinHeight="480"
+        WindowStartupLocation="CenterOwner"
+        Title="Skills">
+
+    <!-- SKILLS (ET-16): one rail module between COMP and TOOLS, drawn like the RUNS window — a list with a 400 px
+         detail pane — for both CATALOGUE and TRAINING QUEUE. The character choice lives in the header, where
+         FitDetailWindow puts its own SKILLS combobox, and reuses the ET-184 CharacterPickerWindow row. -->
+    <DockPanel>
+
+        <DockPanel.Styles>
+            <Style Selector="TabControl">
+                <Setter Property="Padding" Value="0"/>
+            </Style>
+            <Style Selector="TabItem">
+                <Setter Property="FontSize" Value="11"/>
+                <Setter Property="Padding" Value="14,7"/>
+                <Setter Property="MinHeight" Value="0"/>
+                <Setter Property="Foreground" Value="{DynamicResource TextDimBrush}"/>
+            </Style>
+            <Style Selector="TabItem:selected">
+                <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+            </Style>
+            <Style Selector="TabItem:selected /template/ Border#PART_SelectedPipe">
+                <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
+            </Style>
+
+            <!-- The header character choice (ET-16): a real ComboBox — closing on selection is then the control's
+                 own default rather than logic this window has to reimplement. Its closed box shows the current
+                 character; its dropdown is the ET-184 row (sh:CharacterPickRowView) behind a search field that only
+                 appears once scrolling stops being faster (ShowCharacterSearch, D-point-8). -->
+            <Style Selector="ComboBox.characterpick">
+                <Setter Property="MinWidth" Value="200"/>
+                <Setter Property="Padding" Value="8,4"/>
+                <Setter Property="FontSize" Value="11"/>
+                <Setter Property="Template">
+                    <ControlTemplate>
+                        <Panel>
+                            <Border Background="{StaticResource BgRowBrush}" BorderBrush="{DynamicResource BorderBrush}"
+                                    BorderThickness="1" Padding="{TemplateBinding Padding}">
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+                                    <TextBlock Grid.Column="0" TextTrimming="CharacterEllipsis"
+                                               Text="{Binding SelectedCharacterName}"/>
+                                    <TextBlock Grid.Column="1" Text="▾" Foreground="{StaticResource TextDimBrush}"/>
+                                </Grid>
+                            </Border>
+                            <Popup Name="PART_Popup" IsOpen="{TemplateBinding IsDropDownOpen, Mode=TwoWay}"
+                                   IsLightDismissEnabled="True" Placement="Bottom" HorizontalOffset="0">
+                                <Border Classes="panel" Padding="6" MinWidth="320">
+                                    <DockPanel>
+                                        <TextBox DockPanel.Dock="Top" Margin="0,0,0,6"
+                                                 PlaceholderText="{Binding CharacterSearchWatermark}"
+                                                 Text="{Binding CharacterSearchText, Mode=TwoWay}"
+                                                 IsVisible="{Binding ShowCharacterSearch}"/>
+                                        <ScrollViewer MaxHeight="420" HorizontalScrollBarVisibility="Disabled">
+                                            <ItemsPresenter Name="PART_ItemsPresenter"
+                                                             ItemsPanel="{TemplateBinding ItemsPanel}"/>
+                                        </ScrollViewer>
+                                    </DockPanel>
+                                </Border>
+                            </Popup>
+                        </Panel>
+                    </ControlTemplate>
+                </Setter>
+            </Style>
+        </DockPanel.Styles>
+
+        <!-- Header: character choice + total SP (ET-16 AC1, AC6). -->
+        <Border DockPanel.Dock="Top" Padding="14,10" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource BorderBrush}">
+            <Grid ColumnDefinitions="Auto,*,Auto">
+                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                    <TextBlock Classes="panel-title" FontSize="13" VerticalAlignment="Center" Text="SKILLS"/>
+                    <TextBlock Classes="label" FontSize="10" VerticalAlignment="Center" Text="CHARACTER"/>
+                    <!-- The FitDetailWindow SKILLS-combobox spot, with the ET-184 row as the item template (ET-16). -->
+                    <ComboBox Classes="characterpick" VerticalAlignment="Center"
+                              ItemsSource="{Binding FilteredCharacterOptions}"
+                              SelectedItem="{Binding SelectedCharacterOption, Mode=TwoWay}">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate x:DataType="dlg:CharacterPickRowViewModel">
+                                <sh:CharacterPickRowView/>
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+                    <TextBlock Classes="hint" VerticalAlignment="Center" Text="{Binding CharacterOrdinalText}"/>
+                </StackPanel>
+                <StackPanel Grid.Column="2" VerticalAlignment="Center" HorizontalAlignment="Right">
+                    <TextBlock Classes="hint" HorizontalAlignment="Right" Text="{Binding TotalSpText}"/>
+                    <TextBlock Classes="hint" HorizontalAlignment="Right" Text="{Binding UnallocatedSpText}"
+                               IsVisible="{Binding UnallocatedSpText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <TextBlock DockPanel.Dock="Top" Classes="hint" Margin="14,10" TextWrapping="Wrap"
+                   IsVisible="{Binding StatusMessage, Converter={x:Static ObjectConverters.IsNotNull}}"
+                   Text="{Binding StatusMessage}"/>
+
+        <TabControl SelectedIndex="{Binding SelectedTabIndex, Mode=TwoWay}"
+                    IsVisible="{Binding StatusMessage, Converter={x:Static ObjectConverters.IsNull}}">
+            <TabItem Header="CATALOGUE">
+                <sk:SkillsCataloguePane DataContext="{Binding Catalogue}"/>
+            </TabItem>
+            <TabItem Header="TRAINING QUEUE">
+                <sk:SkillsQueuePane DataContext="{Binding Queue}"/>
+            </TabItem>
+            <!-- PLANS and OPTIMISE: the tabstrip only (ET-16 scope) — content lands in S5/S6. A tooltip says so,
+                 rather than the disabled tab reading as broken (Raymond's preview feedback, 2026-09-24). -->
+            <TabItem Header="PLANS" IsEnabled="False" ToolTip.Tip="Skill plans — coming soon"/>
+            <TabItem Header="OPTIMISE" IsEnabled="False" ToolTip.Tip="Optimise — coming soon"/>
+        </TabControl>
+    </DockPanel>
+</v:ChromedWindow>

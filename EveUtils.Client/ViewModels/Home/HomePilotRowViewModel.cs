@@ -170,6 +170,11 @@ public sealed partial class HomePilotRowViewModel : ObservableObject
     [RelayCommand]
     private void OpenSettings() => _ = _navigation.OpenCharacterSettings(Character);
 
+    /// <summary>The TRAINING cell (ET-16 AC2): opens SKILLS on this character, whether it is already showing a
+    /// queue or is empty — clicking it is how a pilot row leads into the module at all.</summary>
+    [RelayCommand]
+    private void OpenSkills() => _navigation.OpenSkills(CharacterId);
+
     public string WhereNotSharedTooltip =>
         $"{Character.Name} did not share Location ({LocationScopeCatalog.ReadLocation}).\nThe system still appears after the first jump or undock: the game log on this PC needs no scope.\nALLOW… opens the scope picker with it ticked, then EVE's sign-in.";
 

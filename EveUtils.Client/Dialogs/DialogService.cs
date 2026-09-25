@@ -12,6 +12,7 @@ using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Client.ViewModels.FitBrowser;
 using EveUtils.Client.ViewModels.Killmails;
 using EveUtils.Client.ViewModels.Runs;
+using EveUtils.Client.ViewModels.Skills;
 using EveUtils.Client.Views;
 using EveUtils.Shared.Modules.Esi;
 using EveUtils.Shared.Modules.Fittings.Dtos;
@@ -573,6 +574,13 @@ public sealed class DialogService : IDialogService, ISingletonService
         // Same fix as the fit browser above: one compositions module for the whole app, refreshed on re-open
         // instead of re-selecting a stale one (ET-48).
         Route(new CompositionsWindow(viewModel), "COMPOSITIONS", "compositions", "compositions", MaterialIconKind.ViewGridOutline);
+
+    public SkillsWindowViewModel ShowSkills(SkillsWindowViewModel viewModel)
+    {
+        _Observe(viewModel.LoadAsync(), "this screen could not be read");
+        return Route(new SkillsWindow(viewModel), "SKILLS", "skills", "skills", MaterialIconKind.SchoolOutline)
+            as SkillsWindowViewModel ?? viewModel;
+    }
 
     public void ShowFitDetail(FitDetailWindowViewModel viewModel) =>
         // The fits wrench, shared with the browser: a fit detail is titled after the fit, so its tab is the one that

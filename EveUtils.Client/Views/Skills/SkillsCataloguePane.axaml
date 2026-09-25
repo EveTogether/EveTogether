@@ -1,0 +1,144 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vs="using:EveUtils.Client.ViewModels.Skills"
+             xmlns:sk="using:EveUtils.Client.Views.Skills"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="1200" d:DesignHeight="700"
+             x:Class="EveUtils.Client.Views.Skills.SkillsCataloguePane"
+             x:DataType="vs:SkillsCatalogueViewModel">
+
+    <UserControl.Styles>
+        <!-- One tile: name left, injected/total right, the accent edge while selected — same shape as RUNS' own
+             filter tiles (Border.tileaccent), so a "pick one of these" grid reads the same everywhere in the app. -->
+        <Style Selector="ListBox.grouplist">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+        </Style>
+        <Style Selector="ListBox.grouplist ListBoxItem">
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Margin" Value="0,0,10,6"/>
+        </Style>
+        <Style Selector="ListBox.grouplist ListBoxItem:selected /template/ ContentPresenter">
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+        <Style Selector="Border.grouptile">
+            <Setter Property="Background" Value="{StaticResource BgRowBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="10,7"/>
+        </Style>
+        <Style Selector="Border.grouptile.selected">
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+            <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
+        </Style>
+        <Style Selector="TextBlock.groupcount">
+            <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+            <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+            <Setter Property="FontSize" Value="11"/>
+        </Style>
+
+        <Style Selector="ListBox.skilllist">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+        </Style>
+        <Style Selector="ListBox.skilllist ListBoxItem">
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+        </Style>
+        <Style Selector="ListBox.skilllist ListBoxItem:selected /template/ ContentPresenter">
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+        <Style Selector="Border.skillrow">
+            <Setter Property="Padding" Value="8,5"/>
+            <Setter Property="BorderThickness" Value="0,0,0,1"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}"/>
+        </Style>
+        <Style Selector="Border.skillrow.selected">
+            <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
+        </Style>
+        <Style Selector="Border.skillrow:pointerover">
+            <Setter Property="Background" Value="{DynamicResource BgRowHoverBrush}"/>
+        </Style>
+        <Style Selector="TextBlock.pips">
+            <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="TextBlock.skillstatus">
+            <Setter Property="FontSize" Value="10.5"/>
+            <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+            <Setter Property="TextAlignment" Value="Right"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+    </UserControl.Styles>
+
+    <Grid ColumnDefinitions="*,400">
+        <Grid Grid.Column="0" RowDefinitions="Auto,*">
+            <!-- Groups (ET-16: GetGroupsByCategory(16)) -->
+            <Border Grid.Row="0" Padding="14,10" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource BorderBrush}"
+                    MaxHeight="220">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Top" Classes="hint" Margin="0,0,0,8" Text="{Binding SummaryText}"/>
+                    <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+                        <ListBox Classes="grouplist" ItemsSource="{Binding Groups}"
+                                 SelectedItem="{Binding SelectedGroup, Mode=TwoWay}">
+                            <ListBox.ItemsPanel>
+                                <ItemsPanelTemplate><WrapPanel Orientation="Horizontal"/></ItemsPanelTemplate>
+                            </ListBox.ItemsPanel>
+                            <ListBox.ItemTemplate>
+                                <DataTemplate x:DataType="vs:SkillGroupTileViewModel">
+                                    <Border Classes="grouptile" Classes.selected="{Binding IsSelected}" Width="240">
+                                        <Grid ColumnDefinitions="*,Auto">
+                                            <TextBlock Grid.Column="0" FontSize="11.5" TextTrimming="CharacterEllipsis"
+                                                       Foreground="{StaticResource TextBrightBrush}" Text="{Binding Name}"/>
+                                            <TextBlock Grid.Column="1" Classes="groupcount" Margin="8,0,0,0" Text="{Binding CountText}"/>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </ScrollViewer>
+                </DockPanel>
+            </Border>
+
+            <!-- Skills in the selected group -->
+            <Border Grid.Row="1" Padding="14,10">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Top" Classes="panel-title" FontSize="12" Margin="0,0,0,8"
+                               Text="{Binding SelectedGroup.Name}"/>
+                    <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+                        <ListBox Classes="skilllist" ItemsSource="{Binding Skills}"
+                                 SelectedItem="{Binding SelectedSkillRow, Mode=TwoWay}">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate x:DataType="vs:SkillRowViewModel">
+                                    <Border Classes="skillrow" Classes.selected="{Binding IsSelected}">
+                                        <Grid ColumnDefinitions="70,*,Auto" ColumnSpacing="8">
+                                            <TextBlock Grid.Column="0" Classes="pips" Text="{Binding PipsText}"/>
+                                            <TextBlock Grid.Column="1" FontSize="11.5" TextTrimming="CharacterEllipsis"
+                                                       Foreground="{StaticResource TextBrush}" Text="{Binding Name}"/>
+                                            <TextBlock Grid.Column="2" Classes="skillstatus" Text="{Binding StatusText}"/>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </ScrollViewer>
+                </DockPanel>
+            </Border>
+        </Grid>
+
+        <!-- The 400 px pane, beside the list — the RUNS window's own shape (ET-16). -->
+        <Border Grid.Column="1" BorderThickness="1,0,0,0" BorderBrush="{DynamicResource BorderBrush}">
+            <Panel>
+                <TextBlock Classes="hint" Margin="14" TextWrapping="Wrap" HorizontalAlignment="Center"
+                           VerticalAlignment="Center" Text="Pick a skill to see its detail."
+                           IsVisible="{Binding SelectedDetail, Converter={x:Static ObjectConverters.IsNull}}"/>
+                <Panel IsVisible="{Binding SelectedDetail, Converter={x:Static ObjectConverters.IsNotNull}}">
+                    <sk:SkillDetailPane DataContext="{Binding SelectedDetail}"/>
+                </Panel>
+            </Panel>
+        </Border>
+    </Grid>
+</UserControl>

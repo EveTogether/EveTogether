@@ -223,6 +223,26 @@
         <Style Selector="Border.pilot:pointerover TextBlock.none">
             <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
         </Style>
+        <!-- The TRAINING cell as a plain link into SKILLS (ET-16 AC2): no chrome of its own, so it still reads as
+             the same cell — only the cursor and a faint hover give away that it opens something. -->
+        <Style Selector="Button.pilotlink">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="MinHeight" Value="0"/>
+            <Setter Property="HorizontalContentAlignment" Value="Left"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <ContentPresenter x:Name="PART_ContentPresenter" Background="{TemplateBinding Background}"
+                                      Content="{TemplateBinding Content}"
+                                      HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"/>
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <Style Selector="Button.pilotlink:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource BgRowHoverBrush}"/>
+        </Style>
         <Style Selector="TextBlock.figure">
             <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
             <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
