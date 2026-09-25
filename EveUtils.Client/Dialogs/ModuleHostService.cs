@@ -172,10 +172,13 @@ public sealed class ModuleHostService
         // to be spoken as raising the window. Without this, asking for a module that is already open does nothing
         // visible when it happens to sit behind the one you asked from — which is exactly the case ET-171's back
         // buttons create: FLEETS from a fleet screen, with the overview already open behind it.
+        //
+        // The two are independent, not either/or (ET-111): Dismiss's own "neighbour" pick can land on a detached
+        // module even though other tabs remain open, and skipping the tab selection whenever select is windowed
+        // used to strand those tabs with nothing selected — the host falling back to the home despite an open tab.
         if (select is not null && windowed.Contains(select))
             select.Window.Activate();
-        else
-            _host.SelectedHostTab = (select is not null && tabbed.Contains(select) ? select : tabbed.LastOrDefault())?.Tab;
+        _host.SelectedHostTab = (select is not null && tabbed.Contains(select) ? select : tabbed.LastOrDefault())?.Tab;
     }
 
     private void Dismiss(ModuleFrame frame)

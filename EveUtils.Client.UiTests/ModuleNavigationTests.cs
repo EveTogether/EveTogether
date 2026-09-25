@@ -502,32 +502,40 @@ public class ModuleNavigationTests
 
         var logs = new HostableWindow { Content = new Border() };
         var esi = new HostableWindow { Content = new Border() };
+        var inbox = new HostableWindow { Content = new Border() };
         host.Open(logs, "APP LOGS", "logs", "logs");
         host.Open(esi, "ESI METRICS", "esi", "esi-metrics");
-        const int openModules = 2;
+        host.Open(inbox, "INBOX", "inbox", "inbox");
+        const int openModules = 3;
         Assert.Equal(openModules, fake.HostTabs.Count + host.FloatingWindowCount);
 
-        host.PopOut(fake.HostTabs.Single(t => t.Title == "APP LOGS"));   // pop out one tab
+        host.PopOut(fake.HostTabs.Single(t => t.Title == "ESI METRICS"));   // pop out the middle tab
         Assert.Equal(openModules, fake.HostTabs.Count + host.FloatingWindowCount);
+
+        // Closing an unrelated docked tab must not strand the remaining one with nothing selected: Dismiss's own
+        // "neighbour" pick can land on the just-detached module, which must not swallow the tab selection.
+        fake.HostTabs.Single(t => t.Title == "APP LOGS").CloseCommand.Execute(null);
+        Assert.Equal(openModules - 1, fake.HostTabs.Count + host.FloatingWindowCount);
+        Assert.Same(fake.HostTabs.Single(t => t.Title == "INBOX"), fake.SelectedHostTab);
 
         fake.IsFloating = true;
         host.SwitchMode();                                               // rail: everything floats
-        Assert.Equal(openModules, fake.HostTabs.Count + host.FloatingWindowCount);
+        Assert.Equal(openModules - 1, fake.HostTabs.Count + host.FloatingWindowCount);
 
         fake.IsFloating = false;
         host.SwitchMode();                                               // rail: everything docks again
-        Assert.Equal(openModules, fake.HostTabs.Count);                  // Detached cleared: both are tabs
+        Assert.Equal(openModules - 1, fake.HostTabs.Count);              // Detached cleared: both are tabs
 
-        host.PopOut(fake.HostTabs.Single(t => t.Title == "APP LOGS"));   // pop out again
-        Assert.Equal(openModules, fake.HostTabs.Count + host.FloatingWindowCount);
+        host.PopOut(fake.HostTabs.Single(t => t.Title == "ESI METRICS"));   // pop out again
+        Assert.Equal(openModules - 1, fake.HostTabs.Count + host.FloatingWindowCount);
 
-        logs.DockRequested!();                                           // ...and dock it back from its own window
-        Assert.Equal(openModules, fake.HostTabs.Count);
+        esi.DockRequested!();                                            // ...and dock it back from its own window
+        Assert.Equal(openModules - 1, fake.HostTabs.Count);
 
-        host.PopOut(fake.HostTabs.Single(t => t.Title == "APP LOGS"));
-        host.PopOut(fake.HostTabs.Single(t => t.Title == "ESI METRICS"));  // pop the last remaining tab out
+        host.PopOut(fake.HostTabs.Single(t => t.Title == "ESI METRICS"));
+        host.PopOut(fake.HostTabs.Single(t => t.Title == "INBOX"));      // pop the last remaining tab out
         Assert.Empty(fake.HostTabs);                                     // docked host goes empty — the home shows
-        Assert.Equal(openModules, host.FloatingWindowCount);
+        Assert.Equal(openModules - 1, host.FloatingWindowCount);
 
         host.CloseFloatingWindows();
         Assert.Equal(0, fake.HostTabs.Count + host.FloatingWindowCount);
