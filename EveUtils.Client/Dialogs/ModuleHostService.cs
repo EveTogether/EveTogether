@@ -145,6 +145,11 @@ public sealed class ModuleHostService
         var windowed = _modules.Where(IsWindowed).ToList();
         var tabbed = _modules.Where(m => !IsWindowed(m)).ToList();
 
+        // Release every module from the docked tab strip first, so a module moving into a window is not still
+        // visually parented by the ContentPresenter its old tab bound to (Avalonia refuses a second parent).
+        _host.SelectedHostTab = null;
+        _host.HostTabs.Clear();
+
         foreach (var m in windowed)
         {
             if (!ReferenceEquals(m.Window.Content, m.Content)) m.Window.Content = m.Content;
@@ -161,7 +166,6 @@ public sealed class ModuleHostService
             if (ReferenceEquals(m.Window.Content, m.Content)) m.Window.Content = null;   // steal for the tab
         }
 
-        _host.HostTabs.Clear();
         foreach (var m in tabbed) _host.HostTabs.Add(m.Tab!);
 
         // Docked, "select" means the tab the host switches to; windowed there are no tabs, so the same intent has

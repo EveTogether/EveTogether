@@ -22,6 +22,7 @@ using EveUtils.Shared.Modules.Fittings.Dtos;
 using EveUtils.Shared.Modules.Fittings.Entities;
 using EveUtils.Shared.Modules.Fittings.Repositories;
 using EveUtils.Shared.Modules.Settings.Repositories;
+using Material.Icons.Avalonia;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -40,6 +41,14 @@ public class ModuleNavigationTests
         public bool IsFloating { get; set; }
         public ObservableCollection<HostTab> HostTabs { get; } = new();
         public HostTab? SelectedHostTab { get; set; }
+    }
+
+    /// <summary>A hostable module window with no chrome/XAML to load — just enough to drive
+    /// <see cref="IHostableModuleWindow.DockRequested"/> from a test (ET-111).</summary>
+    private sealed class HostableWindow : Window, IHostableModuleWindow
+    {
+        public Action? CloseRequested { get; set; }
+        public Action? DockRequested { get; set; }
     }
 
     private static async Task<bool> WaitForAsync(Func<bool> condition, int tries = 150)
@@ -404,6 +413,124 @@ public class ModuleNavigationTests
         Assert.False(vm.IsHomeShown);
         Assert.Equal("APP LOGS", vm.HostTabs[0].Title);
         window.Close();
+    }
+
+    /// <summary>ET-111 AC1: the top-right button pops only the current tab out — the other open module and the
+    /// app's own dock mode are left exactly as they were. Distinct from <see cref="DockFloat_Toggle_MigratesOpenModule"/>,
+    /// which is the rail's all-modules switch.</summary>
+    [AvaloniaFact]
+    public void PopOutTab_DetachesOnlyTheSelectedTab_LeavesDockModeAndOtherModulesUntouched()
+    {
+        using var instance = TestClientInstance.Create();
+        var (vm, window) = BuildHostedApp(instance.Services);
+
+        vm.LaunchModuleCommand.Execute("logs");
+        Dispatcher.UIThread.RunJobs();
+        vm.LaunchModuleCommand.Execute("esi");
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(2, vm.HostTabs.Count);
+
+        var logsTab = vm.HostTabs.Single(t => t.Title == "APP LOGS");
+        vm.SelectedHostTab = logsTab;
+        Dispatcher.UIThread.RunJobs();
+
+        vm.PopOutTabCommand.Execute(null);
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Single(vm.HostTabs);
+        Assert.DoesNotContain(logsTab, vm.HostTabs);
+        Assert.Equal("ESI METRICS", vm.HostTabs[0].Title);
+        Assert.False(vm.IsFloating);
+        window.Close();
+    }
+
+    /// <summary>ET-111 AC2: the rail's dock/float switch and the top-right pop-out button must stay tellable
+    /// apart by a user, not only by which command they run in code.</summary>
+    [AvaloniaFact]
+    public void RailAndPopOutButtons_AreDistinctCommandsWithDistinctWordsAndIcons()
+    {
+        using var instance = TestClientInstance.Create();
+        var (vm, window) = BuildHostedApp(instance.Services);
+
+        var railButton = window.FindControl<Button>("RailDockToggleButton");
+        var popOutButton = window.FindControl<Button>("PopOutTabButton");
+        Assert.NotNull(railButton);
+        Assert.NotNull(popOutButton);
+
+        Assert.NotSame(railButton!.Command, popOutButton!.Command);
+        Assert.NotEqual(ToolTip.GetTip(railButton), ToolTip.GetTip(popOutButton));
+
+        var railIcon = railButton.GetVisualDescendants().OfType<MaterialIcon>().Single();
+        var popOutIcon = popOutButton.GetVisualDescendants().OfType<MaterialIcon>().Single();
+        Assert.NotEqual(railIcon.Kind, popOutIcon.Kind);
+        window.Close();
+    }
+
+    /// <summary>ET-111 AC4 (the way back): the window's own DOCK button, wired through <see
+    /// cref="IHostableModuleWindow.DockRequested"/>, returns a detached frame to the tab strip, selected.</summary>
+    [AvaloniaFact]
+    public void DockRequested_ReturnsTheDetachedFrame_AsTheSelectedTab()
+    {
+        var fake = new FakeDisplay { IsFloating = false };
+        var host = new ModuleHostService();
+        host.SetOwner(new Window());
+        host.SetHost(fake);
+
+        var window = new HostableWindow { Content = new Border() };
+        host.Open(window, "APP LOGS", "logs", "logs");
+        var tab = fake.HostTabs[0];
+
+        host.PopOut(tab);
+        Assert.Empty(fake.HostTabs);
+
+        window.DockRequested!();
+
+        Assert.Single(fake.HostTabs);
+        Assert.Same(tab, fake.SelectedHostTab);
+    }
+
+    /// <summary>ET-111 AC5: no sequence of pop-out/dock/float actions leaves an open module neither a tab nor a
+    /// visible window. Toets on <see cref="ModuleHostService"/>'s own counts, not on window activation — headless
+    /// Avalonia keeps Windows empty (see ET-111's ticket description).</summary>
+    [AvaloniaFact]
+    public void PopOutDockFloatSequence_NeverLosesAnOpenModule()
+    {
+        var fake = new FakeDisplay { IsFloating = false };
+        var host = new ModuleHostService();
+        host.SetOwner(new Window());
+        host.SetHost(fake);
+
+        var logs = new HostableWindow { Content = new Border() };
+        var esi = new HostableWindow { Content = new Border() };
+        host.Open(logs, "APP LOGS", "logs", "logs");
+        host.Open(esi, "ESI METRICS", "esi", "esi-metrics");
+        const int openModules = 2;
+        Assert.Equal(openModules, fake.HostTabs.Count + host.FloatingWindowCount);
+
+        host.PopOut(fake.HostTabs.Single(t => t.Title == "APP LOGS"));   // pop out one tab
+        Assert.Equal(openModules, fake.HostTabs.Count + host.FloatingWindowCount);
+
+        fake.IsFloating = true;
+        host.SwitchMode();                                               // rail: everything floats
+        Assert.Equal(openModules, fake.HostTabs.Count + host.FloatingWindowCount);
+
+        fake.IsFloating = false;
+        host.SwitchMode();                                               // rail: everything docks again
+        Assert.Equal(openModules, fake.HostTabs.Count);                  // Detached cleared: both are tabs
+
+        host.PopOut(fake.HostTabs.Single(t => t.Title == "APP LOGS"));   // pop out again
+        Assert.Equal(openModules, fake.HostTabs.Count + host.FloatingWindowCount);
+
+        logs.DockRequested!();                                           // ...and dock it back from its own window
+        Assert.Equal(openModules, fake.HostTabs.Count);
+
+        host.PopOut(fake.HostTabs.Single(t => t.Title == "APP LOGS"));
+        host.PopOut(fake.HostTabs.Single(t => t.Title == "ESI METRICS"));  // pop the last remaining tab out
+        Assert.Empty(fake.HostTabs);                                     // docked host goes empty — the home shows
+        Assert.Equal(openModules, host.FloatingWindowCount);
+
+        host.CloseFloatingWindows();
+        Assert.Equal(0, fake.HostTabs.Count + host.FloatingWindowCount);
     }
 
     [AvaloniaFact]
