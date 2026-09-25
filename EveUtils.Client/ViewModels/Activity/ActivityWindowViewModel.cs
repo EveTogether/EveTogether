@@ -180,14 +180,15 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             .Subscribe<FleetRunPilotResumedEvent>(_OnFleetPilotResumed);
         _fleetLegs = services.GetService<FleetRunLegs>();
         RunLoot = services.GetService<CqrsDispatcher>() is { } dispatcher
-            ? new RunLootViewModel(dispatcher, services.GetService<IAppraisalProvider>(), services.GetService<ISdeAccessor>())
+            ? new RunLootViewModel(dispatcher, sde: services.GetService<ISdeAccessor>(),
+                appraisalSelector: services.GetService<IAppraisalProviderSelector>())
             : null;
         if (RunLoot is not null)
             RunLoot.PropertyChanged += (_, _) => _RefreshSummaries();
         LootOverview = services.GetService<CqrsDispatcher>() is { } overviewDispatcher
             ? new ActivityLootViewModel(() => new RunLootViewModel(overviewDispatcher,
-                    services.GetService<IAppraisalProvider>(), services.GetService<ISdeAccessor>(),
-                    services.GetService<ITypeImageProvider>()),
+                    sde: services.GetService<ISdeAccessor>(), images: services.GetService<ITypeImageProvider>(),
+                    appraisalSelector: services.GetService<IAppraisalProviderSelector>()),
                 services.GetService<ICharacterPortraitProvider>())
             : null;
         if (LootOverview is not null)

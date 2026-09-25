@@ -12,6 +12,7 @@ using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Runs.Isk;
 using EveUtils.Shared.Modules.Sde;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace EveUtils.Client.ViewModels.Runs.Sections;
 
@@ -69,17 +70,7 @@ public sealed partial class MiningDetailSectionViewModel(RunDetailSectionService
             .Where(entry => characterByRun.ContainsKey(entry.RunId))
             .Select(entry => (entry, ores.Of(entry.OreType)))];
 
-        Dictionary<int, double> prices = new();
-        int[] typeIds = [.. resolved.Select(r => r.Ore?.TypeId).OfType<int>().Distinct()];
-        if (typeIds.Length > 0 && services.Appraisal is { } appraisal)
-        {
-            Result<AppraisalOutcome> valued = await appraisal.AppraiseAsync(
-                [.. typeIds.Select(id => new AppraisalLine(id, string.Empty, 1))], cancellationToken);
-            if (valued.IsSuccess)
-                foreach (AppraisalRow row in valued.Value!.Rows)
-                    if (row.Price?.Estimate is { } estimate)
-                        prices[row.Line.TypeId] = estimate;
-        }
+        Dictionary<int, double> prices = await _PricesOfAsync(resolved, services, cancellationToken);
 
         Rows.Clear();
         foreach ((RunMiningEntryDto entry, MiningOreType? ore) in resolved.OrderByDescending(r => r.Entry.Units))
@@ -92,6 +83,33 @@ public sealed partial class MiningDetailSectionViewModel(RunDetailSectionService
         }
 
         _SyncGroups(input, resolved, characterByRun, prices);
+    }
+
+    /// <summary>ET-364: the selector (the user's chosen provider, with a fallback to ESI average) takes priority;
+    /// <c>services.Appraisal</c> only still matters for a caller that never set <c>Services</c>.</summary>
+    private static async Task<Dictionary<int, double>> _PricesOfAsync(
+        List<(RunMiningEntryDto Entry, MiningOreType? Ore)> resolved, RunDetailSectionServices services,
+        CancellationToken cancellationToken)
+    {
+        Dictionary<int, double> prices = new();
+        int[] typeIds = [.. resolved.Select(r => r.Ore?.TypeId).OfType<int>().Distinct()];
+        if (typeIds.Length == 0)
+            return prices;
+
+        List<AppraisalLine> lines = [.. typeIds.Select(id => new AppraisalLine(id, string.Empty, 1))];
+        Result<AppraisalOutcome> valued;
+        if (services.Services?.GetService<IAppraisalProviderSelector>() is { } selector)
+            valued = await selector.AppraiseWithFallbackAsync(lines, cancellationToken);
+        else if (services.Appraisal is { } appraisal)
+            valued = await appraisal.AppraiseAsync(lines, cancellationToken);
+        else
+            return prices;
+
+        if (valued.Value is { } outcome)
+            foreach (AppraisalRow row in outcome.Rows)
+                if (row.Price?.Estimate is { } estimate)
+                    prices[row.Line.TypeId] = estimate;
+        return prices;
     }
 
     private void _SyncGroups(RunDetailSectionInput input, List<(RunMiningEntryDto Entry, MiningOreType? Ore)> resolved,

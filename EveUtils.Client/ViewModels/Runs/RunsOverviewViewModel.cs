@@ -1566,16 +1566,19 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
             return Task.CompletedTask;
 
         _dialogs.ShowActivityDetail(
+            // Appraisal.Appraisal itself is left null on purpose: the detail sections resolve the user's chosen
+            // provider through Services (below) via IAppraisalProviderSelector, ET-364 — a fixed provider here
+            // would go stale the moment a second one is registered.
             new ActivityDetailViewModel(_dispatcher, row.ActivitySummaryId,
-                _services.GetService<IAppraisalProvider>(), _NameOf,
-                _services.GetService<IEsiClient>(), _services.GetService<IEsiLocationClient>(),
-                _services.GetService<ISdeAccessor>(), _services.GetService<ICharacterPortraitProvider>(),
-                _services.GetService<ITypeImageProvider>(),
+                appraisal: null, nameOf: _NameOf,
+                esi: _services.GetService<IEsiClient>(), locations: _services.GetService<IEsiLocationClient>(),
+                sde: _services.GetService<ISdeAccessor>(), portraits: _services.GetService<ICharacterPortraitProvider>(),
+                images: _services.GetService<ITypeImageProvider>(),
                 // Only this machine's own pilots' runs can be corrected there, or deleted from there (ET-214):
                 // anyone else's came in from a server and could never be published back (ET-215).
-                _namesById.Keys.ToHashSet(),
-                _canPublish ? () => _PublishAsync(row) : null, _dialogs, _services.GetService<RunChangeFeed>(),
-                _services),
+                ownCharacterIds: _namesById.Keys.ToHashSet(),
+                republish: _canPublish ? () => _PublishAsync(row) : null, dialogs: _dialogs,
+                runChanges: _services.GetService<RunChangeFeed>(), services: _services),
             row.ActivitySummaryId);
         return Task.CompletedTask;
     }

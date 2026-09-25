@@ -12,6 +12,7 @@ using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Market.Services;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Enums;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace EveUtils.Client.ViewModels.Runs.Sections;
 
@@ -117,11 +118,20 @@ public sealed partial class ConsumablesDetailSectionViewModel(RunDetailSectionSe
     private async Task _LoadPricesAsync(IEnumerable<int> typeIds, CancellationToken cancellationToken)
     {
         int[] wanted = [.. typeIds.Where(typeId => typeId > 0).Distinct()];
-        if (services.Appraisal is not { } appraisal || wanted.Length == 0)
+        if (wanted.Length == 0)
             return;
 
-        Result<AppraisalOutcome> valued = await appraisal.AppraiseAsync(
-            [.. wanted.Select(typeId => new AppraisalLine(typeId, string.Empty, 1))], cancellationToken);
+        List<AppraisalLine> lines = [.. wanted.Select(typeId => new AppraisalLine(typeId, string.Empty, 1))];
+        // ET-364: the selector (the user's chosen provider, with a fallback to ESI average) takes priority;
+        // services.Appraisal only still matters for a caller that never set Services.
+        Result<AppraisalOutcome> valued;
+        if (services.Services?.GetService<IAppraisalProviderSelector>() is { } selector)
+            valued = await selector.AppraiseWithFallbackAsync(lines, cancellationToken);
+        else if (services.Appraisal is { } appraisal)
+            valued = await appraisal.AppraiseAsync(lines, cancellationToken);
+        else
+            return;
+
         if (!valued.IsSuccess || valued.Value is not { } outcome)
             return;
 

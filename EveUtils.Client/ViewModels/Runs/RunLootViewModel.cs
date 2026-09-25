@@ -28,6 +28,7 @@ public sealed partial class RunLootViewModel : ViewModelBase
 {
     private readonly CqrsDispatcher _dispatcher;
     private readonly IAppraisalProvider? _appraisal;
+    private readonly IAppraisalProviderSelector? _appraisalSelector;
     private readonly ISdeAccessor? _sde;
     private readonly ITypeImageProvider? _images;
     private readonly Dictionary<int, decimal> _unitPrices = [];
@@ -35,11 +36,15 @@ public sealed partial class RunLootViewModel : ViewModelBase
     private IReadOnlyList<LootTallyLine> _counted = [];
     private string? _pricingBasis;
 
+    /// <param name="appraisal">A fixed price source — kept for tests that hand this a stub directly.
+    /// <paramref name="appraisalSelector"/> takes priority when both are given (ET-364): production wiring passes
+    /// the selector, so the user's chosen provider is asked, not whichever one happened to be built here.</param>
     public RunLootViewModel(CqrsDispatcher dispatcher, IAppraisalProvider? appraisal = null, ISdeAccessor? sde = null,
-        ITypeImageProvider? images = null)
+        ITypeImageProvider? images = null, IAppraisalProviderSelector? appraisalSelector = null)
     {
         _dispatcher = dispatcher;
         _appraisal = appraisal;
+        _appraisalSelector = appraisalSelector;
         _sde = sde;
         _images = images;
         LootEditor = new InventoryListEditorViewModel(sde, _StoreLootListAsync);
@@ -568,8 +573,6 @@ public sealed partial class RunLootViewModel : ViewModelBase
         _unitPrices.Clear();
         _pricingBasis = null;
         PricingProblemText = null;
-        if (_appraisal is null)
-            return;
 
         List<AppraisalLine> lines = [.. entries
             .Select(entry => entry.ItemTypeId)
@@ -579,7 +582,14 @@ public sealed partial class RunLootViewModel : ViewModelBase
         if (lines.Count == 0)
             return;
 
-        Result<AppraisalOutcome> valued = await _appraisal.AppraiseAsync(lines, cancellationToken);
+        Result<AppraisalOutcome> valued;
+        if (_appraisalSelector is { } selector)
+            valued = await selector.AppraiseWithFallbackAsync(lines, cancellationToken);
+        else if (_appraisal is { } appraisal)
+            valued = await appraisal.AppraiseAsync(lines, cancellationToken);
+        else
+            return;
+
         if (!valued.IsSuccess)
         {
             _pricingBasis = valued.Messages.Count > 0 ? valued.Messages[0].Text : null;
