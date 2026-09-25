@@ -7,16 +7,20 @@ using EveUtils.Shared.Modules.Skills.Entities;
 namespace EveUtils.Client.ViewModels.Skills;
 
 /// <summary>
-/// Everything CATALOGUE and TRAINING QUEUE (ET-16) need for one character, read once off the UI thread when the
-/// character changes and shared by both tabs — avoids threading four separate reads through both view-models.
+/// Everything CATALOGUE, TRAINING QUEUE and OPTIMISE (ET-16, ET-354) need for one character, read once off the UI
+/// thread when the character changes and shared by every tab — avoids threading separate reads through each
+/// view-model. <see cref="ImplantTypeIds"/> defaults to none for callers that only need the first two tabs.
 /// </summary>
 public sealed record SkillsCharacterSnapshot(
     ISdeAccessor Sde,
     IReadOnlyDictionary<int, int> Levels,
     IReadOnlyList<CharacterSkillQueueEntry> Queue,
     CharacterAttributes? Attributes,
-    DateTimeOffset Now)
+    DateTimeOffset Now,
+    IReadOnlyList<int>? ImplantTypeIds = null)
 {
+    public IReadOnlyList<int> ImplantTypeIds { get; } = ImplantTypeIds ?? [];
+
     public int LevelOf(int skillTypeId) => Levels.TryGetValue(skillTypeId, out var level) ? level : 0;
 
     /// <summary>The skill and target level actively training right now — the queue's head entry, and only while it

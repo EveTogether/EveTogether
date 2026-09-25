@@ -21,6 +21,12 @@ entries under `[Unreleased]` below that were not there yet at the previous night
   PASTE LINK stored the loss but skipped two things the automatic feed always does for it: linking it to the run it
   happened in — so it never counted as FAILED or added to TOTAL ISK — and telling an already open KILLMAILS window
   about it, which only picked up the pasted mail after being reopened. Both now happen exactly like the feed.
+- **Added: OPTIMISE in the SKILLS module.** The attribute remap that trains your current training queue fastest,
+  brute-forced over every valid 17-27-per-attribute split, with your implants left plugged in. Shows what a +4 or
+  +5 implant set would save instead, your current implants by attribute, when your next remap is available (or
+  "unknown" if ESI hasn't reported it), and the training time per attribute pair. The TRAINING QUEUE tab now shows a
+  REMAP line with the same savings figures and a jump to OPTIMISE. This is advice only — EVE Together cannot perform
+  a remap for you, since ESI has no endpoint for it.
 - **Added: PLANS in the SKILLS module.** Build a skill plan for a character from a single skill, from any fit in your
   local or shared library, or from any published item — prerequisites are added automatically, and levels you have
   already trained are left off. Order the plan "fly first" (default), "shortest first" or "by attribute"; a

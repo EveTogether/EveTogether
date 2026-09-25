@@ -67,7 +67,15 @@
 
     <Grid ColumnDefinitions="*,400">
         <DockPanel Grid.Column="0">
-            <!-- REMAP/OPTIMISE are S6 (ET-354) — the summary stops at what TRAINING QUEUE itself owns. -->
+            <!-- REMAP line (ET-354): the OPTIMISE tab's own savings figures, summarised here with a jump. -->
+            <Border DockPanel.Dock="Top" Padding="14,8" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource BorderBrush}"
+                    IsVisible="{Binding RemapLineText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                <Grid ColumnDefinitions="*,Auto">
+                    <TextBlock Grid.Column="0" Classes="hint" VerticalAlignment="Center" Text="{Binding RemapLineText}"/>
+                    <Button Grid.Column="1" Classes="link" Content="OPTIMISE ›" Command="{Binding OpenOptimiseCommand}"/>
+                </Grid>
+            </Border>
+
             <Border DockPanel.Dock="Top" Padding="14,10" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource BorderBrush}">
                 <Grid ColumnDefinitions="*,*,*,*">
                     <StackPanel Grid.Column="0" Spacing="2">

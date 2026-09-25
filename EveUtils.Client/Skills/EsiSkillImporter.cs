@@ -91,7 +91,10 @@ public sealed class EsiSkillImporter(
         Perception = attributes.Perception,
         Willpower = attributes.Willpower,
         TotalSp = totalSp,
-        UnallocatedSp = unallocatedSp
+        UnallocatedSp = unallocatedSp,
+        LastRemapDate = attributes.LastRemapDate,
+        AccruedRemapCooldownDate = attributes.AccruedRemapCooldownDate,
+        BonusRemaps = attributes.BonusRemaps
     };
 
     private static SkillImportResult Failure(EsiError? error) => error?.Kind switch
