@@ -5,8 +5,10 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using EveUtils.Client.Dialogs;
+using EveUtils.Client.ViewModels.Skills.Plans;
 using EveUtils.Shared.Modules.Dogma;
 using EveUtils.Shared.Modules.Skills;
+using EveUtils.Shared.Modules.Skills.Plans.Commands;
 
 namespace EveUtils.Client.ViewModels.FitBrowser;
 
@@ -15,6 +17,10 @@ namespace EveUtils.Client.ViewModels.FitBrowser;
 /// the skills that move at least one chosen stat by combined gain per hour of training. The scan is the expensive
 /// part (~500 engine calls, run off the UI thread); toggling which stats to optimise for only re-ranks the cached
 /// result — nothing is recalculated in the engine.
+///
+/// ET-357: with at least one stat chosen, three target cards (can fly / optimal ±III / max) and the greedy training
+/// curve between them — computed by <see cref="SkillTargetsCalculator"/> off the UI thread, version-stamped like the
+/// scan itself so a superseded recompute (a chip toggled again before the first finishes) is discarded on arrival.
 /// </summary>
 public sealed class SkillImpactViewModel : ViewModelBase, IRefreshableModule
 {
@@ -25,23 +31,37 @@ public sealed class SkillImpactViewModel : ViewModelBase, IRefreshableModule
     private readonly IFitValidator? _validator;
     private readonly SkillTrainingEstimator? _trainingEstimator;
     private readonly CharacterAttributeSet? _attributes;
+    private readonly SkillTargetsCalculator? _targetsCalculator;
+    private readonly Func<IReadOnlyList<SkillPlanRowDraft>, string, Task>? _addToPlan;
+    private readonly string _planSourceLabel;
     private readonly ISdeNameResolver _names;
     private readonly FitInput _baseInput;
     private readonly IReadOnlyDictionary<int, int> _trainedLevels;
     private readonly IReadOnlyDictionary<SkillImpactStat, string> _labels;
     private int _scanVersion;
+    private int _targetsVersion;
     private SkillImpactResult? _result;
     private bool _isLoading;
+    private bool _isLoadingTargets;
+    private string? _targetsErrorMessage;
+    private SkillTargetCardViewModel? _canFlyCard;
+    private SkillTargetCardViewModel? _optimalCard;
+    private SkillTargetCardViewModel? _maxCard;
+    private SkillTargetCurveViewModel? _curve;
 
     public SkillImpactViewModel(SkillImpactScanner scanner, IFitValidator? validator,
         SkillTrainingEstimator? trainingEstimator, CharacterAttributeSet? attributes, ISdeNameResolver names,
         string moduleId, string characterName, string shipName, FitInput baseInput,
-        IReadOnlyDictionary<int, int> trainedLevels)
+        IReadOnlyDictionary<int, int> trainedLevels, SkillTargetsCalculator? targetsCalculator = null,
+        Func<IReadOnlyList<SkillPlanRowDraft>, string, Task>? addToPlan = null)
     {
         _scanner = scanner;
         _validator = validator;
         _trainingEstimator = trainingEstimator;
         _attributes = attributes;
+        _targetsCalculator = targetsCalculator;
+        _addToPlan = addToPlan;
+        _planSourceLabel = shipName;
         _names = names;
         _baseInput = baseInput;
         _trainedLevels = trainedLevels;
@@ -51,7 +71,7 @@ public sealed class SkillImpactViewModel : ViewModelBase, IRefreshableModule
         Chips = _BuildChips();
         _labels = Chips.ToDictionary(chip => chip.Stat, chip => chip.Label);
         foreach (var chip in Chips)
-            chip.SelectionChanged += _Recompute;
+            chip.SelectionChanged += _OnStatSelectionChanged;
     }
 
     public string ModuleId { get; }
@@ -64,6 +84,42 @@ public sealed class SkillImpactViewModel : ViewModelBase, IRefreshableModule
     {
         get => _isLoading;
         private set => SetProperty(ref _isLoading, value);
+    }
+
+    public bool IsLoadingTargets
+    {
+        get => _isLoadingTargets;
+        private set => SetProperty(ref _isLoadingTargets, value);
+    }
+
+    public string? TargetsErrorMessage
+    {
+        get => _targetsErrorMessage;
+        private set => SetProperty(ref _targetsErrorMessage, value);
+    }
+
+    public SkillTargetCardViewModel? CanFlyCard
+    {
+        get => _canFlyCard;
+        private set => SetProperty(ref _canFlyCard, value);
+    }
+
+    public SkillTargetCardViewModel? OptimalCard
+    {
+        get => _optimalCard;
+        private set => SetProperty(ref _optimalCard, value);
+    }
+
+    public SkillTargetCardViewModel? MaxCard
+    {
+        get => _maxCard;
+        private set => SetProperty(ref _maxCard, value);
+    }
+
+    public SkillTargetCurveViewModel? Curve
+    {
+        get => _curve;
+        private set => SetProperty(ref _curve, value);
     }
 
     /// <summary>Re-runs the scan against the same snapshot this window was opened with (<see cref="IRefreshableModule"/>):
@@ -84,6 +140,67 @@ public sealed class SkillImpactViewModel : ViewModelBase, IRefreshableModule
         _ApplyAvailability(result);
         _Recompute();
         IsLoading = false;
+        await _RecomputeTargetsAsync(cancellationToken);
+    }
+
+    // A chip toggle re-ranks the cached scan synchronously (cheap) but the three target cards and the curve depend
+    // on the chosen stats too and need fresh engine calls, so they run again off the UI thread — version-stamped so
+    // a toggle fired while an older recompute is still running discards that older one on arrival.
+    private void _OnStatSelectionChanged()
+    {
+        _Recompute();
+        _ = _RecomputeTargetsAsync(CancellationToken.None);
+    }
+
+    private async Task _RecomputeTargetsAsync(CancellationToken cancellationToken)
+    {
+        var selected = Chips.Where(chip => chip.IsSelected && chip.IsAvailable).Select(chip => chip.Stat).ToList();
+        var scan = _result;
+        if (_targetsCalculator is not { } calculator || scan is null || selected.Count == 0)
+        {
+            ++_targetsVersion;   // discard any recompute already in flight for a since-cleared selection
+            CanFlyCard = OptimalCard = MaxCard = null;
+            Curve = null;
+            TargetsErrorMessage = null;
+            return;
+        }
+
+        int version = ++_targetsVersion;
+        IsLoadingTargets = true;
+        SkillTargetsResult result;
+        try
+        {
+            result = await Task.Run(
+                () => calculator.CalculateAsync(_baseInput, _trainedLevels, scan, selected, cancellationToken),
+                cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            if (version == _targetsVersion)
+            {
+                TargetsErrorMessage = "The skill targets could not be computed.";
+                IsLoadingTargets = false;
+            }
+            return;
+        }
+
+        if (version != _targetsVersion)
+            return;   // a newer selection (or a fresh scan) superseded this recompute — its result is stale
+
+        TargetsErrorMessage = null;
+        CanFlyCard = _BuildCard(result.CanFly);
+        OptimalCard = _BuildCard(result.Optimal);
+        MaxCard = _BuildCard(result.Max);
+        Curve = new SkillTargetCurveViewModel(result.Curve);
+        IsLoadingTargets = false;
+    }
+
+    private SkillTargetCardViewModel _BuildCard(SkillTargetGoal goal)
+    {
+        Func<Task>? addToPlan = _addToPlan is not { } add ? null : () => add(
+            goal.Levels.Select(level => new SkillPlanRowDraft(level.SkillTypeId, level.Level, _planSourceLabel)).ToList(),
+            _planSourceLabel);
+        return new SkillTargetCardViewModel(goal, _labels, DateTimeOffset.UtcNow, addToPlan);
     }
 
     private void _ApplyAvailability(SkillImpactResult result)
@@ -135,12 +252,22 @@ public sealed class SkillImpactViewModel : ViewModelBase, IRefreshableModule
             var gains = movedSelected.Select(stat => new SkillImpactStatGain(stat, _labels[stat],
                 entry.AtNextLevel.GetValueOrDefault(stat, _result.BaseValues[stat]), entry.AtFive[stat])).ToList();
 
-            rows.Add(new SkillImpactRowViewModel(
-                entry.SkillTypeId, _names.TypeName(entry.SkillTypeId), entry.CurrentLevel, gains, trainingTime, scorePerHour));
+            string skillName = _names.TypeName(entry.SkillTypeId);
+            rows.Add(new SkillImpactRowViewModel(entry.SkillTypeId, skillName, entry.CurrentLevel, gains, trainingTime,
+                scorePerHour, _RowAddToPlan(entry.SkillTypeId, skillName)));
         }
 
         foreach (var row in rows.OrderByDescending(row => row.ScorePerHour))
             Rows.Add(row);
+    }
+
+    // ET-357 D1: the "+" per impact-row — adds this one skill to V (prerequisites included) via AddSkillPlanRowsCommand,
+    // Source Fit, same write SkillPlanRowFactory already builds for + SKILL/FROM FIT/FROM ITEM (ET-355).
+    private Func<Task>? _RowAddToPlan(int skillTypeId, string skillName)
+    {
+        if (_addToPlan is not { } add || _validator is not { } validator)
+            return null;
+        return () => add(SkillPlanRowFactory.FromSkill(validator, skillTypeId, 5, _trainedLevels, skillName).Rows, _planSourceLabel);
     }
 
     // Prerequisites included: the same recursive closure the "Skills Required" panel runs, seeded with just this one

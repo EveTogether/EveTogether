@@ -286,7 +286,7 @@ public sealed partial class SkillsWindowViewModel : ObservableObject, IRefreshab
                  new SkillsOptimiseViewModel(snapshot, _dogma)), cancellationToken);
             queue.GoToOptimise = () => SelectedTabIndex = OptimiseTabIndex;
             queue.RemapLineText = optimise.RemapLineText;
-            var plans = new SkillsPlansViewModel(_services, snapshot, characterId);
+            var plans = new SkillsPlansViewModel(_services, snapshot, characterId, character.Name);
             await plans.LoadAsync(cancellationToken);
 
             if (version != _selectionVersion)
