@@ -1,6 +1,8 @@
 using EveUtils.Shared.Modules.Sde.Enums;
+using EveUtils.Client.ViewModels.FitBrowser;
 using EveUtils.Shared.Modules.Dogma;
 using EveUtils.Shared.Modules.Sde.Dtos;
+using EveUtils.Shared.Modules.Skills;
 using Xunit;
 
 namespace EveUtils.Client.UiTests;
@@ -1183,5 +1185,208 @@ public class DogmaCalculatorTests
         var result = Calculate(data, new FitInput(587, [], SkillSource.AllLevelFive, Profile: profile));
 
         Assert.Equal(1445.09, result.Derived.ShieldEhp, 2);
+    }
+
+    // ── ET-356: SkillImpactScanner + SkillImpactViewModel ──────────────────────────────────────────────
+    // Extends the Ferox fixture above (railgun + CaldariBattlecruiser hull skill) with a propulsion module and a
+    // skill that only moves MaxVelocity while that module is Active: the propulsion boost is a code aggregate that
+    // contributes nothing at all unless the module state is Active (Propulsion_BoostsVelocityPerActivePropModule_
+    // WhenActive above), so a skill raising only the module's own speedBoostFactor is what actually exercises
+    // "module states matter to the scan" (A1) rather than a skill whose effect would show up regardless of state.
+    private const int SpeedImpactSkill = 33098;
+
+    private static (FakeDogmaDataAccessor Data, FitInput Input) SkillImpactFixture(
+        Dictionary<int, int> levels, ModuleState propState)
+    {
+        const int ferox = 16227, railgun = 3186, antimatter = 21904, mediumHybridTurret = 3304, propmod = 6001;
+        const int speedBonus = 9101;
+        var data = new FakeDogmaDataAccessor()
+            .Attribute(DogmaAttributeIds.SpeedBoostFactor, 0, stackable: false)
+            .Attribute(speedBonus, 0, stackable: true)
+            .Type(ferox, 419, 6,
+                new SdeDogmaAttribute(743, 10), new SdeDogmaAttribute(745, 5),
+                new SdeDogmaAttribute(DogmaAttributeIds.MaxVelocity, 120),
+                new SdeDogmaAttribute(DogmaAttributeIds.Mass, 2_100_000))
+            .TypeEffect(ferox, 5334).TypeEffect(ferox, 6177)
+            .Effect(5334, 0, new ModifierInfo(ModifierFunc.LocationRequiredSkillModifier, ModifierDomain.ShipId, 6, DogmaAttributeIds.MaxRange, 743, null, mediumHybridTurret))
+            .Effect(6177, 0, new ModifierInfo(ModifierFunc.LocationRequiredSkillModifier, ModifierDomain.ShipId, 6, DogmaAttributeIds.DamageMultiplier, 745, null, mediumHybridTurret))
+            .Type(CaldariBattlecruiser, 257, 16)
+            .TypeEffect(CaldariBattlecruiser, 5286).TypeEffect(CaldariBattlecruiser, 5287)
+            .Effect(5286, 0, new ModifierInfo(ModifierFunc.ItemModifier, ModifierDomain.ShipId, 0, 743, DogmaAttributeIds.SkillLevel, null, null))
+            .Effect(5287, 0, new ModifierInfo(ModifierFunc.ItemModifier, ModifierDomain.ShipId, 0, 745, DogmaAttributeIds.SkillLevel, null, null))
+            .Type(railgun, 74, 7,
+                new SdeDogmaAttribute(DogmaAttributeIds.DamageMultiplier, 2.0),
+                new SdeDogmaAttribute(DogmaAttributeIds.CycleTime, 10000),
+                new SdeDogmaAttribute(DogmaAttributeIds.MaxRange, 20000),
+                new SdeDogmaAttribute(182, mediumHybridTurret))
+            .Type(antimatter, 85, 8, new SdeDogmaAttribute(114, 10))
+            .Type(propmod, 46, 7,
+                new SdeDogmaAttribute(DogmaAttributeIds.SpeedFactor, 156.25),
+                new SdeDogmaAttribute(DogmaAttributeIds.SpeedBoostFactor, 1_500_000),
+                new SdeDogmaAttribute(182, SpeedImpactSkill))
+            .Type(SpeedImpactSkill, 9000, 16, new SdeDogmaAttribute(speedBonus, 5))
+            .TypeEffect(SpeedImpactSkill, 900).TypeEffect(SpeedImpactSkill, 901)
+            .Effect(900, 0, new ModifierInfo(ModifierFunc.ItemModifier, ModifierDomain.ItemId, 0, speedBonus, DogmaAttributeIds.SkillLevel, null, null))
+            .Effect(901, 0, new ModifierInfo(ModifierFunc.LocationRequiredSkillModifier, ModifierDomain.ShipId, 6, DogmaAttributeIds.SpeedBoostFactor, speedBonus, null, SpeedImpactSkill));
+
+        var input = new FitInput(ferox,
+            [new ModuleInput(railgun, ModuleState.Active, ChargeTypeId: antimatter), new ModuleInput(propmod, propState)],
+            SkillSource.From(levels));
+        return (data, input);
+    }
+
+    private static IDogmaCalculator CalculatorFor(FakeDogmaDataAccessor data)
+    {
+        var evaluator = new DogmaEvaluator(data);
+        return new DogmaCalculator(data, new DogmaFitBuilder(data), new DogmaEffectCollector(data),
+            new ReactiveArmorHardener(data, evaluator), new DerivedStatsCalculator(evaluator, data), evaluator);
+    }
+
+    private static SkillImpactScanner ScannerFor(FakeDogmaDataAccessor data, IDogmaCalculator? calculator = null) =>
+        new(calculator ?? CalculatorFor(data), data);
+
+    // A1, with its counter-proof as the second row: only with the propmod in its real default state (Active) does
+    // the scan find the skill that raises speed only while the propmod is active; with every module forced Online
+    // (the old, wrong probe) that skill has nothing to move and drops out. The hull's DPS skill is state-independent,
+    // so it is found either way, and a skill with no effect on the fit at all never appears.
+    [Theory]
+    [InlineData(ModuleState.Active, true)]
+    [InlineData(ModuleState.Online, false)]
+    public async Task SkillImpactScan_FindsTheSpeedSkillOnlyWhenThePropIsActive_AndAlwaysFindsTheDpsSkill(
+        ModuleState propState, bool expectSpeedSkillFound)
+    {
+        const int inertSkill = 33099;
+        var (data, input) = SkillImpactFixture([], propState);
+        data.Type(inertSkill, 9000, 16);   // registered as a discoverable skill but touches nothing on this fit
+
+        var result = await ScannerFor(data).ScanAsync(input, new Dictionary<int, int>(), TestContext.Current.CancellationToken);
+
+        Assert.Contains(result.Entries, entry => entry.SkillTypeId == CaldariBattlecruiser);
+        Assert.Equal(expectSpeedSkillFound, result.Entries.Any(entry => entry.SkillTypeId == SpeedImpactSkill));
+        Assert.DoesNotContain(result.Entries, entry => entry.SkillTypeId == inertSkill);
+    }
+
+    // A2: the hull skill's 0→I gain is positive for both DPS and optimal — the untrained skill must be injected at
+    // level 0 (G1/ET-350), not skipped or treated as already-maxed, or the gain would read as zero.
+    [Fact]
+    public async Task SkillImpactScan_HullSkillZeroToOne_GivesPositiveDpsAndOptimalGain()
+    {
+        var (data, input) = SkillImpactFixture([], ModuleState.Active);
+
+        var result = await ScannerFor(data).ScanAsync(input, new Dictionary<int, int>(), TestContext.Current.CancellationToken);
+
+        var hullSkill = result.Entries.Single(entry => entry.SkillTypeId == CaldariBattlecruiser);
+        Assert.Equal(0, hullSkill.CurrentLevel);
+        Assert.True(hullSkill.AtNextLevel[SkillImpactStat.Dps] > result.BaseValues[SkillImpactStat.Dps]);
+        Assert.True(hullSkill.AtNextLevel[SkillImpactStat.Optimal] > result.BaseValues[SkillImpactStat.Optimal]);
+    }
+
+    // A3: selecting only DPS drops the speed-only skill from the list; adding Speed back brings it in — and re-ranking
+    // the cached scan for a different stat selection makes no further engine calls.
+    [Fact]
+    public async Task SkillImpactViewModel_TogglingAStat_RefiltersWithoutRescanningTheEngine()
+    {
+        var (data, input) = SkillImpactFixture([], ModuleState.Active);
+        var counting = new CountingCalculator(CalculatorFor(data));
+        var vm = new SkillImpactViewModel(new SkillImpactScanner(counting, data), validator: null, trainingEstimator: null,
+            attributes: null, FallbackNameResolver.Instance, "skill-impact:test", "Sin Krah", "Ferox", input, new Dictionary<int, int>());
+
+        await vm.LoadAsync(TestContext.Current.CancellationToken);
+        var callsAfterLoad = counting.Calls;
+        vm.Chips.Single(chip => chip.Stat == SkillImpactStat.Dps).IsSelected = true;
+
+        Assert.DoesNotContain(vm.Rows, row => row.SkillTypeId == SpeedImpactSkill);
+        Assert.Contains(vm.Rows, row => row.SkillTypeId == CaldariBattlecruiser);
+
+        vm.Chips.Single(chip => chip.Stat == SkillImpactStat.Speed).IsSelected = true;
+
+        Assert.Contains(vm.Rows, row => row.SkillTypeId == SpeedImpactSkill);
+        Assert.Equal(callsAfterLoad, counting.Calls);
+    }
+
+    // A4: with the speed skill already at V, nothing untrained moves Speed any more — grey with the "already at V"
+    // reason, not the "no skill touches this" reason a fit that never had a speed skill at all would show.
+    [Fact]
+    public async Task SkillImpactViewModel_StatWhoseOnlyMoverIsAlreadyAtFive_IsGreyedWithReason()
+    {
+        var levels = new Dictionary<int, int> { [SpeedImpactSkill] = 5 };
+        var (data, input) = SkillImpactFixture(levels, ModuleState.Active);
+        var vm = new SkillImpactViewModel(ScannerFor(data), validator: null, trainingEstimator: null, attributes: null,
+            FallbackNameResolver.Instance, "skill-impact:test", "Sin Krah", "Ferox", input, levels);
+
+        await vm.LoadAsync(TestContext.Current.CancellationToken);
+
+        var speedChip = vm.Chips.Single(chip => chip.Stat == SkillImpactStat.Speed);
+        Assert.False(speedChip.IsAvailable);
+        Assert.Equal("all skills that change this are at V", speedChip.UnavailableReason);
+    }
+
+    // A6: the scan runs off the calling thread (the gated call observes a different managed thread id than the
+    // caller's), and a scan superseded by a fresher one before it finishes is discarded on completion. The gate makes
+    // this deterministic rather than delay-based: the stale scan's very first engine call blocks until released, so
+    // the test can prove it has genuinely started (off-thread) before the fresh scan runs to completion, and only
+    // then let the stale one finish — proving its late result produces zero further changes to the applied Rows.
+    [Fact]
+    public async Task SkillImpactViewModel_LoadAsync_RunsOffTheCallingThread_AndDiscardsAStaleScan()
+    {
+        var (data, input) = SkillImpactFixture([], ModuleState.Active);
+        var gated = new GatedCalculator(CalculatorFor(data));
+        var vm = new SkillImpactViewModel(new SkillImpactScanner(gated, data), validator: null, trainingEstimator: null,
+            attributes: null, FallbackNameResolver.Instance, "skill-impact:test", "Sin Krah", "Ferox", input, new Dictionary<int, int>());
+        vm.Chips.Single(chip => chip.Stat == SkillImpactStat.Dps).IsSelected = true;
+        var changeCount = 0;
+        vm.Rows.CollectionChanged += (_, _) => changeCount++;
+        var callingThreadId = Environment.CurrentManagedThreadId;
+
+        var staleLoad = vm.LoadAsync(TestContext.Current.CancellationToken);
+        await gated.WaitUntilFirstCallStartedAsync(TestContext.Current.CancellationToken);
+        Assert.NotEqual(callingThreadId, gated.CallingThreadId);
+
+        await vm.LoadAsync(TestContext.Current.CancellationToken);   // fresh: the gate no longer blocks, runs to completion
+        Assert.True(vm.Rows.Count > 0);
+        var changesAfterFreshLoad = changeCount;
+
+        gated.ReleaseFirstCall();
+        await staleLoad;
+
+        Assert.Equal(changesAfterFreshLoad, changeCount);
+    }
+
+    private sealed class CountingCalculator(IDogmaCalculator inner) : IDogmaCalculator
+    {
+        public int Calls { get; private set; }
+
+        public Task<FitResult> CalculateAsync(FitInput fit, CancellationToken cancellationToken = default)
+        {
+            Calls++;
+            return inner.CalculateAsync(fit, cancellationToken);
+        }
+    }
+
+    // Blocks only the very first call it ever receives, until the test releases it — deterministic stand-in for "a
+    // scan that hasn't finished yet", with no reliance on wall-clock timing.
+    private sealed class GatedCalculator(IDogmaCalculator inner) : IDogmaCalculator
+    {
+        private readonly SemaphoreSlim _started = new(0);
+        private readonly SemaphoreSlim _release = new(0);
+        private bool _gateNextCall = true;
+
+        public int CallingThreadId { get; private set; }
+
+        public async Task<FitResult> CalculateAsync(FitInput fit, CancellationToken cancellationToken = default)
+        {
+            CallingThreadId = Environment.CurrentManagedThreadId;
+            if (_gateNextCall)
+            {
+                _gateNextCall = false;
+                _started.Release();
+                await _release.WaitAsync(cancellationToken);
+            }
+            return await inner.CalculateAsync(fit, cancellationToken);
+        }
+
+        public Task WaitUntilFirstCallStartedAsync(CancellationToken cancellationToken) => _started.WaitAsync(cancellationToken);
+
+        public void ReleaseFirstCall() => _release.Release();
     }
 }

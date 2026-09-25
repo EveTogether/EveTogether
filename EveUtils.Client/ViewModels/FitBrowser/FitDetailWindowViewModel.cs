@@ -139,6 +139,12 @@ public sealed class FitDetailWindowViewModel : ViewModelBase
     private IReadOnlyDictionary<int, int>? _trainedSkills;
     private FitValidationResult _validation = FitValidationResult.Empty;
 
+    // ET-356: SKILL IMPACT… entry point. Null scanner (no engine data) or no callback (caller opted out of the
+    // feature) disables the button; the trained-levels/module-state snapshot always comes from this window's own
+    // current selection, never a second source of truth.
+    private readonly SkillImpactScanner? _skillImpactScanner;
+    private readonly Action<SkillImpactViewModel>? _onShowSkillImpact;
+
     // Skill-gap SP + Omega training-time estimate: the selected character's effective attributes (base + the
     // attribute implants) drive the per-skill rate, so the estimate shortens with +stat implants.
     private readonly ICharacterAttributesRepository? _attributesRepository;
@@ -364,7 +370,7 @@ public sealed class FitDetailWindowViewModel : ViewModelBase
         string? description = null, string? tags = null,
         ICharacterAttributesRepository? attributesRepository = null, IToastService? toasts = null,
         Func<int, Task<FitMetadataDraft?>>? onEditMetadata = null, Func<string, Task>? onSharedToServer = null,
-        string? name = null)
+        string? name = null, IDogmaCalculator? calculator = null, Action<SkillImpactViewModel>? onShowSkillImpact = null)
     {
         _fit = fit;
         _onEditMetadata = onEditMetadata;
@@ -381,6 +387,10 @@ public sealed class FitDetailWindowViewModel : ViewModelBase
         _toasts = toasts;
         _onShowInfo = onShowInfo;
         _validator = data is null ? null : new FitValidator(data);   // validate skills + resource budgets
+        _onShowSkillImpact = onShowSkillImpact;
+        // ET-356: the same engine + data accessor the validator and the stats provider use, so a skill-impact scan
+        // reads identical dogma to the fit-detail's own numbers. Null (no engine data yet) disables the entry point.
+        _skillImpactScanner = data is null || calculator is null ? null : new SkillImpactScanner(calculator, data);
         // fit-metadata: the stored name wins over the one still standing in RawJson, which renaming leaves alone
         // (same rule as the browser's rows). _ApplyMetadata keeps the header in step during an in-place edit.
         Name = string.IsNullOrWhiteSpace(name) ? fit.Name : name;
@@ -480,6 +490,51 @@ public sealed class FitDetailWindowViewModel : ViewModelBase
         CopyEveshipLinkCommand = new AsyncRelayCommand(() => InvokeExportAsync((a, r) => a.CopyEveshipLinkAsync(r)), () => CanExport);
         OpenEftWindowCommand   = new AsyncRelayCommand(() => InvokeExportAsync((a, r) => a.OpenEftWindowAsync(r)), () => CanExport);
         EditMetadataCommand    = new AsyncRelayCommand(_EditMetadataAsync, () => CanEditMetadata);
+        ShowSkillImpactCommand = new AsyncRelayCommand(_ShowSkillImpactAsync);
+    }
+
+    // ── SKILL IMPACT… (ET-356): which skills move this fit, for the character under SKILLS ───────────
+
+    /// <summary>True once a character (not an All I–V baseline) is selected and the engine is available — the only
+    /// state the scan has trained levels and a real character to price against.</summary>
+    public bool CanShowSkillImpact =>
+        _skillImpactScanner is not null && _onShowSkillImpact is not null
+        && SelectedSkillMode?.CharacterId is not null && _trainedSkills is not null;
+
+    /// <summary>Shown on the disabled button's tooltip in All I–V mode.</summary>
+    public string SkillImpactDisabledReason => "choose a character under SKILLS";
+
+    public ICommand ShowSkillImpactCommand { get; }
+
+    private Task _ShowSkillImpactAsync()
+    {
+        if (!CanShowSkillImpact || _skillImpactScanner is null || _trainedSkills is null || _onShowSkillImpact is null
+            || SelectedSkillMode?.CharacterId is not { } characterId)
+            return Task.CompletedTask;
+
+        // Keyed on the character too, not just the fit: switching SKILLS to a different character while a SKILL
+        // IMPACT tab is already open must land in its own tab, not silently refocus the previous character's stale
+        // one (ModuleHostService.Open treats a re-used module id as "already open" and drops the new view model).
+        var viewModel = new SkillImpactViewModel(_skillImpactScanner, _validator, _trainingEstimator, _effectiveAttributes,
+            _names, $"skill-impact:{ModuleId}:{characterId}", SelectedSkillMode!.Label, ShipName, _BuildBaseFitInput(), _trainedSkills);
+        _onShowSkillImpact(viewModel);
+        return viewModel.LoadAsync();
+    }
+
+    // The same module states, drones, implants and skills RecomputeAsync feeds the stats provider — one source of
+    // truth for "what the fit-detail is showing right now", so the scan prices exactly that snapshot (ET-356 G3: no
+    // separate propmod-online pass).
+    private FitInput _BuildBaseFitInput()
+    {
+        var modules = RadialSlots.Select(slot => slot.ToInput()).ToList();
+        var drones = DroneBay.Where(drone => drone.ActiveQuantity > 0)
+            .Select(drone => new DroneInput(drone.TypeId, drone.ActiveQuantity)).ToList();
+        var implantInputs = Boosters.Where(booster => booster.IsActive)
+            .Select(booster => new ImplantInput(booster.TypeId)).ToList();
+        implantInputs.AddRange(_activeImplants.CharacterTypeIds.Select(typeId => new ImplantInput(typeId)));
+        return new FitInput(_fit.ShipTypeId, modules, _activeSkills ?? SkillSource.AllLevelFive, drones, implantInputs,
+            _selectedModeTypeId, _damageProfileSelector?.CurrentProfile, _weatherSelector?.CurrentWeather,
+            FighterBay?.LaunchedFighters);
     }
 
     // ── fit export (share / push / copy link / EFT window) via the shared seam ───────────

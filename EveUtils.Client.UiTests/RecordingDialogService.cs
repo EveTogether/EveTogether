@@ -403,6 +403,11 @@ public sealed class RecordingDialogService : IDialogService
     public void ShowCompositions(CompositionsViewModel viewModel) => throw NotUsed();
     public FitDetailWindowViewModel? LastFitDetail { get; private set; }
     public void ShowFitDetail(FitDetailWindowViewModel viewModel) => LastFitDetail = viewModel;
+
+    /// <summary>The SKILL IMPACT… screen the fit-detail window asked to open, or null — how a test asserts the
+    /// entry point reached the service with the right character/state snapshot (ET-356) without a real window.</summary>
+    public SkillImpactViewModel? LastSkillImpact { get; private set; }
+    public void ShowSkillImpact(SkillImpactViewModel viewModel) => LastSkillImpact = viewModel;
     public void ShowTypeInfo(TypeInfoWindowViewModel viewModel) => throw NotUsed();
     public Task<FleetInviteResult?> PickFleetInviteAsync(string fleetName, IReadOnlyList<CharacterPickOption> options) => throw NotUsed();
     /// <summary>Answers the add-external-pilot search dialog with a character id (or null to cancel). Default: cancel.</summary>

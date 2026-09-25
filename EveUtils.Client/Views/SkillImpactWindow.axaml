@@ -1,0 +1,71 @@
+<v:ChromedWindow xmlns="https://github.com/avaloniaui" xmlns:v="using:EveUtils.Client.Views"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vf="using:EveUtils.Client.ViewModels.FitBrowser"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="640" d:DesignHeight="600"
+        x:Class="EveUtils.Client.Views.SkillImpactWindow"
+        x:DataType="vf:SkillImpactViewModel"
+        Width="640" Height="600" MinWidth="420" MinHeight="320"
+        WindowStartupLocation="CenterOwner"
+        Title="SKILL IMPACT">
+
+    <!-- ET-356: which skills move this fit, for the character and module states the fit-detail window opened it
+         with. Layout follows KillmailDetailWindow — a header, a filter row, then a scrolling list. -->
+    <DockPanel MaxWidth="1040">
+
+        <Border DockPanel.Dock="Top" Padding="14,12" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource BorderBrush}">
+            <StackPanel Spacing="4">
+                <TextBlock Classes="panel-title" FontSize="13" Text="{Binding ShipName}"/>
+                <TextBlock Classes="hint" Margin="0" Text="{Binding CharacterName}"/>
+            </StackPanel>
+        </Border>
+
+        <Border DockPanel.Dock="Top" Padding="14,9" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource DividerBrush}">
+            <StackPanel Spacing="6">
+                <TextBlock Classes="label" Text="OPTIMISE FOR"/>
+                <ItemsControl ItemsSource="{Binding Chips}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel/>
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="vf:SkillImpactStatChipViewModel">
+                            <ToggleButton Margin="0,0,6,6" IsChecked="{Binding IsSelected, Mode=TwoWay}"
+                                          IsEnabled="{Binding IsAvailable}" Content="{Binding Label}"
+                                          ToolTip.Tip="{Binding UnavailableReason}"/>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </Border>
+
+        <TextBlock DockPanel.Dock="Top" Classes="hint" Margin="14,8" Text="Scanning…" IsVisible="{Binding IsLoading}"/>
+
+        <ScrollViewer>
+            <ItemsControl ItemsSource="{Binding Rows}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="vf:SkillImpactRowViewModel">
+                        <Border Padding="14,8" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource DividerBrush}">
+                            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
+                                <StackPanel>
+                                    <TextBlock FontSize="12" Text="{Binding SkillName}"/>
+                                    <TextBlock Classes="hint" Margin="0" Text="{Binding CurrentLevel}"/>
+                                </StackPanel>
+                                <ItemsControl Grid.Column="1" ItemsSource="{Binding Gains}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate DataType="vf:SkillImpactStatGain">
+                                            <TextBlock FontFamily="{StaticResource MonoFont}" FontSize="10.5" Text="{Binding DisplayText}"/>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <TextBlock Grid.Column="2" Classes="hint" Margin="0" Text="{Binding TrainingTimeText}"/>
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+    </DockPanel>
+</v:ChromedWindow>

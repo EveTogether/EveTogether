@@ -305,6 +305,11 @@ public interface IDialogService
     /// <summary>Shows the radial fit-detail window non-modally — the fitting wheel plus the computed stats.</summary>
     void ShowFitDetail(FitDetailWindowViewModel viewModel);
 
+    /// <summary>Opens the SKILL IMPACT… screen (ET-356) as a hosted module — which skills move the fit, for the
+    /// character and module states the fit-detail window opened it with. Keyed on <see cref="SkillImpactViewModel.ModuleId"/>
+    /// so re-opening it for the same fit and character focuses the one tab instead of stacking a second.</summary>
+    void ShowSkillImpact(SkillImpactViewModel viewModel);
+
     /// <summary>Shows a small "Show Info" card for a module/charge type.</summary>
     void ShowTypeInfo(TypeInfoWindowViewModel viewModel);
 
