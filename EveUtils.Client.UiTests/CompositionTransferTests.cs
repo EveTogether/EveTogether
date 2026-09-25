@@ -36,8 +36,8 @@ public class CompositionTransferTests
     {
         var (_, _, compositionId) = await client.CreateAsync("Armor doctrine", "armor + shield");
         var role = await client.AddRoleAsync(compositionId, "Logistics", 5);
-        await client.AddEntryAsync(role.Id, Fit("Guardian", 11987), 3);
-        await client.AddEntryAsync(role.Id, Fit("Scimitar", 11978), 2);
+        await client.AddEntryAsync(role.Id, Fit("Guardian", 11987), 3, []);
+        await client.AddEntryAsync(role.Id, Fit("Scimitar", 11978), 2, []);
         return compositionId;
     }
 

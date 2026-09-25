@@ -237,6 +237,7 @@ public class CompositionsViewModelTests
         CompositionCharacterReadiness[] characters = Enumerable.Range(1, 12)
             .Select(number => new CompositionCharacterReadiness($"Pilot {number}",
                 number == 1 ? CompositionReadinessStatus.Ready : CompositionReadinessStatus.NotYet,
+                number == 1 ? TimeSpan.Zero : TimeSpan.FromHours(number),
                 number == 1 ? TimeSpan.Zero : TimeSpan.FromHours(number), [], ""))
             .ToArray();
         CompositionReadinessEntry entry = new("DPS", "Ferox · Rails", "Ferox", characters);

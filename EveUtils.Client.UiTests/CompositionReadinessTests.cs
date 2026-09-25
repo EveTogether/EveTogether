@@ -52,9 +52,9 @@ public sealed class CompositionReadinessTests
             .Select(number => Pilot($"Pilot {number}", number <= 3 ? 4 : 0)).ToList();
 
         CompositionReadinessCalculator calculator = Calculator(Data());
-        calculator.Evaluate("Mainline", Fit(), pilots);
+        calculator.Evaluate("Mainline", Fit(), [], pilots);
         Stopwatch clock = Stopwatch.StartNew();
-        CompositionReadinessEntry entry = calculator.Evaluate("Mainline", Fit(), pilots);
+        CompositionReadinessEntry entry = calculator.Evaluate("Mainline", Fit(), [], pilots);
         clock.Stop();
         TestContext.Current.TestOutputHelper?.WriteLine($"Readiness over 12 cached characters: {clock.Elapsed.TotalMilliseconds:F2} ms");
 
@@ -70,13 +70,13 @@ public sealed class CompositionReadinessTests
     public void CharacterList_SortsReadyThenFastest_AndSearchStartsAtNine()
     {
         CompositionCharacterReadiness slow = new("Slow", CompositionReadinessStatus.NotYet,
-            TimeSpan.FromDays(10), [], "");
+            TimeSpan.FromDays(10), TimeSpan.FromDays(10), [], "");
         CompositionCharacterReadiness fast = new("Fast", CompositionReadinessStatus.NotYet,
-            TimeSpan.FromDays(1), [], "");
+            TimeSpan.FromDays(1), TimeSpan.FromDays(1), [], "");
         CompositionCharacterReadiness ready = new("Ready", CompositionReadinessStatus.Ready,
-            TimeSpan.Zero, [], "");
+            TimeSpan.Zero, TimeSpan.Zero, [], "");
         CompositionCharacterReadiness flies = new("Flies", CompositionReadinessStatus.Flies,
-            TimeSpan.Zero, [], "");
+            TimeSpan.Zero, TimeSpan.FromDays(2), [], "");
         CompositionReadinessEntry eight = new("Mainline", "Ferox", "Ferox",
             [slow, fast, ready, flies, slow, slow, slow, slow]);
         CompositionReadinessEntry nine = new("Mainline", "Ferox", "Ferox",
@@ -94,7 +94,7 @@ public sealed class CompositionReadinessTests
     [Fact]
     public void Evaluate_NoSkillsScope_RemainsUnknownDespiteCachedLevels()
     {
-        CompositionReadinessEntry entry = Calculator(Data()).Evaluate("Mainline", Fit(),
+        CompositionReadinessEntry entry = Calculator(Data()).Evaluate("Mainline", Fit(), [],
             [Pilot("No scope", 0, hasScope: false), Pilot("Scoped", 0)]);
 
         Assert.Equal(1, entry.UnknownCount);
@@ -108,7 +108,7 @@ public sealed class CompositionReadinessTests
     {
         FakeDogmaDataAccessor data = Data();
         CharacterSkillQueueEntry queued = new() { SkillTypeId = Skill, FinishedLevel = 2 };
-        CompositionReadinessEntry entry = Calculator(data).Evaluate("Mainline", Fit(),
+        CompositionReadinessEntry entry = Calculator(data).Evaluate("Mainline", Fit(), [],
             [Pilot("Catbank", 1, queue: [queued])]);
         CompositionCharacterReadiness pilot = Assert.Single(entry.VisibleCharacters);
         SkillTrainingEstimate expected = new SkillTrainingEstimator(data).Estimate(Skill, 1, 4, EffectiveAttributes);
@@ -116,5 +116,35 @@ public sealed class CompositionReadinessTests
         Assert.Equal(expected.TrainingTime, pilot.ToFly);
         Assert.Equal(EveDurationFormatter.Format(expected.TrainingTime), pilot.ToFlyLabel);
         Assert.Equal("Already in the queue: type 3300 2", pilot.QueueSummary);
+    }
+
+    /// <summary>ET-353 A2: a doctrine minimum at or below what the fit already requires asks nothing extra, so TO MIN
+    /// stays equal to TO FLY and the editor row says "no effect".</summary>
+    [Fact]
+    public void Evaluate_MinimumNotAboveTheFit_LeavesToMinAtToFly_AndShowsNoEffect()
+    {
+        CompositionReadinessEntry entry = Calculator(Data()).Evaluate("Mainline", Fit(),
+            [new SkillMinimum(Skill, 3)], [Pilot("Catbank", 1)]);
+        CompositionCharacterReadiness pilot = Assert.Single(entry.VisibleCharacters);
+        EditorSkillMinimumViewModel row = new(Skill, "Skill", level: 3, fitLevel: 4);
+
+        Assert.Equal(pilot.ToFly, pilot.ToMin);
+        Assert.Equal("fit: IV · no effect", row.FitHint);
+    }
+
+    /// <summary>ET-353 A6: flying the fit while under the doctrine minimum is Flies, with TO MIN the training to the
+    /// minimum; at the minimum it is Ready.</summary>
+    [Theory]
+    [InlineData(4, CompositionReadinessStatus.Flies)]
+    [InlineData(5, CompositionReadinessStatus.Ready)]
+    public void Evaluate_FitFlownUnderTheMinimum_IsFliesWithToMin(int trained, CompositionReadinessStatus expected)
+    {
+        FakeDogmaDataAccessor data = Data();
+        CompositionReadinessEntry entry = Calculator(data).Evaluate("Mainline", Fit(),
+            [new SkillMinimum(Skill, 5)], [Pilot("Catbank", trained)]);
+        CompositionCharacterReadiness pilot = Assert.Single(entry.VisibleCharacters);
+
+        Assert.Equal(expected, pilot.Status);
+        Assert.Equal(new SkillTrainingEstimator(data).Estimate(Skill, trained, 5, EffectiveAttributes).TrainingTime, pilot.ToMin);
     }
 }

@@ -11,14 +11,16 @@ public sealed partial class CompositionReadinessEntry : ObservableObject
     private readonly IReadOnlyList<CompositionCharacterReadiness> _characters;
 
     public CompositionReadinessEntry(string roleName, string fitName, string hullName,
-        IReadOnlyList<CompositionCharacterReadiness> characters)
+        IReadOnlyList<CompositionCharacterReadiness> characters, bool hasSkillMinimums = false)
     {
         RoleName = roleName;
+        HasSkillMinimums = hasSkillMinimums;
         FitName = fitName;
         HullName = hullName;
         _characters = characters
             .OrderBy(character => character.Status)
             .ThenBy(character => character.ToFly ?? TimeSpan.MaxValue)
+            .ThenBy(character => character.ToMin ?? TimeSpan.MaxValue)
             .ThenBy(character => character.Name, StringComparer.OrdinalIgnoreCase)
             .ToList();
         VisibleCharacters = new ObservableCollection<CompositionCharacterReadiness>(_characters);
@@ -28,6 +30,9 @@ public sealed partial class CompositionReadinessEntry : ObservableObject
     public string RoleName { get; }
     public string FitName { get; }
     public string HullName { get; }
+
+    /// <summary>The fit entry carries a doctrine skill minimum, so the TO MIN column means something.</summary>
+    public bool HasSkillMinimums { get; }
     public int CharacterCount => _characters.Count;
     public string CharactersLabel => $"YOUR {CharacterCount} CHARACTERS";
     public string DetailCharactersLabel => $"YOUR CHARACTERS · {CharacterCount}";
