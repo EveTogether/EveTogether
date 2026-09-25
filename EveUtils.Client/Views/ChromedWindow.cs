@@ -13,6 +13,7 @@ using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.VisualTree;
+using EveUtils.Client.Dialogs;
 using Material.Icons;
 using Material.Icons.Avalonia;
 
@@ -34,6 +35,17 @@ public class ChromedWindow : Window
     // The app icon, so a floating/popped-out chromed window shows the EVE Together icon in the taskbar (matching the
     // main window) instead of the default Avalonia icon. Loaded once.
     private static readonly WindowIcon AppIcon = new(AssetLoader.Open(new Uri("avares://EveUtils.Client/Assets/eve-together.ico")));
+
+    /// <summary>Whether this window's own DOCK button shows: true only while this frame is popped out of the tab
+    /// strip and the app itself stays docked (ET-111) — <see cref="Dialogs.ModuleHostService"/> sets it on render.</summary>
+    public static readonly StyledProperty<bool> ShowDockButtonProperty =
+        AvaloniaProperty.Register<ChromedWindow, bool>(nameof(ShowDockButton));
+
+    public bool ShowDockButton
+    {
+        get => GetValue(ShowDockButtonProperty);
+        set => SetValue(ShowDockButtonProperty, value);
+    }
 
     public ChromedWindow()
     {
@@ -65,6 +77,12 @@ public class ChromedWindow : Window
         brand.Children.Add(badge);
         brand.Children.Add(title);
 
+        var dock = new Button { Content = new MaterialIcon { Kind = MaterialIconKind.DockWindow } };
+        dock.Classes.Add("winbtn");
+        ToolTip.SetTip(dock, "Dock this window back into a tab.");
+        dock.Click += (_, _) => (window as IHostableModuleWindow)?.DockRequested?.Invoke();
+        dock.Bind(Visual.IsVisibleProperty, window.GetObservable(ShowDockButtonProperty));
+
         var minimize = new Button { Content = new MaterialIcon { Kind = MaterialIconKind.WindowMinimize } };
         minimize.Classes.Add("winbtn");
         ToolTip.SetTip(minimize, "Minimize");
@@ -80,6 +98,7 @@ public class ChromedWindow : Window
 
         var buttons = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Stretch };
         Grid.SetColumn(buttons, 1);
+        buttons.Children.Add(dock);
         buttons.Children.Add(minimize);
         buttons.Children.Add(close);
 
@@ -96,6 +115,7 @@ public class ChromedWindow : Window
         // Windows snap (no-op unless the client area is extended): the bar is a native caption drag area — that is
         // what makes drag-to-edge snap work — and the buttons stay clickable on top of it.
         WindowDecorationProperties.SetElementRole(titleBar, WindowDecorationsElementRole.TitleBar);
+        WindowDecorationProperties.SetElementRole(dock, WindowDecorationsElementRole.User);
         WindowDecorationProperties.SetElementRole(minimize, WindowDecorationsElementRole.User);
         WindowDecorationProperties.SetElementRole(close, WindowDecorationsElementRole.User);
 

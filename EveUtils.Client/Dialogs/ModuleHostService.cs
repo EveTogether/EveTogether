@@ -5,6 +5,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using CommunityToolkit.Mvvm.Input;
 using EveUtils.Client.Input;
+using EveUtils.Client.Views;
 using Material.Icons;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -25,6 +26,7 @@ public sealed class ModuleHostService
         public required string Title;
         public required string Id;
         public bool Shown;        // window currently shown (floating)
+        public bool Detached;     // popped out of the tab strip on its own, independent of dock mode (ET-111)
         public HostTab? Tab;      // docked tab wrapper
     }
 
@@ -93,7 +95,10 @@ public sealed class ModuleHostService
         var frame = new ModuleFrame { Window = window, Content = content, Title = title, Id = moduleId };
         frame.Tab = new HostTab { Content = content, Title = title, ModuleKey = moduleKey, Icon = icon, CloseCommand = new RelayCommand(() => Dismiss(frame)) };
         if (window is IHostableModuleWindow hostable)
+        {
             hostable.CloseRequested = () => Dismiss(frame);
+            hostable.DockRequested = () => Dock(frame);
+        }
         window.Closed += (_, _) => OnWindowClosed(frame);
         // Only ever reaches this window while it is actually shown — i.e. floating (docked hides it and steals its
         // content, so it cannot hold keyboard focus then). The docked case is MainWindow's own key handling instead.
@@ -104,43 +109,69 @@ public sealed class ModuleHostService
         return window.DataContext;
     }
 
-    /// <summary>Re-render after a dock/float switch — migrates the open modules to the other mode (no orphans).</summary>
-    public void SwitchMode() => Render(select: null);
+    /// <summary>Re-render after a dock/float switch — migrates the open modules to the other mode (no orphans).
+    /// Switching to docked is "all modules", per the rail button's own tooltip: any tab popped out on its own
+    /// rejoins the strip along with everything else rather than staying stranded as a window (ET-111).</summary>
+    public void SwitchMode()
+    {
+        if (_host is not null && !_host.IsFloating)
+            foreach (var m in _modules) m.Detached = false;
+        Render(select: null);
+    }
+
+    /// <summary>Pops one open tab into its own floating window, leaving the dock mode and every other module
+    /// untouched (ET-111) — the host's top-right button, distinct from <see cref="SwitchMode"/>.</summary>
+    public void PopOut(HostTab tab)
+    {
+        var frame = _modules.FirstOrDefault(m => ReferenceEquals(m.Tab, tab));
+        if (frame is null) return;
+        frame.Detached = true;
+        Render(select: frame);
+    }
+
+    /// <summary>Docks one detached frame back into a tab — reached through the window's own DOCK button, wired
+    /// in <see cref="Open"/> (ET-111).</summary>
+    private void Dock(ModuleFrame frame)
+    {
+        frame.Detached = false;
+        Render(select: frame);
+    }
 
     private void Render(ModuleFrame? select)
     {
         if (_host is null) return;
 
-        if (_host.IsFloating)
-        {
-            // Release any hosted content from the tabs first, then hand it back to each window and show them.
-            _host.SelectedHostTab = null;
-            _host.HostTabs.Clear();
-            foreach (var m in _modules)
-            {
-                if (!ReferenceEquals(m.Window.Content, m.Content)) m.Window.Content = m.Content;
-                // Shown ownerless (not Show(_owner)) so a floating module is independent of the main window: minimizing
-                // the main window no longer minimizes it. The main window's close handler closes these explicitly.
-                if (!m.Shown) { m.Window.Show(); m.Shown = true; }
-            }
+        bool IsWindowed(ModuleFrame m) => _host.IsFloating || m.Detached;
+        var windowed = _modules.Where(IsWindowed).ToList();
+        var tabbed = _modules.Where(m => !IsWindowed(m)).ToList();
 
-            // Docked, "select" means the tab the host switches to; floating there are no tabs, so the same intent has
-            // to be spoken as raising the window. Without this, asking for a module that is already open does nothing
-            // visible when it happens to sit behind the one you asked from — which is exactly the case ET-171's back
-            // buttons create: FLEETS from a fleet screen, with the overview already open behind it.
-            select?.Window.Activate();
-        }
-        else
+        foreach (var m in windowed)
         {
-            foreach (var m in _modules)
-            {
-                if (m.Shown) { m.Window.Hide(); m.Shown = false; }
-                if (ReferenceEquals(m.Window.Content, m.Content)) m.Window.Content = null;   // steal for the tab
-            }
-            _host.HostTabs.Clear();
-            foreach (var m in _modules) _host.HostTabs.Add(m.Tab!);
-            _host.SelectedHostTab = (select ?? _modules.LastOrDefault())?.Tab;
+            if (!ReferenceEquals(m.Window.Content, m.Content)) m.Window.Content = m.Content;
+            // The chrome's own DOCK button only makes sense for a frame popped out on its own while the app itself
+            // stays docked — with the app floating, the rail switch is already the way back (ET-111).
+            if (m.Window is ChromedWindow chromed) chromed.ShowDockButton = m.Detached && !_host.IsFloating;
+            // Shown ownerless (not Show(_owner)) so a floating module is independent of the main window: minimizing
+            // the main window no longer minimizes it. The main window's close handler closes these explicitly.
+            if (!m.Shown) { m.Window.Show(); m.Shown = true; }
         }
+        foreach (var m in tabbed)
+        {
+            if (m.Shown) { m.Window.Hide(); m.Shown = false; }
+            if (ReferenceEquals(m.Window.Content, m.Content)) m.Window.Content = null;   // steal for the tab
+        }
+
+        _host.HostTabs.Clear();
+        foreach (var m in tabbed) _host.HostTabs.Add(m.Tab!);
+
+        // Docked, "select" means the tab the host switches to; windowed there are no tabs, so the same intent has
+        // to be spoken as raising the window. Without this, asking for a module that is already open does nothing
+        // visible when it happens to sit behind the one you asked from — which is exactly the case ET-171's back
+        // buttons create: FLEETS from a fleet screen, with the overview already open behind it.
+        if (select is not null && windowed.Contains(select))
+            select.Window.Activate();
+        else
+            _host.SelectedHostTab = (select is not null && tabbed.Contains(select) ? select : tabbed.LastOrDefault())?.Tab;
     }
 
     private void Dismiss(ModuleFrame frame)

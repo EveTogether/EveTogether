@@ -13,6 +13,7 @@ namespace EveUtils.Client.Views;
 public partial class InboxWindow : ChromedWindow, IHostableModuleWindow
 {
     public Action? CloseRequested { get; set; }
+    public Action? DockRequested { get; set; }
 
     public InboxWindow()
     {

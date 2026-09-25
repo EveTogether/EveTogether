@@ -458,6 +458,7 @@ public sealed class RecordingDialogService : IDialogService
     public void ShowFleetMetrics(FleetMetricsViewModel viewModel) => OpenedFleetMetrics.Add(viewModel);
     public Task ShowSdeUpdateAsync(SdeProgressViewModel viewModel) => throw NotUsed();
     public void SwitchMode() { }
+    public void PopOut(HostTab tab) => throw NotUsed();
 
     private static NotSupportedException NotUsed() =>
         new("RecordingDialogService: this dialog is not expected in the fleet request-to-join picker test.");

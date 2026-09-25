@@ -326,6 +326,15 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
     [RelayCommand] private void ToggleDockMode() => IsFloating = !IsFloating;
     [RelayCommand] private void ToggleChars() => IsCharsCollapsed = !IsCharsCollapsed;
 
+    /// <summary>Top-right button (ET-111): pops the current tab into its own window, leaving the dock mode and
+    /// every other module untouched — distinct from the rail's all-modules <see cref="ToggleDockMode"/>.</summary>
+    [RelayCommand]
+    private void PopOutTab()
+    {
+        if (_dialogs is null || SelectedHostTab is null) return;
+        _dialogs.PopOut(SelectedHostTab);
+    }
+
     /// <summary>Rail click: open the module's feature (a docked tab, or a floating window). The rail highlight is
     /// derived from the selected tab, so it lights up only once the module is actually open.</summary>
     [RelayCommand]

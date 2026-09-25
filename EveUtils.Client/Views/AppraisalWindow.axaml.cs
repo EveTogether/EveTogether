@@ -17,6 +17,7 @@ namespace EveUtils.Client.Views;
 public partial class AppraisalWindow : ChromedWindow, IHostableModuleWindow
 {
     public Action? CloseRequested { get; set; }
+    public Action? DockRequested { get; set; }
 
     private const double WideLayoutWidth = 760;
 

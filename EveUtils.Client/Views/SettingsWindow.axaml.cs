@@ -92,6 +92,7 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
 
     /// <summary>Set by the module host so Save/Cancel dismiss the docked tab; null when floating (then we Close()).</summary>
     public Action? CloseRequested { get; set; }
+    public Action? DockRequested { get; set; }
 
     /// <summary>
     /// Index of the Privacy &amp; Sharing entry in <c>CategoryNav</c>, for callers that want the window opened there.

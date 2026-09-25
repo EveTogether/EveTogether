@@ -53,4 +53,8 @@ public interface IModuleHostDisplay
 public interface IHostableModuleWindow
 {
     Action? CloseRequested { get; set; }
+
+    /// <summary>Set by <see cref="ModuleHostService.Open"/> on every hostable window; invoked by its own chrome DOCK
+    /// button (ET-111) to dock this one frame back into a tab, independent of the app's dock/float switch.</summary>
+    Action? DockRequested { get; set; }
 }

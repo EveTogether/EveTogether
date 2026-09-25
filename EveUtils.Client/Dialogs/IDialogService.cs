@@ -362,4 +362,8 @@ public interface IDialogService
 
     /// <summary>Re-render the open module set after a dock/float switch — migrates modules to the new mode.</summary>
     void SwitchMode();
+
+    /// <summary>Pops one open module tab into its own floating window, leaving dock mode and every other module
+    /// untouched (ET-111) — the host's top-right button, distinct from <see cref="SwitchMode"/>.</summary>
+    void PopOut(HostTab tab);
 }
