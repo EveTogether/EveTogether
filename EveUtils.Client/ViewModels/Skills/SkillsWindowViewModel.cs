@@ -11,6 +11,7 @@ using EveUtils.Client.Imaging;
 using EveUtils.Client.Skills.Plans;
 using EveUtils.Client.ViewModels.Skills.Plans;
 using EveUtils.Shared.Identity;
+using EveUtils.Shared.Modules.Implants.Repositories;
 using EveUtils.Shared.Modules.Sde;
 using EveUtils.Shared.Modules.Settings.Repositories;
 using EveUtils.Shared.Modules.Skills.Entities;
@@ -23,18 +24,24 @@ using SkillQueueStanding = EveUtils.Client.ViewModels.Home.SkillQueueStanding;
 namespace EveUtils.Client.ViewModels.Skills;
 
 /// <summary>
-/// SKILLS module (ET-16, ET-355): one screen, one character at a time, picked from the header — CATALOGUE,
-/// TRAINING QUEUE and PLANS are built. OPTIMISE is a placeholder tab; its content lands in S6.
+/// SKILLS module (ET-16, ET-355, ET-354): one screen, one character at a time, picked from the header —
+/// CATALOGUE, TRAINING QUEUE, PLANS and OPTIMISE.
 /// </summary>
 public sealed partial class SkillsWindowViewModel : ObservableObject, IRefreshableModule, IDisposable
 {
     public const string LastCharacterSettingKey = "skills.last-character";
+
+    /// <summary>The OPTIMISE tab's index in <see cref="SkillsWindow"/>'s TabControl — CATALOGUE, TRAINING QUEUE,
+    /// PLANS, OPTIMISE — used by the TRAINING QUEUE REMAP line's "OPTIMISE ›" jump.</summary>
+    public const int OptimiseTabIndex = 3;
 
     private readonly IServiceProvider _services;
     private readonly ICharacterRegistry _registry;
     private readonly ICharacterSkillRepository _skillRepository;
     private readonly ICharacterSkillQueueRepository _queueRepository;
     private readonly ICharacterAttributesRepository _attributesRepository;
+    private readonly ICharacterImplantRepository? _implantRepository;
+    private readonly IDogmaDataAccessor? _dogma;
     private readonly ISdeAccessor _sde;
     private readonly ISettingRepository? _settings;
     private readonly ICharacterPortraitProvider? _portraits;
@@ -56,6 +63,7 @@ public sealed partial class SkillsWindowViewModel : ObservableObject, IRefreshab
     [ObservableProperty] private SkillsCatalogueViewModel? _catalogue;
     [ObservableProperty] private SkillsQueueViewModel? _queue;
     [ObservableProperty] private SkillsPlansViewModel? _plans;
+    [ObservableProperty] private SkillsOptimiseViewModel? _optimise;
     [ObservableProperty] private bool _isLoading;
     [ObservableProperty] private string? _statusMessage;
 
@@ -85,6 +93,8 @@ public sealed partial class SkillsWindowViewModel : ObservableObject, IRefreshab
         _skillRepository = services.GetRequiredService<ICharacterSkillRepository>();
         _queueRepository = services.GetRequiredService<ICharacterSkillQueueRepository>();
         _attributesRepository = services.GetRequiredService<ICharacterAttributesRepository>();
+        _implantRepository = services.GetService<ICharacterImplantRepository>();
+        _dogma = services.GetService<IDogmaDataAccessor>();
         _sde = services.GetRequiredService<ISdeAccessor>();
         _settings = services.GetService<ISettingRepository>();
         _portraits = services.GetService<ICharacterPortraitProvider>();
@@ -232,10 +242,13 @@ public sealed partial class SkillsWindowViewModel : ObservableObject, IRefreshab
             }
 
             var snapshot = await _BuildSnapshotAsync(characterId, cancellationToken);
-            // The SDE reads inside both view-models are synchronous SQLite queries — off the UI thread, the same
-            // rule RunsOverviewViewModel and KillmailsOverviewViewModel hold themselves to for their own reads.
-            var (catalogue, queue) = await Task.Run(() =>
-                (new SkillsCatalogueViewModel(snapshot), new SkillsQueueViewModel(snapshot)), cancellationToken);
+            // The SDE/dogma reads inside these view-models are synchronous SQLite queries — off the UI thread, the
+            // same rule RunsOverviewViewModel and KillmailsOverviewViewModel hold themselves to for their own reads.
+            var (catalogue, queue, optimise) = await Task.Run(() =>
+                (new SkillsCatalogueViewModel(snapshot), new SkillsQueueViewModel(snapshot),
+                 new SkillsOptimiseViewModel(snapshot, _dogma)), cancellationToken);
+            queue.GoToOptimise = () => SelectedTabIndex = OptimiseTabIndex;
+            queue.RemapLineText = optimise.RemapLineText;
             var plans = new SkillsPlansViewModel(_services, snapshot, characterId);
             await plans.LoadAsync(cancellationToken);
 
@@ -272,6 +285,7 @@ public sealed partial class SkillsWindowViewModel : ObservableObject, IRefreshab
             Catalogue = catalogue;
             Queue = queue;
             Plans = plans;
+            Optimise = optimise;
             StatusMessage = null;
 
             if (_settings is not null)
@@ -298,6 +312,9 @@ public sealed partial class SkillsWindowViewModel : ObservableObject, IRefreshab
         var levels = await _skillRepository.GetLevelsAsync(characterId, cancellationToken);
         var queue = await _queueRepository.GetForCharacterAsync(characterId, cancellationToken);
         var attributes = await _attributesRepository.GetAsync(characterId, cancellationToken);
-        return new SkillsCharacterSnapshot(_sde, levels, queue, attributes, DateTimeOffset.UtcNow);
+        IReadOnlyList<int> implantTypeIds = _implantRepository is null
+            ? []
+            : await _implantRepository.GetTypeIdsAsync(characterId, cancellationToken);
+        return new SkillsCharacterSnapshot(_sde, levels, queue, attributes, DateTimeOffset.UtcNow, implantTypeIds);
     }
 }

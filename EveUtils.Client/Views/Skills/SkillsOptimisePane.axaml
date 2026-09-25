@@ -1,0 +1,94 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vs="using:EveUtils.Client.ViewModels.Skills"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="1200" d:DesignHeight="700"
+             x:Class="EveUtils.Client.Views.Skills.SkillsOptimisePane"
+             x:DataType="vs:SkillsOptimiseViewModel">
+
+    <UserControl.Styles>
+        <Style Selector="TextBlock.ostatlabel">
+            <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+            <Setter Property="FontSize" Value="10"/>
+            <Setter Property="LetterSpacing" Value="1.2"/>
+        </Style>
+        <Style Selector="TextBlock.ostatvalue">
+            <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+        <Style Selector="Border.osection">
+            <Setter Property="Padding" Value="14,10"/>
+            <Setter Property="BorderThickness" Value="0,0,0,1"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}"/>
+        </Style>
+    </UserControl.Styles>
+
+    <ScrollViewer>
+        <StackPanel>
+            <TextBlock Classes="hint" Margin="14,10" TextWrapping="Wrap"
+                       Text="No queue to advise on yet — import this character's skills and skill queue first."
+                       IsVisible="{Binding !HasData}"/>
+
+            <StackPanel IsVisible="{Binding HasData}">
+                <Border Classes="osection">
+                    <Grid ColumnDefinitions="*,*,*">
+                        <StackPanel Grid.Column="0" Spacing="2">
+                            <TextBlock Classes="ostatlabel" Text="REMAP FOR QUEUE"/>
+                            <TextBlock Classes="ostatvalue" Text="{Binding BestSplitText}"/>
+                            <TextBlock Classes="hint" Text="{Binding QueueSavingsText}"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Spacing="2">
+                            <TextBlock Classes="ostatlabel" Text="+4 IMPLANT SET"/>
+                            <TextBlock Classes="ostatvalue" Text="{Binding Plus4SavingsText}"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="2" Spacing="2">
+                            <TextBlock Classes="ostatlabel" Text="+5 IMPLANT SET"/>
+                            <TextBlock Classes="ostatvalue" Text="{Binding Plus5SavingsText}"/>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
+                <Border Classes="osection">
+                    <StackPanel Spacing="2">
+                        <TextBlock Classes="ostatlabel" Text="NEXT REMAP"/>
+                        <TextBlock Classes="ostatvalue" Text="{Binding NextRemapText}"/>
+                    </StackPanel>
+                </Border>
+
+                <Border Classes="osection">
+                    <StackPanel Spacing="6">
+                        <TextBlock Classes="ostatlabel" Text="IMPLANTS"/>
+                        <ItemsControl ItemsSource="{Binding Implants}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vs:ImplantAttributeRowViewModel">
+                                    <Grid ColumnDefinitions="140,*" Margin="0,2">
+                                        <TextBlock Grid.Column="0" Classes="hint" Text="{Binding AttributeName}"/>
+                                        <TextBlock Grid.Column="1" FontSize="11.5" Text="{Binding BonusText}"/>
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+
+                <Border Classes="osection" BorderThickness="0">
+                    <StackPanel Spacing="6">
+                        <TextBlock Classes="ostatlabel" Text="TIME PER ATTRIBUTE PAIR"/>
+                        <ItemsControl ItemsSource="{Binding TimePerAttributePair}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vs:AttributePairTimeRowViewModel">
+                                    <Grid ColumnDefinitions="200,*" Margin="0,2">
+                                        <TextBlock Grid.Column="0" Classes="hint" Text="{Binding AttributePairText}"/>
+                                        <TextBlock Grid.Column="1" FontSize="11.5" Text="{Binding TimeText}"/>
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

@@ -116,9 +116,9 @@
             <TabItem Header="PLANS">
                 <sk:SkillsPlansPane DataContext="{Binding Plans}"/>
             </TabItem>
-            <!-- OPTIMISE: the tabstrip only (ET-16 scope) — content lands in S6. A tooltip says so, rather than the
-                 disabled tab reading as broken (Raymond's preview feedback, 2026-09-24). -->
-            <TabItem Header="OPTIMISE" IsEnabled="False" ToolTip.Tip="Optimise — coming soon"/>
+            <TabItem Header="OPTIMISE">
+                <sk:SkillsOptimisePane DataContext="{Binding Optimise}"/>
+            </TabItem>
         </TabControl>
     </DockPanel>
 </v:ChromedWindow>

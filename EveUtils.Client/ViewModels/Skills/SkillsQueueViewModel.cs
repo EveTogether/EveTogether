@@ -4,6 +4,7 @@ using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using EveUtils.Shared.Modules.Sde.Dtos;
 using SkillPointMath = EveUtils.Shared.Modules.Skills.SkillPointMath;
 using SkillQueueEntry = EveUtils.Shared.Modules.Skills.Entities.CharacterSkillQueueEntry;
@@ -36,6 +37,17 @@ public sealed partial class SkillsQueueViewModel : ObservableObject
     [ObservableProperty] private string _skillCountText = $"0/{QueueCap}";
     [ObservableProperty] private string _distinctSkillsText = "";
     [ObservableProperty] private string _spInQueueText = "—";
+
+    /// <summary>The REMAP line's text ("A remap would save X; a +4 implant set Y") — set from the OPTIMISE tab's
+    /// own view-model once both are built (ET-354). Empty until then, which hides the line.</summary>
+    [ObservableProperty] private string _remapLineText = "";
+
+    /// <summary>Jumps the SKILLS window to the OPTIMISE tab — wired by <see cref="SkillsWindowViewModel"/>, which
+    /// owns <c>SelectedTabIndex</c>.</summary>
+    public Action? GoToOptimise { get; set; }
+
+    [RelayCommand]
+    private void OpenOptimise() => GoToOptimise?.Invoke();
 
     public SkillsQueueViewModel(SkillsCharacterSnapshot snapshot)
     {
