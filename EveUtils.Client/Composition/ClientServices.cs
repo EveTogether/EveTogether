@@ -109,7 +109,8 @@ public static class ClientServices
         // implants repositories live in Shared and auto-register via AddSharedServices.
         services.AddSingleton<IEsiSkillImporter>(sp =>
             new EsiSkillImporter(sp.GetRequiredService<IEsiClient>(), sp.GetRequiredService<ICharacterSkillRepository>(),
-                sp.GetRequiredService<ICharacterSkillQueueRepository>(), sp.GetRequiredService<ICharacterAttributesRepository>())); // skills + queue/attributes import
+                sp.GetRequiredService<ICharacterSkillQueueRepository>(), sp.GetRequiredService<ICharacterAttributesRepository>(),
+                sp.GetRequiredService<IEventBus>())); // skills + queue/attributes import, signals SkillsChangedEvent (ET-387)
         services.AddSingleton<IEsiImplantImporter>(sp =>
             new EsiImplantImporter(sp.GetRequiredService<IEsiClient>(), sp.GetRequiredService<ICharacterImplantRepository>())); // implants import
         services.AddSingleton<EsiKillmailImporter>(); // kills + losses import (the repository auto-registers)

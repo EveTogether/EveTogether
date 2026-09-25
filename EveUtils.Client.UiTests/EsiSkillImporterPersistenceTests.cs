@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using EveUtils.Client.Skills;
+using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Esi.Http;
 using EveUtils.Shared.Modules.Skills.Entities;
 using EveUtils.Shared.Modules.Skills.Repositories;
@@ -102,7 +103,8 @@ public class EsiSkillImporterPersistenceTests
             Charisma = 1, Intelligence = 1, Memory = 1, Perception = 1, Willpower = 1
         };
         var skillRepository = new ConcurrencyTrackingSkillRepository();
-        var importer = new EsiSkillImporter(esi, skillRepository, new NoOpQueueRepository(), new NoOpAttributesRepository());
+        var importer = new EsiSkillImporter(
+            esi, skillRepository, new NoOpQueueRepository(), new NoOpAttributesRepository(), new InProcessEventBus());
 
         var results = await Task.WhenAll(Enumerable.Range(0, 6)
             .Select(_ => importer.ImportAsync(characterId, TestContext.Current.CancellationToken)));
@@ -154,16 +156,5 @@ public class EsiSkillImporterPersistenceTests
 
         public Task<CharacterAttributes?> GetAsync(int characterId, CancellationToken cancellationToken = default) =>
             Task.FromResult<CharacterAttributes?>(null);
-    }
-
-    /// <summary>An <see cref="IEsiClient"/> that answers each typed GET from a per-path response table.</summary>
-    private sealed class RoutingEsiClient : IEsiClient
-    {
-        public Dictionary<string, object?> Responses { get; } = new();
-
-        public Task<EsiResult<T>> RequestAsync<T>(EsiRequest request, CancellationToken cancellationToken = default) =>
-            Task.FromResult(Responses.TryGetValue(request.Path, out var value) && value is T typed
-                ? EsiResult<T>.Ok(typed)
-                : EsiResult<T>.Fail(EsiError.Of(EsiErrorKind.ServerError, $"no stub for {request.Path}", 500)));
     }
 }

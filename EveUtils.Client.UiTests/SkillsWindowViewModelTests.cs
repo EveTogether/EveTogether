@@ -3,8 +3,11 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
+using Avalonia.Headless.XUnit;
+using EveUtils.Client.Skills;
 using EveUtils.Client.ViewModels.Skills;
 using EveUtils.Shared.Identity;
+using EveUtils.Shared.Modules.Esi.Http;
 using EveUtils.Shared.Modules.Settings.Repositories;
 using EveUtils.Shared.Modules.Skills.Entities;
 using EveUtils.Shared.Modules.Skills.Repositories;
@@ -127,5 +130,46 @@ public sealed class SkillsWindowViewModelTests
         await viewModel.LoadAsync(Ct); // RefreshModule's own call, verbatim — ModuleHostService.Open re-selects the running instance
 
         Assert.Equal(20, viewModel.SelectedCharacterId);
+    }
+
+    /// <summary>
+    /// ET-387, criterion A1. Red before this change: <c>EsiSkillImporter</c> wrote straight to the skill/queue/
+    /// attribute repositories with nothing telling an already-open window, so TRAINING QUEUE kept showing whatever
+    /// it read when it was last (re-)opened, even after a background import for the same character landed.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task ImportAsync_RefreshesTheOpenWindowsTrainingQueue_WithoutReopening()
+    {
+        var esi = new RoutingEsiClient();
+        esi.Responses["/characters/1/skills/"] = new EsiCharacterSkills { Skills = [] };
+        esi.Responses["/characters/1/skillqueue/"] = Array.Empty<EsiSkillQueueEntry>();
+        esi.Responses["/characters/1/attributes/"] = new EsiCharacterAttributes
+        {
+            Charisma = 17, Intelligence = 17, Memory = 17, Perception = 17, Willpower = 17
+        };
+        using var instance = TestClientInstance.Create(s => s.AddSingleton<IEsiClient>(esi));
+        await _SeedCharactersAsync(instance, (1, "Pilot"));
+        var viewModel = new SkillsWindowViewModel(instance.Services, startingCharacterId: 1);
+        await viewModel.LoadAsync(Ct);
+        Assert.Equal("0/150", viewModel.Queue!.SkillCountText);
+
+        // The background refresh's own call (SkillRefreshService.RefreshAllAsync), verbatim — the window stays open.
+        // The queued skill's type id (3300) needs no SDE fixture here: SkillCountText counts future queue entries
+        // before the per-row detail loop that resolves each skill's name against the SDE.
+        esi.Responses["/characters/1/skillqueue/"] = new[]
+        {
+            new EsiSkillQueueEntry
+            {
+                SkillId = 3300, FinishedLevel = 4, QueuePosition = 0,
+                StartDate = DateTimeOffset.UtcNow, FinishDate = DateTimeOffset.UtcNow.AddDays(1)
+            }
+        };
+        var importer = instance.Services.GetRequiredService<IEsiSkillImporter>();
+        var result = await importer.ImportAsync(1, Ct);
+        Assert.True(result.IsSuccess);
+
+        await ActivityWindowHarness.WaitUntil(() => viewModel.Queue!.SkillCountText != "0/150");
+
+        Assert.Equal("1/150", viewModel.Queue!.SkillCountText);
     }
 }
