@@ -169,7 +169,7 @@ public sealed class EsiKillmailImporter(IEsiClient esi, ILocalKillmailReader kil
         await using AsyncServiceScope scope = scopes.CreateAsyncScope();
         IReadOnlyList<Character> characters = await scope.ServiceProvider.GetRequiredService<ICharacterRegistry>().GetAllAsync(cancellationToken);
         IKillmailEntityNameRepository names = scope.ServiceProvider.GetRequiredService<IKillmailEntityNameRepository>();
-        IProvisionalKillmailRepository provisional = scope.ServiceProvider.GetRequiredService<IProvisionalKillmailRepository>();
+        IDispatcher dispatcher = scope.ServiceProvider.GetRequiredService<IDispatcher>();
 
         List<int> victimIds = [.. killmails.Select(killmail => killmail.VictimCharacterId).OfType<int>().Distinct()];
         IReadOnlyDictionary<long, KillmailEntityName> cachedNames = victimIds.Count > 0
@@ -190,7 +190,9 @@ public sealed class EsiKillmailImporter(IEsiClient esi, ILocalKillmailReader kil
                 continue;
             }
 
-            await provisional.RemoveMatchingAsync(characterId, killmail.KillmailTimeUtc, killmail.VictimShipTypeId, victimName, cancellationToken);
+            await dispatcher.Send(
+                new RemoveMatchingProvisionalKillmailCommand(characterId, killmail.KillmailTimeUtc, killmail.VictimShipTypeId, victimName),
+                cancellationToken);
         }
     }
 

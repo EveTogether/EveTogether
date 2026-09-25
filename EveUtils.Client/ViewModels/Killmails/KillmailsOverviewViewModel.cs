@@ -449,7 +449,7 @@ public sealed partial class KillmailsOverviewViewModel : ViewModelBase, IRefresh
                 .Select(dto => dto.VictimAllianceId).OfType<int>()],
             cancellationToken);
 
-        IReadOnlyList<KillmailRowViewModel> provisionalRows = _services.GetService<IProvisionalKillmailRepository>() is { } repository
+        IReadOnlyList<KillmailRowViewModel> provisionalRows = _services.GetService<IProvisionalKillmailReader>() is { } repository
             ? [.. (await repository.GetForCharacterAsync(characterId, cancellationToken)).Select(_BuildProvisionalRow)]
             : [];
 

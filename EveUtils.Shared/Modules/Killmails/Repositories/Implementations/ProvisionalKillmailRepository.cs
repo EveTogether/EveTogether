@@ -26,7 +26,7 @@ internal sealed class ProvisionalKillmailRepository(IDbContextFactory<SharedDbCo
             .ToListAsync(cancellationToken);
     }
 
-    public async Task RemoveMatchingAsync(int characterId, DateTime killmailTimeUtc, int victimShipTypeId, string victimName,
+    public async Task<bool> RemoveMatchingAsync(int characterId, DateTime killmailTimeUtc, int victimShipTypeId, string victimName,
         CancellationToken cancellationToken = default)
     {
         await using var db = await contextFactory.CreateDbContextAsync(cancellationToken);
@@ -37,10 +37,11 @@ internal sealed class ProvisionalKillmailRepository(IDbContextFactory<SharedDbCo
         matches.RemoveAll(killmail => !string.Equals(killmail.VictimName, victimName, StringComparison.OrdinalIgnoreCase));
         if (matches.Count == 0)
         {
-            return;
+            return false;
         }
 
         db.Set<ProvisionalKillmail>().RemoveRange(matches);
         await db.SaveChangesAsync(cancellationToken);
+        return true;
     }
 }

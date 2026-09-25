@@ -1,7 +1,8 @@
+using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Identity;
 using EveUtils.Shared.Modules.Killmails;
+using EveUtils.Shared.Modules.Killmails.Commands;
 using EveUtils.Shared.Modules.Killmails.Entities;
-using EveUtils.Shared.Modules.Killmails.Repositories;
 using EveUtils.Shared.Modules.Sde;
 
 namespace EveUtils.Client.Killmails;
@@ -9,10 +10,11 @@ namespace EveUtils.Client.Killmails;
 /// <summary>
 /// Turns pasted killmail clipboard text into a provisional killmail (ET-340): parses it with
 /// <see cref="KillmailTextParser"/>, resolves the victim's ship through the SDE (no ESI, ever), and stores one row
-/// per own character the text names as victim or attacker. Refused with nothing stored when the text is not a
-/// killmail, the ship is unknown, or none of the pilot's own characters are on it.
+/// per own character the text names as victim or attacker, through <see cref="StoreProvisionalKillmailCommand"/> so
+/// its signal is published. Refused with nothing stored when the text is not a killmail, the ship is unknown, or
+/// none of the pilot's own characters are on it.
 /// </summary>
-public sealed class ProvisionalKillmailImporter(ISdeAccessor sde, ICharacterRegistry registry, IProvisionalKillmailRepository repository)
+public sealed class ProvisionalKillmailImporter(ISdeAccessor sde, ICharacterRegistry registry, IDispatcher dispatcher)
 {
     public async Task<ProvisionalKillmailImportResult> ImportAsync(string text, CancellationToken cancellationToken = default)
     {
@@ -52,7 +54,7 @@ public sealed class ProvisionalKillmailImporter(ISdeAccessor sde, ICharacterRegi
         DateTime nowUtc = DateTime.UtcNow;
         foreach (int characterId in ownCharacterIds)
         {
-            await repository.AddAsync(new ProvisionalKillmail
+            await dispatcher.Send(new StoreProvisionalKillmailCommand(characterId, new ProvisionalKillmail
             {
                 Id = Guid.NewGuid(),
                 CharacterId = characterId,
@@ -61,7 +63,7 @@ public sealed class ProvisionalKillmailImporter(ISdeAccessor sde, ICharacterRegi
                 VictimShipTypeId = shipTypeId,
                 RawText = text,
                 CreatedAtUtc = nowUtc
-            }, cancellationToken);
+            }), cancellationToken);
         }
 
         return ProvisionalKillmailImportResult.Ok(ownCharacterIds.Count);

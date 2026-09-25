@@ -209,6 +209,19 @@ public sealed class CommandSignalCoverageTests
             () => dispatcher.Send(new StoreKillmailsCommand(Owner, [_Killmail()]), cancellationToken),
             published => published is KillmailsChangedEvent { Data: { CharacterId: Owner, Kind: KillmailsChangeKind.Imported } })),
 
+        [typeof(StoreProvisionalKillmailCommand)] = (dispatcher, cancellationToken) => Task.FromResult(new Act(
+            () => dispatcher.Send(new StoreProvisionalKillmailCommand(Owner, _ProvisionalKillmail()), cancellationToken),
+            published => published is KillmailsChangedEvent { Data: { CharacterId: Owner, Kind: KillmailsChangeKind.ProvisionalChanged } })),
+
+        [typeof(RemoveMatchingProvisionalKillmailCommand)] = async (dispatcher, cancellationToken) =>
+        {
+            ProvisionalKillmail killmail = _ProvisionalKillmail();
+            Assert.True((await dispatcher.Send(new StoreProvisionalKillmailCommand(Owner, killmail), cancellationToken)).IsSuccess);
+            return new Act(() => dispatcher.Send(new RemoveMatchingProvisionalKillmailCommand(
+                    Owner, killmail.KillmailTimeUtc, killmail.VictimShipTypeId, killmail.VictimName), cancellationToken),
+                published => published is KillmailsChangedEvent { Data: { CharacterId: Owner, Kind: KillmailsChangeKind.ProvisionalChanged } });
+        },
+
         [typeof(CreateFleetCommand)] = (dispatcher, cancellationToken) =>
         {
             long? fleetId = null;
@@ -651,6 +664,21 @@ public sealed class CommandSignalCoverageTests
         LinkSource = KillmailLinkSource.None,
         ImportedAtUtc = DateTime.UtcNow
     };
+
+    private static ProvisionalKillmail _ProvisionalKillmail()
+    {
+        DateTime now = DateTime.UtcNow;
+        return new ProvisionalKillmail
+        {
+            Id = Guid.NewGuid(),
+            CharacterId = Owner,
+            KillmailTimeUtc = now,
+            VictimName = "Signal Victim",
+            VictimShipTypeId = 11987,
+            RawText = "signal",
+            CreatedAtUtc = now
+        };
+    }
 
     private static Predicate<IIntegrationEvent> _NamesComposition(long compositionId) =>
         published => published is CompositionChangedEvent changed && changed.Data.CompositionId == compositionId;
