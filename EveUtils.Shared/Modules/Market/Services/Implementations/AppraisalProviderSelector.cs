@@ -31,6 +31,12 @@ public sealed class AppraisalProviderSelector(IEnumerable<IAppraisalProvider> pr
                 return candidate;
         }
 
+        // Neither the choice nor the default is available (e.g. the default provider itself is missing from a
+        // minimal host) — any available provider beats returning one known to fail.
+        foreach (var provider in providers)
+            if (await provider.IsAvailableAsync(cancellationToken))
+                return provider;
+
         return providers.FirstOrDefault();
     }
 

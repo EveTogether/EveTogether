@@ -56,15 +56,31 @@ public partial class AppraisalViewModel : ViewModelBase
         SelectedProvider = Providers.FirstOrDefault();
         ShowEveWorkbenchToken = eveWorkbenchKeyStore is not null
             && Providers.Any(provider => provider.Id == EveWorkbenchAppraisalProvider.ProviderId);
+        _constructed = true;
         if (selector is not null)
             _ = _ApplyPersistedSelectionAsync(selector);
         if (eveWorkbenchKeyStore is not null)
             _ = _RefreshEveWorkbenchTokenStatusAsync(eveWorkbenchKeyStore);
     }
 
+    // Set once construction's own SelectedProvider assignment (above) has run, so OnSelectedProviderChanged below
+    // only tracks a pick the operator actually made — never that first, synchronous default.
+    private readonly bool _constructed;
+    private bool _selectionChangedByUser;
+
+    partial void OnSelectedProviderChanged(IAppraisalProvider? value)
+    {
+        if (_constructed)
+            _selectionChangedByUser = true;
+    }
+
+    /// <summary>Applies the persisted default once it resolves — unless the operator already picked something of
+    /// their own from the ComboBox in the meantime, in which case that pick wins and this defers to it.</summary>
     private async Task _ApplyPersistedSelectionAsync(IAppraisalProviderSelector selector)
     {
-        if (await selector.SelectAsync() is { } chosen && Providers.FirstOrDefault(p => p.Id == chosen.Id) is { } match)
+        if (await selector.SelectAsync() is not { } chosen || _selectionChangedByUser)
+            return;
+        if (Providers.FirstOrDefault(p => p.Id == chosen.Id) is { } match)
             SelectedProvider = match;
     }
 

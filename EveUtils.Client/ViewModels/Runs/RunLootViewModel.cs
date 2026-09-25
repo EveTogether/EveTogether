@@ -573,8 +573,6 @@ public sealed partial class RunLootViewModel : ViewModelBase
         _unitPrices.Clear();
         _pricingBasis = null;
         PricingProblemText = null;
-        if (_appraisalSelector is null && _appraisal is null)
-            return;
 
         List<AppraisalLine> lines = [.. entries
             .Select(entry => entry.ItemTypeId)
@@ -584,9 +582,14 @@ public sealed partial class RunLootViewModel : ViewModelBase
         if (lines.Count == 0)
             return;
 
-        Result<AppraisalOutcome> valued = _appraisalSelector is not null
-            ? await _appraisalSelector.AppraiseWithFallbackAsync(lines, cancellationToken)
-            : await _appraisal!.AppraiseAsync(lines, cancellationToken);
+        Result<AppraisalOutcome> valued;
+        if (_appraisalSelector is { } selector)
+            valued = await selector.AppraiseWithFallbackAsync(lines, cancellationToken);
+        else if (_appraisal is { } appraisal)
+            valued = await appraisal.AppraiseAsync(lines, cancellationToken);
+        else
+            return;
+
         if (!valued.IsSuccess)
         {
             _pricingBasis = valued.Messages.Count > 0 ? valued.Messages[0].Text : null;
