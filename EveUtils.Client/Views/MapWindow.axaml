@@ -1,0 +1,339 @@
+<v:ChromedWindow xmlns="https://github.com/avaloniaui" xmlns:v="using:EveUtils.Client.Views"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:EveUtils.Client.ViewModels.Map"
+        xmlns:map="using:EveUtils.Client.Controls.Map"
+        xmlns:me="using:EveUtils.Shared.Modules.Map.Enums"
+        xmlns:mi="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="1180" d:DesignHeight="720"
+        x:Class="EveUtils.Client.Views.MapWindow"
+        x:DataType="vm:MapViewModel"
+        Width="1180" Height="720" MinWidth="760" MinHeight="420"
+        WindowStartupLocation="CenterOwner"
+        Title="Map">
+
+    <!-- MAP (ET-392, mockup v2 scene 1): a side panel with ROUTE / FIND SYSTEM / LEGEND beside the map with its HUD.
+         FOLLOW and TRAIL join the side panel in phase 2 of ET-390. -->
+    <Grid x:Name="MapRoot">
+        <Grid.Styles>
+            <Style Selector="Border.block">
+                <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+                <Setter Property="BorderThickness" Value="0,0,0,1"/>
+                <Setter Property="Padding" Value="14,10,14,12"/>
+            </Style>
+            <Style Selector="TextBlock.kicker">
+                <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+                <Setter Property="FontSize" Value="10"/>
+                <Setter Property="LetterSpacing" Value="2"/>
+                <Setter Property="Margin" Value="0,0,0,8"/>
+            </Style>
+            <Style Selector="TextBlock.field">
+                <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+                <Setter Property="FontSize" Value="10"/>
+                <Setter Property="LetterSpacing" Value="1.8"/>
+                <Setter Property="Margin" Value="0,8,0,4"/>
+            </Style>
+            <Style Selector="TextBlock.message">
+                <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+                <Setter Property="FontSize" Value="11"/>
+                <Setter Property="TextWrapping" Value="Wrap"/>
+                <Setter Property="Margin" Value="0,8,0,0"/>
+            </Style>
+            <Style Selector="Border.hud">
+                <Setter Property="Background" Value="{x:Static map:MapPalette.HudBackgroundBrush}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+                <Setter Property="BorderThickness" Value="1"/>
+            </Style>
+            <Style Selector="Button.hudbutton">
+                <Setter Property="Background" Value="{x:Static map:MapPalette.HudBackgroundBrush}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+                <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+                <Setter Property="Width" Value="30"/>
+                <Setter Property="Height" Value="28"/>
+                <Setter Property="Padding" Value="0"/>
+                <Setter Property="FontSize" Value="10"/>
+                <Setter Property="HorizontalContentAlignment" Value="Center"/>
+                <Setter Property="VerticalContentAlignment" Value="Center"/>
+            </Style>
+            <Style Selector="Button.routestep">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="BorderThickness" Value="0"/>
+                <Setter Property="Padding" Value="4,3"/>
+                <Setter Property="MinHeight" Value="0"/>
+                <Setter Property="CornerRadius" Value="0"/>
+                <Setter Property="HorizontalAlignment" Value="Stretch"/>
+                <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            </Style>
+            <Style Selector="Button.routestep:pointerover /template/ ContentPresenter">
+                <Setter Property="Background" Value="{DynamicResource BgRowHoverBrush}"/>
+            </Style>
+            <Style Selector="StackPanel.legend > StackPanel">
+                <Setter Property="Orientation" Value="Horizontal"/>
+                <Setter Property="Spacing" Value="8"/>
+                <Setter Property="Margin" Value="0,3"/>
+            </Style>
+            <Style Selector="StackPanel.legend TextBlock">
+                <Setter Property="FontSize" Value="11"/>
+                <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+            </Style>
+        </Grid.Styles>
+
+        <DockPanel>
+            <!-- ══ Header ══ -->
+            <Border DockPanel.Dock="Top" Classes="panel-header" Padding="14,10">
+                <StackPanel Orientation="Horizontal" Spacing="10">
+                    <TextBlock Classes="diamond" Text="◆"/>
+                    <TextBlock Classes="panel-title" FontSize="13" Text="MAP" VerticalAlignment="Center"/>
+                    <TextBlock Text="{Binding CountsText}" FontSize="11" Foreground="{StaticResource TextBrush}" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Border>
+
+            <!-- ══ Side panel ══ -->
+            <Border DockPanel.Dock="Left" Width="286" BorderThickness="0,0,1,0" BorderBrush="{DynamicResource BorderBrush}">
+                <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel>
+                        <!-- ROUTE -->
+                        <Border Classes="block">
+                            <StackPanel>
+                                <TextBlock Classes="kicker" Text="ROUTE"/>
+                                <TextBlock Classes="field" Text="FROM" Margin="0,0,0,4"/>
+                                <AutoCompleteBox x:Name="RouteFrom" Text="{Binding FromText, Mode=TwoWay}" ItemsSource="{Binding SystemNames}"
+                                                 FilterMode="StartsWith" MinimumPrefixLength="2" MaxDropDownHeight="240"
+                                                 PlaceholderText="System name…">
+                                    <AutoCompleteBox.KeyBindings>
+                                        <KeyBinding Gesture="Enter" Command="{Binding PlanRouteCommand}"/>
+                                    </AutoCompleteBox.KeyBindings>
+                                </AutoCompleteBox>
+                                <Button HorizontalAlignment="Right" Margin="0,4,0,0" Padding="8,2" Command="{Binding SwapRouteCommand}"
+                                        ToolTip.Tip="Swap start and destination">
+                                    <StackPanel Orientation="Horizontal" Spacing="4">
+                                        <mi:MaterialIcon Kind="SwapVertical" Width="14" Height="14"/>
+                                        <TextBlock Text="Swap" FontSize="11" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </Button>
+                                <TextBlock Classes="field" Text="TO" Margin="0,0,0,4"/>
+                                <AutoCompleteBox x:Name="RouteTo" Text="{Binding ToText, Mode=TwoWay}" ItemsSource="{Binding SystemNames}"
+                                                 FilterMode="StartsWith" MinimumPrefixLength="2" MaxDropDownHeight="240"
+                                                 PlaceholderText="System name…">
+                                    <AutoCompleteBox.KeyBindings>
+                                        <KeyBinding Gesture="Enter" Command="{Binding PlanRouteCommand}"/>
+                                    </AutoCompleteBox.KeyBindings>
+                                </AutoCompleteBox>
+                                <TextBlock Classes="field" Text="PREFER"/>
+                                <UniformGrid Columns="3">
+                                    <Button Classes="seg" Classes.on="{Binding IsShortest}" Content="SHORTEST" Margin="0"
+                                            HorizontalAlignment="Stretch"
+                                            Command="{Binding SetPreferenceCommand}" CommandParameter="{x:Static me:RoutePreference.Shortest}"/>
+                                    <Button Classes="seg" Classes.on="{Binding IsSafer}" Content="SAFER"
+                                            HorizontalAlignment="Stretch" ToolTip.Tip="Stays in highsec wherever a highsec way exists"
+                                            Command="{Binding SetPreferenceCommand}" CommandParameter="{x:Static me:RoutePreference.Safer}"/>
+                                    <Button Classes="seg" Classes.on="{Binding IsLessSecure}" Content="LESS SECURE"
+                                            HorizontalAlignment="Stretch" ToolTip.Tip="Stays out of highsec wherever it can"
+                                            Command="{Binding SetPreferenceCommand}" CommandParameter="{x:Static me:RoutePreference.LessSecure}"/>
+                                </UniformGrid>
+                                <CheckBox Margin="0,8,0,0" Content="Avoid lowsec" IsChecked="{Binding AvoidLowsec}"/>
+                                <CheckBox Content="Avoid nullsec" IsChecked="{Binding AvoidNullsec}"/>
+                                <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,8,0,0">
+                                    <Button Classes="accent" Content="PLAN ROUTE" Command="{Binding PlanRouteCommand}"/>
+                                    <Button Content="CLEAR" Command="{Binding ClearRouteCommand}"/>
+                                </StackPanel>
+                                <TextBlock Classes="message" Text="{Binding RouteMessage}"
+                                           IsVisible="{Binding RouteMessage, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+
+                                <StackPanel IsVisible="{Binding HasRoute}" Margin="0,10,0,0">
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <TextBlock Classes="metric" Text="{Binding RouteJumpsText}"/>
+                                        <TextBlock Text="{Binding RouteEndsText}" FontSize="12" Foreground="{StaticResource TextBrush}"
+                                                   VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                    </StackPanel>
+                                    <StackPanel x:Name="SecurityBar" Orientation="Horizontal" Height="6" Margin="0,6,0,4"
+                                                Background="#0FFFFFFF">
+                                        <Border Width="{Binding HighsecBarWidth}" Background="{x:Static map:MapPalette.HighsecBrush}"/>
+                                        <Border Width="{Binding LowsecBarWidth}" Background="{x:Static map:MapPalette.LowsecBrush}"/>
+                                        <Border Width="{Binding NullsecBarWidth}" Background="{x:Static map:MapPalette.NullsecBrush}"/>
+                                    </StackPanel>
+                                    <StackPanel Orientation="Horizontal" Spacing="4">
+                                        <TextBlock FontSize="11" Text="{Binding HighsecText}" Foreground="{x:Static map:MapPalette.HighsecBrush}"/>
+                                        <TextBlock FontSize="11" Text="·" Foreground="{StaticResource TextBrush}"/>
+                                        <TextBlock FontSize="11" Text="{Binding LowsecText}" Foreground="{x:Static map:MapPalette.LowsecBrush}"/>
+                                        <TextBlock FontSize="11" Text="·" Foreground="{StaticResource TextBrush}"/>
+                                        <TextBlock FontSize="11" Text="{Binding NullsecText}" Foreground="{x:Static map:MapPalette.NullsecBrush}"/>
+                                    </StackPanel>
+                                    <Border Margin="0,8,0,0" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource DividerBrush}">
+                                        <ScrollViewer MaxHeight="210">
+                                            <ItemsControl x:Name="RouteList" ItemsSource="{Binding RouteSteps}">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate x:DataType="vm:MapRouteStepViewModel">
+                                                        <Button Classes="routestep"
+                                                                Command="{Binding $parent[ItemsControl].((vm:MapViewModel)DataContext).ShowStepCommand}"
+                                                                CommandParameter="{Binding}">
+                                                            <Grid ColumnDefinitions="24,*,30" ColumnSpacing="4">
+                                                                <TextBlock Grid.Column="0" Text="{Binding Number}" FontFamily="{StaticResource MonoFont}"
+                                                                           FontSize="10.5" Foreground="{StaticResource TextDimSmallBrush}"
+                                                                           TextAlignment="Right" VerticalAlignment="Center"/>
+                                                                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="5">
+                                                                    <TextBlock Text="{Binding Name}" FontSize="11.5" Foreground="{StaticResource TextBrush}"/>
+                                                                    <TextBlock Text="{Binding RegionName}" FontSize="10" Foreground="{StaticResource TextDimSmallBrush}"
+                                                                               VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                                                </StackPanel>
+                                                                <TextBlock Grid.Column="2" Text="{Binding SecurityText}" FontSize="11.5" FontWeight="SemiBold"
+                                                                           Foreground="{Binding SecurityBrush}" TextAlignment="Right"/>
+                                                            </Grid>
+                                                        </Button>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </ScrollViewer>
+                                    </Border>
+                                    <Button Margin="0,8,0,0" Content="SHOW WHOLE ROUTE" Command="{Binding ShowWholeRouteCommand}"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- FIND SYSTEM -->
+                        <Border Classes="block">
+                            <StackPanel>
+                                <TextBlock Classes="kicker" Text="FIND SYSTEM"/>
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+                                    <AutoCompleteBox x:Name="FindBox" Text="{Binding FindText, Mode=TwoWay}" ItemsSource="{Binding SystemNames}"
+                                                     FilterMode="StartsWith" MinimumPrefixLength="2" MaxDropDownHeight="240"
+                                                     PlaceholderText="System name…">
+                                        <AutoCompleteBox.KeyBindings>
+                                            <KeyBinding Gesture="Enter" Command="{Binding FindCommand}"/>
+                                        </AutoCompleteBox.KeyBindings>
+                                    </AutoCompleteBox>
+                                    <Button Grid.Column="1" Command="{Binding FindCommand}" ToolTip.Tip="Show this system on the map">
+                                        <mi:MaterialIcon Kind="Magnify" Width="16" Height="16"/>
+                                    </Button>
+                                </Grid>
+                                <TextBlock Classes="message" Text="{Binding FindMessage}"
+                                           IsVisible="{Binding FindMessage, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- LEGEND -->
+                        <ToggleButton Classes="section" IsChecked="{Binding IsLegendOpen}">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <TextBlock Classes="caret" Text="▶"/>
+                                <TextBlock Classes="kicker" Text="LEGEND" Margin="0"/>
+                            </StackPanel>
+                        </ToggleButton>
+                        <Border Classes="block" IsVisible="{Binding IsLegendOpen}">
+                            <StackPanel Classes="legend">
+                                <StackPanel>
+                                    <Line StartPoint="2,5" EndPoint="36,5" Width="38" Height="10" StrokeThickness="2"
+                                          Stroke="{x:Static map:MapPalette.SampleRegionBrush}"/>
+                                    <TextBlock Text="Jump inside a constellation"/>
+                                </StackPanel>
+                                <StackPanel>
+                                    <Line StartPoint="2,5" EndPoint="36,5" Width="38" Height="10" StrokeThickness="2" StrokeDashArray="2,1.5"
+                                          Stroke="{x:Static map:MapPalette.SampleRegionBrush}"/>
+                                    <TextBlock Text="To another constellation"/>
+                                </StackPanel>
+                                <StackPanel>
+                                    <Line StartPoint="2,5" EndPoint="36,5" Width="38" Height="10" StrokeThickness="2" StrokeDashArray="3,2"
+                                          Stroke="{x:Static map:MapPalette.CrossRegionLineBrush}"/>
+                                    <TextBlock Text="To another region"/>
+                                </StackPanel>
+                                <StackPanel>
+                                    <Line StartPoint="2,5" EndPoint="36,5" Width="38" Height="10" StrokeThickness="4"
+                                          Stroke="{x:Static map:MapPalette.RouteBrush}"/>
+                                    <TextBlock Text="Planned route"/>
+                                </StackPanel>
+                                <StackPanel>
+                                    <Panel Width="38" Height="14">
+                                        <Path Data="M 19,2 L 24,7 L 19,12 L 14,7 Z" StrokeThickness="2"
+                                              Stroke="{DynamicResource AccentBrightBrush}"/>
+                                    </Panel>
+                                    <TextBlock Text="Your character, where the game log last saw it"/>
+                                </StackPanel>
+                                <ItemsControl ItemsSource="{x:Static map:MapPalette.SecurityScale}" Margin="0,4,0,0">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="map:MapSecurityStep">
+                                            <TextBlock Text="{Binding Text}" Foreground="{Binding Brush}" FontWeight="SemiBold" Margin="0,0,6,0"/>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <TextBlock Classes="hint" Text="Security colours show in system view. Region colours only tell neighbours apart; they carry no faction meaning."/>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </Border>
+
+            <!-- ══ Map + HUD ══ -->
+            <Panel Background="{x:Static map:MapPalette.BackgroundBrush}">
+                <map:StarMapControl x:Name="Map"
+                                    Graph="{Binding Graph}"
+                                    Route="{Binding RouteIndexes}"
+                                    Markers="{Binding Markers}"
+                                    SelectedIndex="{Binding SelectedIndex, Mode=TwoWay}"
+                                    FocusRequest="{Binding FocusRequest}"/>
+
+                <TextBlock Text="{Binding StatusMessage}" IsVisible="{Binding StatusMessage, Converter={x:Static ObjectConverters.IsNotNull}}"
+                           Foreground="{StaticResource TextBrush}" FontSize="12" TextWrapping="Wrap" MaxWidth="360"
+                           HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center"/>
+
+                <!-- Level of detail -->
+                <Border Classes="hud" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="10" Padding="9,4">
+                    <StackPanel Orientation="Horizontal" Spacing="4">
+                        <TextBlock Text="{Binding #Map.DetailLevelLabel}" FontSize="10" LetterSpacing="1.2" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource AccentBrightBrush}"/>
+                        <TextBlock Text="{Binding #Map.ZoomLevel, StringFormat='· {0:0.0}×'}" FontSize="10" LetterSpacing="1.2"
+                                   Foreground="{StaticResource TextBrush}"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- Selection card -->
+                <Border x:Name="SelectionCard" Classes="hud" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="10" Width="260"
+                        Padding="12,10" IsVisible="{Binding HasSelection}">
+                    <Grid>
+                        <StackPanel Spacing="2">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <TextBlock Text="{Binding SelectedName}" FontSize="15" FontWeight="Bold" Foreground="{StaticResource TextBrightBrush}"/>
+                                <TextBlock Text="{Binding SelectedSecurityText}" FontSize="15" FontWeight="Bold" Foreground="{Binding SelectedSecurityBrush}"/>
+                            </StackPanel>
+                            <TextBlock FontSize="11" TextWrapping="Wrap">
+                                <Run Text="{Binding SelectedConstellationText}" Foreground="{StaticResource TextBrush}"/>
+                                <Run Text="{Binding SelectedRegionText}" Foreground="{Binding SelectedRegionBrush}"/>
+                            </TextBlock>
+                            <TextBlock Text="{Binding SelectedGatesText}" FontSize="11" Foreground="{StaticResource TextBrush}"/>
+                            <TextBlock Text="{Binding SelectedHereText}" IsVisible="{Binding HasSelectedHere}" FontSize="11" TextWrapping="Wrap"
+                                       Foreground="{DynamicResource AccentBrightBrush}" Margin="0,2,0,0"/>
+                            <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,8,0,0">
+                                <Button Content="ROUTE FROM" FontSize="10.5" Command="{Binding RouteFromSelectedCommand}"
+                                        ToolTip.Tip="Plan the route from this system"/>
+                                <Button Content="ROUTE TO" FontSize="10.5" Command="{Binding RouteToSelectedCommand}"
+                                        ToolTip.Tip="Plan the route to this system"/>
+                            </StackPanel>
+                        </StackPanel>
+                        <Button Classes="tabclose" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-4,-6,0"
+                                Command="{Binding ClearSelectionCommand}" ToolTip.Tip="Close">
+                            <mi:MaterialIcon Kind="Close" Width="12" Height="12"/>
+                        </Button>
+                    </Grid>
+                </Border>
+
+                <!-- Zoom -->
+                <StackPanel HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="10,0,0,34" Spacing="4">
+                    <Button Classes="hudbutton" Click="OnZoomIn" ToolTip.Tip="Zoom in">
+                        <mi:MaterialIcon Kind="Plus" Width="14" Height="14"/>
+                    </Button>
+                    <Button Classes="hudbutton" Click="OnZoomOut" ToolTip.Tip="Zoom out">
+                        <mi:MaterialIcon Kind="Minus" Width="14" Height="14"/>
+                    </Button>
+                    <Button Classes="hudbutton" Content="ALL" Click="OnZoomAll" ToolTip.Tip="Show all of New Eden"/>
+                </StackPanel>
+
+                <TextBlock HorizontalAlignment="Stretch" VerticalAlignment="Bottom" Margin="10,0,10,6" FontSize="9.5" TextWrapping="Wrap"
+                           Foreground="{StaticResource TextDimSmallBrush}"
+                           Text="Material related to EVE-Online is used with limited permission of CCP Games hf by using official Toolkit. No official affiliation or endorsement by CCP Games hf is stated or implied."/>
+            </Panel>
+        </DockPanel>
+    </Grid>
+</v:ChromedWindow>

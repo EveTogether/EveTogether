@@ -35,6 +35,8 @@ public static class KeyboardShortcutDefaults
             [ShortcutAction.CloseDialog] = [new KeyGesture(Key.Escape, KeyModifiers.None)],
             [ShortcutAction.SaveRun] = [new KeyGesture(Key.S, KeyModifiers.Control | KeyModifiers.Shift)],
             [ShortcutAction.GoToHome] = [new KeyGesture(Key.D0, KeyModifiers.Control)],
+            // Not Ctrl+9 as first proposed for ET-392: that is GoToLastTab, the browser convention.
+            [ShortcutAction.OpenMap] = [new KeyGesture(Key.M, KeyModifiers.Control)],
         };
 
     /// <summary>Label shown in the Settings list — what the action does, not its key.</summary>
@@ -59,5 +61,6 @@ public static class KeyboardShortcutDefaults
         [ShortcutAction.CloseDialog] = "Cancel/close a dialog",
         [ShortcutAction.SaveRun] = "Save the current run",
         [ShortcutAction.GoToHome] = "Go to the home screen",
+        [ShortcutAction.OpenMap] = "Open the map",
     };
 }

@@ -50,4 +50,7 @@ public enum ShortcutAction
 
     /// <summary>Docked host only: the home in front, open tabs left open — the rail's HOME (ET-324).</summary>
     GoToHome,
+
+    /// <summary>Docked host only: open the MAP module, or bring it to the front (ET-392).</summary>
+    OpenMap,
 }

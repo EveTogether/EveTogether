@@ -9,6 +9,7 @@ using EveUtils.Client.ViewModels;
 using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Client.ViewModels.FitBrowser;
 using EveUtils.Client.ViewModels.Killmails;
+using EveUtils.Client.ViewModels.Map;
 using EveUtils.Client.ViewModels.Runs;
 using EveUtils.Shared.Modules.Esi;
 using EveUtils.Shared.Modules.Fittings.Dtos;
@@ -359,6 +360,11 @@ public sealed class RecordingDialogService : IDialogService
     public KillmailsOverviewViewModel? LastKillmails { get; private set; }
 
     public KillmailsOverviewViewModel ShowKillmails(KillmailsOverviewViewModel viewModel) => LastKillmails = viewModel;
+
+    /// <summary>The MAP module the launcher asked for, or null (ET-392).</summary>
+    public MapViewModel? LastMap { get; private set; }
+
+    public void ShowMap(MapViewModel viewModel) => LastMap = viewModel;
 
     /// <summary>The killmail detail screen the shell was asked to open, or null — a hook to drive it without
     /// standing up the real window (ET-333).</summary>

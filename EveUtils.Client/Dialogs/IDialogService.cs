@@ -5,6 +5,7 @@ using EveUtils.Client.ViewModels;
 using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Client.ViewModels.FitBrowser;
 using EveUtils.Client.ViewModels.Killmails;
+using EveUtils.Client.ViewModels.Map;
 using EveUtils.Client.ViewModels.Runs;
 using EveUtils.Shared.Modules.Esi;
 using EveUtils.Shared.Modules.Fittings.Dtos;
@@ -266,6 +267,10 @@ public interface IDialogService
     /// other feature modules. One screen, not one per pilot: the running band already holds a lane each. Returns the
     /// screen now showing — the one already open, when it was.</summary>
     RunsOverviewViewModel ShowRuns(RunsOverviewViewModel viewModel);
+
+    /// <summary>Opens the MAP module (ET-392) as a hosted module — one map for the whole app. When it is open already
+    /// that one comes to the front and re-reads its data.</summary>
+    void ShowMap(MapViewModel viewModel);
 
     /// <summary>Opens the KILLMAILS overview (ET-332) as a hosted module — a docked tab or a floating window, like
     /// RUNS. One screen for the whole app, not one per character: it reads a single selected character at a time.

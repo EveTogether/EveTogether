@@ -27,4 +27,5 @@ public static class MessageCodes
     public const string BackupIncompatible = "BACKUP_INCOMPATIBLE";
     public const string BackupRestoreFailed = "BACKUP_RESTORE_FAILED";
     public const string HotKeyUnavailable = "HOTKEY_UNAVAILABLE";
+    public const string RouteNotFound = "ROUTE_NOT_FOUND";
 }

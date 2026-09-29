@@ -30,7 +30,28 @@ public sealed class FakeSdeAccessor : ISdeAccessor
     private readonly Dictionary<string, SdeSolarSystem> _solarSystemsByName = new(StringComparer.OrdinalIgnoreCase);
 
     public bool IsAvailable { get; private set; } = true;
-    public SdeVersion? Version => new(1, DateTimeOffset.UnixEpoch);
+    public SdeVersion? Version => new(_buildNumber, DateTimeOffset.UnixEpoch);
+
+    private long _buildNumber = 1;
+    private SdeMapSnapshot _map = SdeMapSnapshot.Empty;
+    private IReadOnlyDictionary<int, string> _factionNames = new Dictionary<int, string>();
+
+    /// <summary>The managed thread each <see cref="GetMapSnapshot"/> call ran on, in call order.</summary>
+    public List<int> MapReadThreadIds { get; } = [];
+
+    /// <summary>Pretends the store now holds another SDE build, as after an import.</summary>
+    public FakeSdeAccessor WithBuild(long buildNumber)
+    {
+        _buildNumber = buildNumber;
+        return this;
+    }
+
+    public FakeSdeAccessor WithMap(SdeMapSnapshot map, IReadOnlyDictionary<int, string> factionNames)
+    {
+        _map = map;
+        _factionNames = factionNames;
+        return this;
+    }
 
     public FakeSdeAccessor Add(int typeId, string name, int groupId, int categoryId, SdeSlotType slot = SdeSlotType.None, bool isTurret = false, double volume = 0, bool isMutated = false, string? groupName = null, int? metaGroupId = null, bool published = true)
     {
@@ -222,12 +243,15 @@ public sealed class FakeSdeAccessor : ISdeAccessor
         return this;
     }
 
-    public SdeMapSnapshot GetMapSnapshot() => SdeMapSnapshot.Empty;
+    public SdeMapSnapshot GetMapSnapshot()
+    {
+        MapReadThreadIds.Add(Environment.CurrentManagedThreadId);
+        return _map;
+    }
 
     public string? GetNpcCorporationName(int corporationId) => _npcCorporations.GetValueOrDefault(corporationId);
 
-    // No fixture wired up here — nothing under test today reads faction names through this fake.
-    public string? GetFactionName(int factionId) => null;
+    public string? GetFactionName(int factionId) => _factionNames.GetValueOrDefault(factionId);
 
     public void Close() { }
     public void Reopen() { }
