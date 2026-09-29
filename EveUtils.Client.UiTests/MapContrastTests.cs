@@ -45,9 +45,13 @@ public sealed class MapContrastTests
         Color[] hudTexts = [_Neutral("TextBrush"), _Neutral("TextBrightBrush"), accentBright, .. MapPalette.Security, .. MapPalette.Regions];
         Color[] headerTexts = [_Neutral("TextBrush"), _Neutral("TextBrightBrush")];
 
+        // ET-393: the followed character's row is marked by an accent bar, not a tint — a tint took the security
+        // colours below 4.5:1 (measured 3.6). RESET TRAIL is red text straight on the panel.
         List<(string Where, Color Ink, Color Ground, double Ratio)> pairs =
         [
             .. _Pairs("side panel", panelTexts, panels),
+            .. _Pairs("RESET TRAIL", [_Neutral("RedBrush")], panels),
+            .. _Pairs("portrait initial", [_Neutral("TextBrightBrush")], [.. panels.Select(panel => _Over(((ISolidColorBrush)theme["AccentSoftBrush"]!).Color, panel))]),
             .. _Pairs("header", headerTexts, headers),
             .. _Pairs("map canvas", canvasTexts, [canvas]),
             .. _Pairs("HUD", hudTexts, [hud])

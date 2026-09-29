@@ -40,6 +40,7 @@ using EveUtils.Client.Theming;
 using EveUtils.Client.Characters;
 using EveUtils.Client.Transport;
 using EveUtils.Client.Updates;
+using EveUtils.Client.WorldMap;
 using EveUtils.Shared.Transport;
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Identity;
@@ -176,6 +177,9 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
 
     // Transient activity line: pairing progress, couple/decouple results, errors. Empty = idle.
     [ObservableProperty] private string _activityStatus = "";
+
+    // "Map: following {name}" while the map follows a character; empty otherwise (ET-393).
+    [ObservableProperty] private string _mapStatus = "";
     [ObservableProperty] private string _fittingsStatus = "";
 
     // Tranquility server status (ESI /status/, polled every 30 s by EveServerStatusService). Shown right-aligned
@@ -422,6 +426,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
     {
         _services = services;
         _gamelog = services.GetRequiredService<GamelogClientService>();
+        services.GetRequiredService<MapTrailRecorder>(); // records trails from app start, map open or not
         _login = services.GetRequiredService<LocalEsiLoginService>();
         _pairing = services.GetRequiredService<ServerPairingService>();
         _busConnector = services.GetRequiredService<IRemoteBusConnector>();
@@ -666,10 +671,19 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
     {
         if (_dialogs is null || _services is null)
             return;
-        _dialogs.ShowMap(new MapViewModel(
+        var map = new MapViewModel(
             _services.GetRequiredService<IDispatcher>(),
             _services.GetRequiredService<ICharacterRegistry>(),
-            _services.GetService<GamelogClientService>()));
+            _services.GetRequiredService<IFleetPositionSource>(),
+            _services.GetRequiredService<MapTrailRecorder>(),
+            _services.GetRequiredService<TimeProvider>(),
+            _services.GetService<ICharacterPortraitProvider>());
+        map.PropertyChanged += (_, change) =>
+        {
+            if (change.PropertyName == nameof(MapViewModel.FollowStatusText))
+                MapStatus = map.FollowStatusText;
+        };
+        _dialogs.ShowMap(map);
     }
 
     /// <summary>Opens the ESI-metrics window — non-modal; a fresh view-model per open so its live poll

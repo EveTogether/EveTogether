@@ -13,8 +13,8 @@
         WindowStartupLocation="CenterOwner"
         Title="Map">
 
-    <!-- MAP (ET-392, mockup v2 scene 1): a side panel with ROUTE / FIND SYSTEM / LEGEND beside the map with its HUD.
-         FOLLOW and TRAIL join the side panel in phase 2 of ET-390. -->
+    <!-- MAP (ET-392/393, mockup v2 scene 1): a side panel with FOLLOW / TRAIL / ROUTE / FIND SYSTEM / LEGEND beside the
+         map with its HUD. -->
     <Grid x:Name="MapRoot">
         <Grid.Styles>
             <Style Selector="Border.block">
@@ -68,6 +68,10 @@
             <Style Selector="Button.routestep:pointerover /template/ ContentPresenter">
                 <Setter Property="Background" Value="{DynamicResource BgRowHoverBrush}"/>
             </Style>
+            <Style Selector="Button.routestep.picked /template/ ContentPresenter">
+                <Setter Property="BorderBrush" Value="{DynamicResource AccentBrightBrush}"/>
+                <Setter Property="BorderThickness" Value="3,0,0,0"/>
+            </Style>
             <Style Selector="StackPanel.legend > StackPanel">
                 <Setter Property="Orientation" Value="Horizontal"/>
                 <Setter Property="Spacing" Value="8"/>
@@ -94,6 +98,96 @@
             <Border DockPanel.Dock="Left" Width="286" BorderThickness="0,0,1,0" BorderBrush="{DynamicResource BorderBrush}">
                 <ScrollViewer HorizontalScrollBarVisibility="Disabled">
                     <StackPanel>
+                        <!-- FOLLOW -->
+                        <Border Classes="block">
+                            <StackPanel>
+                                <TextBlock Classes="kicker" Text="FOLLOW"/>
+                                <UniformGrid Columns="2">
+                                    <Button Classes="seg" Classes.on="{Binding IsFollowOff}" Content="OFF" Margin="0" HorizontalAlignment="Stretch"
+                                            Command="{Binding SetFollowModeCommand}" CommandParameter="{x:Static me:MapFollowMode.Off}"/>
+                                    <Button Classes="seg" Classes.on="{Binding IsFollowCharacter}" Content="CHARACTER" HorizontalAlignment="Stretch"
+                                            ToolTip.Tip="Keep one of your characters in view"
+                                            Command="{Binding SetFollowModeCommand}" CommandParameter="{x:Static me:MapFollowMode.Character}"/>
+                                </UniformGrid>
+                                <StackPanel IsVisible="{Binding IsFollowCharacter}">
+                                    <TextBlock Classes="message" Text="Who should the map follow?" IsVisible="{Binding NeedsCharacterPick}"/>
+                                    <TextBlock Classes="message" Text="None of your characters has an ESI sign-in, so none can be located."
+                                               IsVisible="{Binding !HasCharacters}"/>
+                                    <ItemsControl x:Name="CharacterList" ItemsSource="{Binding Characters}" Margin="0,6,0,0">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:MapCharacterRowViewModel">
+                                                <Button Classes="routestep" Classes.picked="{Binding IsFollowed}"
+                                                        Command="{Binding $parent[ItemsControl].((vm:MapViewModel)DataContext).FollowCharacterCommand}"
+                                                        CommandParameter="{Binding}">
+                                                    <Grid ColumnDefinitions="30,*" ColumnSpacing="8">
+                                                        <Panel Width="28" Height="28" VerticalAlignment="Center">
+                                                            <Ellipse Fill="{DynamicResource AccentSoftBrush}"/>
+                                                            <TextBlock Text="{Binding Initial}" FontSize="12" FontWeight="SemiBold"
+                                                                       Foreground="{StaticResource TextBrightBrush}"
+                                                                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                                       IsVisible="{Binding !HasPortrait}"/>
+                                                            <Ellipse IsVisible="{Binding HasPortrait}">
+                                                                <Ellipse.Fill>
+                                                                    <ImageBrush Source="{Binding Portrait}" Stretch="UniformToFill"/>
+                                                                </Ellipse.Fill>
+                                                            </Ellipse>
+                                                        </Panel>
+                                                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                            <TextBlock Text="{Binding Name}" FontSize="12" Foreground="{StaticResource TextBrightBrush}"
+                                                                       TextTrimming="CharacterEllipsis"/>
+                                                            <StackPanel Orientation="Horizontal" Spacing="5">
+                                                                <TextBlock Text="{Binding SystemName}" FontSize="10.5" Foreground="{StaticResource TextBrush}"/>
+                                                                <TextBlock Text="{Binding SecurityText}" FontSize="10.5" FontWeight="SemiBold"
+                                                                           Foreground="{Binding SecurityBrush}"/>
+                                                                <TextBlock Text="{Binding SourceText}" FontSize="10" Foreground="{StaticResource TextDimSmallBrush}"
+                                                                           VerticalAlignment="Center"/>
+                                                            </StackPanel>
+                                                        </StackPanel>
+                                                    </Grid>
+                                                </Button>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- TRAIL -->
+                        <Border Classes="block" IsVisible="{Binding IsFollowing}">
+                            <StackPanel>
+                                <TextBlock Classes="kicker" Text="TRAIL"/>
+                                <CheckBox Content="Show the trail" IsChecked="{Binding IsTrailOn}"/>
+                                <StackPanel IsVisible="{Binding IsTrailOn}">
+                                    <TextBlock Classes="field" Text="SHOW"/>
+                                    <UniformGrid Columns="2">
+                                        <Button Classes="seg" Classes.on="{Binding IsTrailByJumps}" Content="LAST JUMPS" Margin="0" HorizontalAlignment="Stretch"
+                                                Command="{Binding SetTrailWindowCommand}" CommandParameter="{x:Static me:TrailWindow.LastJumps}"/>
+                                        <Button Classes="seg" Classes.on="{Binding IsTrailBySince}" Content="SINCE" HorizontalAlignment="Stretch"
+                                                Command="{Binding SetTrailWindowCommand}" CommandParameter="{x:Static me:TrailWindow.Since}"/>
+                                    </UniformGrid>
+                                    <ComboBox x:Name="TrailJumpsBox" Margin="0,6,0,0" HorizontalAlignment="Stretch" IsVisible="{Binding IsTrailByJumps}"
+                                              ItemsSource="{x:Static vm:MapViewModel.TrailJumpOptions}" SelectedItem="{Binding TrailJumps}"/>
+                                    <ComboBox x:Name="TrailSinceBox" Margin="0,6,0,0" HorizontalAlignment="Stretch" IsVisible="{Binding IsTrailBySince}"
+                                              ItemsSource="{x:Static vm:MapViewModel.TrailSinceOptions}"
+                                              SelectedValueBinding="{Binding Value}" SelectedValue="{Binding TrailSince}">
+                                        <ComboBox.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:TrailSinceOption">
+                                                <TextBlock Text="{Binding Label}"/>
+                                            </DataTemplate>
+                                        </ComboBox.ItemTemplate>
+                                    </ComboBox>
+                                    <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,8,0,0">
+                                        <Button Classes="danger" Content="RESET TRAIL" Command="{Binding ResetTrailCommand}"
+                                                ToolTip.Tip="Forget where this character has been; the trail starts again from here"/>
+                                        <TextBlock Text="{Binding TrailResetText}" FontSize="11" Foreground="{StaticResource TextBrush}"
+                                                   VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                    <TextBlock Classes="hint" Margin="0,6,0,0"
+                                               Text="Kept in memory only. A dotted jump is one the trail did not see, not a known route."/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+
                         <!-- ROUTE -->
                         <Border Classes="block">
                             <StackPanel>
@@ -247,7 +341,17 @@
                                         <Path Data="M 19,2 L 24,7 L 19,12 L 14,7 Z" StrokeThickness="2"
                                               Stroke="{DynamicResource AccentBrightBrush}"/>
                                     </Panel>
-                                    <TextBlock Text="Your character, where the game log last saw it"/>
+                                    <TextBlock Text="Your character, where it was last seen"/>
+                                </StackPanel>
+                                <StackPanel>
+                                    <Line StartPoint="2,5" EndPoint="36,5" Width="38" Height="10" StrokeThickness="2.5" StrokeDashArray="2,1.4"
+                                          Stroke="{DynamicResource AccentBrightBrush}"/>
+                                    <TextBlock Text="Trail of the followed character, fading with age"/>
+                                </StackPanel>
+                                <StackPanel>
+                                    <Line StartPoint="2,5" EndPoint="36,5" Width="38" Height="10" StrokeThickness="2.5" StrokeDashArray="0.6,2.6"
+                                          Stroke="{DynamicResource AccentBrightBrush}"/>
+                                    <TextBlock Text="A jump the trail did not see"/>
                                 </StackPanel>
                                 <ItemsControl ItemsSource="{x:Static map:MapPalette.SecurityScale}" Margin="0,4,0,0">
                                     <ItemsControl.ItemsPanel>
@@ -272,6 +376,8 @@
                                     Graph="{Binding Graph}"
                                     Route="{Binding RouteIndexes}"
                                     Markers="{Binding Markers}"
+                                    Trail="{Binding Trail}"
+                                    FollowIndex="{Binding FollowIndex}"
                                     SelectedIndex="{Binding SelectedIndex, Mode=TwoWay}"
                                     FocusRequest="{Binding FocusRequest}"/>
 
@@ -286,6 +392,17 @@
                                    Foreground="{DynamicResource AccentBrightBrush}"/>
                         <TextBlock Text="{Binding #Map.ZoomLevel, StringFormat='· {0:0.0}×'}" FontSize="10" LetterSpacing="1.2"
                                    Foreground="{StaticResource TextBrush}"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- Follow chip: who the map follows, or that it stopped because the pilot moved it -->
+                <Border x:Name="FollowChip" Classes="hud" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="10" Padding="9,3"
+                        IsVisible="{Binding IsFollowing}">
+                    <StackPanel Orientation="Horizontal" Spacing="10">
+                        <TextBlock Text="{Binding FollowChipText}" FontSize="10" LetterSpacing="1.2" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource AccentBrightBrush}" VerticalAlignment="Center"/>
+                        <Button Content="RESUME" FontSize="10" Padding="8,2" MinHeight="0" IsVisible="{Binding IsFollowPaused}"
+                                Command="{Binding ResumeFollowCommand}" ToolTip.Tip="Recentre on the character and keep following"/>
                     </StackPanel>
                 </Border>
 

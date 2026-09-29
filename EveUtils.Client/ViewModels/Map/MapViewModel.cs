@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
@@ -8,10 +9,13 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EveUtils.Client.Controls.Map;
 using EveUtils.Client.Dialogs;
-using EveUtils.Client.Gamelog;
+using EveUtils.Client.Fleet;
+using EveUtils.Client.Imaging;
+using EveUtils.Client.WorldMap;
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Identity;
 using EveUtils.Shared.Messaging;
+using EveUtils.Shared.Modules.Fleet.Dtos;
 using EveUtils.Shared.Modules.Map.Dtos;
 using EveUtils.Shared.Modules.Map.Enums;
 using EveUtils.Shared.Modules.Map.Queries;
@@ -22,26 +26,49 @@ namespace EveUtils.Client.ViewModels.Map;
 /// The MAP module (ET-392): New Eden to zoom around in, a wayfinder over the local map, a system search and your own
 /// characters where the game log last saw them. The graph comes from <see cref="GetMapGraphQuery"/>, which builds it
 /// off the UI thread once per SDE build (ET-298); everything here only reads that immutable snapshot.
-/// Following a character and the trail come in the next phase of ET-390.
+///
+/// <para>Following (ET-393): the map keeps one of your own characters in view, recentring on every jump, until you
+/// move the map yourself — then it pauses until RESUME or a new pick. Nobody is followed by default; the pilot picks
+/// who, every time (AGENTS.md: no global active character). The character's trail is read from
+/// <see cref="MapTrailRecorder"/> and cut to the window the pilot chose.</para>
 /// </summary>
 public sealed partial class MapViewModel : ObservableObject, IRefreshableModule, IDisposable
 {
     /// <summary>Width of the route's security bar: the side panel's inner width.</summary>
     public const double SecurityBarWidth = 258;
 
+    /// <summary>Following never zooms out past system view: the level where a jump is something you can see.</summary>
+    public const double FollowMinZoom = 9;
+
+    public static IReadOnlyList<int> TrailJumpOptions { get; } = [5, 10, 20, 50];
+
+    public static IReadOnlyList<TrailSinceOption> TrailSinceOptions { get; } =
+    [
+        new(TrailSince.Last15Minutes, "Last 15 minutes"),
+        new(TrailSince.LastHour, "Last hour"),
+        new(TrailSince.SinceDowntime, "Since downtime"),
+        new(TrailSince.SinceAppStart, "Since app start")
+    ];
+
     private readonly IDispatcher _dispatcher;
     private readonly ICharacterRegistry _registry;
-    private readonly GamelogClientService? _gamelog;
+    private readonly IFleetPositionSource _positions;
+    private readonly MapTrailRecorder _trails;
+    private readonly TimeProvider _clock;
+    private readonly ICharacterPortraitProvider? _portraits;
     private IReadOnlyList<Character> _characters = [];
 
-    public MapViewModel(IDispatcher dispatcher, ICharacterRegistry registry, GamelogClientService? gamelog)
+    public MapViewModel(IDispatcher dispatcher, ICharacterRegistry registry, IFleetPositionSource positions, MapTrailRecorder trails,
+        TimeProvider clock, ICharacterPortraitProvider? portraits = null)
     {
         _dispatcher = dispatcher;
         _registry = registry;
-        _gamelog = gamelog;
+        _positions = positions;
+        _trails = trails;
+        _clock = clock;
+        _portraits = portraits;
         _registry.RegistryChanged += _OnRegistryChanged;
-        if (_gamelog is not null)
-            _gamelog.LocationChanged += _OnLocationChanged;
+        _positions.PositionChanged += _OnPositionChanged;
     }
 
     [ObservableProperty]
@@ -55,6 +82,61 @@ public sealed partial class MapViewModel : ObservableObject, IRefreshableModule,
     [ObservableProperty] private IReadOnlyList<MapMarker> _markers = [];
     [ObservableProperty] private MapFocusRequest? _focusRequest;
     [ObservableProperty] private bool _isLegendOpen;
+
+    // ── Follow ───────────────────────────────────────────────────────────────────────────────────
+
+    public ObservableCollection<MapCharacterRowViewModel> Characters { get; } = [];
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsFollowOff), nameof(IsFollowCharacter), nameof(NeedsCharacterPick))]
+    private MapFollowMode _followMode = MapFollowMode.Off;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsFollowing), nameof(NeedsCharacterPick), nameof(FollowChipText), nameof(FollowStatusText), nameof(TrailResetText))]
+    private MapCharacterRowViewModel? _followedCharacter;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(FollowChipText), nameof(FollowStatusText))]
+    private bool _isFollowPaused;
+
+    /// <summary>The system of the followed character, ringed on the map; -1 when there is none or the map does not hold it.</summary>
+    [ObservableProperty] private int _followIndex = -1;
+
+    public bool IsFollowOff => FollowMode == MapFollowMode.Off;
+    public bool IsFollowCharacter => FollowMode == MapFollowMode.Character;
+    public bool IsFollowing => FollowMode == MapFollowMode.Character && FollowedCharacter is not null;
+    public bool NeedsCharacterPick => FollowMode == MapFollowMode.Character && FollowedCharacter is null;
+    public bool HasCharacters => Characters.Count > 0;
+
+    public string FollowChipText => FollowedCharacter is not { } followed
+        ? string.Empty
+        : IsFollowPaused ? "PAUSED · you moved the map" : "FOLLOWING " + followed.Name.ToUpperInvariant();
+
+    /// <summary>The status bar's line; empty when the map follows nobody.</summary>
+    public string FollowStatusText => IsFollowing && FollowedCharacter is { } followed
+        ? IsFollowPaused ? $"Map: following {followed.Name} (paused)" : $"Map: following {followed.Name}"
+        : string.Empty;
+
+    // ── Trail ────────────────────────────────────────────────────────────────────────────────────
+
+    [ObservableProperty] private bool _isTrailOn = true;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsTrailByJumps), nameof(IsTrailBySince))]
+    private TrailWindow _trailWindow = TrailWindow.LastJumps;
+
+    [ObservableProperty] private int _trailJumps = 10;
+    [ObservableProperty] private TrailSince _trailSince = TrailSince.LastHour;
+
+    /// <summary>The followed character's trail as the map draws it; null when off or nobody is followed.</summary>
+    [ObservableProperty] private IReadOnlyList<MapTrailStep>? _trail;
+
+    public bool IsTrailByJumps => TrailWindow == TrailWindow.LastJumps;
+    public bool IsTrailBySince => TrailWindow == TrailWindow.Since;
+
+    public string TrailResetText => FollowedCharacter is { } followed && _trails.TrailOf(followed.CharacterId).ResetAt is { } resetAt
+        ? "reset at " + resetAt.ToLocalTime().ToString("HH:mm", CultureInfo.InvariantCulture)
+        : string.Empty;
 
     // ── Route ────────────────────────────────────────────────────────────────────────────────────
 
@@ -165,11 +247,12 @@ public sealed partial class MapViewModel : ObservableObject, IRefreshableModule,
     public async Task LoadAsync()
     {
         _characters = await _registry.GetAllAsync();
+        _SyncCharacterRows();
         Result<MapGraphDto> result = await _dispatcher.Query(new GetMapGraphQuery());
         if (!result.IsSuccess || result.Value is not { } graph)
         {
             StatusMessage = result.Messages.FirstOrDefault()?.Text ?? "The map could not be read.";
-            _RefreshMarkers();
+            _RefreshPositions();
             return;
         }
 
@@ -181,7 +264,7 @@ public sealed partial class MapViewModel : ObservableObject, IRefreshableModule,
             Graph = graph;
             SystemNames = graph.Systems.Select(system => system.Name).Order(StringComparer.OrdinalIgnoreCase).ToList();
         }
-        _RefreshMarkers();
+        _RefreshPositions();
     }
 
     public void RefreshModule() => _ = LoadAsync();
@@ -199,6 +282,7 @@ public sealed partial class MapViewModel : ObservableObject, IRefreshableModule,
         if (Graph is not { } graph)
             return;
 
+        PauseFollow();
         MapSystemDto? from = graph.FindByName(FromText), to = graph.FindByName(ToText);
         if (from is null || to is null)
         {
@@ -237,6 +321,7 @@ public sealed partial class MapViewModel : ObservableObject, IRefreshableModule,
     [RelayCommand]
     private void ShowWholeRoute()
     {
+        PauseFollow();
         if (RouteIndexes is { } indexes)
             FocusRequest = new MapFocusRequest(indexes);
     }
@@ -267,11 +352,85 @@ public sealed partial class MapViewModel : ObservableObject, IRefreshableModule,
     [RelayCommand]
     private void ToggleLegend() => IsLegendOpen = !IsLegendOpen;
 
+    [RelayCommand]
+    private void SetFollowMode(MapFollowMode mode) => FollowMode = mode;
+
+    partial void OnFollowModeChanged(MapFollowMode value)
+    {
+        if (value != MapFollowMode.Character)
+            _StopFollowing();
+    }
+
+    /// <summary>Follows this character from now on — an explicit pick, and it resumes a paused map.</summary>
+    [RelayCommand]
+    private void FollowCharacter(MapCharacterRowViewModel character)
+    {
+        FollowMode = MapFollowMode.Character;
+        FollowedCharacter = character;
+        IsFollowPaused = false;
+        foreach (MapCharacterRowViewModel row in Characters)
+            row.IsFollowed = ReferenceEquals(row, character);
+        _RefreshPositions();
+        _FocusFollowed();
+    }
+
+    [RelayCommand]
+    private void ResumeFollow()
+    {
+        IsFollowPaused = false;
+        _FocusFollowed();
+    }
+
+    /// <summary>The pilot moved the map, searched or planned a route: the map stops recentring until RESUME.</summary>
+    public void PauseFollow()
+    {
+        if (IsFollowing)
+            IsFollowPaused = true;
+    }
+
+    [RelayCommand]
+    private void SetTrailWindow(TrailWindow window)
+    {
+        TrailWindow = window;
+        _RefreshTrail();
+    }
+
+    partial void OnIsTrailOnChanged(bool value) => _RefreshTrail();
+    partial void OnTrailJumpsChanged(int value) => _RefreshTrail();
+    partial void OnTrailSinceChanged(TrailSince value) => _RefreshTrail();
+
+    /// <summary>Forgets where the followed character has been; the trail starts over from the current system.</summary>
+    [RelayCommand]
+    private void ResetTrail()
+    {
+        if (FollowedCharacter is not { } followed)
+            return;
+        _trails.ResetTrail(followed.CharacterId);
+        OnPropertyChanged(nameof(TrailResetText));
+        _RefreshTrail();
+    }
+
     public void Dispose()
     {
         _registry.RegistryChanged -= _OnRegistryChanged;
-        if (_gamelog is not null)
-            _gamelog.LocationChanged -= _OnLocationChanged;
+        _positions.PositionChanged -= _OnPositionChanged;
+        _StopFollowing();
+    }
+
+    private void _StopFollowing()
+    {
+        FollowedCharacter = null;
+        IsFollowPaused = false;
+        foreach (MapCharacterRowViewModel row in Characters)
+            row.IsFollowed = false;
+        FollowIndex = -1;
+        Trail = null;
+    }
+
+    private void _FocusFollowed()
+    {
+        if (FollowIndex >= 0)
+            FocusRequest = new MapFocusRequest([FollowIndex], FollowMinZoom);
     }
 
     private async Task _RouteWithSelectedAsync(bool asStart)
@@ -296,6 +455,7 @@ public sealed partial class MapViewModel : ObservableObject, IRefreshableModule,
 
     private void _SelectAndShow(int systemIndex)
     {
+        PauseFollow();
         SelectedIndex = systemIndex;
         FocusRequest = new MapFocusRequest([systemIndex]);
     }
@@ -304,27 +464,89 @@ public sealed partial class MapViewModel : ObservableObject, IRefreshableModule,
 
     private void _OnRegistryChanged() => Avalonia.Threading.Dispatcher.UIThread.Post(() => _ = LoadAsync());
 
-    private void _OnLocationChanged(string characterName) => Avalonia.Threading.Dispatcher.UIThread.Post(_RefreshMarkers);
+    // Raised on whichever thread saw the jump; the view model only ever touches its state on the UI thread (ET-298).
+    private void _OnPositionChanged(FleetPositionDto position) =>
+        Avalonia.Threading.Dispatcher.UIThread.Post(() => _OnPositionOnUiThread(position));
 
-    // Own characters where the game log last put them. The log gives a system name, so it is matched against the map
-    // by name — exact only, a prefix match would put a character in the wrong system.
-    private void _RefreshMarkers()
+    private void _OnPositionOnUiThread(FleetPositionDto position)
     {
-        if (Graph is not { } graph || _gamelog is null)
+        _RefreshPositions();
+        if (IsFollowing && !IsFollowPaused && FollowedCharacter?.CharacterId == position.CharacterId)
+            _FocusFollowed();
+    }
+
+    // One row per own character that has an ESI id: positions are keyed by it.
+    private void _SyncCharacterRows()
+    {
+        Dictionary<int, MapCharacterRowViewModel> known = Characters.ToDictionary(row => row.CharacterId);
+        var rows = new List<MapCharacterRowViewModel>();
+        foreach (Character character in _characters.Where(character => character.EsiCharacterId is > 0))
         {
-            Markers = [];
-            return;
+            int id = character.EsiCharacterId ?? 0;
+            if (!known.TryGetValue(id, out MapCharacterRowViewModel? row))
+            {
+                row = new MapCharacterRowViewModel(character.Name, id) { IsFollowed = FollowedCharacter?.CharacterId == id };
+                if (_portraits is not null)
+                    _ = row.LoadPortraitAsync(_portraits);
+            }
+            rows.Add(row);
         }
 
+        Characters.Clear();
+        foreach (MapCharacterRowViewModel row in rows)
+            Characters.Add(row);
+        OnPropertyChanged(nameof(HasCharacters));
+    }
+
+    // Own characters where the merged positions last put them, the followed one ringed, and its trail.
+    private void _RefreshPositions()
+    {
+        Dictionary<int, FleetPositionDto> positions = _positions.GetPositions().ToDictionary(position => position.CharacterId);
         var markers = new List<MapMarker>();
-        foreach (Character character in _characters)
+        foreach (MapCharacterRowViewModel row in Characters)
         {
-            string? location = _gamelog.Snapshot(character.Name).Location;
-            if (graph.FindByName(location) is { } system && string.Equals(system.Name, location?.Trim(), StringComparison.OrdinalIgnoreCase))
-                markers.Add(new MapMarker(system.Index, character.Name));
+            FleetPositionDto? position = positions.GetValueOrDefault(row.CharacterId);
+            MapSystemDto? system = _SystemOf(position);
+            row.ShowPosition(position, system);
+            if (system is not null)
+                markers.Add(new MapMarker(system.Index, row.Name));
         }
+
         Markers = markers;
         OnPropertyChanged(nameof(SelectedHereText));
         OnPropertyChanged(nameof(HasSelectedHere));
+        FollowIndex = FollowedCharacter is { } followed ? _SystemOf(positions.GetValueOrDefault(followed.CharacterId))?.Index ?? -1 : -1;
+        _RefreshTrail();
+    }
+
+    private MapSystemDto? _SystemOf(FleetPositionDto? position) =>
+        position is not null && Graph is { } graph && graph.TryGetIndex(position.SolarSystemId, out int index) ? graph.Systems[index] : null;
+
+    private void _RefreshTrail()
+    {
+        if (!IsTrailOn || FollowedCharacter is not { } followed || Graph is not { } graph)
+        {
+            Trail = null;
+            return;
+        }
+
+        MapTrail trail = _trails.TrailOf(followed.CharacterId);
+        DateTimeOffset now = _clock.GetUtcNow();
+        IReadOnlyList<MapTrailPoint> points = TrailWindow == TrailWindow.LastJumps
+            ? trail.LastJumps(TrailJumps)
+            : trail.Since(MapTrail.CutoffFor(TrailSince, now, _trails.StartedAt));
+
+        // A system the map does not hold (wormhole space) is skipped, and what follows it is then a leap. So is any
+        // step to a system that is not a gate neighbour: the jump the trail missed is never drawn in.
+        var steps = new List<MapTrailStep>();
+        int previous = -1;
+        foreach (MapTrailPoint point in points)
+        {
+            if (!graph.TryGetIndex(point.SolarSystemId, out int index) || index == previous)
+                continue;
+            steps.Add(new MapTrailStep(index, previous >= 0 && !graph.NeighboursOf(previous).Contains(index)));
+            previous = index;
+        }
+        Trail = steps;
     }
 }
