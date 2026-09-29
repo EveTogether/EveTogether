@@ -102,12 +102,15 @@
                         <Border Classes="block">
                             <StackPanel>
                                 <TextBlock Classes="kicker" Text="FOLLOW"/>
-                                <UniformGrid Columns="2">
+                                <UniformGrid Columns="3">
                                     <Button Classes="seg" Classes.on="{Binding IsFollowOff}" Content="OFF" Margin="0" HorizontalAlignment="Stretch"
                                             Command="{Binding SetFollowModeCommand}" CommandParameter="{x:Static me:MapFollowMode.Off}"/>
                                     <Button Classes="seg" Classes.on="{Binding IsFollowCharacter}" Content="CHARACTER" HorizontalAlignment="Stretch"
                                             ToolTip.Tip="Keep one of your characters in view"
                                             Command="{Binding SetFollowModeCommand}" CommandParameter="{x:Static me:MapFollowMode.Character}"/>
+                                    <Button Classes="seg" Classes.on="{Binding IsFollowFleet}" Content="FLEET" HorizontalAlignment="Stretch"
+                                            ToolTip.Tip="Keep every member of one of your fleets in view"
+                                            Command="{Binding SetFollowModeCommand}" CommandParameter="{x:Static me:MapFollowMode.Fleet}"/>
                                 </UniformGrid>
                                 <StackPanel IsVisible="{Binding IsFollowCharacter}">
                                     <TextBlock Classes="message" Text="Who should the map follow?" IsVisible="{Binding NeedsCharacterPick}"/>
@@ -149,11 +152,43 @@
                                         </ItemsControl.ItemTemplate>
                                     </ItemsControl>
                                 </StackPanel>
+                                <StackPanel IsVisible="{Binding IsFollowFleet}">
+                                    <TextBlock Classes="message" Text="Which fleet should the map follow?" IsVisible="{Binding NeedsFleetPick}"/>
+                                    <TextBlock Classes="message" Text="None of your characters is in an active fleet right now."
+                                               IsVisible="{Binding !HasFleets}"/>
+                                    <ItemsControl x:Name="FleetList" ItemsSource="{Binding Fleets}" Margin="0,6,0,0">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:MapFleetRowViewModel">
+                                                <Button Classes="routestep" Classes.picked="{Binding IsFollowed}"
+                                                        Command="{Binding $parent[ItemsControl].((vm:MapViewModel)DataContext).FollowFleetCommand}"
+                                                        CommandParameter="{Binding}">
+                                                    <Grid ColumnDefinitions="30,*" ColumnSpacing="8">
+                                                        <mi:MaterialIcon Kind="AccountGroupOutline" Width="18" Height="18" VerticalAlignment="Center"
+                                                                         Foreground="{DynamicResource AccentBrightBrush}"/>
+                                                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                            <TextBlock Text="{Binding Name}" FontSize="12" Foreground="{StaticResource TextBrightBrush}"
+                                                                       TextTrimming="CharacterEllipsis"/>
+                                                            <TextBlock Text="{Binding MembersText}" FontSize="10.5" Foreground="{StaticResource TextBrush}"/>
+                                                        </StackPanel>
+                                                    </Grid>
+                                                </Button>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                    <StackPanel IsVisible="{Binding IsFollowingFleet}" Margin="0,6,0,0">
+                                        <TextBlock x:Name="FleetSpread" Text="{Binding FleetSpreadText}" FontSize="12" FontWeight="SemiBold"
+                                                   Foreground="{StaticResource TextBrightBrush}"/>
+                                        <TextBlock Text="{Binding FleetUnplacedText}" IsVisible="{Binding HasFleetUnplaced}" FontSize="11"
+                                                   TextWrapping="Wrap" Foreground="{StaticResource TextBrush}"/>
+                                        <TextBlock Classes="hint" Margin="0,4,0,0"
+                                                   Text="The closer together, the closer in. Positions are kept in memory only."/>
+                                    </StackPanel>
+                                </StackPanel>
                             </StackPanel>
                         </Border>
 
                         <!-- TRAIL -->
-                        <Border Classes="block" IsVisible="{Binding IsFollowing}">
+                        <Border Classes="block" IsVisible="{Binding IsFollowingCharacter}">
                             <StackPanel>
                                 <TextBlock Classes="kicker" Text="TRAIL"/>
                                 <CheckBox Content="Show the trail" IsChecked="{Binding IsTrailOn}"/>
@@ -344,6 +379,14 @@
                                     <TextBlock Text="Your character, where it was last seen"/>
                                 </StackPanel>
                                 <StackPanel>
+                                    <Panel Width="38" Height="18">
+                                        <Ellipse Width="16" Height="16" Fill="{DynamicResource AccentBrightBrush}"/>
+                                        <TextBlock Text="3" FontSize="11" FontWeight="Bold" Foreground="{x:Static map:MapPalette.BackgroundBrush}"
+                                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    </Panel>
+                                    <TextBlock Text="Fleet members in a system; hover for who and how recent"/>
+                                </StackPanel>
+                                <StackPanel>
                                     <Line StartPoint="2,5" EndPoint="36,5" Width="38" Height="10" StrokeThickness="2.5" StrokeDashArray="2,1.4"
                                           Stroke="{DynamicResource AccentBrightBrush}"/>
                                     <TextBlock Text="Trail of the followed character, fading with age"/>
@@ -378,6 +421,8 @@
                                     Markers="{Binding Markers}"
                                     Trail="{Binding Trail}"
                                     FollowIndex="{Binding FollowIndex}"
+                                    FleetBadges="{Binding FleetBadges}"
+                                    Clock="{Binding Clock}"
                                     SelectedIndex="{Binding SelectedIndex, Mode=TwoWay}"
                                     FocusRequest="{Binding FocusRequest}"/>
 
@@ -402,7 +447,7 @@
                         <TextBlock Text="{Binding FollowChipText}" FontSize="10" LetterSpacing="1.2" FontWeight="SemiBold"
                                    Foreground="{DynamicResource AccentBrightBrush}" VerticalAlignment="Center"/>
                         <Button Content="RESUME" FontSize="10" Padding="8,2" MinHeight="0" IsVisible="{Binding IsFollowPaused}"
-                                Command="{Binding ResumeFollowCommand}" ToolTip.Tip="Recentre on the character and keep following"/>
+                                Command="{Binding ResumeFollowCommand}" ToolTip.Tip="Recentre and keep following"/>
                     </StackPanel>
                 </Border>
 
