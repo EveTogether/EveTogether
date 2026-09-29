@@ -106,6 +106,16 @@ public sealed class GamelogClientService : IFleetMetricSource, ISingletonService
     /// <summary>A character's known system was set — from a game log jump or from the ESI gap fill alike, so a listener
     /// that wants the location never has to know which of the two answered.</summary>
     public event Action<string>? LocationChanged;
+
+    /// <summary>Character id, name, the system name and the gamelog line's own time of a jump or undock line — the
+    /// gamelog alone, never the ESI gap fill, so a listener can tell the two apart. A character with no known id
+    /// raises nothing.</summary>
+    public event Action<int, string, string, DateTime>? GamelogLocationObserved;
+
+    /// <summary>Character id, name, solar system id and reading time of every ESI location reading outside the abyss,
+    /// but only while that character is in game — a logged-out character's reading is their log-off spot (ET-71).</summary>
+    public event Action<int, string, int, DateTime>? EsiLocationObserved;
+
     /// <summary>
     /// Character, target, the gamelog line's OWN time, and which way the damage went. The time is never the moment
     /// we read it, for the same reason the hit itself is placed at that time (see <see cref="AddHitAsync"/>): EVE
@@ -218,6 +228,8 @@ public sealed class GamelogClientService : IFleetMetricSource, ISingletonService
             if (reading.IsOutside)
             {
                 metrics.SeenOutside(reading.AtUtc);
+                if (IsInGame(characterId, name))
+                    EsiLocationObserved?.Invoke(characterId, name, solarSystemId, reading.AtUtc);
                 FillLocationGap(characterId, name, solarSystemId);
             }
             else
@@ -248,7 +260,7 @@ public sealed class GamelogClientService : IFleetMetricSource, ISingletonService
         // (ET-71) and count them into the WITH FC denominator (ET-63). Same verdict the rows and the badge use, so
         // the three cannot disagree. No evidence of a running client → nothing is written and the gap stays open,
         // which is what it was before any of this existed.
-        if (_services.GetService<ILocalCharacterPresence>()?.IsInGame(characterId, name) is not true)
+        if (!IsInGame(characterId, name))
             return;
 
         if (_services.GetService<ISolarSystemNames>() is not { } systemNames)
@@ -256,6 +268,9 @@ public sealed class GamelogClientService : IFleetMetricSource, ISingletonService
 
         _ = FillLocationGapAsync(name, solarSystemId, systemNames);
     }
+
+    private bool IsInGame(int characterId, string name) =>
+        _services.GetService<ILocalCharacterPresence>()?.IsInGame(characterId, name) is true;
 
     private async Task FillLocationGapAsync(string name, int solarSystemId, ISolarSystemNames systemNames)
     {
@@ -274,7 +289,7 @@ public sealed class GamelogClientService : IFleetMetricSource, ISingletonService
             if (Metrics(name).Location is not null)
                 return;
 
-            SetLocation(name, system, DateTime.UtcNow);
+            ApplyLocation(name, system, DateTime.UtcNow);
         }
         catch (Exception ex)
         {
@@ -504,18 +519,11 @@ public sealed class GamelogClientService : IFleetMetricSource, ISingletonService
         var now = DateTimeOffset.FromUnixTimeMilliseconds(unixMs).UtcDateTime;
         var rates = new CombatRates();
         var application = ApplicationSummary.Idle;
-        string? system = null;
-        DateTime? abyssalAnchor = null;
         if (_nameById.TryGetValue(characterId, out var name))
         {
             rates = SampleRates(name, now);
             if (_application.TryGetValue(name, out var weapons))
                 application = weapons.Summarize(now);
-            if (_metrics.TryGetValue(name, out var metrics))
-            {
-                system = metrics.Location; // last known solar system from the gamelog jump/undock
-                abyssalAnchor = metrics.AbyssalAnchor;
-            }
         }
 
         // Bounty is the character's own run in THIS fleet, and zero without one (ET-309) — a zero every tick rather than
@@ -541,13 +549,6 @@ public sealed class GamelogClientService : IFleetMetricSource, ISingletonService
             application.Breakdown);
         // Bounty is a cumulative ISK total (not a rate): the receiver shows the latest + the fleet sums them.
         yield return new MetricSample(characterId, fleetId, MetricKind.Bounty, bounty, unixMs);
-
-        // The participating character's current system as a State sample — the share-gate (Location opt-in) decides
-        // whether it leaves this client. Only emitted once a position is actually known (no fabricated "—").
-        if (!string.IsNullOrEmpty(system))
-            yield return new MetricSample(
-                characterId, fleetId, MetricKind.Location, 0, unixMs, system,
-                abyssalAnchor is { } anchor ? new DateTimeOffset(anchor, TimeSpan.Zero).ToUnixTimeMilliseconds() : 0);
     }
 
     /// <summary>The local character's full set of live combat rates (DPS out/in, neut and cap each way in GJ/s, reps
@@ -754,10 +755,30 @@ public sealed class GamelogClientService : IFleetMetricSource, ISingletonService
     /// clock is driven by the ESI watch, which sees both ends of a run and cannot be handed a stale timestamp.</summary>
     public void SetLocation(string characterName, string system, DateTime at)
     {
+        string name = ApplyLocation(characterName, system, at);
+        if (_idByName.TryGetValue(name, out var characterId))
+            GamelogLocationObserved?.Invoke(characterId, name, system, at);
+    }
+
+    private string ApplyLocation(string characterName, string system, DateTime at)
+    {
         string name = Resolve(characterName);
         Metrics(name).SetLocation(system, at);
         MetricsChanged?.Invoke();
         LocationChanged?.Invoke(name);
+        return name;
+    }
+
+    /// <summary>The character's last known system and, while inside an abyssal run, when it entered — what the fleet
+    /// location sample carries. Null until a system is known.</summary>
+    public CharacterLocation? LocationOf(int characterId)
+    {
+        if (!_nameById.TryGetValue(characterId, out var name)
+            || !_metrics.TryGetValue(name, out var metrics)
+            || string.IsNullOrEmpty(metrics.Location))
+            return null;
+
+        return new CharacterLocation(metrics.Location, metrics.AbyssalAnchor);
     }
 
     /// <summary>Record a notable notify/warning event (scramble, jam, neut, …).</summary>
