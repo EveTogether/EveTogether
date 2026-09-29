@@ -12,7 +12,7 @@ namespace EveUtils.Shared.Modules.Sde.Import;
 /// file until the swap), then creates the indexes. The slot/hardpoint table is pre-computed while reading
 /// typeDogma so fit parsers never join dogma at runtime. Only the minimal subset of each dataset is imported
 /// (data-minimalisation) — missions.jsonl's eight-language message/reward blocks and mapSolarSystems.jsonl's
-/// wormhole/planet fields stay out even though the files themselves are now read.
+/// 3D position, wormhole and planet fields stay out even though the files themselves are now read.
 /// </summary>
 public sealed class SdeSqliteBuilder
 {
@@ -21,13 +21,15 @@ public sealed class SdeSqliteBuilder
     // Entry names are flat in the zip (verified build 3374020 — no sde/ submap). Order: dependency-light first.
     // archetypes/factions/typeLists are read purely as lookups for the Site rows, so they must precede dungeons.
     // Likewise mapSolarSystems/npcStations/agentTypes are lookups for the Agent rows and must precede
-    // npcCharacters (ET-173); missions and epicArcs carry no such dependency and can come last. mapRegions and
-    // npcCorporations (ET-335) are plain id+name tables with no reader-side lookup dependency of their own.
+    // npcCharacters (ET-173); missions and epicArcs carry no such dependency and can come last. mapRegions,
+    // mapConstellations, mapStargates and npcCorporations (ET-335, ET-391) are plain tables with no reader-side
+    // lookup dependency of their own.
     private static readonly string[] Datasets =
     [
         "categories.jsonl", "groups.jsonl", "dogmaAttributes.jsonl", "dogmaEffects.jsonl", "types.jsonl", "typeDogma.jsonl",
         "archetypes.jsonl", "factions.jsonl", "typeLists.jsonl", "dungeons.jsonl",
-        "mapRegions.jsonl", "mapSolarSystems.jsonl", "npcStations.jsonl", "agentTypes.jsonl", "npcCorporations.jsonl",
+        "mapRegions.jsonl", "mapConstellations.jsonl", "mapSolarSystems.jsonl", "mapStargates.jsonl",
+        "npcStations.jsonl", "agentTypes.jsonl", "npcCorporations.jsonl",
         "npcCharacters.jsonl", "missions.jsonl", "epicArcs.jsonl", "dynamicItemAttributes.jsonl"
     ];
 

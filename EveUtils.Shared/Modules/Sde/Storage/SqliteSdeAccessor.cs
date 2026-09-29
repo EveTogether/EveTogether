@@ -784,6 +784,43 @@ public sealed class SqliteSdeAccessor : ISdeAccessor
             reader.GetDouble(2),
             reader.IsDBNull(3) ? null : reader.GetString(3));
 
+    public SdeMapSnapshot GetMapSnapshot()
+    {
+        using var connection = Open();
+        if (connection is null)
+            return SdeMapSnapshot.Empty;
+        // One read transaction so the four tables come from the same store state. Deferred: the default BEGIN
+        // IMMEDIATE wants the write lock, which the read-only connection does not have.
+        using var transaction = connection.BeginTransaction(deferred: true);
+        var systems = ReadRows(connection,
+            "SELECT solarSystemId, nameEn, securityStatus, constellationId, regionId, x2d, y2d FROM SolarSystem ORDER BY solarSystemId;",
+            reader => new SdeMapSystem(
+                reader.GetInt32(0), reader.GetString(1), reader.GetDouble(2), reader.GetInt32(3), reader.GetInt32(4),
+                reader.IsDBNull(5) ? null : reader.GetDouble(5), reader.IsDBNull(6) ? null : reader.GetDouble(6)));
+        var constellations = ReadRows(connection,
+            "SELECT constellationId, nameEn, regionId, factionId FROM Constellation ORDER BY constellationId;",
+            reader => new SdeMapConstellation(
+                reader.GetInt32(0), reader.GetString(1), reader.GetInt32(2), reader.IsDBNull(3) ? null : reader.GetInt32(3)));
+        var regions = ReadRows(connection,
+            "SELECT regionId, nameEn, factionId FROM Region ORDER BY regionId;",
+            reader => new SdeMapRegion(reader.GetInt32(0), reader.GetString(1), reader.IsDBNull(2) ? null : reader.GetInt32(2)));
+        var jumps = ReadRows(connection,
+            "SELECT fromSystemId, toSystemId FROM Jump ORDER BY fromSystemId, toSystemId;",
+            reader => new SdeMapJump(reader.GetInt32(0), reader.GetInt32(1)));
+        return new SdeMapSnapshot(systems, constellations, regions, jumps);
+    }
+
+    private static List<T> ReadRows<T>(SqliteConnection connection, string sql, Func<SqliteDataReader, T> read)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = sql;
+        using var reader = command.ExecuteReader();
+        var rows = new List<T>();
+        while (reader.Read())
+            rows.Add(read(reader));
+        return rows;
+    }
+
     public string? GetNpcCorporationName(int corporationId) => LookupName("NpcCorporation", "corporationId", corporationId);
 
     public string? GetFactionName(int factionId) => LookupName("Faction", "factionId", factionId);

@@ -222,6 +222,8 @@ public sealed class FakeSdeAccessor : ISdeAccessor
         return this;
     }
 
+    public SdeMapSnapshot GetMapSnapshot() => SdeMapSnapshot.Empty;
+
     public string? GetNpcCorporationName(int corporationId) => _npcCorporations.GetValueOrDefault(corporationId);
 
     // No fixture wired up here — nothing under test today reads faction names through this fake.
