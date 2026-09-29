@@ -11,6 +11,7 @@ using EveUtils.Client.ViewModels;
 using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Client.ViewModels.FitBrowser;
 using EveUtils.Client.ViewModels.Killmails;
+using EveUtils.Client.ViewModels.Map;
 using EveUtils.Client.ViewModels.Runs;
 using EveUtils.Client.Views;
 using EveUtils.Shared.Modules.Esi;
@@ -523,6 +524,12 @@ public sealed class DialogService : IDialogService, ISingletonService
         _Observe(viewModel.LoadAsync(), "this screen could not be read");
         return Route(new RunsWindow(viewModel), "RUNS", "runs", "runs", MaterialIconKind.RocketLaunchOutline)
             as RunsOverviewViewModel ?? viewModel;
+    }
+
+    public void ShowMap(MapViewModel viewModel)
+    {
+        _Observe(viewModel.LoadAsync(), "the map could not be read");
+        Route(new MapWindow(viewModel), "MAP", "map", "map", MaterialIconKind.MapOutline);
     }
 
     public KillmailsOverviewViewModel ShowKillmails(KillmailsOverviewViewModel viewModel)

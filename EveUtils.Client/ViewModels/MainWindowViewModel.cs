@@ -19,6 +19,7 @@ using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Client.ViewModels.FitBrowser;
 using EveUtils.Client.ViewModels.Home;
 using EveUtils.Client.ViewModels.Killmails;
+using EveUtils.Client.ViewModels.Map;
 using EveUtils.Client.ViewModels.Runs;
 using EveUtils.Client.Esi;
 using EveUtils.Client.EveSettings;
@@ -129,6 +130,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         ["app-logs"] = "logs",
         ["settings"] = "settings",
         ["runs"] = "runs",
+        ["map"] = "map",
     };
 
     private const int RecentlyClosedModulesCapacity = 10;
@@ -266,6 +268,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
 
     public bool IsFitsActive => ActiveModule == "fits";
     public bool IsFleetActive => ActiveModule == "fleet";
+    public bool IsMapActive => ActiveModule == "map";
     public bool IsEsiActive => ActiveModule == "esi";
     public bool IsInboxActive => ActiveModule == "inbox";
     public bool IsLogsActive => ActiveModule == "logs";
@@ -315,6 +318,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         OnPropertyChanged(nameof(ActiveModule));
         OnPropertyChanged(nameof(IsFitsActive));
         OnPropertyChanged(nameof(IsFleetActive));
+        OnPropertyChanged(nameof(IsMapActive));
         OnPropertyChanged(nameof(IsEsiActive));
         OnPropertyChanged(nameof(IsInboxActive));
         OnPropertyChanged(nameof(IsLogsActive));
@@ -337,6 +341,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
             // The home remains the landing shown at startup and when no tab is open.
             case "fits": await OpenFitBrowser(); break;
             case "fleet": OpenFleets(); break;
+            case "map": OpenMap(); break;
             case "compositions": OpenCompositions(); break;
             case "esi": OpenEsiMetrics(); break;
             case "settings-sync": OpenSettingsSync(); break;
@@ -653,6 +658,18 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         if (_dialogs is null)
             return;
         _dialogs.ShowLogs(Logs);
+    }
+
+    /// <summary>Opens the MAP module (ET-392). A fresh view-model per open; the map itself is shared, built once per SDE
+    /// build by the map module, so a second open costs no second read of the SDE.</summary>
+    private void OpenMap()
+    {
+        if (_dialogs is null || _services is null)
+            return;
+        _dialogs.ShowMap(new MapViewModel(
+            _services.GetRequiredService<IDispatcher>(),
+            _services.GetRequiredService<ICharacterRegistry>(),
+            _services.GetService<GamelogClientService>()));
     }
 
     /// <summary>Opens the ESI-metrics window — non-modal; a fresh view-model per open so its live poll

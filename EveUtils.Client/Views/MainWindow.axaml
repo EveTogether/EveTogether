@@ -231,6 +231,14 @@
                                 <TextBlock Text="FLEET" FontSize="9" LetterSpacing="1" HorizontalAlignment="Center"/>
                             </StackPanel>
                         </Button>
+                        <Button Classes="railitem" Classes.active="{Binding IsMapActive}"
+                                Command="{Binding LaunchModuleCommand}" CommandParameter="map"
+                                ToolTip.Tip="Map — New Eden, routes and where your characters are">
+                            <StackPanel HorizontalAlignment="Center" Spacing="5">
+                                <mi:MaterialIcon Classes="rail" Kind="MapOutline"/>
+                                <TextBlock Text="MAP" FontSize="9" LetterSpacing="1" HorizontalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
                         <Button Classes="railitem" Classes.active="{Binding IsRunsActive}"
                                 Command="{Binding LaunchModuleCommand}" CommandParameter="runs"
                                 ToolTip.Tip="Runs — what you flew, and what is running right now">

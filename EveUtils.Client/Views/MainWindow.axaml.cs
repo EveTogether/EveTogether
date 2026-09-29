@@ -465,6 +465,9 @@ public partial class MainWindow : Window
             case ShortcutAction.GoToHome:
                 vm.GoHomeCommand.Execute(null);
                 break;
+            case ShortcutAction.OpenMap:
+                vm.LaunchModuleCommand.Execute("map");
+                break;
             default:
                 return;
         }

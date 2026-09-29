@@ -26,15 +26,19 @@ public class KeyboardShortcutRegistryTests
         Assert.False(registry.IsOverridden(ShortcutAction.CloseTab));
     }
 
-    [AvaloniaFact]
-    public void SaveRunDefault_ResolvesWithoutAnyOverride_AndDoesNotConflictWithAnyOtherDefault()
+    /// <summary>A newer action's default must not take a key another action already had — the map's first proposal,
+    /// Ctrl+9, was GoToLastTab's (ET-392).</summary>
+    [AvaloniaTheory]
+    [InlineData(ShortcutAction.SaveRun, Key.S, KeyModifiers.Control | KeyModifiers.Shift)]
+    [InlineData(ShortcutAction.OpenMap, Key.M, KeyModifiers.Control)]
+    public void NewerDefault_ResolvesWithoutAnyOverride_AndDoesNotConflictWithAnyOtherDefault(ShortcutAction expected, Key key, KeyModifiers modifiers)
     {
         var registry = new KeyboardShortcutRegistry(TestClientInstance.Create().Services);
-        var gesture = new KeyGesture(Key.S, KeyModifiers.Control | KeyModifiers.Shift);
+        var gesture = new KeyGesture(key, modifiers);
 
         Assert.True(registry.TryResolve(gesture, out var action));
-        Assert.Equal(ShortcutAction.SaveRun, action);
-        Assert.Null(registry.FindConflict(gesture, ShortcutAction.SaveRun));
+        Assert.Equal(expected, action);
+        Assert.Null(registry.FindConflict(gesture, expected));
     }
 
     [AvaloniaFact]
