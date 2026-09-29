@@ -62,7 +62,7 @@ public sealed class MapFollowTests
         world.Follow();
 
         world.Jump(Perimeter);
-        _Settle();
+        Settle();
         Point middle = map.TranslatePoint(new Point(map.Bounds.Width / 2, map.Bounds.Height / 2), window)
             ?? throw new InvalidOperationException("the map is not in the window");
         window.MouseDown(middle, MouseButton.Left);
@@ -79,7 +79,7 @@ public sealed class MapFollowTests
         (Window window, StarMapControl map) = world.Show();
         world.Follow();
         world.Jump(Jita);
-        _Settle();
+        Settle();
 
         Point from = map.TranslatePoint(new Point(map.Bounds.Width / 2, map.Bounds.Height / 2), window) ?? default;
         window.MouseDown(from, MouseButton.Left);
@@ -110,7 +110,7 @@ public sealed class MapFollowTests
 
         world.Jump(Jita);
         world.Jump(Perimeter);
-        _Settle();
+        Settle();
 
         Assert.Equal(0, moves);
         Assert.False(world.Model.IsFollowPaused);
@@ -367,7 +367,7 @@ public sealed class MapFollowTests
         Assert.Equal(1, moves);
     }
 
-    private static void _Settle()
+    internal static void Settle()
     {
         var clock = Stopwatch.StartNew();
         while (clock.ElapsedMilliseconds < 700)
@@ -418,7 +418,7 @@ public sealed class MapFollowTests
         public async Task OpenMapAsync()
         {
             _model = new MapViewModel(_instance.Services.GetRequiredService<IDispatcher>(), _instance.Services.GetRequiredService<ICharacterRegistry>(),
-                _positions, _recorder, Clock);
+                _positions, _recorder, _instance.Services.GetRequiredService<IMapFleetSource>(), Clock);
             await _model.LoadAsync();
             _graph = _model.Graph;
         }

@@ -32,6 +32,10 @@ public sealed class StarMapControl : Control
     private const double SystemFocusZoom = 11;
     private const double FrameMaxZoom = 16;
     private const double FramePadding = 56;
+    private const double FleetFramePadding = 40;
+    private const double FleetMaxZoom = 14;
+    private const double BadgeRadius = 9;
+    private const double BadgeOffset = 10;
     private const double DragThreshold = 3;
     private const double SelectRadius = 12;
     private const double HoverRadius = 10;
@@ -78,6 +82,14 @@ public sealed class StarMapControl : Control
     public static readonly StyledProperty<int> FollowIndexProperty =
         AvaloniaProperty.Register<StarMapControl, int>(nameof(FollowIndex), -1);
 
+    /// <summary>Fleet members per system, drawn as numbered badges with who is there on hover; null for none.</summary>
+    public static readonly StyledProperty<IReadOnlyList<MapFleetBadge>?> FleetBadgesProperty =
+        AvaloniaProperty.Register<StarMapControl, IReadOnlyList<MapFleetBadge>?>(nameof(FleetBadges));
+
+    /// <summary>What a badge's "12s ago" is measured against.</summary>
+    public static readonly StyledProperty<TimeProvider> ClockProperty =
+        AvaloniaProperty.Register<StarMapControl, TimeProvider>(nameof(Clock), TimeProvider.System);
+
     public static readonly DirectProperty<StarMapControl, double> ZoomLevelProperty =
         AvaloniaProperty.RegisterDirect<StarMapControl, double>(nameof(ZoomLevel), map => map.ZoomLevel);
 
@@ -117,7 +129,8 @@ public sealed class StarMapControl : Control
 
     static StarMapControl()
     {
-        AffectsRender<StarMapControl>(GraphProperty, RouteProperty, MarkersProperty, SelectedIndexProperty, TrailProperty, FollowIndexProperty);
+        AffectsRender<StarMapControl>(GraphProperty, RouteProperty, MarkersProperty, SelectedIndexProperty, TrailProperty, FollowIndexProperty,
+            FleetBadgesProperty);
         ClipToBoundsProperty.OverrideDefaultValue<StarMapControl>(true);
         FocusableProperty.OverrideDefaultValue<StarMapControl>(true);
     }
@@ -176,6 +189,18 @@ public sealed class StarMapControl : Control
         set => SetValue(FollowIndexProperty, value);
     }
 
+    public IReadOnlyList<MapFleetBadge>? FleetBadges
+    {
+        get => GetValue(FleetBadgesProperty);
+        set => SetValue(FleetBadgesProperty, value);
+    }
+
+    public TimeProvider Clock
+    {
+        get => GetValue(ClockProperty);
+        set => SetValue(ClockProperty, value);
+    }
+
     /// <summary>The pilot moved the view: a drag, the wheel, a double tap or the zoom buttons. Never raised for a
     /// <see cref="FocusRequest"/> — that is the map moving itself, and following must not pause on its own moves.</summary>
     public event EventHandler? ViewMovedByUser;
@@ -221,6 +246,8 @@ public sealed class StarMapControl : Control
             _OnRouteChanged();
         else if (change.Property == FocusRequestProperty && FocusRequest is { } request)
             _Focus(request);
+        else if (change.Property == FleetBadgesProperty)
+            _UpdateBadgeTip();
     }
 
     protected override void OnSizeChanged(SizeChangedEventArgs e)
@@ -271,10 +298,11 @@ public sealed class StarMapControl : Control
             return;
         }
 
-        int hover = _NearestAt(at, HoverRadius);
+        int hover = _BadgeAt(at) ?? _NearestAt(at, HoverRadius);
         if (hover == _hoverIndex)
             return;
         _hoverIndex = hover;
+        _UpdateBadgeTip();
         InvalidateVisual();
     }
 
@@ -297,6 +325,7 @@ public sealed class StarMapControl : Control
         if (_hoverIndex < 0)
             return;
         _hoverIndex = -1;
+        _UpdateBadgeTip();
         InvalidateVisual();
     }
 
@@ -402,6 +431,12 @@ public sealed class StarMapControl : Control
             .ToList();
         if (systems.Count == 0)
             return;
+        if (request.Framing == MapFraming.Fleet)
+        {
+            double left = systems.Min(s => s.X), right = systems.Max(s => s.X), top = systems.Min(s => s.Y), bottom = systems.Max(s => s.Y);
+            _FlyTo((left + right) / 2, (top + bottom) / 2, FleetFrameScale(right - left, bottom - top, Bounds.Size, _fitScale), FlyDuration);
+            return;
+        }
         if (systems.Count == 1)
         {
             _FlyTo(systems[0].X, systems[0].Y, Math.Max(_scale, _fitScale * (request.MinZoom ?? SystemFocusZoom)), FlyDuration);
@@ -445,6 +480,50 @@ public sealed class StarMapControl : Control
         else
             _flight = null;
     }
+
+    // The follow-fleet zoom for members spread over spanX × spanY world units: the extent fills the view less a 40 px
+    // margin, clamped between the whole map and 14×. It reads the 2D extent only — jumps are no measure of map
+    // distance — and can only shrink as either span grows.
+    internal static double FleetFrameScale(double spanX, double spanY, Size viewport, double fitScale)
+    {
+        double scale = Math.Min((viewport.Width - FleetFramePadding * 2) / Math.Max(spanX, 1),
+                                (viewport.Height - FleetFramePadding * 2) / Math.Max(spanY, 1));
+        return Math.Clamp(scale, fitScale, fitScale * FleetMaxZoom);
+    }
+
+    internal Point ScreenPointOf(int systemIndex) =>
+        Graph is { } graph && systemIndex >= 0 && systemIndex < graph.Systems.Count ? _ToScreen(graph.Systems[systemIndex]) : default;
+
+    private int? _BadgeAt(Point at)
+    {
+        if (FleetBadges is not { Count: > 0 } badges || Graph is not { } graph)
+            return null;
+        foreach (MapFleetBadge badge in badges.Where(badge => badge.SystemIndex >= 0 && badge.SystemIndex < graph.Systems.Count))
+        {
+            Point centre = _BadgeCentre(_ToScreen(graph.Systems[badge.SystemIndex]));
+            if (Math.Abs(at.X - centre.X) <= BadgeRadius && Math.Abs(at.Y - centre.Y) <= BadgeRadius)
+                return badge.SystemIndex;
+        }
+        return null;
+    }
+
+    // Hovering a system with a badge lists its members and how old each position is; anywhere else shows nothing. The
+    // tooltip service opens it on the next pointer move and closes it when the tip goes back to null.
+    private void _UpdateBadgeTip()
+    {
+        MapFleetBadge? badge = _hoverIndex >= 0 ? FleetBadges?.FirstOrDefault(candidate => candidate.SystemIndex == _hoverIndex) : null;
+        if (badge is null || Graph is not { } graph || badge.SystemIndex >= graph.Systems.Count)
+        {
+            ToolTip.SetTip(this, null);
+            return;
+        }
+
+        MapSystemDto system = graph.Systems[badge.SystemIndex];
+        string heading = system.Name + " " + system.DisplaySecurity.ToString("0.0", CultureInfo.InvariantCulture);
+        ToolTip.SetTip(this, badge.Describe(heading, Clock.GetUtcNow()));
+    }
+
+    private static Point _BadgeCentre(Point system) => new(system.X + BadgeOffset, system.Y - BadgeOffset);
 
     private double _ClampScale(double scale) => Math.Clamp(scale, _fitScale * MinZoom, _fitScale * MaxZoom);
 
@@ -490,6 +569,7 @@ public sealed class StarMapControl : Control
         _DrawTrail(context, graph, area, accent);
         _labels.Clear();
         _DrawMarkers(context, graph, level, world, accent);
+        _DrawFleetBadges(context, graph, world, accent);
         if (FollowIndex >= 0 && FollowIndex < graph.Systems.Count)
             context.DrawEllipse(null, new ImmutablePen(new ImmutableSolidColorBrush(accent), 2.5), _ToScreen(graph.Systems[FollowIndex]),
                 nodeRadius + 10, nodeRadius + 10);
@@ -624,6 +704,30 @@ public sealed class StarMapControl : Control
 
             if (level != MapDetailLevel.Regions)
                 _DrawLabel(context, string.Join(", ", here.Select(m => m.Label)), MapLabelFont.Marker, accent, new Point(at.X, at.Y - 22), 2);
+        }
+    }
+
+    // A filled AccentBright disc with the member count in the map's background colour, up and to the right of the
+    // system so it never covers your own diamond on its left.
+    private void _DrawFleetBadges(DrawingContext context, MapGraphDto graph, Rect world, Color accent)
+    {
+        if (FleetBadges is not { Count: > 0 } badges)
+            return;
+
+        var fill = new ImmutableSolidColorBrush(accent);
+        var typeface = new Typeface(GetValue(TextElement.FontFamilyProperty), FontStyle.Normal, FontWeight.Bold);
+        foreach (MapFleetBadge badge in badges.Where(badge => badge.SystemIndex >= 0 && badge.SystemIndex < graph.Systems.Count))
+        {
+            MapSystemDto system = graph.Systems[badge.SystemIndex];
+            if (!world.Contains(new Point(system.X, system.Y)))
+                continue;
+
+            Point centre = _BadgeCentre(_ToScreen(system));
+            context.DrawEllipse(fill, NodeOutline, centre, BadgeRadius, BadgeRadius);
+            var count = new FormattedText(badge.Members.Count.ToString(CultureInfo.InvariantCulture), CultureInfo.InvariantCulture,
+                FlowDirection.LeftToRight, typeface, 11, BackgroundBrush);
+            context.DrawText(count, new Point(centre.X - count.Width / 2, centre.Y - count.Height / 2));
+            _labels.Reserve(new Rect(centre.X - BadgeRadius - 1, centre.Y - BadgeRadius - 1, BadgeRadius * 2 + 2, BadgeRadius * 2 + 2));
         }
     }
 

@@ -676,6 +676,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
             _services.GetRequiredService<ICharacterRegistry>(),
             _services.GetRequiredService<IFleetPositionSource>(),
             _services.GetRequiredService<MapTrailRecorder>(),
+            _services.GetRequiredService<IMapFleetSource>(),
             _services.GetRequiredService<TimeProvider>(),
             _services.GetService<ICharacterPortraitProvider>());
         map.PropertyChanged += (_, change) =>

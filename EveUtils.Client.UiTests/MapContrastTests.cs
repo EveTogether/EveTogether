@@ -54,7 +54,9 @@ public sealed class MapContrastTests
             .. _Pairs("portrait initial", [_Neutral("TextBrightBrush")], [.. panels.Select(panel => _Over(((ISolidColorBrush)theme["AccentSoftBrush"]!).Color, panel))]),
             .. _Pairs("header", headerTexts, headers),
             .. _Pairs("map canvas", canvasTexts, [canvas]),
-            .. _Pairs("HUD", hudTexts, [hud])
+            .. _Pairs("HUD", hudTexts, [hud]),
+            // ET-394: the fleet badge's count is the map background on an AccentBright disc.
+            .. _Pairs("fleet badge count", [MapPalette.Background], [accentBright])
         ];
 
         TestContext.Current.TestOutputHelper?.WriteLine(

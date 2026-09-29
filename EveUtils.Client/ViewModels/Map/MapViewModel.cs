@@ -16,6 +16,7 @@ using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Identity;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Fleet.Dtos;
+using EveUtils.Shared.Modules.Fleet.Enums;
 using EveUtils.Shared.Modules.Map.Dtos;
 using EveUtils.Shared.Modules.Map.Enums;
 using EveUtils.Shared.Modules.Map.Queries;
@@ -31,6 +32,14 @@ namespace EveUtils.Client.ViewModels.Map;
 /// move the map yourself — then it pauses until RESUME or a new pick. Nobody is followed by default; the pilot picks
 /// who, every time (AGENTS.md: no global active character). The character's trail is read from
 /// <see cref="MapTrailRecorder"/> and cut to the window the pilot chose.</para>
+///
+/// <para>Fleets (ET-394): every member of your active fleets with a current position is counted on a badge per system,
+/// and following a fleet keeps all of them framed. Which fleet is again an explicit pick. A position counts as current
+/// while it is younger than <see cref="FleetPositionExpiry"/>, except one from your own game log: the log only writes on
+/// a jump, so a pilot sitting in one system for an hour is still there. Every other source repeats itself every few
+/// seconds while it is live (location metric 1 s, ESI location 6 s, ESI fleet 5 s), so ten minutes of silence means the
+/// pilot stopped sharing, logged off or left the in-game fleet — they are left off the badges and out of the frame, and
+/// the FOLLOW block says how many.</para>
 /// </summary>
 public sealed partial class MapViewModel : ObservableObject, IRefreshableModule, IDisposable
 {
@@ -39,6 +48,12 @@ public sealed partial class MapViewModel : ObservableObject, IRefreshableModule,
 
     /// <summary>Following never zooms out past system view: the level where a jump is something you can see.</summary>
     public const double FollowMinZoom = 9;
+
+    /// <summary>How long a fleet member's position stays on the map without being confirmed again (see the class remarks).</summary>
+    public static readonly TimeSpan FleetPositionExpiry = TimeSpan.FromMinutes(10);
+
+    // A repeat sighting in the same system raises no event, so the badges' ages and the expiry are re-read on a beat.
+    private static readonly TimeSpan BadgeRefresh = TimeSpan.FromSeconds(5);
 
     public static IReadOnlyList<int> TrailJumpOptions { get; } = [5, 10, 20, 50];
 
@@ -54,22 +69,34 @@ public sealed partial class MapViewModel : ObservableObject, IRefreshableModule,
     private readonly ICharacterRegistry _registry;
     private readonly IFleetPositionSource _positions;
     private readonly MapTrailRecorder _trails;
+    private readonly IMapFleetSource _fleets;
     private readonly TimeProvider _clock;
     private readonly ICharacterPortraitProvider? _portraits;
+    private readonly IDisposable _rosterWatch;
+    private readonly ITimer _badgeBeat;
+    private readonly Dictionary<long, IReadOnlyCollection<int>> _fleetMembers = [];
+    private readonly Dictionary<int, string> _names = [];
+    private readonly HashSet<int> _namesAsked = [];
     private IReadOnlyList<Character> _characters = [];
 
     public MapViewModel(IDispatcher dispatcher, ICharacterRegistry registry, IFleetPositionSource positions, MapTrailRecorder trails,
-        TimeProvider clock, ICharacterPortraitProvider? portraits = null)
+        IMapFleetSource fleets, TimeProvider clock, ICharacterPortraitProvider? portraits = null)
     {
         _dispatcher = dispatcher;
         _registry = registry;
         _positions = positions;
         _trails = trails;
+        _fleets = fleets;
         _clock = clock;
         _portraits = portraits;
         _registry.RegistryChanged += _OnRegistryChanged;
         _positions.PositionChanged += _OnPositionChanged;
+        _rosterWatch = fleets.WatchRosters(_OnRosterChanged);
+        _badgeBeat = clock.CreateTimer(_ => Avalonia.Threading.Dispatcher.UIThread.Post(_OnBadgeBeat), null, BadgeRefresh, BadgeRefresh);
     }
+
+    /// <summary>What the badges' "12s ago" is measured against.</summary>
+    public TimeProvider Clock => _clock;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CountsText))]
@@ -87,13 +114,20 @@ public sealed partial class MapViewModel : ObservableObject, IRefreshableModule,
 
     public ObservableCollection<MapCharacterRowViewModel> Characters { get; } = [];
 
+    public ObservableCollection<MapFleetRowViewModel> Fleets { get; } = [];
+
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsFollowOff), nameof(IsFollowCharacter), nameof(NeedsCharacterPick))]
+    [NotifyPropertyChangedFor(nameof(IsFollowOff), nameof(IsFollowCharacter), nameof(IsFollowFleet), nameof(NeedsCharacterPick), nameof(NeedsFleetPick))]
     private MapFollowMode _followMode = MapFollowMode.Off;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsFollowing), nameof(NeedsCharacterPick), nameof(FollowChipText), nameof(FollowStatusText), nameof(TrailResetText))]
+    [NotifyPropertyChangedFor(nameof(IsFollowing), nameof(IsFollowingCharacter), nameof(NeedsCharacterPick), nameof(FollowChipText),
+        nameof(FollowStatusText), nameof(TrailResetText))]
     private MapCharacterRowViewModel? _followedCharacter;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsFollowing), nameof(IsFollowingFleet), nameof(NeedsFleetPick), nameof(FollowChipText), nameof(FollowStatusText))]
+    private MapFleetRowViewModel? _followedFleet;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(FollowChipText), nameof(FollowStatusText))]
@@ -102,20 +136,37 @@ public sealed partial class MapViewModel : ObservableObject, IRefreshableModule,
     /// <summary>The system of the followed character, ringed on the map; -1 when there is none or the map does not hold it.</summary>
     [ObservableProperty] private int _followIndex = -1;
 
+    /// <summary>Members of your active fleets with a current position, one badge per system.</summary>
+    [ObservableProperty] private IReadOnlyList<MapFleetBadge> _fleetBadges = [];
+
+    /// <summary>The followed fleet in a line: how many members, in how many systems.</summary>
+    [ObservableProperty] private string _fleetSpreadText = string.Empty;
+
+    /// <summary>How many of the followed fleet's members have no current position; empty when all do.</summary>
+    [ObservableProperty] private string _fleetUnplacedText = string.Empty;
+
     public bool IsFollowOff => FollowMode == MapFollowMode.Off;
     public bool IsFollowCharacter => FollowMode == MapFollowMode.Character;
-    public bool IsFollowing => FollowMode == MapFollowMode.Character && FollowedCharacter is not null;
+    public bool IsFollowFleet => FollowMode == MapFollowMode.Fleet;
+    public bool IsFollowingCharacter => FollowMode == MapFollowMode.Character && FollowedCharacter is not null;
+    public bool IsFollowingFleet => FollowMode == MapFollowMode.Fleet && FollowedFleet is not null;
+    public bool IsFollowing => IsFollowingCharacter || IsFollowingFleet;
     public bool NeedsCharacterPick => FollowMode == MapFollowMode.Character && FollowedCharacter is null;
+    public bool NeedsFleetPick => FollowMode == MapFollowMode.Fleet && FollowedFleet is null;
     public bool HasCharacters => Characters.Count > 0;
+    public bool HasFleets => Fleets.Count > 0;
+    public bool HasFleetUnplaced => FleetUnplacedText.Length > 0;
 
-    public string FollowChipText => FollowedCharacter is not { } followed
+    public string FollowChipText => _FollowedName() is not { } followed
         ? string.Empty
-        : IsFollowPaused ? "PAUSED · you moved the map" : "FOLLOWING " + followed.Name.ToUpperInvariant();
+        : IsFollowPaused ? "PAUSED · you moved the map" : "FOLLOWING " + followed.ToUpperInvariant();
 
     /// <summary>The status bar's line; empty when the map follows nobody.</summary>
-    public string FollowStatusText => IsFollowing && FollowedCharacter is { } followed
-        ? IsFollowPaused ? $"Map: following {followed.Name} (paused)" : $"Map: following {followed.Name}"
+    public string FollowStatusText => _FollowedName() is { } followed
+        ? IsFollowPaused ? $"Map: following {followed} (paused)" : $"Map: following {followed}"
         : string.Empty;
+
+    partial void OnFleetUnplacedTextChanged(string value) => OnPropertyChanged(nameof(HasFleetUnplaced));
 
     // ── Trail ────────────────────────────────────────────────────────────────────────────────────
 
@@ -264,7 +315,7 @@ public sealed partial class MapViewModel : ObservableObject, IRefreshableModule,
             Graph = graph;
             SystemNames = graph.Systems.Select(system => system.Name).Order(StringComparer.OrdinalIgnoreCase).ToList();
         }
-        _RefreshPositions();
+        await _ReloadFleetsAsync();
     }
 
     public void RefreshModule() => _ = LoadAsync();
@@ -358,7 +409,11 @@ public sealed partial class MapViewModel : ObservableObject, IRefreshableModule,
     partial void OnFollowModeChanged(MapFollowMode value)
     {
         if (value != MapFollowMode.Character)
-            _StopFollowing();
+            _StopFollowingCharacter();
+        if (value != MapFollowMode.Fleet)
+            _StopFollowingFleet();
+        else
+            _ = _ReloadFleetsAsync();
     }
 
     /// <summary>Follows this character from now on — an explicit pick, and it resumes a paused map.</summary>
@@ -370,6 +425,19 @@ public sealed partial class MapViewModel : ObservableObject, IRefreshableModule,
         IsFollowPaused = false;
         foreach (MapCharacterRowViewModel row in Characters)
             row.IsFollowed = ReferenceEquals(row, character);
+        _RefreshPositions();
+        _FocusFollowed();
+    }
+
+    /// <summary>Keeps every member of this fleet in view from now on — an explicit pick, and it resumes a paused map.</summary>
+    [RelayCommand]
+    private void FollowFleet(MapFleetRowViewModel fleet)
+    {
+        FollowMode = MapFollowMode.Fleet;
+        FollowedFleet = fleet;
+        IsFollowPaused = false;
+        foreach (MapFleetRowViewModel row in Fleets)
+            row.IsFollowed = ReferenceEquals(row, fleet);
         _RefreshPositions();
         _FocusFollowed();
     }
@@ -414,24 +482,50 @@ public sealed partial class MapViewModel : ObservableObject, IRefreshableModule,
     {
         _registry.RegistryChanged -= _OnRegistryChanged;
         _positions.PositionChanged -= _OnPositionChanged;
-        _StopFollowing();
+        _rosterWatch.Dispose();
+        _badgeBeat.Dispose();
+        _StopFollowingCharacter();
+        _StopFollowingFleet();
     }
 
-    private void _StopFollowing()
+    private void _StopFollowingCharacter()
     {
         FollowedCharacter = null;
-        IsFollowPaused = false;
+        if (FollowedFleet is null)
+            IsFollowPaused = false;
         foreach (MapCharacterRowViewModel row in Characters)
             row.IsFollowed = false;
         FollowIndex = -1;
         Trail = null;
     }
 
+    private void _StopFollowingFleet()
+    {
+        FollowedFleet = null;
+        if (FollowedCharacter is null)
+            IsFollowPaused = false;
+        foreach (MapFleetRowViewModel row in Fleets)
+            row.IsFollowed = false;
+        FleetSpreadText = string.Empty;
+        FleetUnplacedText = string.Empty;
+    }
+
     private void _FocusFollowed()
     {
-        if (FollowIndex >= 0)
+        if (IsFollowingFleet)
+        {
+            List<int> systems = _FollowedFleetSystems();
+            if (systems.Count > 0)
+                FocusRequest = new MapFocusRequest(systems, framing: MapFraming.Fleet);
+        }
+        else if (FollowIndex >= 0)
             FocusRequest = new MapFocusRequest([FollowIndex], FollowMinZoom);
     }
+
+    private string? _FollowedName() =>
+        IsFollowingCharacter ? FollowedCharacter?.Name
+        : IsFollowingFleet ? "fleet " + FollowedFleet?.Name
+        : null;
 
     private async Task _RouteWithSelectedAsync(bool asStart)
     {
@@ -471,8 +565,75 @@ public sealed partial class MapViewModel : ObservableObject, IRefreshableModule,
     private void _OnPositionOnUiThread(FleetPositionDto position)
     {
         _RefreshPositions();
-        if (IsFollowing && !IsFollowPaused && FollowedCharacter?.CharacterId == position.CharacterId)
+        if (IsFollowPaused)
+            return;
+        if ((IsFollowingCharacter && FollowedCharacter?.CharacterId == position.CharacterId)
+            || (IsFollowingFleet && FollowedFleet is { } fleet && _MembersOf(fleet).Contains(position.CharacterId)))
             _FocusFollowed();
+    }
+
+    private void _OnBadgeBeat()
+    {
+        if (_fleetMembers.Count > 0)
+            _RefreshFleetBadges(_positions.GetPositions().ToDictionary(position => position.CharacterId));
+    }
+
+    private void _OnRosterChanged(long fleetId)
+    {
+        if (_fleetMembers.ContainsKey(fleetId))
+            _ = _ReloadFleetsAsync();
+    }
+
+    // The active fleets and their members, re-read when the map loads, FLEET is chosen or a roster moves. A fleet that
+    // is no longer active drops out of the list, and following it stops.
+    private async Task _ReloadFleetsAsync()
+    {
+        IReadOnlyList<MapFleetChoice> choices = _fleets.ActiveFleets();
+        var members = new Dictionary<long, IReadOnlyCollection<int>>();
+        foreach (MapFleetChoice choice in choices)
+            members[choice.FleetId] = await _fleets.MembersOfAsync(choice);
+
+        Dictionary<MapFleetChoice, MapFleetRowViewModel> known = Fleets.ToDictionary(row => row.Fleet);
+        Fleets.Clear();
+        foreach (MapFleetChoice choice in choices)
+            Fleets.Add(known.GetValueOrDefault(choice) ?? new MapFleetRowViewModel(choice));
+        OnPropertyChanged(nameof(HasFleets));
+        if (FollowedFleet is { } followed && !Fleets.Contains(followed))
+            _StopFollowingFleet();
+
+        _fleetMembers.Clear();
+        foreach ((long fleetId, IReadOnlyCollection<int> ids) in members)
+            _fleetMembers[fleetId] = ids;
+        foreach (MapFleetRowViewModel row in Fleets)
+            row.MembersText = _MembersOf(row).Count == 1 ? "1 member" : $"{_MembersOf(row).Count} members";
+
+        _RefreshPositions();
+        if (IsFollowingFleet && !IsFollowPaused)
+            _FocusFollowed();
+    }
+
+    private IReadOnlyCollection<int> _MembersOf(MapFleetRowViewModel fleet) =>
+        _fleetMembers.GetValueOrDefault(fleet.Fleet.FleetId) ?? [];
+
+    // Gamelog positions never expire: the log only writes on a jump (see the class remarks).
+    private bool _IsCurrent(FleetPositionDto position) =>
+        position.Source == PositionSource.Gamelog || _clock.GetUtcNow() - position.ObservedAt <= FleetPositionExpiry;
+
+    private List<int> _FollowedFleetSystems()
+    {
+        if (FollowedFleet is not { } fleet)
+            return [];
+        Dictionary<int, FleetPositionDto> positions = _positions.GetPositions().ToDictionary(position => position.CharacterId);
+        return
+        [
+            .. _MembersOf(fleet)
+                .Select(id => positions.GetValueOrDefault(id))
+                .Where(position => position is not null && _IsCurrent(position))
+                .Select(_SystemOf)
+                .OfType<MapSystemDto>()
+                .Select(system => system.Index)
+                .Distinct()
+        ];
     }
 
     // One row per own character that has an ESI id: positions are keyed by it.
@@ -517,6 +678,61 @@ public sealed partial class MapViewModel : ObservableObject, IRefreshableModule,
         OnPropertyChanged(nameof(HasSelectedHere));
         FollowIndex = FollowedCharacter is { } followed ? _SystemOf(positions.GetValueOrDefault(followed.CharacterId))?.Index ?? -1 : -1;
         _RefreshTrail();
+        _RefreshFleetBadges(positions);
+    }
+
+    // One badge per system for every member of your active fleets whose position is current; the followed fleet's
+    // spread and who of it the map cannot place go to the FOLLOW block.
+    private void _RefreshFleetBadges(Dictionary<int, FleetPositionDto> positions)
+    {
+        var placed = new List<(int SystemIndex, int CharacterId, FleetPositionDto Position)>();
+        foreach (int id in _fleetMembers.Values.SelectMany(ids => ids).Distinct())
+            if (positions.GetValueOrDefault(id) is { } position && _IsCurrent(position) && _SystemOf(position) is { } system)
+                placed.Add((system.Index, id, position));
+
+        FleetBadges =
+        [
+            .. placed.GroupBy(member => member.SystemIndex)
+                .Select(here => new MapFleetBadge(here.Key,
+                    [.. here.Select(member => new MapFleetSighting(_NameOf(member.CharacterId, member.Position), member.Position.ObservedAt))]))
+        ];
+
+        if (FollowedFleet is not { } fleet)
+            return;
+        IReadOnlyCollection<int> members = _MembersOf(fleet);
+        List<(int SystemIndex, int CharacterId, FleetPositionDto Position)> inFleet = [.. placed.Where(member => members.Contains(member.CharacterId))];
+        int systems = inFleet.Select(member => member.SystemIndex).Distinct().Count();
+        FleetSpreadText = $"{_Count(inFleet.Count, "member")} in {_Count(systems, "system")}";
+        int unplaced = members.Count - inFleet.Count;
+        FleetUnplacedText = unplaced == 0
+            ? string.Empty
+            : $"{_Count(unplaced, "member")} without a position from the last {FleetPositionExpiry.TotalMinutes:0} minutes";
+    }
+
+    private static string _Count(int count, string noun) => count == 1 ? $"1 {noun}" : $"{count} {noun}s";
+
+    // A position from the game log or ESI location carries the name; the rest are looked up once — your own registry,
+    // then public ESI — and the badges redrawn when the answer arrives.
+    private string _NameOf(int characterId, FleetPositionDto position)
+    {
+        if (position.Name is { Length: > 0 } name)
+            return name;
+        if (_characters.FirstOrDefault(character => character.EsiCharacterId == characterId) is { } own)
+            return own.Name;
+        if (_names.TryGetValue(characterId, out string? known))
+            return known;
+        if (_namesAsked.Add(characterId))
+            _ = _LookUpNameAsync(characterId);
+        return "Unknown pilot";
+    }
+
+    private async Task _LookUpNameAsync(int characterId)
+    {
+        if (await _fleets.NameOfAsync(characterId) is not { } name)
+            return;
+        _names[characterId] = name;
+        // Posted, not run: a cached answer arrives while the badges that asked for it are still being built.
+        Avalonia.Threading.Dispatcher.UIThread.Post(_RefreshPositions);
     }
 
     private MapSystemDto? _SystemOf(FleetPositionDto? position) =>
