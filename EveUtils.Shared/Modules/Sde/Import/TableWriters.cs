@@ -35,6 +35,8 @@ internal sealed partial class TableWriters
     private readonly SqliteCommand _mission;
     private readonly SqliteCommand _epicArcMission;
     private readonly SqliteCommand _region;
+    private readonly SqliteCommand _constellation;
+    private readonly SqliteCommand _jump;
     private readonly SqliteCommand _npcCorporation;
     private readonly SqliteCommand _faction;
     private readonly SqliteCommand _mutaplasmidRange;
@@ -92,9 +94,9 @@ internal sealed partial class TableWriters
             "INSERT INTO SiteNameAlias (dungeonId, nameKey, locale) VALUES ($dungeonId, $nameKey, $locale);",
             "$dungeonId", "$nameKey", "$locale");
         _solarSystem = Prepare(connection, transaction,
-            "INSERT INTO SolarSystem (solarSystemId, nameEn, securityStatus, regionId) " +
-            "VALUES ($solarSystemId, $nameEn, $securityStatus, $regionId);",
-            "$solarSystemId", "$nameEn", "$securityStatus", "$regionId");
+            "INSERT INTO SolarSystem (solarSystemId, nameEn, securityStatus, regionId, constellationId, x2d, y2d) " +
+            "VALUES ($solarSystemId, $nameEn, $securityStatus, $regionId, $constellationId, $x2d, $y2d);",
+            "$solarSystemId", "$nameEn", "$securityStatus", "$regionId", "$constellationId", "$x2d", "$y2d");
         _agent = Prepare(connection, transaction,
             "INSERT INTO Agent (agentId, nameEn, nameKey, level, agentTypeId, agentTypeName, divisionId, isLocator, corporationId, locationId, solarSystemId) " +
             "VALUES ($agentId, $nameEn, $nameKey, $level, $agentTypeId, $agentTypeName, $divisionId, $isLocator, $corporationId, $locationId, $solarSystemId);",
@@ -111,8 +113,16 @@ internal sealed partial class TableWriters
             "INSERT INTO EpicArcMission (missionId, arcId) VALUES ($missionId, $arcId);",
             "$missionId", "$arcId");
         _region = Prepare(connection, transaction,
-            "INSERT INTO Region (regionId, nameEn) VALUES ($regionId, $nameEn);",
-            "$regionId", "$nameEn");
+            "INSERT INTO Region (regionId, nameEn, factionId) VALUES ($regionId, $nameEn, $factionId);",
+            "$regionId", "$nameEn", "$factionId");
+        _constellation = Prepare(connection, transaction,
+            "INSERT INTO Constellation (constellationId, nameEn, regionId, factionId) " +
+            "VALUES ($constellationId, $nameEn, $regionId, $factionId);",
+            "$constellationId", "$nameEn", "$regionId", "$factionId");
+        // OR IGNORE: both gates of a connection normalise to the same (lower, higher) pair.
+        _jump = Prepare(connection, transaction,
+            "INSERT OR IGNORE INTO Jump (fromSystemId, toSystemId) VALUES ($fromSystemId, $toSystemId);",
+            "$fromSystemId", "$toSystemId");
         _npcCorporation = Prepare(connection, transaction,
             "INSERT INTO NpcCorporation (corporationId, nameEn) VALUES ($corporationId, $nameEn);",
             "$corporationId", "$nameEn");
@@ -144,7 +154,9 @@ internal sealed partial class TableWriters
             case "typeLists.jsonl": CollectTypeList(element); break;
             case "dungeons.jsonl": InsertSite(element); break;
             case "mapRegions.jsonl": InsertRegion(element); break;
+            case "mapConstellations.jsonl": InsertConstellation(element); break;
             case "mapSolarSystems.jsonl": InsertSolarSystem(element); break;
+            case "mapStargates.jsonl": InsertJump(element); break;
             case "npcStations.jsonl": CollectStationSystem(element); break;
             case "agentTypes.jsonl": CollectAgentType(element); break;
             case "npcCorporations.jsonl": InsertNpcCorporation(element); break;
@@ -417,15 +429,43 @@ internal sealed partial class TableWriters
         _solarSystem.Parameters["$nameEn"].Value = EnName(e, "name");
         _solarSystem.Parameters["$securityStatus"].Value = Double(e, "securityStatus");
         _solarSystem.Parameters["$regionId"].Value = Int(e, "regionID");
+        _solarSystem.Parameters["$constellationId"].Value = Int(e, "constellationID");
+        var hasPosition = e.TryGetProperty("position2D", out var position) && position.ValueKind == JsonValueKind.Object;
+        _solarSystem.Parameters["$x2d"].Value = hasPosition ? NullableDouble(position, "x") : DBNull.Value;
+        // Negated: the SDE has y+ = north, the map draws y+ = down (see SdeSchema.CreateTables).
+        _solarSystem.Parameters["$y2d"].Value = hasPosition && NullableDouble(position, "y") is double y ? -y : DBNull.Value;
         _solarSystem.ExecuteNonQuery();
     }
 
-    // Id + English name only (ET-335) — mapRegions.jsonl/npcCorporations.jsonl carry nothing else this project uses.
+    // Id, English name and faction (ET-335, ET-391) — mapRegions.jsonl carries nothing else this project uses.
     private void InsertRegion(JsonElement e)
     {
         _region.Parameters["$regionId"].Value = Key(e);
         _region.Parameters["$nameEn"].Value = EnName(e, "name");
+        _region.Parameters["$factionId"].Value = NullableInt(e, "factionID");
         _region.ExecuteNonQuery();
+    }
+
+    private void InsertConstellation(JsonElement e)
+    {
+        _constellation.Parameters["$constellationId"].Value = Key(e);
+        _constellation.Parameters["$nameEn"].Value = EnName(e, "name");
+        _constellation.Parameters["$regionId"].Value = Int(e, "regionID");
+        _constellation.Parameters["$factionId"].Value = NullableInt(e, "factionID");
+        _constellation.ExecuteNonQuery();
+    }
+
+    private void InsertJump(JsonElement e)
+    {
+        if (!e.TryGetProperty("destination", out var destination) || destination.ValueKind != JsonValueKind.Object)
+            return;
+        var from = Int(e, "solarSystemID");
+        var to = Int(destination, "solarSystemID");
+        if (from == 0 || to == 0)
+            return;
+        _jump.Parameters["$fromSystemId"].Value = Math.Min(from, to);
+        _jump.Parameters["$toSystemId"].Value = Math.Max(from, to);
+        _jump.ExecuteNonQuery();
     }
 
     private void InsertNpcCorporation(JsonElement e)
@@ -629,6 +669,9 @@ internal sealed partial class TableWriters
 
     private static double Double(JsonElement e, string prop) =>
         e.TryGetProperty(prop, out var v) && v.ValueKind == JsonValueKind.Number ? v.GetDouble() : 0d;
+
+    private static object NullableDouble(JsonElement e, string prop) =>
+        e.TryGetProperty(prop, out var v) && v.ValueKind == JsonValueKind.Number ? v.GetDouble() : DBNull.Value;
 
     private static bool Bool(JsonElement e, string prop) =>
         e.TryGetProperty(prop, out var v) && v.ValueKind == JsonValueKind.True;

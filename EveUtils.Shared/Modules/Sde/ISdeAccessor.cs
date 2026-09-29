@@ -137,6 +137,11 @@ public interface ISdeAccessor
     /// that id — a stale or out-of-range id from an older build, not treated as an error.</summary>
     SdeSolarSystem? GetSolarSystem(int solarSystemId);
 
+    /// <summary>Every system, constellation, region and stargate connection in one read on one connection (ET-391),
+    /// for the map module. About 8.5k systems and 7k jumps: synchronous and blocking, so a caller on the UI thread
+    /// must wrap it in <c>Task.Run</c> (ET-298). <see cref="SdeMapSnapshot.Empty"/> when the SDE is unavailable.</summary>
+    SdeMapSnapshot GetMapSnapshot();
+
     /// <summary>SDE name for an NPC corporation id (ET-335), for a killmail's attacker/victim corporation. Null
     /// when the SDE is unavailable or the id belongs to a player rather than an NPC — the importer's signal to
     /// ask ESI instead.</summary>
