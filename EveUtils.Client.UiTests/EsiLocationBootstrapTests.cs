@@ -6,13 +6,14 @@ using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Headless.XUnit;
 using EveUtils.Client.Esi;
+using EveUtils.Client.Fleet;
 using EveUtils.Client.Gamelog;
 using EveUtils.Client.Platform;
 using EveUtils.Shared.Identity;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Esi;
 using EveUtils.Shared.Modules.Esi.Events;
-using EveUtils.Shared.Modules.Fleet.Metrics;
+using EveUtils.Shared.Modules.Fleet.Enums;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -203,13 +204,42 @@ public class EsiLocationBootstrapTests
         var monitor = new FakeMonitor();
         using var harness = await StartAsync(monitor, new FakeSystemNames { [Jita] = "Jita" });
 
-        Assert.DoesNotContain(harness.Gamelog.Sample(7, Pilot, 0), s => s.Kind == MetricKind.Location);
+        var source = harness.Services.GetRequiredService<LocationMetricSource>();
+        Assert.Empty(source.Sample(7, Pilot, 0));
 
         monitor.Report(Pilot, Jita);
         await harness.WaitForLocationAsync();
 
-        var location = Assert.Single(harness.Gamelog.Sample(7, Pilot, 0), s => s.Kind == MetricKind.Location);
+        var location = Assert.Single(source.Sample(7, Pilot, 0));
         Assert.Equal("Jita", location.Text);
+    }
+
+    /// <summary>ET-394: the world map gets every reading as an id, not just the one that fills a gap.</summary>
+    [AvaloniaFact]
+    public async Task AReading_ReachesTheFleetPositions_AsAnEsiLocation()
+    {
+        var monitor = new FakeMonitor();
+        using var harness = await StartAsync(monitor, new FakeSystemNames { [Jita] = "Jita" });
+        var positions = harness.Services.GetRequiredService<FleetPositionSource>();
+
+        monitor.Report(Pilot, Jita);
+
+        var position = Assert.Single(positions.GetPositions());
+        Assert.Equal((Pilot, Name, Jita, PositionSource.EsiLocation),
+            (position.CharacterId, position.Name, position.SolarSystemId, position.Source));
+    }
+
+    /// <summary>A logged-out character's reading is their log-off spot, so it is not a position either (ET-71).</summary>
+    [AvaloniaFact]
+    public async Task AnOfflineCharactersReading_DoesNotReachTheFleetPositions()
+    {
+        var monitor = new FakeMonitor();
+        using var harness = await StartAsync(monitor, new FakeSystemNames { [Jita] = "Jita" }, inGame: false);
+        var positions = harness.Services.GetRequiredService<FleetPositionSource>();
+
+        monitor.Report(Pilot, Jita);
+
+        Assert.Empty(positions.GetPositions());
     }
 
     // ---- The operator's decision: a logged-out character's parking spot is not a location -----------------------

@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using EveUtils.Shared.Modules.Fleet.Enums;
+using EveUtils.Client.Fleet;
 using EveUtils.Client.Transport;
 using EveUtils.Shared.Identity;
 using EveUtils.Shared.Messaging;
@@ -39,7 +40,8 @@ public sealed class EsiFleetSyncService(
     IEventBus eventBus,
     IFleetRosterChangeNotifier changeNotifier,
     IEsiAvailabilityState availability,
-    ILogger<EsiFleetSyncService> logger) : BackgroundService
+    ILogger<EsiFleetSyncService> logger,
+    FleetPositionSource? positions = null) : BackgroundService
 {
     private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(5); // the members/wings ESI cache TTL
     private const int DecoupleAfterMissingPolls = 2; // tolerate a brief blip (~10s); decouple once the in-game fleet is clearly gone
@@ -215,6 +217,10 @@ public sealed class EsiFleetSyncService(
         }
 
         ClearStreaks(dedupKey); // a successful poll clears both the missing and the persistent-failure streaks
+
+        // Every member's system goes to the live map, off-plan members included — in memory only; the roster rows
+        // never get it (FleetMember.SolarSystemId stays unset), and it is passed on even when the roster is unchanged.
+        positions?.ObserveEsiFleet(members.Value, DateTimeOffset.UtcNow);
 
         var diff = FleetRosterDiffer.Diff(plannedCharacterIds, members.Value.Select(member => member.CharacterId));
 
