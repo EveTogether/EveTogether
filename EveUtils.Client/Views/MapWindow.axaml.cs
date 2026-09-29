@@ -17,6 +17,7 @@ public partial class MapWindow : ChromedWindow
     public MapWindow(MapViewModel viewModel) : this()
     {
         DataContext = viewModel;
+        MapView?.ViewMovedByUser += (_, _) => viewModel.PauseFollow();
         Closed += (_, _) => viewModel.Dispose();
     }
 

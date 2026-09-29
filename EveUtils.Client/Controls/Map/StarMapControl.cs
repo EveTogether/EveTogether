@@ -38,6 +38,11 @@ public sealed class StarMapControl : Control
     private const double WheelStep = 1.25;
     private const double DoubleTapZoom = 2.5;
 
+    private const double TrailWidth = 2.5;
+    private const double TrailTailOpacity = 0.2;
+
+    private static readonly ImmutableDashStyle TrailStepDash = new([2, 1.4], 0);
+    private static readonly ImmutableDashStyle TrailGapDash = new([0.6, 2.6], 0);
     private static readonly TimeSpan FlyDuration = TimeSpan.FromMilliseconds(450);
     private static readonly TimeSpan ZoomDuration = TimeSpan.FromMilliseconds(250);
     private static readonly Cursor GrabCursor = new(StandardCursorType.Hand);
@@ -64,6 +69,14 @@ public sealed class StarMapControl : Control
 
     public static readonly StyledProperty<MapFocusRequest?> FocusRequestProperty =
         AvaloniaProperty.Register<StarMapControl, MapFocusRequest?>(nameof(FocusRequest));
+
+    /// <summary>The followed character's trail, oldest system first; null for none.</summary>
+    public static readonly StyledProperty<IReadOnlyList<MapTrailStep>?> TrailProperty =
+        AvaloniaProperty.Register<StarMapControl, IReadOnlyList<MapTrailStep>?>(nameof(Trail));
+
+    /// <summary>The system of the character the map follows, ringed; -1 for none.</summary>
+    public static readonly StyledProperty<int> FollowIndexProperty =
+        AvaloniaProperty.Register<StarMapControl, int>(nameof(FollowIndex), -1);
 
     public static readonly DirectProperty<StarMapControl, double> ZoomLevelProperty =
         AvaloniaProperty.RegisterDirect<StarMapControl, double>(nameof(ZoomLevel), map => map.ZoomLevel);
@@ -104,7 +117,7 @@ public sealed class StarMapControl : Control
 
     static StarMapControl()
     {
-        AffectsRender<StarMapControl>(GraphProperty, RouteProperty, MarkersProperty, SelectedIndexProperty);
+        AffectsRender<StarMapControl>(GraphProperty, RouteProperty, MarkersProperty, SelectedIndexProperty, TrailProperty, FollowIndexProperty);
         ClipToBoundsProperty.OverrideDefaultValue<StarMapControl>(true);
         FocusableProperty.OverrideDefaultValue<StarMapControl>(true);
     }
@@ -114,6 +127,7 @@ public sealed class StarMapControl : Control
         Cursor = GrabCursor;
         DoubleTapped += (_, e) =>
         {
+            ViewMovedByUser?.Invoke(this, EventArgs.Empty);
             Point at = e.GetPosition(this);
             _FlyTo(_ToWorldX(at.X), _ToWorldY(at.Y), _ClampScale(_scale * DoubleTapZoom), ZoomDuration);
         };
@@ -150,6 +164,22 @@ public sealed class StarMapControl : Control
         set => SetValue(FocusRequestProperty, value);
     }
 
+    public IReadOnlyList<MapTrailStep>? Trail
+    {
+        get => GetValue(TrailProperty);
+        set => SetValue(TrailProperty, value);
+    }
+
+    public int FollowIndex
+    {
+        get => GetValue(FollowIndexProperty);
+        set => SetValue(FollowIndexProperty, value);
+    }
+
+    /// <summary>The pilot moved the view: a drag, the wheel, a double tap or the zoom buttons. Never raised for a
+    /// <see cref="FocusRequest"/> — that is the map moving itself, and following must not pause on its own moves.</summary>
+    public event EventHandler? ViewMovedByUser;
+
     /// <summary>Zoom relative to the whole map fitting the control: 1 = all of New Eden.</summary>
     public double ZoomLevel
     {
@@ -169,10 +199,15 @@ public sealed class StarMapControl : Control
         private set => SetAndRaise(DetailLevelLabelProperty, ref _detailLevelLabel, value);
     }
 
-    public void ZoomBy(double factor) => _FlyTo(_centerX, _centerY, _ClampScale(_scale * factor), ZoomDuration);
+    public void ZoomBy(double factor)
+    {
+        ViewMovedByUser?.Invoke(this, EventArgs.Empty);
+        _FlyTo(_centerX, _centerY, _ClampScale(_scale * factor), ZoomDuration);
+    }
 
     public void ZoomToFit()
     {
+        ViewMovedByUser?.Invoke(this, EventArgs.Empty);
         if (Graph is { } graph)
             _FlyTo(graph.Width / 2, graph.Height / 2, _fitScale, FlyDuration);
     }
@@ -225,6 +260,7 @@ public sealed class StarMapControl : Control
             {
                 _isDragging = true;
                 Cursor = DragCursor;
+                ViewMovedByUser?.Invoke(this, EventArgs.Empty);
             }
             if (_isDragging)
             {
@@ -267,6 +303,7 @@ public sealed class StarMapControl : Control
     protected override void OnPointerWheelChanged(PointerWheelEventArgs e)
     {
         base.OnPointerWheelChanged(e);
+        ViewMovedByUser?.Invoke(this, EventArgs.Empty);
         _flight = null;
         Point at = e.GetPosition(this);
         double worldX = _ToWorldX(at.X), worldY = _ToWorldY(at.Y);
@@ -367,7 +404,7 @@ public sealed class StarMapControl : Control
             return;
         if (systems.Count == 1)
         {
-            _FlyTo(systems[0].X, systems[0].Y, Math.Max(_scale, _fitScale * SystemFocusZoom), FlyDuration);
+            _FlyTo(systems[0].X, systems[0].Y, Math.Max(_scale, _fitScale * (request.MinZoom ?? SystemFocusZoom)), FlyDuration);
             return;
         }
 
@@ -450,8 +487,12 @@ public sealed class StarMapControl : Control
         };
         _DrawSystems(context, graph, level, world, nodeRadius);
 
+        _DrawTrail(context, graph, area, accent);
         _labels.Clear();
         _DrawMarkers(context, graph, level, world, accent);
+        if (FollowIndex >= 0 && FollowIndex < graph.Systems.Count)
+            context.DrawEllipse(null, new ImmutablePen(new ImmutableSolidColorBrush(accent), 2.5), _ToScreen(graph.Systems[FollowIndex]),
+                nodeRadius + 10, nodeRadius + 10);
         foreach (int ring in new[] { SelectedIndex, _hoverIndex }.Where(index => index >= 0 && index < graph.Systems.Count))
             context.DrawEllipse(null, new ImmutablePen(new ImmutableSolidColorBrush(accent), 2), _ToScreen(graph.Systems[ring]), nodeRadius + 5, nodeRadius + 5);
 
@@ -525,6 +566,32 @@ public sealed class StarMapControl : Control
             MapSystemDto system = graph.Systems[index];
             if (world.Contains(new Point(system.X, system.Y)))
                 context.DrawEllipse(_dotBrushes[system.RegionIndex], null, _ToScreen(system), nodeRadius + 1.5, nodeRadius + 1.5);
+        }
+    }
+
+    // Drawn in screen space so the dashes keep their size at any zoom. Older jumps fade towards the tail; a jump the
+    // trail could not follow (see MapTrailStep.IsGapBefore) is dotted rather than dashed.
+    private void _DrawTrail(DrawingContext context, MapGraphDto graph, Rect area, Color accent)
+    {
+        if (Trail is not { Count: > 1 } steps)
+            return;
+
+        int jumps = steps.Count - 1;
+        for (int at = 1; at < steps.Count; at++)
+        {
+            int from = steps[at - 1].SystemIndex, to = steps[at].SystemIndex;
+            if (from < 0 || from >= graph.Systems.Count || to < 0 || to >= graph.Systems.Count)
+                continue;
+
+            Point start = _ToScreen(graph.Systems[from]), end = _ToScreen(graph.Systems[to]);
+            if (!area.Inflate(TrailWidth).Intersects(new Rect(Math.Min(start.X, end.X), Math.Min(start.Y, end.Y),
+                    Math.Abs(start.X - end.X), Math.Abs(start.Y - end.Y))))
+                continue;
+
+            double opacity = jumps == 1 ? 1 : TrailTailOpacity + (1 - TrailTailOpacity) * (at - 1) / (jumps - 1);
+            var pen = new ImmutablePen(new ImmutableSolidColorBrush(accent, opacity), TrailWidth,
+                steps[at].IsGapBefore ? TrailGapDash : TrailStepDash);
+            context.DrawLine(pen, start, end);
         }
     }
 
