@@ -49,8 +49,8 @@ public sealed partial class MapViewModel : ObservableObject, IRefreshableModule,
     /// <summary>Width of the route's security bar: the side panel's inner width.</summary>
     public const double SecurityBarWidth = 258;
 
-    /// <summary>Following never zooms out past system view: the level where a jump is something you can see.</summary>
-    public const double FollowMinZoom = 9;
+    /// <summary>Following one character never zooms out past this: one system with its neighbours around it. A fleet\r\n    /// gathered in one system gets the same zoom (<c>StarMapControl</c>, SingleSystemZoom).</summary>
+    public const double FollowMinZoom = 40;
 
     /// <summary>How long a fleet member's position stays on the map without being confirmed again (see the class remarks).</summary>
     public static readonly TimeSpan FleetPositionExpiry = TimeSpan.FromMinutes(10);

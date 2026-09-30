@@ -17,6 +17,7 @@ entries under `[Unreleased]` below that were not there yet at the previous night
 
 ## [Unreleased]
 
+- **Changed: Follow fleet zooms in much closer.** A group within a jump or two now fills about half the map, with the systems around it still in view; a group in a single system gets a comfortable close-up instead of a far-out view, and Follow character uses the same close-up. The map's zoom limit went up to match.
 - **Fixed: pilots who are offline no longer show on the fleet map.** They are left out of the system card, the name beside your diamonds and the member count, and the "Xs ago" of a logged-out pilot no longer restarts from zero on every refresh. Their last position also no longer stretches what Follow fleet zooms to.
 - **Fixed: Follow fleet and Follow character zoom back in on the group.** When the card's header and footer settled after the map had already zoomed, the map stayed framed for the old view; it now frames again until you move the map yourself.
 - **Changed: no more dark bands across the fleet map.** The header and footer of the map card no longer lie over the map as half-transparent strips; each button, label and note floats on its own small background, and the zoom figure no longer sits against the zoom buttons.
