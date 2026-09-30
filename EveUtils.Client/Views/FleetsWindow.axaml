@@ -281,24 +281,24 @@
             <Style Selector="Border.groupband">
                 <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
                 <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
-                <Setter Property="BorderThickness" Value="0,1,0,0"/>
-                <Setter Property="Padding" Value="12,5"/>
+                <Setter Property="BorderThickness" Value="0,1,0,2"/>
+                <Setter Property="Padding" Value="12,9"/>
             </Style>
             <Style Selector="DockPanel.wide Border.groupband">
-                <Setter Property="Padding" Value="14,7"/>
+                <Setter Property="Padding" Value="14,11"/>
             </Style>
             <Style Selector="Border.groupband.dim">
                 <Setter Property="Background" Value="{StaticResource BgRowAltBrush}"/>
             </Style>
             <Style Selector="TextBlock.bandtitle">
-                <Setter Property="FontSize" Value="9"/>
+                <Setter Property="FontSize" Value="13"/>
                 <Setter Property="FontWeight" Value="Bold"/>
                 <Setter Property="LetterSpacing" Value="1.5"/>
                 <Setter Property="Foreground" Value="{DynamicResource TextAccentBrush}"/>
                 <Setter Property="VerticalAlignment" Value="Center"/>
             </Style>
             <Style Selector="Border.groupband.dim TextBlock.bandtitle">
-                <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+                <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
             </Style>
             <Style Selector="TextBlock.bandnote">
                 <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
@@ -1121,7 +1121,7 @@
                 </DataTemplate>
             </ScrollViewer.Resources>
 
-            <StackPanel>
+            <StackPanel Spacing="18">
                 <!-- ACTIVE -->
                 <StackPanel IsVisible="{Binding ShowActiveGroup}">
                     <Border Classes="groupband">

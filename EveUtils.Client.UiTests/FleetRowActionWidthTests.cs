@@ -197,7 +197,7 @@ public class FleetRowActionWidthTests
             Assert.Equal(FleetOverviewLayout.MaxActionsWidth, vm.ActionsWidth);
             Assert.True(theirs.ShowJoin);
             Assert.True(mine.ShowRequest);
-            Assert.DoesNotContain(mine.OverflowItems, i => i.Label.StartsWith("REQUEST", StringComparison.Ordinal));
+            Assert.DoesNotContain(mine.OverflowItems, i => i.Label.StartsWith("Request", StringComparison.Ordinal));
             AssertNoRowBreaks(window);
 
             // At the breakpoint the cell is back to the 250 px that holds scherm 1's four buttons, and there is no
@@ -210,7 +210,7 @@ public class FleetRowActionWidthTests
             Assert.True(theirs.ShowJoin);
             Assert.False(mine.ShowRequest);
             Assert.True(mine.ShowShareButton);
-            var folded = Assert.Single(mine.OverflowItems, i => i.Label.StartsWith("REQUEST", StringComparison.Ordinal));
+            var folded = Assert.Single(mine.OverflowItems, i => i.Label.StartsWith("Request", StringComparison.Ordinal));
             Assert.NotNull(folded.Command);   // an alt is free, so it is an action and not an explanation
             Assert.Equal(mine.JoinHint, folded.Tooltip);
             AssertNoRowBreaks(window);
@@ -268,7 +268,7 @@ public class FleetRowActionWidthTests
             }
 
             var theirs = vm.ServerGroups.SelectMany(g => g.Fleets).Single(f => f.Name == "Theirs public");
-            var folded = Assert.Single(theirs.OverflowItems, i => i.Label.StartsWith("JOIN", StringComparison.Ordinal));
+            var folded = Assert.Single(theirs.OverflowItems, i => i.Label.StartsWith("Join", StringComparison.Ordinal));
             Assert.Equal(theirs.JoinHint, folded.Tooltip);
 
             window.Close();
