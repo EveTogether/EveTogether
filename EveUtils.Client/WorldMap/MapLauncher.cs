@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using EveUtils.Client.Dialogs;
 using EveUtils.Client.Fleet;
@@ -13,11 +14,38 @@ namespace EveUtils.Client.WorldMap;
 
 /// <summary>A fresh view model per open; the map itself is shared, built once per SDE build by the map module, so a second
 /// view costs no second read of the SDE.</summary>
-public sealed class MapLauncher(IServiceProvider services, IDialogService dialogs) : IMapLauncher, ISingletonService
+public sealed class MapLauncher(IServiceProvider services, IDialogService dialogs) : IMapLauncher, ISingletonService, IDisposable
 {
+    // Each map runs a badge timer on the thread pool; one that outlives its screen keeps posting to the dispatcher. The
+    // owner of a map still disposes it — this only catches what is left when the app (or a test host) shuts down.
+    private readonly List<WeakReference<MapViewModel>> _created = [];
+
     public event Action<MapViewModel>? MapOpened;
 
-    public MapViewModel Create() => new(
+    public MapViewModel Create()
+    {
+        MapViewModel map = _Build();
+        lock (_created)
+        {
+            _created.RemoveAll(reference => !reference.TryGetTarget(out _));
+            _created.Add(new WeakReference<MapViewModel>(map));
+        }
+
+        return map;
+    }
+
+    public void Dispose()
+    {
+        lock (_created)
+        {
+            foreach (WeakReference<MapViewModel> reference in _created)
+                if (reference.TryGetTarget(out MapViewModel? map))
+                    map.Dispose();
+            _created.Clear();
+        }
+    }
+
+    private MapViewModel _Build() => new(
         services.GetRequiredService<IDispatcher>(),
         services.GetRequiredService<ICharacterRegistry>(),
         services.GetRequiredService<IFleetPositionSource>(),

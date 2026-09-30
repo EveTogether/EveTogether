@@ -168,6 +168,7 @@ public class FleetParticipationActivationTests
         await window.LoadAsync();
         window.StartManualRun(DateTime.UtcNow);
         await window.RefreshFleetCommandAsync(DateTime.UtcNow);
+        await _UnstartedFleetLookupAsync(window);
 
         Assert.Null(window.FleetId);
         Assert.True(window.HasFleetNotice);
@@ -206,6 +207,7 @@ public class FleetParticipationActivationTests
         await window.LoadAsync();
         window.StartManualRun(DateTime.UtcNow);
         await window.RefreshFleetCommandAsync(DateTime.UtcNow);
+        await _UnstartedFleetLookupAsync(window);
 
         Assert.Null(window.FleetId);
         Assert.True(window.HasFleetNotice);
@@ -299,6 +301,21 @@ public class FleetParticipationActivationTests
         {
             FleetId = fleetId, CharacterId = otherCharacterId, JoinTime = DateTimeOffset.UtcNow, IsExternal = true
         });
+    }
+
+    /// <summary>
+    /// The unstarted-fleet lookup runs off the UI thread and is guarded against re-entry (ET-287), and the window's own
+    /// tick has already started it by the time a test calls <c>RefreshFleetCommandAsync</c> — that awaited call then
+    /// returns at once and the answer lands afterwards. Waits for that answer instead of racing it.
+    /// </summary>
+    private static async Task _UnstartedFleetLookupAsync(ActivityWindowViewModel window)
+    {
+        DateTime giveUpAt = DateTime.UtcNow.AddSeconds(10);
+        while (!window.HasFleetNotice && DateTime.UtcNow < giveUpAt)
+        {
+            await Task.Delay(20);
+            Dispatcher.UIThread.RunJobs();
+        }
     }
 
     private static FleetInfo _ServerFleet(FleetActivation activation) => new(
