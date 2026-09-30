@@ -67,10 +67,47 @@ public sealed class FleetMetricsStackedLayoutTests
         }
     }
 
+    /// <summary>ET-404: the card itself — not just the cell it sits in — is as wide as the summary, and carries no CCP
+    /// disclaimer (that lives in About).</summary>
+    [AvaloniaTheory]
+    [InlineData(700)]
+    [InlineData(860)]
+    public async Task WhenStacked_TheMapCardIsAsWideAsTheSummary_AndHasNoDisclaimer(double width)
+    {
+        using var screen = await Screen.OpenAsync(width);
+
+        Rect summary = screen.BoundsOf("SummaryCard");
+        Rect card = screen.CardFrame();
+
+        Assert.True(screen.Metrics.IsStacked);
+        Assert.InRange(card.Width, summary.Width - 2, summary.Width + 2);
+        Assert.InRange(card.Left, summary.Left - 2, summary.Left + 2);
+        Assert.DoesNotContain(screen.AllText(), text => text.Contains("limited permission of CCP"));
+    }
+
+    [AvaloniaFact]
+    public void TheDisclaimer_IsInAbout_AndNotInTheMapWindow()
+    {
+        var about = new AboutWindow(new AboutViewModel());
+        about.Show();
+        Dispatcher.UIThread.RunJobs();
+        var map = new MapWindow();
+        map.Show();
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Contains(about.GetVisualDescendants().OfType<TextBlock>(), text =>
+            text.Text == "Material related to EVE-Online is used with limited permission of CCP Games hf by using official Toolkit. " +
+                         "No official affiliation or endorsement by CCP Games hf is stated or implied.");
+        Assert.DoesNotContain(map.GetVisualDescendants().OfType<TextBlock>(), text => text.Text?.Contains("limited permission of CCP") == true);
+        about.Close();
+        map.Close();
+    }
+
     [AvaloniaFact]
     public async Task AtTheDesignWidth_TheMapStaysBesideSummaryAndList_AndTheHintBesideTheButtons()
     {
         using var screen = await Screen.OpenAsync(1280);
+        Assert.Equal(440, screen.CardFrame().Width);
 
         Rect summary = screen.BoundsOf("SummaryCard");
         Rect map = screen.BoundsOf("MapCardHost");
@@ -207,6 +244,16 @@ public sealed class FleetMetricsStackedLayoutTests
             Control parent = Window.FindControl<Control>(name) ?? throw new InvalidOperationException($"no {name}");
             return parent.GetVisualDescendants().OfType<TextBlock>().Where(text => text.IsVisible).Select(InRoot).ToList();
         }
+
+        // The card's own frame: the FleetMapCard control always fills its cell, what was 440 wide is the border inside it.
+        public Rect CardFrame()
+        {
+            FleetMapCard card = Window.FindControl<FleetMapCard>("MapCard") ?? throw new InvalidOperationException("no card");
+            return InRoot(card.FindControl<Border>("CardFrame") ?? throw new InvalidOperationException("no card frame"));
+        }
+
+        public IEnumerable<string> AllText() =>
+            Window.GetVisualDescendants().OfType<TextBlock>().Select(text => text.Text).OfType<string>().ToList();
 
         private Rect InRoot(Control control) =>
             new(control.TranslatePoint(default, Root) ?? throw new InvalidOperationException("detached"), control.Bounds.Size);

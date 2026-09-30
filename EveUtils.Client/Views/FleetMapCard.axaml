@@ -12,7 +12,7 @@
 
     <!-- The fleet's place on the map (ET-395, mockup v2 scene 3): a second view on the same graph the MAP tab reads, with
          follow fleet on for this fleet. Only the transform and the overlays are this view's own. -->
-    <Border Classes="panel" Width="440">
+    <Border x:Name="CardFrame" Classes="panel">
         <Grid RowDefinitions="Auto,*,Auto">
             <Grid.Styles>
                 <Style Selector="Button.hudbutton">
@@ -108,8 +108,6 @@
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
-                <TextBlock FontSize="9.5" TextWrapping="Wrap" Foreground="{StaticResource TextDimSmallBrush}"
-                           Text="Material related to EVE-Online is used with limited permission of CCP Games hf by using official Toolkit. No official affiliation or endorsement by CCP Games hf is stated or implied."/>
             </StackPanel>
         </Grid>
     </Border>
