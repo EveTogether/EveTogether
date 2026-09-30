@@ -14,9 +14,11 @@ public sealed record MapPopoverRun(string Text, Color Colour, bool IsBold = fals
 public static class MapPopoverRows
 {
     public const int MaxNeighbours = 6;
-    public const int MaxOccupants = 8;
+    public const int MaxOccupants = 15;
 
-    public static IReadOnlyList<IReadOnlyList<MapPopoverRun>> From(MapSystemInfo info, DateTimeOffset now, Color accent)
+    /// <param name="maxOccupants">How many of the people here are named before "+N more here"; the map passes fewer when
+    /// the full list would be taller than the map itself.</param>
+    public static IReadOnlyList<IReadOnlyList<MapPopoverRun>> From(MapSystemInfo info, DateTimeOffset now, Color accent, int maxOccupants = MaxOccupants)
     {
         var rows = new List<IReadOnlyList<MapPopoverRun>>
         {
@@ -39,10 +41,12 @@ public static class MapPopoverRows
         foreach (MapSystemDistance distance in info.Distances)
             rows.Add([_DistanceRun(distance)]);
 
-        foreach (MapSystemOccupant occupant in info.Here.Take(MaxOccupants))
+        if (info.Here.Count > 0)
+            rows.Add([new MapPopoverRun(string.Create(CultureInfo.InvariantCulture, $"Here · {info.Here.Count}"), MapPalette.Muted, true)]);
+        foreach (MapSystemOccupant occupant in info.Here.Take(maxOccupants))
             rows.Add(_OccupantRuns(occupant, now, accent));
-        if (info.Here.Count > MaxOccupants)
-            rows.Add([new MapPopoverRun($"+{info.Here.Count - MaxOccupants} more here", MapPalette.Muted)]);
+        if (info.Here.Count > maxOccupants)
+            rows.Add([new MapPopoverRun($"+{info.Here.Count - maxOccupants} more here", MapPalette.Muted)]);
 
         rows.Add(_GateRuns(info.Neighbours));
         return rows;
