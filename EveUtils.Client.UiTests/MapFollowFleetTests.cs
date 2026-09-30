@@ -65,9 +65,9 @@ public sealed class MapFollowFleetTests
             $"{system} is at {map.ScreenPointOf(world.IndexOf(system))}, outside {map.Bounds.Size}"));
     }
 
-    /// <summary>Acceptance: a fleet gathered in one system lands on 14×, system view with the neighbours around it.</summary>
+    /// <summary>Acceptance: a fleet gathered in one system lands on 50×, system view with the neighbours around it.</summary>
     [AvaloniaFact]
-    public async Task FollowFleet_AllInOneSystem_ZoomsTo14x()
+    public async Task FollowFleet_AllInOneSystem_ZoomsTo50x()
     {
         using var world = await World.OpenAsync();
         (_, StarMapControl map) = world.Show();
@@ -78,12 +78,12 @@ public sealed class MapFollowFleetTests
         world.FollowFleet();
         MapFollowTests.Settle();
 
-        Assert.Equal(14, map.ZoomLevel, precision: 2);
+        Assert.Equal(50, map.ZoomLevel, precision: 2);
         Assert.Equal(MapDetailLevel.Systems, map.DetailLevel);
     }
 
     /// <summary>Acceptance: monotonic — a spread that is wider in either direction never zooms further in, from one
-    /// system (14×) out to all of New Eden (1×). The zoom reads the 2D extent only, so jumps cannot bend it.</summary>
+    /// system (50×) out to all of New Eden (1×). The zoom reads the 2D extent only, so jumps cannot bend it.</summary>
     [AvaloniaTheory]
     [InlineData(0, 0, 800, 0)]
     [InlineData(800, 0, 2400, 0)]
@@ -99,7 +99,7 @@ public sealed class MapFollowFleetTests
         double wide = StarMapControl.FleetFrameScale(wideX, wideY, viewport, fit);
 
         Assert.True(wide <= narrow, $"{wideX}×{wideY} zooms to {wide / fit:0.00}×, closer than {narrowX}×{narrowY} at {narrow / fit:0.00}×");
-        Assert.InRange(wide, fit, fit * 14);
+        Assert.InRange(wide, fit, fit * 50);
     }
 
     /// <summary>Acceptance: someone in the in-game fleet who does not use EVE Together — not on the roster, no name in
