@@ -17,6 +17,7 @@ entries under `[Unreleased]` below that were not there yet at the previous night
 
 ## [Unreleased]
 
+- **Changed: the fleet list is easier to scan.** The ACTIVE, STANDING BY and FINISHED headings are larger and stand out from the rows, with space between the sections. A started fleet now always has a METRICS button, also in a narrow window, and the "⋯" menu uses normal sentence case instead of capitals.
 - **Fixed: the map in the Fleet metrics card fills the whole card.** Its header and summary now lie over the map instead of leaving a grey bar above and below it.
 - **Changed: Killmails now opens on all your characters at once.** Every kill and loss of every character is in one list, each row starting with the character's portrait and name, and a killmail two of your characters were on shows up once (with a +1 and the names on hover) and counts once in the totals. The row of character chips, which ran off the edge with five or more characters, is now a dropdown: "All characters" first, then each character, with Grant access right in the entry of a character that has not shared its killmails yet.
 

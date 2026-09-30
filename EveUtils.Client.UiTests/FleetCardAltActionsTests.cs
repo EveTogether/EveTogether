@@ -101,7 +101,7 @@ public class FleetCardAltActionsTests
         // START · JOIN · MANAGE · SHARE · "⋯" is 233 of the 250 the wide actions cell has, so JOIN stands on the row
         // and is not repeated in the menu.
         Assert.True(card.ShowJoin);
-        Assert.DoesNotContain(card.OverflowItems, i => i.Label == "JOIN WITH ANOTHER CHARACTER");
+        Assert.DoesNotContain(card.OverflowItems, i => i.Label == "Join with another character");
     }
 
     [AvaloniaFact]
@@ -127,7 +127,7 @@ public class FleetCardAltActionsTests
         // START · REQUEST · MANAGE · SHARE · "⋯" comes to 254 of 250. Nothing scherm 1 draws may step aside for it,
         // so REQUEST folds — and the menu line is a live command, not an explanation.
         Assert.False(card.ShowRequest);
-        var folded = Assert.Single(card.OverflowItems, i => i.Label == "REQUEST FOR ANOTHER CHARACTER");
+        var folded = Assert.Single(card.OverflowItems, i => i.Label == "Request for another character");
         Assert.NotNull(folded.Command);
         Assert.Equal(card.JoinHint, folded.Tooltip);
     }

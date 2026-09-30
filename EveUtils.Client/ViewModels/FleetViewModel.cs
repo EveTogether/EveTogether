@@ -210,7 +210,6 @@ public sealed partial class FleetViewModel : ObservableObject
     /// SHARE and LEAVE their own buttons; narrow keeps STOP/START and MANAGE/VIEW and folds the rest behind "⋯" —
     /// two buttons plus an overflow, which is what scherm 10 has room for at 758.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ShowMetricsButton))]
     [NotifyPropertyChangedFor(nameof(ShowShareButton))]
     [NotifyPropertyChangedFor(nameof(ShowLeave))]
     [NotifyPropertyChangedFor(nameof(ShowSignOff))]
@@ -258,10 +257,11 @@ public sealed partial class FleetViewModel : ObservableObject
     /// unlike DELETE, so it stands on every finished row this client can see rather than only its owner's.</summary>
     public bool ShowRuns => IsFinished;
 
-    /// <summary>METRICS stands on the row of a started fleet: that is the fleet that has something to measure right
-    /// now. A standing-by fleet keeps it behind "⋯" — scherm 1 gives its READY rows START, MANAGE and SHARE and no
-    /// METRICS, which is also what keeps the wide row at the four buttons it draws.</summary>
-    public bool ShowMetricsButton => IsWide && ShowMetricsActions && IsInActiveGroup;
+    /// <summary>METRICS stands on the row of a started fleet at every width (ET-407): that is the fleet that has
+    /// something to measure right now, and going for it through the "⋯" was one click too many. A standing-by fleet
+    /// keeps it behind "⋯" — scherm 1 gives its READY rows START, MANAGE and SHARE and no METRICS, which is also what
+    /// keeps the wide row at the four buttons it draws. Finished fleets have no live metrics to open.</summary>
+    public bool ShowMetricsButton => ShowMetricsActions && IsInActiveGroup;
 
     /// <summary>SHARE is the owner's switch — what this fleet's members share with each other. On someone else's
     /// fleet it is not mine to set, so it is not on the row (scherm 1: the Sansha row has no DEEL).</summary>
