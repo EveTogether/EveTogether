@@ -2,6 +2,10 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
+using Avalonia.Media;
+using Avalonia.Media.Imaging;
+using Avalonia.Platform;
+using System.Runtime.InteropServices;
 using EveUtils.Client.Controls.Map;
 using EveUtils.Client.Fleet;
 using EveUtils.Client.ViewModels.Map;
@@ -182,6 +186,150 @@ public sealed class MapFollowFleetTests
         Assert.Equal("FOLLOWING FLEET WOLFPACK", world.Model.FollowChipText);
     }
 
+    /// <summary>ET-398 acceptance: the commander's marker stands on their own system beside the count badge, also when others
+    /// are there, and the count still counts them.</summary>
+    [AvaloniaFact]
+    public async Task TheCommander_IsMarkedOnTheirSystem_BesideTheBadge_EvenWithOthersThere()
+    {
+        using var world = await World.OpenAsync(rosterCommander: Mate);
+        (_, StarMapControl map) = world.Show();
+        world.Sight(Own, Jita);
+        world.Sight(Mate, Amarr);
+        world.Sight(Outsider, Amarr, PositionSource.EsiFleet);
+        world.FollowFleet();
+        MapFollowTests.Settle();
+
+        MapFleetBadge amarr = Assert.Single(world.Model.FleetBadges, badge => badge.SystemIndex == world.IndexOf(Amarr));
+        Assert.Equal(MateName, amarr.Commander?.Name);
+        Assert.Equal(2, amarr.Members.Count);
+        Assert.Null(Assert.Single(world.Model.FleetBadges, badge => badge.SystemIndex == world.IndexOf(Jita)).Commander);
+
+        Point system = map.ScreenPointOf(world.IndexOf(Amarr));
+        Point star = map.CommanderPointOf(world.IndexOf(Amarr));
+        Assert.Equal(system.X - 10, star.X, 0.5);
+        Assert.Equal(system.Y - 10, star.Y, 0.5);
+        Assert.True(system.X + 10 - star.X >= 18, "the star and the count badge overlap");
+        Assert.Equal("", world.Model.FleetCommanderText);
+    }
+
+    [AvaloniaFact]
+    public async Task TheBadgesTooltip_ListsTheCommanderFirst_LabelledFc()
+    {
+        using var world = await World.OpenAsync(rosterCommander: Mate);
+        (Window window, StarMapControl map) = world.Show();
+        world.Sight(Own, Amarr, PositionSource.FleetMetric, T0 - TimeSpan.FromSeconds(2));
+        world.Sight(Mate, Amarr, PositionSource.FleetMetric, T0 - TimeSpan.FromSeconds(40));
+        world.FollowFleet();
+        MapFollowTests.Settle();
+
+        Point system = map.ScreenPointOf(world.IndexOf(Amarr));
+        window.MouseMove(map.TranslatePoint(new Point(system.X + 10, system.Y - 10), window) ?? default);
+
+        Assert.Equal($"Amarr 0.9\nFC · {MateName} · 40s ago\n{OwnName} · 2s ago", ToolTip.GetTip(map));
+    }
+
+    /// <summary>Precedence, as documented on <see cref="MapFleetSource.CommanderOf"/>: the ET roster's FC, and only when it
+    /// names nobody the in-game boss.</summary>
+    [AvaloniaTheory]
+    [InlineData(Own, Mate, Own)]
+    [InlineData(null, Mate, Mate)]
+    [InlineData(Mate, null, Mate)]
+    [InlineData(null, null, null)]
+    public async Task TheRostersFc_WinsOverTheInGameBoss_WhichOnlyStandsIn(int? roster, int? boss, int? expected)
+    {
+        using var world = await World.OpenAsync(roster, boss);
+        var fleet = world.Model.Fleets.Single().Fleet;
+
+        Assert.Equal(expected, world.Instance.Services.GetRequiredService<IMapFleetSource>().CommanderOf(fleet));
+    }
+
+    [AvaloniaFact]
+    public async Task TheInGameBoss_IsMarked_WhenTheRosterNamesNoFc()
+    {
+        using var world = await World.OpenAsync(inGameBoss: Outsider);
+        world.Sight(Own, Jita);
+        world.Sight(Outsider, Dodixie, PositionSource.EsiFleet);
+        world.FollowFleet();
+
+        Assert.Equal(OutsiderName, Assert.Single(world.Model.FleetBadges, badge => badge.SystemIndex == world.IndexOf(Dodixie)).Commander?.Name);
+    }
+
+    /// <summary>ET-398 acceptance: no position for the commander — never seen, or a position that has expired — means no
+    /// marker anywhere and the notice in the FOLLOW block and on the card.</summary>
+    [AvaloniaTheory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ACommanderWithoutAPosition_HasNoMarker_AndTheNoticeSaysSo(bool expired)
+    {
+        using var world = await World.OpenAsync(rosterCommander: Mate);
+        world.Sight(Own, Jita);
+        if (expired)
+            world.Sight(Mate, Jita, PositionSource.EsiFleet, T0 - TimeSpan.FromMinutes(11));
+
+        world.FollowFleet();
+
+        Assert.All(world.Model.FleetBadges, badge => Assert.Null(badge.Commander));
+        Assert.Equal("FC position unknown", world.Model.FleetCommanderText);
+        Assert.True(world.Model.HasFleetCommanderNotice);
+
+        world.Sight(Mate, Amarr);
+
+        Assert.Equal("", world.Model.FleetCommanderText);
+        Assert.NotNull(Assert.Single(world.Model.FleetBadges, badge => badge.SystemIndex == world.IndexOf(Amarr)).Commander);
+    }
+
+    /// <summary>ET-398 acceptance: the commander is inside the follow-fleet frame, on the roster or not, and the frame asks
+    /// for nothing beyond the members' own systems.</summary>
+    [AvaloniaFact]
+    public async Task FollowFleet_FramesTheCommander_WhoIsNotOnTheRoster()
+    {
+        using var world = await World.OpenAsync(inGameBoss: Outsider);
+        (_, StarMapControl map) = world.Show();
+        world.Sight(Own, Jita);
+        world.Sight(Outsider, Dodixie, PositionSource.EsiFleet);
+        world.FollowFleet();
+        MapFollowTests.Settle();
+
+        Assert.Equal([world.IndexOf(Jita), world.IndexOf(Dodixie)], world.Model.FocusRequest!.SystemIndexes.Order());
+        Assert.True(new Rect(map.Bounds.Size).Contains(map.CommanderPointOf(world.IndexOf(Dodixie))));
+    }
+
+    /// <summary>ET-398 acceptance: at every level of detail — the whole of New Eden included — the star is really painted on
+    /// the commander's system, measured off a rendered frame.</summary>
+    [AvaloniaTheory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task TheCommandersStar_IsPainted_AtEveryLevelOfDetail(bool zoomedIn)
+    {
+        using var world = await World.OpenAsync(rosterCommander: Mate);
+        (_, StarMapControl map) = world.Show();
+        world.Sight(Mate, Amarr);
+        world.Sight(Own, Jita);
+        world.FollowFleet();
+        world.Model.PauseFollow();
+        if (zoomedIn)
+            world.Model.FocusRequest = new MapFocusRequest([world.IndexOf(Amarr)], 12);
+        else
+            map.ZoomToFit();
+        MapFollowTests.Settle();
+
+        Assert.Equal(zoomedIn ? MapDetailLevel.Systems : MapDetailLevel.Regions, map.DetailLevel);
+        Point at = map.CommanderPointOf(world.IndexOf(Amarr));
+        Assert.Equal(_AccentOf(map), _PixelAt(map, at));
+    }
+
+    private static Color _AccentOf(StarMapControl map) =>
+        map.TryFindResource("AccentBrightBrush", map.ActualThemeVariant, out object? found) && found is ISolidColorBrush brush ? brush.Color : MapPalette.Text;
+
+    private static Color _PixelAt(StarMapControl map, Point at)
+    {
+        using var surface = new RenderTargetBitmap(new PixelSize((int)map.Bounds.Width, (int)map.Bounds.Height));
+        surface.Render(map);
+        var pixel = new byte[4];
+        surface.CopyPixels(new PixelRect((int)Math.Round(at.X), (int)Math.Round(at.Y), 1, 1), Marshal.UnsafeAddrOfPinnedArrayElement(pixel, 0), 4, 4);
+        return surface.Format == PixelFormat.Rgba8888 ? Color.FromRgb(pixel[0], pixel[1], pixel[2]) : Color.FromRgb(pixel[2], pixel[1], pixel[0]);
+    }
+
     private sealed class MovableClock(DateTimeOffset now) : TimeProvider
     {
         public override DateTimeOffset GetUtcNow() => now;
@@ -204,11 +352,13 @@ public sealed class MapFollowFleetTests
             _recorder = new MapTrailRecorder(_positions, _clock);
         }
 
+        public TestClientInstance Instance => _instance;
+
         public MapViewModel Model => _model ?? throw new InvalidOperationException("the map is not open");
 
         // A client-only fleet this client takes part in: you and an EVE Together mate on the roster, and an outsider the
         // in-game fleet holds as well.
-        public static async Task<World> OpenAsync()
+        public static async Task<World> OpenAsync(int? rosterCommander = null, int? inGameBoss = null)
         {
             var names = new FakeExternalLookup { [Outsider] = OutsiderName, [Mate] = MateName };
             TestClientInstance instance = TestClientInstance.Create(services => services
@@ -220,8 +370,9 @@ public sealed class MapFollowFleetTests
             long fleetId = await repository.AddAsync(new FleetEntity { Name = "Wolfpack", CreatorCharacterId = Own, State = FleetState.Active });
             await repository.AddMemberAsync(new FleetMember { FleetId = fleetId, CharacterId = Own, WingId = -1, SquadId = -1 });
             await repository.AddMemberAsync(new FleetMember { FleetId = fleetId, CharacterId = Mate, WingId = -1, SquadId = -1 });
-            instance.Services.GetRequiredService<IFleetParticipation>().Set([new FleetParticipant(Own, fleetId, ClientOnly: true, FleetName: "Wolfpack")]);
-            instance.Services.GetRequiredService<InGameFleetRosters>().Record(InGameFleetRosters.KeyOf(null, fleetId), [Own, Mate, Outsider]);
+            instance.Services.GetRequiredService<IFleetParticipation>().Set(
+                [new FleetParticipant(Own, fleetId, ClientOnly: true, FleetCommanderCharacterId: rosterCommander, FleetName: "Wolfpack")]);
+            instance.Services.GetRequiredService<InGameFleetRosters>().Record(InGameFleetRosters.KeyOf(null, fleetId), [Own, Mate, Outsider], inGameBoss);
 
             var world = new World(instance);
             world._model = new MapViewModel(instance.Services.GetRequiredService<IDispatcher>(), instance.Services.GetRequiredService<ICharacterRegistry>(),

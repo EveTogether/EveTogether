@@ -224,7 +224,8 @@ public sealed class EsiFleetSyncService(
         // Every member's system goes to the live map, off-plan members included — in memory only; the roster rows
         // never get it (FleetMember.SolarSystemId stays unset), and it is passed on even when the roster is unchanged.
         positions?.ObserveEsiFleet(members.Value, DateTimeOffset.UtcNow);
-        inGameRosters?.Record(dedupKey, members.Value.Select(member => member.CharacterId));
+        inGameRosters?.Record(dedupKey, members.Value.Select(member => member.CharacterId),
+            members.Value.FirstOrDefault(member => member.Role == EsiFleetMember.FleetCommanderRole)?.CharacterId);
 
         var diff = FleetRosterDiffer.Diff(plannedCharacterIds, members.Value.Select(member => member.CharacterId));
 

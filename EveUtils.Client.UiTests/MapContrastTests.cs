@@ -63,6 +63,10 @@ public sealed class MapContrastTests
             // the row-hover fill); the placeholder's text sits on the panel, its accent button is TextBright on AccentSoft and its
             // plain button TextAccent on the button fill (white at 0x22).
             .. _Pairs("POP OUT hover", [_Neutral("TextBrightBrush")], [.. headers.Select(header => _Over(_Neutral("BgRowHoverBrush"), header))]),
+            // ET-398: the commander's star and name are AccentBright straight on the map canvas; the "FC position unknown" notice is TextAccent on the panel (in "fleet card chips").
+            .. _Pairs("commander star and name", [accentBright], [canvas]),
+            // ET-397: the panel's fold button is a navlink straight on the panel — TextBrush resting (already in "side panel"), TextBright on the row-hover fill.
+            .. _Pairs("panel fold button hover", [_Neutral("TextBrightBrush")], [.. panels.Select(panel => _Over(_Neutral("BgRowHoverBrush"), panel))]),
             .. _Pairs("placeholder accent button", [_Neutral("TextBrightBrush")], [.. panels.Select(panel => _Over(((ISolidColorBrush)theme["AccentSoftBrush"]!).Color, panel))]),
             .. _Pairs("placeholder plain button", [((ISolidColorBrush)theme["TextAccentBrush"]!).Color], [.. panels.Select(panel => _Over(Color.FromArgb(0x22, 0xFF, 0xFF, 0xFF), panel))]),
             .. _Pairs("fleet card chips", [_Neutral("GreenBrush"), _Neutral("WarnBrush"), _Neutral("TextDimBrush"), accentBright, ((ISolidColorBrush)theme["TextAccentBrush"]!).Color], panels)

@@ -36,6 +36,8 @@ public sealed class StarMapControl : Control
     private const double FleetMaxZoom = 14;
     private const double BadgeRadius = 9;
     private const double BadgeOffset = 10;
+    private const double CommanderRingRadius = 10;
+    private const double CommanderStarRadius = 8;
     private const double DragThreshold = 3;
     private const double SelectRadius = 12;
     private const double HoverRadius = 10;
@@ -494,6 +496,9 @@ public sealed class StarMapControl : Control
     internal Point ScreenPointOf(int systemIndex) =>
         Graph is { } graph && systemIndex >= 0 && systemIndex < graph.Systems.Count ? _ToScreen(graph.Systems[systemIndex]) : default;
 
+    internal Point CommanderPointOf(int systemIndex) =>
+        Graph is { } graph && systemIndex >= 0 && systemIndex < graph.Systems.Count ? _CommanderCentre(_ToScreen(graph.Systems[systemIndex])) : default;
+
     private int? _BadgeAt(Point at)
     {
         if (FleetBadges is not { Count: > 0 } badges || Graph is not { } graph)
@@ -524,6 +529,8 @@ public sealed class StarMapControl : Control
     }
 
     private static Point _BadgeCentre(Point system) => new(system.X + BadgeOffset, system.Y - BadgeOffset);
+
+    private static Point _CommanderCentre(Point system) => new(system.X - BadgeOffset, system.Y - BadgeOffset);
 
     private double _ClampScale(double scale) => Math.Clamp(scale, _fitScale * MinZoom, _fitScale * MaxZoom);
 
@@ -728,7 +735,41 @@ public sealed class StarMapControl : Control
                 FlowDirection.LeftToRight, typeface, 11, BackgroundBrush);
             context.DrawText(count, new Point(centre.X - count.Width / 2, centre.Y - count.Height / 2));
             _labels.Reserve(new Rect(centre.X - BadgeRadius - 1, centre.Y - BadgeRadius - 1, BadgeRadius * 2 + 2, BadgeRadius * 2 + 2));
+
+            if (badge.Commander is { } commander)
+                _DrawCommander(context, _CommanderCentre(_ToScreen(system)), commander.Name, accent);
         }
+    }
+
+    // The fleet commander: a five-pointed star inside a ring, up and to the left of the system where the count badge is
+    // up and to the right, so the two sit side by side and one never hides the other. The star and the ring are shapes,
+    // not colours, so it reads without telling hues apart. The name goes above it where the labels leave room.
+    private void _DrawCommander(DrawingContext context, Point centre, string name, Color accent)
+    {
+        var ink = new ImmutableSolidColorBrush(accent);
+        context.DrawEllipse(BackgroundBrush, new ImmutablePen(ink, 1.5), centre, CommanderRingRadius, CommanderRingRadius);
+
+        var star = new StreamGeometry();
+        using (StreamGeometryContext shape = star.Open())
+        {
+            for (int point = 0; point < 10; point++)
+            {
+                double radius = point % 2 == 0 ? CommanderStarRadius : CommanderStarRadius * 0.45;
+                double angle = -Math.PI / 2 + point * Math.PI / 5;
+                var corner = new Point(centre.X + radius * Math.Cos(angle), centre.Y + radius * Math.Sin(angle));
+                if (point == 0)
+                    shape.BeginFigure(corner, true);
+                else
+                    shape.LineTo(corner);
+            }
+            shape.EndFigure(true);
+        }
+        context.DrawGeometry(ink, null, star);
+        _labels.Reserve(new Rect(centre.X - CommanderRingRadius - 1, centre.Y - CommanderRingRadius - 1,
+            CommanderRingRadius * 2 + 2, CommanderRingRadius * 2 + 2));
+
+        if (DetailLevel != MapDetailLevel.Regions)
+            _DrawLabel(context, name, MapLabelFont.Marker, accent, new Point(centre.X, centre.Y - CommanderRingRadius - 8), 2);
     }
 
     private void _DrawRegionLabels(DrawingContext context, MapGraphDto graph, MapDetailLevel level, Rect area)

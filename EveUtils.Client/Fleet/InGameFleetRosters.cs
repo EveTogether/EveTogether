@@ -27,10 +27,17 @@ public sealed class InGameFleetRosters(TimeProvider clock) : ISingletonService
             ? snapshot.CharacterIds
             : [];
 
-    internal void Record(string key, IEnumerable<int> characterIds) =>
-        _rosters[key] = new Snapshot([.. characterIds.Distinct()], clock.GetUtcNow());
+    /// <summary>The pilot holding the fleet-commander role in the in-game fleet (the boss), on the same terms as
+    /// <see cref="MembersOf"/>; null when nobody holds it or the roster is not vouched for.</summary>
+    public int? BossOf(string? serverAddress, long fleetId) =>
+        _rosters.TryGetValue(KeyOf(serverAddress, fleetId), out Snapshot? snapshot) && clock.GetUtcNow() - snapshot.ReadAt <= TrustedFor
+            ? snapshot.BossCharacterId
+            : null;
+
+    internal void Record(string key, IEnumerable<int> characterIds, int? bossCharacterId = null) =>
+        _rosters[key] = new Snapshot([.. characterIds.Distinct()], bossCharacterId, clock.GetUtcNow());
 
     internal void Forget(string key) => _rosters.TryRemove(key, out _);
 
-    private sealed record Snapshot(IReadOnlyCollection<int> CharacterIds, DateTimeOffset ReadAt);
+    private sealed record Snapshot(IReadOnlyCollection<int> CharacterIds, int? BossCharacterId, DateTimeOffset ReadAt);
 }

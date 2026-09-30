@@ -20,6 +20,9 @@ using EveUtils.Shared.Modules.Fleet.Enums;
 using EveUtils.Shared.Modules.Map.Dtos;
 using EveUtils.Shared.Modules.Map.Enums;
 using EveUtils.Shared.Modules.Map.Queries;
+using EveUtils.Shared.Modules.Settings.Commands;
+using EveUtils.Shared.Modules.Settings.Dtos;
+using EveUtils.Shared.Modules.Settings.Queries;
 
 namespace EveUtils.Client.ViewModels.Map;
 
@@ -79,6 +82,7 @@ public sealed partial class MapViewModel : ObservableObject, IRefreshableModule,
     private readonly IDisposable _rosterWatch;
     private readonly ITimer _badgeBeat;
     private readonly Dictionary<long, IReadOnlyCollection<int>> _fleetMembers = [];
+    private readonly Dictionary<long, int?> _fleetCommanders = [];
     private readonly Dictionary<int, string> _names = [];
     private readonly HashSet<int> _namesAsked = [];
     private IReadOnlyList<Character> _characters = [];
@@ -123,6 +127,53 @@ public sealed partial class MapViewModel : ObservableObject, IRefreshableModule,
     [ObservableProperty] private MapFocusRequest? _focusRequest;
     [ObservableProperty] private bool _isLegendOpen;
 
+    // ── Side panel (ET-397) ──────────────────────────────────────────────────────────────────────
+
+    // The MAP tab and the popped-out window each remember whether their side panel is folded away.
+    public const string PanelCollapsedInTabSettingKey = "ui.map.panel-collapsed.tab";
+
+    public const string PanelCollapsedInWindowSettingKey = "ui.map.panel-collapsed.window";
+
+    public const double ExpandedPanelWidth = 286;
+
+    /// <summary>What is left of the side panel when it is folded away: a strip with the button to unfold it.</summary>
+    public const double CollapsedPanelWidth = 28;
+
+    private bool _panelCollapsedInTab;
+    private bool _panelCollapsedInWindow;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(PanelToggleTip), nameof(PanelWidth))]
+    private bool _isPanelCollapsed;
+
+    public string PanelToggleTip => IsPanelCollapsed ? "Show panel" : "Hide panel";
+
+    public double PanelWidth => IsPanelCollapsed ? CollapsedPanelWidth : ExpandedPanelWidth;
+
+    [RelayCommand]
+    private async Task TogglePanelAsync()
+    {
+        bool collapsed = !IsPanelCollapsed;
+        if (IsPoppedOut)
+            _panelCollapsedInWindow = collapsed;
+        else
+            _panelCollapsedInTab = collapsed;
+        IsPanelCollapsed = collapsed;
+        await _dispatcher.Send(new SetSettingCommand(_PanelSettingKey(), collapsed ? "true" : "false"));
+    }
+
+    private string _PanelSettingKey() => IsPoppedOut ? PanelCollapsedInWindowSettingKey : PanelCollapsedInTabSettingKey;
+
+    private async Task _LoadPanelStateAsync()
+    {
+        IReadOnlyList<SettingDto> settings = await _dispatcher.Query(new GetSettingsQuery());
+        _panelCollapsedInTab = settings.Any(setting => setting.Key == PanelCollapsedInTabSettingKey && setting.Value == "true");
+        _panelCollapsedInWindow = settings.Any(setting => setting.Key == PanelCollapsedInWindowSettingKey && setting.Value == "true");
+        _ShowPanelStateOfThisView();
+    }
+
+    private void _ShowPanelStateOfThisView() => IsPanelCollapsed = IsPoppedOut ? _panelCollapsedInWindow : _panelCollapsedInTab;
+
     // ── Pop-out (ET-396) ─────────────────────────────────────────────────────────────────────────
 
     /// <summary>The map is in a window of its own and the MAP tab holds a placeholder.</summary>
@@ -144,6 +195,7 @@ public sealed partial class MapViewModel : ObservableObject, IRefreshableModule,
     {
         OnPropertyChanged(nameof(IsPoppedOut));
         OnPropertyChanged(nameof(CanPopOut));
+        _ShowPanelStateOfThisView();
     }
 
     // ── Follow ───────────────────────────────────────────────────────────────────────────────────
@@ -186,6 +238,12 @@ public sealed partial class MapViewModel : ObservableObject, IRefreshableModule,
     [ObservableProperty] private IReadOnlyList<MapFleetSystemChip> _fleetSystemChips = [];
 
     /// <summary>Why the last "show me this member" went nowhere; empty otherwise.</summary>
+    /// <summary>"FC position unknown" while the followed fleet's commander has no current position on the map (or the
+    /// fleet names none); empty when the star marks them.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasFleetCommanderNotice))]
+    private string _fleetCommanderText = string.Empty;
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasMemberNotice))]
     private string _memberNoticeText = string.Empty;
@@ -203,6 +261,7 @@ public sealed partial class MapViewModel : ObservableObject, IRefreshableModule,
     public bool HasCharacters => Characters.Count > 0;
     public bool HasFleets => Fleets.Count > 0;
     public bool HasFleetUnplaced => FleetUnplacedText.Length > 0;
+    public bool HasFleetCommanderNotice => FleetCommanderText.Length > 0;
 
     public string FollowChipText => _FollowedName() is not { } followed
         ? string.Empty
@@ -347,6 +406,7 @@ public sealed partial class MapViewModel : ObservableObject, IRefreshableModule,
     /// <summary>Reads the map; a later call only swaps it in when the SDE build changed, so an open map keeps its view.</summary>
     public async Task LoadAsync()
     {
+        await _LoadPanelStateAsync();
         _characters = await _registry.GetAllAsync();
         _SyncCharacterRows();
         Result<MapGraphDto> result = await _dispatcher.Query(new GetMapGraphQuery());
@@ -623,6 +683,7 @@ public sealed partial class MapViewModel : ObservableObject, IRefreshableModule,
             row.IsFollowed = false;
         FleetSpreadText = string.Empty;
         FleetUnplacedText = string.Empty;
+        FleetCommanderText = string.Empty;
         FleetSystemChips = [];
     }
 
@@ -750,8 +811,15 @@ public sealed partial class MapViewModel : ObservableObject, IRefreshableModule,
     {
         IReadOnlyList<MapFleetChoice> choices = _fleets.ActiveFleets();
         var members = new Dictionary<long, IReadOnlyCollection<int>>();
+        var commanders = new Dictionary<long, int?>();
         foreach (MapFleetChoice choice in choices)
-            members[choice.FleetId] = await _fleets.MembersOfAsync(choice);
+        {
+            // The commander is a member whether or not the roster lists them: the map counts, frames and marks them.
+            int? commander = _fleets.CommanderOf(choice);
+            commanders[choice.FleetId] = commander;
+            IReadOnlyCollection<int> ids = await _fleets.MembersOfAsync(choice);
+            members[choice.FleetId] = commander is { } id && !ids.Contains(id) ? [.. ids, id] : ids;
+        }
 
         Dictionary<MapFleetChoice, MapFleetRowViewModel> known = Fleets.ToDictionary(row => row.Fleet);
         Fleets.Clear();
@@ -764,6 +832,9 @@ public sealed partial class MapViewModel : ObservableObject, IRefreshableModule,
         _fleetMembers.Clear();
         foreach ((long fleetId, IReadOnlyCollection<int> ids) in members)
             _fleetMembers[fleetId] = ids;
+        _fleetCommanders.Clear();
+        foreach ((long fleetId, int? commander) in commanders)
+            _fleetCommanders[fleetId] = commander;
         foreach (MapFleetRowViewModel row in Fleets)
             row.MembersText = _MembersOf(row).Count == 1 ? "1 member" : $"{_MembersOf(row).Count} members";
 
@@ -853,15 +924,19 @@ public sealed partial class MapViewModel : ObservableObject, IRefreshableModule,
             if (positions.GetValueOrDefault(id) is { } position && _IsCurrent(position) && _SystemOf(position) is { } system)
                 placed.Add((system.Index, id, position));
 
+        HashSet<int> commanders = [.. _fleetCommanders.Values.OfType<int>()];
         FleetBadges =
         [
             .. placed.GroupBy(member => member.SystemIndex)
                 .Select(here => new MapFleetBadge(here.Key,
-                    [.. here.Select(member => new MapFleetSighting(_NameOf(member.CharacterId, member.Position), member.Position.ObservedAt))]))
+                    [.. here.Select(member => new MapFleetSighting(_NameOf(member.CharacterId, member.Position), member.Position.ObservedAt,
+                        commanders.Contains(member.CharacterId)))]))
         ];
 
         if (FollowedFleet is not { } fleet)
             return;
+        int? commander = _fleetCommanders.GetValueOrDefault(fleet.Fleet.FleetId);
+        FleetCommanderText = commander is { } commanderId && placed.Any(member => member.CharacterId == commanderId) ? string.Empty : "FC position unknown";
         IReadOnlyCollection<int> members = _MembersOf(fleet);
         List<(int SystemIndex, int CharacterId, FleetPositionDto Position)> inFleet = [.. placed.Where(member => members.Contains(member.CharacterId))];
         int systems = inFleet.Select(member => member.SystemIndex).Distinct().Count();
