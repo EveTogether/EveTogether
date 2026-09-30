@@ -4,6 +4,7 @@ using EveUtils.Client.Theming;
 using EveUtils.Client.ViewModels;
 using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Client.ViewModels.FitBrowser;
+using EveUtils.Client.ViewModels.GameLogs;
 using EveUtils.Client.ViewModels.Killmails;
 using EveUtils.Client.ViewModels.Map;
 using EveUtils.Client.ViewModels.Runs;
@@ -234,6 +235,10 @@ public interface IDialogService
 
     /// <summary>Shows the client log window non-modally so new entries keep arriving while it is open.</summary>
     void ShowLogs(ClientLogViewModel viewModel);
+
+    /// <summary>Shows the GAME LOGS screen (ET-410): every character's EVE game log lines in one list, as a hosted
+    /// module — a docked tab or a floating window.</summary>
+    GameLogsViewModel ShowGameLogs(GameLogsViewModel viewModel);
 
     /// <summary>Shows the client ESI-metrics window non-modally so the per-bucket counters keep
     /// updating live while it is open.</summary>

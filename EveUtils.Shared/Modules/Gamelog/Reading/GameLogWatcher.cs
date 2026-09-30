@@ -37,6 +37,19 @@ public sealed partial class GameLogWatcher : IDisposable
     public event EventHandler<GameLogEventArgs>? EventParsed;
     public event EventHandler<string>? CharacterDetected;
 
+    /// <summary>Raised with every batch of complete lines a poll read, before they are parsed into events — for a reader
+    /// that shows the log as it is (ET-410) and must not tail the same files a second time.</summary>
+    public event EventHandler<GameLogLinesEventArgs>? LinesRead;
+
+    /// <summary>Where the watcher has read each tracked file up to, taken atomically. A batch raised through
+    /// <see cref="LinesRead"/> with an <see cref="GameLogLinesEventArgs.EndOffset"/> at or below the offset taken for its
+    /// file is part of what that offset covers.</summary>
+    public IReadOnlyDictionary<string, long> SnapshotOffsets()
+    {
+        lock (_gate)
+            return _tracked.ToDictionary(pair => pair.Key, pair => pair.Value.Offset, StringComparer.OrdinalIgnoreCase);
+    }
+
     /// <summary>Raised with the character name when a log's header is in a language this build cannot read yet — its
     /// lines are then never parsed, so the pilot has to be told.</summary>
     public event EventHandler<string>? LanguageNotSupported;
@@ -252,12 +265,11 @@ public sealed partial class GameLogWatcher : IDisposable
             if (completeBlock.Length == 0)
                 return;
 
-            foreach (var line in completeBlock.Split('\n'))
-            {
-                var trimmed = line.TrimEnd('\r');
-                if (trimmed.Length == 0)
-                    continue;
+            var lines = completeBlock.Split('\n').Select(line => line.TrimEnd('\r')).Where(line => line.Length > 0).ToList();
+            LinesRead?.Invoke(this, new GameLogLinesEventArgs(path, header.CharacterName, length, lines));
 
+            foreach (var trimmed in lines)
+            {
                 var parsed = LogLineParser.Parse(trimmed, header.Language);
                 if (parsed is not null)
                     EventParsed?.Invoke(this, new GameLogEventArgs(header.CharacterName, parsed));

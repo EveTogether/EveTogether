@@ -298,7 +298,7 @@
                         <!-- Logs group (ET-408): ESI metrics, Inbox and the client log are rarely used, so they share one
                              flyout like Tools. The rail item carries the Inbox unread badge and lights for any of the three. -->
                         <Button Classes="railitem" Classes.active="{Binding IsLogsGroupActive}" x:Name="LogsRailItem"
-                                ToolTip.Tip="ESI metrics, inbox and client logs">
+                                ToolTip.Tip="ESI metrics, inbox, game logs and client logs">
                             <Button.Flyout>
                                 <MenuFlyout Placement="Right">
                                     <TextBlock Classes="menuHeader" Text="LOGS" IsHitTestVisible="False"/>
@@ -317,6 +317,9 @@
                                             </StackPanel>
                                         </MenuItem.Header>
                                         <MenuItem.Icon><mi:MaterialIcon Kind="EmailOutline"/></MenuItem.Icon>
+                                    </MenuItem>
+                                    <MenuItem Header="Game logs" Command="{Binding LaunchModuleCommand}" CommandParameter="gamelogs">
+                                        <MenuItem.Icon><mi:MaterialIcon Kind="ScriptTextOutline"/></MenuItem.Icon>
                                     </MenuItem>
                                     <MenuItem Header="Client logs" Command="{Binding LaunchModuleCommand}" CommandParameter="logs">
                                         <MenuItem.Icon><mi:MaterialIcon Kind="FileDocumentOutline"/></MenuItem.Icon>

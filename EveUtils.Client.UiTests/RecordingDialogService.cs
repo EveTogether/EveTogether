@@ -8,6 +8,7 @@ using EveUtils.Client.Runs;
 using EveUtils.Client.ViewModels;
 using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Client.ViewModels.FitBrowser;
+using EveUtils.Client.ViewModels.GameLogs;
 using EveUtils.Client.ViewModels.Killmails;
 using EveUtils.Client.ViewModels.Map;
 using EveUtils.Client.ViewModels.Runs;
@@ -299,6 +300,11 @@ public sealed class RecordingDialogService : IDialogService
     public Task<FitReferenceInfo?> PickFitAsync(FitPickerViewModel viewModel) => OnPickFit(viewModel);
     public void ShowInbox(InboxViewModel viewModel) => throw NotUsed();
     public void ShowLogs(ClientLogViewModel viewModel) => throw NotUsed();
+
+    /// <summary>The GAME LOGS screen the module launcher asked for, or null (ET-410).</summary>
+    public GameLogsViewModel? LastGameLogs { get; private set; }
+
+    public GameLogsViewModel ShowGameLogs(GameLogsViewModel viewModel) => LastGameLogs = viewModel;
     public void ShowEsiMetrics(EsiMetricsViewModel viewModel) => throw NotUsed();
 
     /// <summary>The settings-sync tool the shell was asked to open, or null — how a test asserts the Tools menu

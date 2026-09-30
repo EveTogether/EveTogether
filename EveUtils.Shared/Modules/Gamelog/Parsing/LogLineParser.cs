@@ -60,6 +60,33 @@ public static partial class LogLineParser
         return moduleSeparator < 0 ? rest : rest[..moduleSeparator];
     }
 
+    /// <summary>Every line of a log as it is shown, not only the ones <see cref="Parse(string, GamelogLanguage)"/> turns into
+    /// an event: the framing is the same in every language, so the kind follows from the category alone.</summary>
+    public static GameLogLine? ParseLine(string line, string character)
+    {
+        Match prefix = LinePrefix().Match(line);
+        if (!prefix.Success
+            || !DateTime.TryParseExact(prefix.Groups["ts"].Value, TimestampFormat,
+                CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime timestamp))
+        {
+            return null;
+        }
+
+        GameLogLineKind kind = ParseCategory(prefix.Groups["cat"].Value) switch
+        {
+            LogCategory.Combat => GameLogLineKind.Combat,
+            LogCategory.Mining => GameLogLineKind.Mining,
+            LogCategory.None => GameLogLineKind.Travel,
+            LogCategory.Notify or LogCategory.Warning => GameLogLineKind.Notify,
+            LogCategory.Info => GameLogLineKind.Info,
+            LogCategory.Hint or LogCategory.Question => GameLogLineKind.Hint,
+            LogCategory.Bounty => GameLogLineKind.Bounty,
+            _ => GameLogLineKind.Other
+        };
+
+        return new GameLogLine(character, timestamp, kind, StripTags(prefix.Groups["body"].Value));
+    }
+
     public static GameLogEvent? Parse(string line) => Parse(line, GamelogLanguage.English);
 
     /// <summary>Parses one line of a gamelog written in <paramref name="language"/>; a language without templates
