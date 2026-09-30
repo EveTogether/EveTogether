@@ -48,6 +48,27 @@ public sealed class MapFleetCardTests
 
     private static readonly TimeSpan Wait = TimeSpan.FromSeconds(5);
 
+    /// <summary>ET-399: the card's own map has the hover popover too, listing who of the fleet is in the system.</summary>
+    [AvaloniaFact]
+    public async Task HoveringAMembersSystemOnTheCardsMap_OpensThePopover()
+    {
+        using var world = await World.OpenAsync();
+        world.Sight(Own, Jita);
+        world.Sight(Mate, Amarr);
+        FleetMapCard card = world.ShowMetrics();
+        await world.WaitAsync(() => world.Card.IsFollowingFleet);
+        world.Settle();
+        StarMapControl map = card.FindControl<StarMapControl>("CardMap") ?? throw new InvalidOperationException("no map in the card");
+        map.PopoverDelay = TimeSpan.Zero;
+
+        Point at = map.TranslatePoint(map.ScreenPointOf(world.IndexOf(Amarr)), world.Window) ?? default;
+        world.Window.MouseMove(new Point(at.X + 1, at.Y));
+        world.Window.MouseMove(at);
+
+        Assert.StartsWith("Amarr ", map.PopoverText);
+        Assert.Contains(MateName, map.PopoverText);
+    }
+
     /// <summary>Acceptance: Fleet metrics opens with follow fleet on and every member inside the card's map.</summary>
     [AvaloniaFact]
     public async Task FleetMetrics_OpensFollowingTheFleet_WithEveryMemberInTheCard()

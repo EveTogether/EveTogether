@@ -18,7 +18,7 @@ internal sealed class PlanRouteQueryHandler(IMapGraphCache cache, IEnumerable<IR
         if (!graph.TryGetIndex(query.ToSystemId, out int to))
             return Result<RouteDto>.Failure(MapMessages.UnknownSystem(query.ToSystemId));
 
-        IReadOnlyDictionary<int, List<int>> extras = await _ExtraNeighboursAsync(graph, cancellationToken);
+        IReadOnlyDictionary<int, List<int>> extras = await RouteEdges.LoadAsync(graph, edgeSources, cancellationToken);
         IReadOnlyList<int>? path = RoutePlanner.Plan(graph, from, to, query.Preference, query.Avoid, query.SaferPenalty, extras);
         if (path is null)
             return Result<RouteDto>.Failure(MapMessages.RouteNotFound);
@@ -30,28 +30,5 @@ internal sealed class PlanRouteQueryHandler(IMapGraphCache cache, IEnumerable<IR
                 system.DisplaySecurity, system.Band);
         }).ToList();
         return Result<RouteDto>.Success(new RouteDto(query.Preference, steps));
-    }
-
-    private async Task<IReadOnlyDictionary<int, List<int>>> _ExtraNeighboursAsync(MapGraphDto graph, CancellationToken cancellationToken)
-    {
-        var extras = new Dictionary<int, List<int>>();
-        foreach (IRouteEdgeSource source in edgeSources)
-        {
-            foreach (RouteEdgeDto edge in await source.GetEdgesAsync(cancellationToken))
-            {
-                if (!graph.TryGetIndex(edge.FromSystemId, out int a) || !graph.TryGetIndex(edge.ToSystemId, out int b))
-                    continue;
-                _Add(a, b);
-                _Add(b, a);
-            }
-        }
-        return extras;
-
-        void _Add(int from, int to)
-        {
-            if (!extras.TryGetValue(from, out List<int>? list))
-                extras[from] = list = [];
-            list.Add(to);
-        }
     }
 }

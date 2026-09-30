@@ -58,6 +58,8 @@
                                     FollowIndex="{Binding FollowIndex}"
                                     FleetBadges="{Binding FleetBadges}"
                                     Clock="{Binding Clock}"
+                                    SystemInfoSource="{Binding SystemInfo}"
+                                    InfoRevision="{Binding InfoRevision}"
                                     FocusRequest="{Binding FocusRequest}"/>
                 <TextBlock Text="{Binding StatusMessage}" IsVisible="{Binding StatusMessage, Converter={x:Static ObjectConverters.IsNotNull}}"
                            Foreground="{StaticResource TextBrush}" FontSize="12" TextWrapping="Wrap" MaxWidth="300"
