@@ -37,6 +37,7 @@ public sealed class StarMapControl : Control
     private const double FleetFramePadding = 40;
     private const double FleetMaxZoom = 14;
     private const double BadgeRadius = 9;
+    private const double MarkerHitRadius = 8;
     private const double BadgeOffset = 10;
     private const double CommanderRingRadius = 10;
     private const double CommanderStarRadius = 8;
@@ -551,18 +552,37 @@ public sealed class StarMapControl : Control
     internal Point CommanderPointOf(int systemIndex) =>
         Graph is { } graph && systemIndex >= 0 && systemIndex < graph.Systems.Count ? _CommanderCentre(_ToScreen(graph.Systems[systemIndex])) : default;
 
+    internal Point MarkerPointOf(int systemIndex) =>
+        Graph is { } graph && systemIndex >= 0 && systemIndex < graph.Systems.Count ? _MarkerCentre(_ToScreen(graph.Systems[systemIndex])) : default;
+
+    internal string? MarkerLabelOf(int systemIndex) =>
+        Markers?.Where(marker => marker.SystemIndex == systemIndex).Select(marker => marker.Label).ToList() is { Count: > 0 } names
+            ? _MarkerLabelText(systemIndex, names)
+            : null;
+
+    internal Size MarkerLabelSizeOf(int systemIndex) =>
+        MarkerLabelOf(systemIndex) is { } text ? _Label(text, MapLabelFont.Marker, _AccentColour()).Size : default;
+
+    // The badge, the commander's star and the diamond of your own characters all open the popover of their system.
     private int? _BadgeAt(Point at)
     {
-        if (FleetBadges is not { Count: > 0 } badges || Graph is not { } graph)
+        if (Graph is not { } graph)
             return null;
-        foreach (MapFleetBadge badge in badges.Where(badge => badge.SystemIndex >= 0 && badge.SystemIndex < graph.Systems.Count))
+        foreach (MapFleetBadge badge in (FleetBadges ?? []).Where(badge => badge.SystemIndex >= 0 && badge.SystemIndex < graph.Systems.Count))
         {
-            Point centre = _BadgeCentre(_ToScreen(graph.Systems[badge.SystemIndex]));
-            if (Math.Abs(at.X - centre.X) <= BadgeRadius && Math.Abs(at.Y - centre.Y) <= BadgeRadius)
+            if (_IsWithin(at, _BadgeCentre(_ToScreen(graph.Systems[badge.SystemIndex])), BadgeRadius))
                 return badge.SystemIndex;
+        }
+        foreach (MapMarker marker in (Markers ?? []).Where(marker => marker.SystemIndex >= 0 && marker.SystemIndex < graph.Systems.Count))
+        {
+            if (_IsWithin(at, _MarkerCentre(_ToScreen(graph.Systems[marker.SystemIndex])), MarkerHitRadius))
+                return marker.SystemIndex;
         }
         return null;
     }
+
+    private static bool _IsWithin(Point at, Point centre, double radius) =>
+        Math.Abs(at.X - centre.X) <= radius && Math.Abs(at.Y - centre.Y) <= radius;
 
     // ── Hover popover (ET-399) ───────────────────────────────────────────────────────────────────
 
@@ -631,12 +651,25 @@ public sealed class StarMapControl : Control
             return;
         }
 
+        // A long list names fewer people rather than outgrow the map: one name less until it fits.
+        int occupants = Math.Min(MapPopoverRows.MaxOccupants, info.Here.Count);
+        (List<FormattedText> lines, List<string> text, Size size) = _MeasurePopover(info, occupants);
+        while (size.Height > Bounds.Height && occupants > 1)
+            (lines, text, size) = _MeasurePopover(info, --occupants);
+
+        _popover = new Popover(_hoverIndex, lines, string.Join('\n', text),
+            MapPopoverLayout.Place(_ToScreen(graph.Systems[_hoverIndex]), size, Bounds.Size));
+        InvalidateVisual();
+    }
+
+    private (List<FormattedText> Lines, List<string> Text, Size Size) _MeasurePopover(MapSystemInfo info, int maxOccupants)
+    {
         Color accent = _AccentColour();
         var typeface = new Typeface(GetValue(TextElement.FontFamilyProperty));
         var lines = new List<FormattedText>();
         var text = new List<string>();
         double width = 0, height = 0;
-        foreach (IReadOnlyList<MapPopoverRun> row in MapPopoverRows.From(info, Clock.GetUtcNow(), accent))
+        foreach (IReadOnlyList<MapPopoverRun> row in MapPopoverRows.From(info, Clock.GetUtcNow(), accent, maxOccupants))
         {
             string content = MapPopoverRows.TextOf(row);
             var line = new FormattedText(content, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, typeface, PopoverFontSize,
@@ -655,10 +688,7 @@ public sealed class StarMapControl : Control
             height += line.Height + (lines.Count > 1 ? PopoverRowGap : 0);
         }
 
-        var size = new Size(width + PopoverPadding * 2, height + PopoverPadding * 2);
-        _popover = new Popover(_hoverIndex, lines, string.Join('\n', text),
-            MapPopoverLayout.Place(_ToScreen(graph.Systems[_hoverIndex]), size, Bounds.Size));
-        InvalidateVisual();
+        return (lines, text, new Size(width + PopoverPadding * 2, height + PopoverPadding * 2));
     }
 
     private void _DrawPopover(DrawingContext context)
@@ -679,6 +709,8 @@ public sealed class StarMapControl : Control
         this.TryFindResource("AccentBrightBrush", ActualThemeVariant, out object? found) && found is ISolidColorBrush brush ? brush.Color : MapPalette.Text;
 
     private static Point _BadgeCentre(Point system) => new(system.X + BadgeOffset, system.Y - BadgeOffset);
+
+    private static Point _MarkerCentre(Point system) => new(system.X - 12, system.Y + 2);
 
     private static Point _CommanderCentre(Point system) => new(system.X - BadgeOffset, system.Y - BadgeOffset);
 
@@ -839,7 +871,7 @@ public sealed class StarMapControl : Control
                 continue;
 
             Point at = _ToScreen(system);
-            var centre = new Point(at.X - 12, at.Y + 2);
+            Point centre = _MarkerCentre(at);
             const double half = 4.25;
             var diamond = new StreamGeometry();
             using (StreamGeometryContext shape = diamond.Open())
@@ -854,9 +886,12 @@ public sealed class StarMapControl : Control
             _labels.Reserve(new Rect(centre.X - half - 2, centre.Y - half - 2, half * 2 + 4, half * 2 + 4));
 
             if (level != MapDetailLevel.Regions)
-                _DrawLabel(context, string.Join(", ", here.Select(m => m.Label)), MapLabelFont.Marker, accent, new Point(at.X, at.Y - 22), 2);
+                _DrawLabel(context, _MarkerLabelText(here.Key, here.Select(m => m.Label).ToList()), MapLabelFont.Marker, accent, new Point(at.X, at.Y - 22), 2);
         }
     }
+
+    private string _MarkerLabelText(int systemIndex, IReadOnlyList<string> names) =>
+        MapMarkerLabel.For(names, FleetBadges?.FirstOrDefault(badge => badge.SystemIndex == systemIndex)?.Commander?.Name);
 
     // A filled AccentBright disc with the member count in the map's background colour, up and to the right of the
     // system so it never covers your own diamond on its left.

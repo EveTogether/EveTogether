@@ -34,7 +34,7 @@ internal static class MapSystemInfoBuilder
             [.. graph.NeighboursOf(systemIndex).ToArray().Select(neighbour => graph.Systems[neighbour].Name).Order(StringComparer.OrdinalIgnoreCase)]);
     }
 
-    // The commander first, then your own characters, then the rest of the fleet freshest first. A character of yours in the
+    // The commander first, then your own characters, then the rest of the fleet, each group alphabetical. A character of yours in the
     // fleet is one entry; one that only the game log placed has no age to show.
     private static List<MapSystemOccupant> _Occupants(int systemIndex, IReadOnlyList<MapMarker> markers, IReadOnlyList<MapFleetBadge> badges)
     {
@@ -52,7 +52,6 @@ internal static class MapSystemInfoBuilder
         [
             .. fromFleet.Concat(ownOnly)
                 .OrderBy(occupant => occupant.Kind)
-                .ThenByDescending(occupant => occupant.ObservedAt ?? DateTimeOffset.MaxValue)
                 .ThenBy(occupant => occupant.Name, StringComparer.OrdinalIgnoreCase)
         ];
     }

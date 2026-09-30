@@ -141,7 +141,7 @@ public sealed class MapFollowFleetTests
             world.Model.FleetUnplacedText);
     }
 
-    /// <summary>Hovering the badge opens the popover of its system, listing each member with how old their position is, freshest first.</summary>
+    /// <summary>Hovering the badge opens the popover of its system, listing each member with how old their position is, alphabetical.</summary>
     [AvaloniaFact]
     public async Task HoveringABadge_ListsItsMembersWithTheAgeOfTheirPosition()
     {

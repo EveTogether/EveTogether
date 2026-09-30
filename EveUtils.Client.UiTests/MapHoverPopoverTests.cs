@@ -35,7 +35,7 @@ public sealed class MapHoverPopoverTests
         Assert.Equal(
         [
             "Amarr 0.9", "Kador · Domain", "Amarr Empire", "On the route · step 4 of 12", "7 jumps from Kaelen Voss", "1 jump from FC Mira",
-            "FC · Mira · 40s ago", "Kaelen Voss", "3 stargates · Alpha, Bravo, Charlie"
+            "Here · 2", "FC · Mira · 40s ago", "Kaelen Voss", "3 stargates · Alpha, Bravo, Charlie"
         ], rows);
     }
 
@@ -56,19 +56,20 @@ public sealed class MapHoverPopoverTests
     }
 
     [Fact]
-    public void Rows_WithMoreThanEightOccupants_ListEightWithTheCommanderFirstAndCountTheRest()
+    public void Rows_WithMoreThanFifteenOccupants_ListFifteenWithTheCommanderFirstAndCountTheRest()
     {
         MapSystemOccupant[] here =
         [
             new("Boss", MapOccupantKind.Commander, T0),
-            .. Enumerable.Range(1, 12).Select(number => new MapSystemOccupant($"Pilot{number}", MapOccupantKind.FleetMember, T0))
+            .. Enumerable.Range(1, 29).Select(number => new MapSystemOccupant($"Pilot{number}", MapOccupantKind.FleetMember, T0))
         ];
 
         string[] rows = [.. MapPopoverRows.From(_Info(neighbours: [], here: here), T0, AccentBright).Select(MapPopoverRows.TextOf)];
 
-        Assert.Equal("FC · Boss · 0s ago", rows[3]);
-        Assert.Equal("Pilot7 · 0s ago", rows[^3]);
-        Assert.Equal("+5 more here", rows[^2]);
+        Assert.Equal("Here · 30", rows[3]);
+        Assert.Equal("FC · Boss · 0s ago", rows[4]);
+        Assert.Equal("Pilot14 · 0s ago", rows[^3]);
+        Assert.Equal("+15 more here", rows[^2]);
     }
 
     [Fact]
