@@ -20,6 +20,9 @@ using EveUtils.Shared.Modules.Fleet.Enums;
 using EveUtils.Shared.Modules.Map.Dtos;
 using EveUtils.Shared.Modules.Map.Enums;
 using EveUtils.Shared.Modules.Map.Queries;
+using EveUtils.Shared.Modules.Settings.Commands;
+using EveUtils.Shared.Modules.Settings.Dtos;
+using EveUtils.Shared.Modules.Settings.Queries;
 
 namespace EveUtils.Client.ViewModels.Map;
 
@@ -123,6 +126,53 @@ public sealed partial class MapViewModel : ObservableObject, IRefreshableModule,
     [ObservableProperty] private MapFocusRequest? _focusRequest;
     [ObservableProperty] private bool _isLegendOpen;
 
+    // ── Side panel (ET-397) ──────────────────────────────────────────────────────────────────────
+
+    // The MAP tab and the popped-out window each remember whether their side panel is folded away.
+    public const string PanelCollapsedInTabSettingKey = "ui.map.panel-collapsed.tab";
+
+    public const string PanelCollapsedInWindowSettingKey = "ui.map.panel-collapsed.window";
+
+    public const double ExpandedPanelWidth = 286;
+
+    /// <summary>What is left of the side panel when it is folded away: a strip with the button to unfold it.</summary>
+    public const double CollapsedPanelWidth = 28;
+
+    private bool _panelCollapsedInTab;
+    private bool _panelCollapsedInWindow;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(PanelToggleTip), nameof(PanelWidth))]
+    private bool _isPanelCollapsed;
+
+    public string PanelToggleTip => IsPanelCollapsed ? "Show panel" : "Hide panel";
+
+    public double PanelWidth => IsPanelCollapsed ? CollapsedPanelWidth : ExpandedPanelWidth;
+
+    [RelayCommand]
+    private async Task TogglePanelAsync()
+    {
+        bool collapsed = !IsPanelCollapsed;
+        if (IsPoppedOut)
+            _panelCollapsedInWindow = collapsed;
+        else
+            _panelCollapsedInTab = collapsed;
+        IsPanelCollapsed = collapsed;
+        await _dispatcher.Send(new SetSettingCommand(_PanelSettingKey(), collapsed ? "true" : "false"));
+    }
+
+    private string _PanelSettingKey() => IsPoppedOut ? PanelCollapsedInWindowSettingKey : PanelCollapsedInTabSettingKey;
+
+    private async Task _LoadPanelStateAsync()
+    {
+        IReadOnlyList<SettingDto> settings = await _dispatcher.Query(new GetSettingsQuery());
+        _panelCollapsedInTab = settings.Any(setting => setting.Key == PanelCollapsedInTabSettingKey && setting.Value == "true");
+        _panelCollapsedInWindow = settings.Any(setting => setting.Key == PanelCollapsedInWindowSettingKey && setting.Value == "true");
+        _ShowPanelStateOfThisView();
+    }
+
+    private void _ShowPanelStateOfThisView() => IsPanelCollapsed = IsPoppedOut ? _panelCollapsedInWindow : _panelCollapsedInTab;
+
     // ── Pop-out (ET-396) ─────────────────────────────────────────────────────────────────────────
 
     /// <summary>The map is in a window of its own and the MAP tab holds a placeholder.</summary>
@@ -144,6 +194,7 @@ public sealed partial class MapViewModel : ObservableObject, IRefreshableModule,
     {
         OnPropertyChanged(nameof(IsPoppedOut));
         OnPropertyChanged(nameof(CanPopOut));
+        _ShowPanelStateOfThisView();
     }
 
     // ── Follow ───────────────────────────────────────────────────────────────────────────────────
@@ -347,6 +398,7 @@ public sealed partial class MapViewModel : ObservableObject, IRefreshableModule,
     /// <summary>Reads the map; a later call only swaps it in when the SDE build changed, so an open map keeps its view.</summary>
     public async Task LoadAsync()
     {
+        await _LoadPanelStateAsync();
         _characters = await _registry.GetAllAsync();
         _SyncCharacterRows();
         Result<MapGraphDto> result = await _dispatcher.Query(new GetMapGraphQuery());

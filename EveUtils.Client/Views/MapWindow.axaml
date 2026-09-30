@@ -110,8 +110,18 @@
             </Border>
 
             <!-- ══ Side panel ══ -->
-            <Border DockPanel.Dock="Left" Width="286" BorderThickness="0,0,1,0" BorderBrush="{DynamicResource BorderBrush}">
-                <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+            <Border x:Name="SidePanel" DockPanel.Dock="Left" Width="{Binding PanelWidth}" BorderThickness="0,0,1,0"
+                    BorderBrush="{DynamicResource BorderBrush}">
+                <DockPanel>
+                <Button x:Name="PanelToggleButton" DockPanel.Dock="Top" Classes="navlink" Width="27" Height="28" Padding="0"
+                        HorizontalAlignment="Right" Command="{Binding TogglePanelCommand}"
+                        ToolTip.Tip="{Binding PanelToggleTip}">
+                    <Panel>
+                        <mi:MaterialIcon Kind="ChevronDoubleLeft" Width="16" Height="16" IsVisible="{Binding !IsPanelCollapsed}"/>
+                        <mi:MaterialIcon Kind="ChevronDoubleRight" Width="16" Height="16" IsVisible="{Binding IsPanelCollapsed}"/>
+                    </Panel>
+                </Button>
+                <ScrollViewer IsVisible="{Binding !IsPanelCollapsed}" HorizontalScrollBarVisibility="Disabled">
                     <StackPanel>
                         <!-- FOLLOW -->
                         <Border Classes="block">
@@ -426,6 +436,7 @@
                         </Border>
                     </StackPanel>
                 </ScrollViewer>
+                </DockPanel>
             </Border>
 
             <!-- ══ Map + HUD ══ -->

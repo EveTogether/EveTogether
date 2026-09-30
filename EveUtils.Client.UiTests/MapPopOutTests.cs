@@ -252,7 +252,7 @@ public sealed class MapPopOutTests
         Assert.Null(world.Popout);
     }
 
-    private sealed class World : IDisposable
+    internal sealed class World : IDisposable
     {
         private readonly MainWindow _window;
         private int _seconds;
@@ -310,6 +310,17 @@ public sealed class MapPopOutTests
             map.FromText = "Jita";
             map.ToText = "Amarr";
             await map.PlanRouteCommand.ExecuteAsync(null);
+        }
+
+        public async Task FollowOwnCharacterAsync(MapViewModel map)
+        {
+            await WaitAsync(() => map.Graph is not null && map.Characters.Count == 1);
+            _Positions().Observe(new FleetPositionDto(Own, OwnName, Jita, PositionSource.Gamelog, DateTimeOffset.UtcNow.AddSeconds(-30 + ++_seconds)));
+            UiDispatcher.UIThread.RunJobs();
+            map.SetFollowModeCommand.Execute(MapFollowMode.Character);
+            map.FollowCharacterCommand.Execute(map.Characters.Single());
+            _Positions().Observe(new FleetPositionDto(Own, OwnName, Amarr, PositionSource.Gamelog, DateTimeOffset.UtcNow.AddSeconds(-30 + ++_seconds)));
+            UiDispatcher.UIThread.RunJobs();
         }
 
         public Button PlaceholderButton(string name) =>
