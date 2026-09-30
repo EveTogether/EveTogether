@@ -18,6 +18,8 @@ namespace EveUtils.Client.UiTests;
 /// </summary>
 public class CrashLogTests
 {
+    private const string UnobservedFaultMarker = "crash-log-test: unobserved task fault";
+
     [Fact]
     public void UnobservedTaskException_IsWrittenToAppErrorsJsonl()
     {
@@ -29,7 +31,9 @@ public class CrashLogTests
             RunAndDropFaultingTask();
             // A Debug-build JIT frame reports its locals conservatively for its whole body, so the dropped task
             // must be confined to its own non-inlined method — otherwise this method's frame still roots it.
-            for (var i = 0; i < 10 && !FileContains(dir, "UnobservedTaskException"); i++)
+            // CrashLog's handlers are process-wide, so an unobserved fault from any other test lands in this file too:
+            // wait for and read back this test's own marker, never the first or last line.
+            for (var i = 0; i < 50 && !FileContains(dir, UnobservedFaultMarker); i++)
             {
                 GC.Collect();
                 GC.WaitForPendingFinalizers();
@@ -37,9 +41,8 @@ public class CrashLogTests
                 Thread.Sleep(20);
             }
 
-            var line = LastLine(dir);
+            var line = LineContaining(dir, UnobservedFaultMarker);
             Assert.Contains("TaskScheduler.UnobservedTaskException", line);
-            Assert.Contains("crash-log-test: unobserved task fault", line);
 
             var entry = JsonSerializer.Deserialize<LogEntry>(line)!;
             Assert.Equal("Crash", entry.Category);
@@ -62,7 +65,7 @@ public class CrashLogTests
 
             CrashLog.WriteShutdownMarker("test harness");
 
-            var line = LastLine(dir);
+            var line = LineContaining(dir, "Clean shutdown: test harness");
             var entry = JsonSerializer.Deserialize<LogEntry>(line)!;
             Assert.Equal("Crash", entry.Category);
             Assert.Contains("Clean shutdown", entry.Message);
@@ -97,7 +100,7 @@ public class CrashLogTests
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static void RunAndDropFaultingTask()
     {
-        var faulting = Task.Run(() => throw new InvalidOperationException("crash-log-test: unobserved task fault"));
+        var faulting = Task.Run(() => throw new InvalidOperationException(UnobservedFaultMarker));
         while (!faulting.IsCompleted) Thread.Sleep(10);
     }
 
@@ -122,6 +125,6 @@ public class CrashLogTests
         return File.Exists(path) && File.ReadAllText(path).Contains(text);
     }
 
-    private static string LastLine(string dir) =>
-        File.ReadAllLines(Path.Combine(dir, "app-errors.jsonl"))[^1];
+    private static string LineContaining(string dir, string text) =>
+        File.ReadAllLines(Path.Combine(dir, "app-errors.jsonl")).First(line => line.Contains(text));
 }
