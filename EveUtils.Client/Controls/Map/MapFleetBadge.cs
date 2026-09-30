@@ -12,16 +12,7 @@ public sealed record MapFleetBadge(int SystemIndex, IReadOnlyList<MapFleetSighti
     /// <summary>The fleet commander among <see cref="Members"/>, or null when they are elsewhere or unplaced.</summary>
     public MapFleetSighting? Commander => Members.FirstOrDefault(member => member.IsCommander);
 
-    /// <summary>The hover text: the system, then the commander as "FC", then each other member with the age of their
-    /// position, freshest first.</summary>
-    public string Describe(string systemHeading, DateTimeOffset now) =>
-        string.Join('\n', Members
-            .OrderByDescending(member => member.IsCommander)
-            .ThenBy(member => now - member.ObservedAt)
-            .ThenBy(member => member.Name, StringComparer.OrdinalIgnoreCase)
-            .Select(member => $"{(member.IsCommander ? "FC · " : string.Empty)}{member.Name} · {Ago(now - member.ObservedAt)}")
-            .Prepend(systemHeading));
-
+    /// <summary>"12s ago", "3 min ago", "2 h ago".</summary>
     public static string Ago(TimeSpan age)
     {
         int seconds = (int)Math.Max(0, Math.Round(age.TotalSeconds));

@@ -33,19 +33,19 @@ namespace EveUtils.Client.UiTests;
 /// merged position source.</summary>
 public sealed class MapFollowFleetTests
 {
-    private const int Jita = 30000142;
-    private const int Perimeter = 30000144;
-    private const int Amarr = 30002187;
-    private const int Dodixie = 30002659;
+    internal const int Jita = 30000142;
+    internal const int Perimeter = 30000144;
+    internal const int Amarr = 30002187;
+    internal const int Dodixie = 30002659;
 
-    private const int Own = 91000001;
-    private const string OwnName = "Kaelen Voss";
-    private const int Mate = 91000002;
-    private const string MateName = "Mira Solenne";
-    private const int Outsider = 91000003;
-    private const string OutsiderName = "Oskar Vale";
+    internal const int Own = 91000001;
+    internal const string OwnName = "Kaelen Voss";
+    internal const int Mate = 91000002;
+    internal const string MateName = "Mira Solenne";
+    internal const int Outsider = 91000003;
+    internal const string OutsiderName = "Oskar Vale";
 
-    private static readonly DateTimeOffset T0 = new(2026, 9, 30, 12, 0, 0, TimeSpan.Zero);
+    internal static readonly DateTimeOffset T0 = new(2026, 9, 30, 12, 0, 0, TimeSpan.Zero);
 
     /// <summary>Acceptance: following the fleet leaves every member inside the map, however far apart they are.</summary>
     [AvaloniaFact]
@@ -141,12 +141,13 @@ public sealed class MapFollowFleetTests
             world.Model.FleetUnplacedText);
     }
 
-    /// <summary>The badge's hover text: the system, then each member with how old their position is, freshest first.</summary>
+    /// <summary>Hovering the badge opens the popover of its system, listing each member with how old their position is, freshest first.</summary>
     [AvaloniaFact]
     public async Task HoveringABadge_ListsItsMembersWithTheAgeOfTheirPosition()
     {
         using var world = await World.OpenAsync();
         (Window window, StarMapControl map) = world.Show();
+        map.PopoverDelay = TimeSpan.Zero;
         world.Sight(Mate, Amarr, PositionSource.FleetMetric, T0 - TimeSpan.FromSeconds(12));
         world.Sight(Outsider, Amarr, PositionSource.EsiFleet, T0 - TimeSpan.FromMinutes(3));
         world.FollowFleet();
@@ -155,7 +156,8 @@ public sealed class MapFollowFleetTests
         Point system = map.ScreenPointOf(world.IndexOf(Amarr));
         window.MouseMove(map.TranslatePoint(new Point(system.X + 10, system.Y - 10), window) ?? default);
 
-        Assert.Equal($"Amarr 0.9\n{MateName} · 12s ago\n{OutsiderName} · 3 min ago", ToolTip.GetTip(map));
+        Assert.StartsWith("Amarr 0.9\n", map.PopoverText);
+        Assert.Contains($"\n{MateName} · 12s ago\n{OutsiderName} · 3 min ago\n", map.PopoverText);
     }
 
     /// <summary>As with a character (ET-393): nothing is followed until a fleet is picked, moving the map pauses, a member's
@@ -213,10 +215,11 @@ public sealed class MapFollowFleetTests
     }
 
     [AvaloniaFact]
-    public async Task TheBadgesTooltip_ListsTheCommanderFirst_LabelledFc()
+    public async Task ThePopover_ListsTheCommanderFirst_LabelledFc()
     {
         using var world = await World.OpenAsync(rosterCommander: Mate);
         (Window window, StarMapControl map) = world.Show();
+        map.PopoverDelay = TimeSpan.Zero;
         world.Sight(Own, Amarr, PositionSource.FleetMetric, T0 - TimeSpan.FromSeconds(2));
         world.Sight(Mate, Amarr, PositionSource.FleetMetric, T0 - TimeSpan.FromSeconds(40));
         world.FollowFleet();
@@ -225,7 +228,8 @@ public sealed class MapFollowFleetTests
         Point system = map.ScreenPointOf(world.IndexOf(Amarr));
         window.MouseMove(map.TranslatePoint(new Point(system.X + 10, system.Y - 10), window) ?? default);
 
-        Assert.Equal($"Amarr 0.9\nFC · {MateName} · 40s ago\n{OwnName} · 2s ago", ToolTip.GetTip(map));
+        Assert.StartsWith("Amarr 0.9\n", map.PopoverText);
+        Assert.Contains($"\nFC · {MateName} · 40s ago\n{OwnName} · 2s ago\n", map.PopoverText);
     }
 
     /// <summary>Precedence, as documented on <see cref="MapFleetSource.CommanderOf"/>: the ET roster's FC, and only when it
@@ -335,7 +339,7 @@ public sealed class MapFollowFleetTests
         public override DateTimeOffset GetUtcNow() => now;
     }
 
-    private sealed class World : IDisposable
+    internal sealed class World : IDisposable
     {
         private readonly TestClientInstance _instance;
         private readonly FleetPositionSource _positions;

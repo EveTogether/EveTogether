@@ -71,6 +71,71 @@ public sealed class MapModuleTests
         Assert.Equal(1, route.Value?.Jumps);
     }
 
+    /// <summary>ET-399: the jump count to any system is the length of the shortest route the planner finds.</summary>
+    [AvaloniaFact]
+    public async Task GetJumpDistances_FromJita_AgreeWithTheShortestRoute()
+    {
+        using TestClientInstance instance = TestClientInstance.Create(services => services.AddSingleton<ISdeAccessor>(MapFixture.Sde()));
+        IDispatcher dispatcher = _Dispatcher(instance);
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+
+        JumpDistancesDto? distances = (await dispatcher.Query(new GetJumpDistancesQuery(Jita), cancellationToken)).Value;
+        MapGraphDto? graph = (await dispatcher.Query(new GetMapGraphQuery(), cancellationToken)).Value;
+
+        Assert.NotNull(distances);
+        Assert.NotNull(graph);
+        graph.TryGetIndex(Jita, out int jita);
+        graph.TryGetIndex(Amarr, out int amarr);
+        Assert.Equal(jita, distances.FromIndex);
+        Assert.Equal(0, distances.JumpsTo(jita));
+        Assert.Equal(11, distances.JumpsTo(amarr));
+    }
+
+    /// <summary>No gate leads into Pochven: unreachable is null, not a failure and not a huge number.</summary>
+    [AvaloniaFact]
+    public async Task GetJumpDistances_ToPochven_IsNull()
+    {
+        using TestClientInstance instance = TestClientInstance.Create(services => services.AddSingleton<ISdeAccessor>(MapFixture.Sde()));
+        IDispatcher dispatcher = _Dispatcher(instance);
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+
+        JumpDistancesDto? distances = (await dispatcher.Query(new GetJumpDistancesQuery(Jita), cancellationToken)).Value;
+        MapGraphDto? graph = (await dispatcher.Query(new GetMapGraphQuery(), cancellationToken)).Value;
+
+        graph!.TryGetIndex(Ichoriya, out int ichoriya);
+        Assert.Null(distances!.JumpsTo(ichoriya));
+        Assert.Null(distances.JumpsTo(-1));
+    }
+
+    [AvaloniaFact]
+    public async Task GetJumpDistances_WithAnExtraEdge_CountsIt()
+    {
+        using TestClientInstance instance = TestClientInstance.Create(services =>
+        {
+            services.AddSingleton<ISdeAccessor>(MapFixture.Sde());
+            services.AddSingleton<IRouteEdgeSource>(new FixedEdges(new RouteEdgeDto(Jita, Ichoriya)));
+        });
+        IDispatcher dispatcher = _Dispatcher(instance);
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+
+        JumpDistancesDto? distances = (await dispatcher.Query(new GetJumpDistancesQuery(Jita), cancellationToken)).Value;
+        MapGraphDto? graph = (await dispatcher.Query(new GetMapGraphQuery(), cancellationToken)).Value;
+
+        graph!.TryGetIndex(Ichoriya, out int ichoriya);
+        Assert.Equal(1, distances!.JumpsTo(ichoriya));
+    }
+
+    [AvaloniaFact]
+    public async Task GetJumpDistances_FromAnUnknownSystem_FailsWithNotFound()
+    {
+        using TestClientInstance instance = TestClientInstance.Create(services => services.AddSingleton<ISdeAccessor>(MapFixture.Sde()));
+
+        Result<JumpDistancesDto> result = await _Dispatcher(instance).Query(new GetJumpDistancesQuery(1), TestContext.Current.CancellationToken);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(MessageCodes.NotFound, Assert.Single(result.Messages).Code);
+    }
+
     /// <summary>ET-298: the SDE read behind the graph is blocking, so it may never run on the UI thread that asks.</summary>
     [AvaloniaFact]
     public async Task GetMapGraph_FromTheUiThread_ReadsTheSdeOffIt()

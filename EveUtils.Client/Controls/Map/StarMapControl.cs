@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Documents;
@@ -40,7 +42,12 @@ public sealed class StarMapControl : Control
     private const double CommanderStarRadius = 8;
     private const double DragThreshold = 3;
     private const double SelectRadius = 12;
-    private const double HoverRadius = 10;
+    private const double RegionsPickRadius = 7;
+    private const double ConstellationsPickRadius = 9;
+    private const double PopoverPadding = 9;
+    private const double PopoverMaxWidth = 300;
+    private const double PopoverFontSize = 12;
+    private const double PopoverRowGap = 3;
     private const double WheelStep = 1.25;
     private const double DoubleTapZoom = 2.5;
 
@@ -92,6 +99,14 @@ public sealed class StarMapControl : Control
     public static readonly StyledProperty<TimeProvider> ClockProperty =
         AvaloniaProperty.Register<StarMapControl, TimeProvider>(nameof(Clock), TimeProvider.System);
 
+    /// <summary>What the hover popover says about a system index; null for no popover (the lookup may also return null).</summary>
+    public static readonly StyledProperty<Func<int, MapSystemInfo?>?> SystemInfoSourceProperty =
+        AvaloniaProperty.Register<StarMapControl, Func<int, MapSystemInfo?>?>(nameof(SystemInfoSource));
+
+    /// <summary>Raised by the owner when what <see cref="SystemInfoSource"/> answers changed (a jump count arrived); an open popover rereads it.</summary>
+    public static readonly StyledProperty<int> InfoRevisionProperty =
+        AvaloniaProperty.Register<StarMapControl, int>(nameof(InfoRevision));
+
     public static readonly DirectProperty<StarMapControl, double> ZoomLevelProperty =
         AvaloniaProperty.RegisterDirect<StarMapControl, double>(nameof(ZoomLevel), map => map.ZoomLevel);
 
@@ -124,6 +139,8 @@ public sealed class StarMapControl : Control
     private bool _isDragging;
     private int _hoverIndex = -1;
     private Flight? _flight;
+    private CancellationTokenSource? _popoverDelay;
+    private Popover? _popover;
 
     private double _zoomLevel = 1;
     private MapDetailLevel _detailLevel = MapDetailLevel.Regions;
@@ -203,6 +220,32 @@ public sealed class StarMapControl : Control
         set => SetValue(ClockProperty, value);
     }
 
+    public Func<int, MapSystemInfo?>? SystemInfoSource
+    {
+        get => GetValue(SystemInfoSourceProperty);
+        set => SetValue(SystemInfoSourceProperty, value);
+    }
+
+    public int InfoRevision
+    {
+        get => GetValue(InfoRevisionProperty);
+        set => SetValue(InfoRevisionProperty, value);
+    }
+
+    /// <summary>How long the pointer rests on a system before its popover opens.</summary>
+    public TimeSpan PopoverDelay { get; set; } = TimeSpan.FromMilliseconds(250);
+
+    /// <summary>The open popover's lines, one per row; null while none is open.</summary>
+    internal string? PopoverText => _popover?.Text;
+
+    /// <summary>Where the open popover sits inside the map; empty while none is open.</summary>
+    internal Rect PopoverBounds => _popover?.Bounds ?? default;
+
+    internal double PickRadius => _PickRadius();
+
+    /// <summary>The system the open popover is about, -1 while none is open.</summary>
+    internal int PopoverIndex => _popover?.SystemIndex ?? -1;
+
     /// <summary>The pilot moved the view: a drag, the wheel, a double tap or the zoom buttons. Never raised for a
     /// <see cref="FocusRequest"/> — that is the map moving itself, and following must not pause on its own moves.</summary>
     public event EventHandler? ViewMovedByUser;
@@ -248,8 +291,9 @@ public sealed class StarMapControl : Control
             _OnRouteChanged();
         else if (change.Property == FocusRequestProperty && FocusRequest is { } request)
             _Focus(request);
-        else if (change.Property == FleetBadgesProperty)
-            _UpdateBadgeTip();
+        else if (change.Property == FleetBadgesProperty || change.Property == MarkersProperty || change.Property == RouteProperty
+                 || change.Property == InfoRevisionProperty || change.Property == SystemInfoSourceProperty)
+            _RefreshPopover();
     }
 
     protected override void OnSizeChanged(SizeChangedEventArgs e)
@@ -262,6 +306,7 @@ public sealed class StarMapControl : Control
     {
         base.OnDetachedFromVisualTree(e);
         _labelImages.Clear();
+        _HidePopover();
     }
 
     // ── Input ────────────────────────────────────────────────────────────────────────────────────
@@ -272,6 +317,7 @@ public sealed class StarMapControl : Control
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
             return;
         _flight = null;
+        _HidePopover();
         _pressedAt = e.GetPosition(this);
         _pressedCenter = new Point(_centerX, _centerY);
         _isDragging = false;
@@ -300,11 +346,13 @@ public sealed class StarMapControl : Control
             return;
         }
 
-        int hover = _BadgeAt(at) ?? _NearestAt(at, HoverRadius);
+        int hover = _BadgeAt(at) ?? _NearestAt(at, _PickRadius());
         if (hover == _hoverIndex)
             return;
         _hoverIndex = hover;
-        _UpdateBadgeTip();
+        _HidePopover();
+        if (hover >= 0)
+            _ArmPopover();
         InvalidateVisual();
     }
 
@@ -324,10 +372,10 @@ public sealed class StarMapControl : Control
     protected override void OnPointerExited(PointerEventArgs e)
     {
         base.OnPointerExited(e);
+        _HidePopover();
         if (_hoverIndex < 0)
             return;
         _hoverIndex = -1;
-        _UpdateBadgeTip();
         InvalidateVisual();
     }
 
@@ -352,6 +400,7 @@ public sealed class StarMapControl : Control
         _hasView = false;
         _flight = null;
         _hoverIndex = -1;
+        _HidePopover();
         _labelImages.Clear();
         MapGraphDto? graph = Graph;
         _geometry = graph is null ? null : new MapGeometry(graph);
@@ -406,6 +455,9 @@ public sealed class StarMapControl : Control
 
     private void _PublishView()
     {
+        // The map moved under a resting pointer (drag, wheel, flight, resize): what was hovered no longer is.
+        _hoverIndex = -1;
+        _HidePopover();
         ZoomLevel = _scale / _fitScale;
         DetailLevel = ZoomLevel < ConstellationsFrom ? MapDetailLevel.Regions
             : ZoomLevel < SystemsFrom ? MapDetailLevel.Constellations
@@ -512,21 +564,119 @@ public sealed class StarMapControl : Control
         return null;
     }
 
-    // Hovering a system with a badge lists its members and how old each position is; anywhere else shows nothing. The
-    // tooltip service opens it on the next pointer move and closes it when the tip goes back to null.
-    private void _UpdateBadgeTip()
+    // ── Hover popover (ET-399) ───────────────────────────────────────────────────────────────────
+
+    // The pick radius follows the zoom: dots are 1.3 px at regions, 2.4 at constellations and up to 7 at systems, and a
+    // fixed 10 px is too generous among the dense dots of the first two and too tight around a big system dot.
+    private double _PickRadius() => DetailLevel switch
     {
-        MapFleetBadge? badge = _hoverIndex >= 0 ? FleetBadges?.FirstOrDefault(candidate => candidate.SystemIndex == _hoverIndex) : null;
-        if (badge is null || Graph is not { } graph || badge.SystemIndex >= graph.Systems.Count)
+        MapDetailLevel.Regions => RegionsPickRadius,
+        MapDetailLevel.Constellations => ConstellationsPickRadius,
+        _ => Math.Min(12, _NodeRadius(DetailLevel) + 5)
+    };
+
+    private double _NodeRadius(MapDetailLevel level) => level switch
+    {
+        MapDetailLevel.Regions => 1.3,
+        MapDetailLevel.Constellations => 2.4,
+        _ => Math.Min(7, 3 + ZoomLevel / 6)
+    };
+
+    private void _ArmPopover()
+    {
+        if (SystemInfoSource is null)
+            return;
+        if (PopoverDelay <= TimeSpan.Zero)
         {
-            ToolTip.SetTip(this, null);
+            _RefreshPopover(force: true);
             return;
         }
 
-        MapSystemDto system = graph.Systems[badge.SystemIndex];
-        string heading = system.Name + " " + system.DisplaySecurity.ToString("0.0", CultureInfo.InvariantCulture);
-        ToolTip.SetTip(this, badge.Describe(heading, Clock.GetUtcNow()));
+        _popoverDelay = new CancellationTokenSource();
+        _ = _OpenAfterDelayAsync(_popoverDelay.Token);
     }
+
+    private async Task _OpenAfterDelayAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await Task.Delay(PopoverDelay, Clock, cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+        _RefreshPopover(force: true);
+    }
+
+    private void _HidePopover()
+    {
+        _popoverDelay?.Cancel();
+        _popoverDelay = null;
+        if (_popover is null)
+            return;
+        _popover = null;
+        InvalidateVisual();
+    }
+
+    // Builds (or, while one is open, rebuilds) the popover of the hovered system from the owner's snapshot — nothing here
+    // reads the SDE or the database. Without force it only refreshes a popover that is already open.
+    private void _RefreshPopover(bool force = false)
+    {
+        if (!force && _popover is null)
+            return;
+        if (_hoverIndex < 0 || Graph is not { } graph || _hoverIndex >= graph.Systems.Count || SystemInfoSource?.Invoke(_hoverIndex) is not { } info)
+        {
+            _HidePopover();
+            return;
+        }
+
+        Color accent = _AccentColour();
+        var typeface = new Typeface(GetValue(TextElement.FontFamilyProperty));
+        var lines = new List<FormattedText>();
+        var text = new List<string>();
+        double width = 0, height = 0;
+        foreach (IReadOnlyList<MapPopoverRun> row in MapPopoverRows.From(info, Clock.GetUtcNow(), accent))
+        {
+            string content = MapPopoverRows.TextOf(row);
+            var line = new FormattedText(content, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, typeface, PopoverFontSize,
+                new ImmutableSolidColorBrush(MapPalette.Text)) { MaxTextWidth = PopoverMaxWidth - PopoverPadding * 2 };
+            int start = 0;
+            foreach (MapPopoverRun run in row)
+            {
+                line.SetForegroundBrush(new ImmutableSolidColorBrush(run.Colour), start, run.Text.Length);
+                if (run.IsBold)
+                    line.SetFontWeight(FontWeight.Bold, start, run.Text.Length);
+                start += run.Text.Length;
+            }
+            lines.Add(line);
+            text.Add(content);
+            width = Math.Max(width, line.Width);
+            height += line.Height + (lines.Count > 1 ? PopoverRowGap : 0);
+        }
+
+        var size = new Size(width + PopoverPadding * 2, height + PopoverPadding * 2);
+        _popover = new Popover(_hoverIndex, lines, string.Join('\n', text),
+            MapPopoverLayout.Place(_ToScreen(graph.Systems[_hoverIndex]), size, Bounds.Size));
+        InvalidateVisual();
+    }
+
+    private void _DrawPopover(DrawingContext context)
+    {
+        if (_popover is not { } popover)
+            return;
+
+        context.DrawRectangle(MapPalette.HudBackgroundBrush, new ImmutablePen(new ImmutableSolidColorBrush(_AccentColour()), 1), popover.Bounds, 3, 3);
+        double y = popover.Bounds.Y + PopoverPadding;
+        foreach (FormattedText line in popover.Lines)
+        {
+            context.DrawText(line, new Point(popover.Bounds.X + PopoverPadding, y));
+            y += line.Height + PopoverRowGap;
+        }
+    }
+
+    private Color _AccentColour() =>
+        this.TryFindResource("AccentBrightBrush", ActualThemeVariant, out object? found) && found is ISolidColorBrush brush ? brush.Color : MapPalette.Text;
 
     private static Point _BadgeCentre(Point system) => new(system.X + BadgeOffset, system.Y - BadgeOffset);
 
@@ -556,21 +706,14 @@ public sealed class StarMapControl : Control
         if (Graph is not { } graph || _geometry is not { } geometry || !_hasView)
             return;
 
-        Color accent = this.TryFindResource("AccentBrightBrush", ActualThemeVariant, out object? found) && found is ISolidColorBrush brush
-            ? brush.Color
-            : MapPalette.Text;
+        Color accent = _AccentColour();
         MapDetailLevel level = DetailLevel;
         double margin = 40 / _scale;
         var world = new Rect(_ToWorldX(0) - margin, _ToWorldY(0) - margin,
             area.Width / _scale + margin * 2, area.Height / _scale + margin * 2);
 
         _DrawNetwork(context, graph, geometry, level, world);
-        double nodeRadius = level switch
-        {
-            MapDetailLevel.Regions => 1.3,
-            MapDetailLevel.Constellations => 2.4,
-            _ => Math.Min(7, 3 + ZoomLevel / 6)
-        };
+        double nodeRadius = _NodeRadius(level);
         _DrawSystems(context, graph, level, world, nodeRadius);
 
         _DrawTrail(context, graph, area, accent);
@@ -588,6 +731,7 @@ public sealed class StarMapControl : Control
             _DrawConstellationLabels(context, graph, level, area);
         if (level == MapDetailLevel.Systems)
             _DrawSystemLabels(context, graph, world, nodeRadius);
+        _DrawPopover(context);
     }
 
     private void _DrawNetwork(DrawingContext context, MapGraphDto graph, MapGeometry geometry, MapDetailLevel level, Rect world)
@@ -850,6 +994,8 @@ public sealed class StarMapControl : Control
 
     private static Color _RegionColour(MapRegionDto region) =>
         MapPalette.Regions[region.ColourIndex % MapPalette.Regions.Count];
+
+    private sealed record Popover(int SystemIndex, IReadOnlyList<FormattedText> Lines, string Text, Rect Bounds);
 
     private sealed record Flight(
         double FromX, double FromY, double FromScale, double ToX, double ToY, double ToScale, TimeSpan Duration, Stopwatch Clock);

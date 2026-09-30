@@ -55,6 +55,9 @@ public sealed partial class MapViewModel : ObservableObject, IRefreshableModule,
     /// <summary>How long a fleet member's position stays on the map without being confirmed again (see the class remarks).</summary>
     public static readonly TimeSpan FleetPositionExpiry = TimeSpan.FromMinutes(10);
 
+    // With no character followed, the popover counts jumps from this many of your own characters at most.
+    private const int MaxOwnDistanceOrigins = 3;
+
     // A repeat sighting in the same system raises no event, so the badges' ages and the expiry are re-read on a beat.
     private static readonly TimeSpan BadgeRefresh = TimeSpan.FromSeconds(5);
 
@@ -85,6 +88,9 @@ public sealed partial class MapViewModel : ObservableObject, IRefreshableModule,
     private readonly Dictionary<long, int?> _fleetCommanders = [];
     private readonly Dictionary<int, string> _names = [];
     private readonly HashSet<int> _namesAsked = [];
+    private readonly Dictionary<int, JumpDistancesDto?> _distances = [];
+    private readonly HashSet<int> _distancesAsked = [];
+    private (string Name, int SystemIndex)? _commanderOrigin;
     private IReadOnlyList<Character> _characters = [];
     private (long FleetId, string? ServerAddress)? _pinnedFleet;
     private bool _pinnedFollowOff;
@@ -110,6 +116,53 @@ public sealed partial class MapViewModel : ObservableObject, IRefreshableModule,
         _positions.PositionChanged += _OnPositionChanged;
         _rosterWatch = fleets.WatchRosters(_OnRosterChanged);
         _badgeBeat = clock.CreateTimer(_ => Avalonia.Threading.Dispatcher.UIThread.Post(_OnBadgeBeat), null, BadgeRefresh, BadgeRefresh);
+        SystemInfo = _BuildSystemInfo;
+    }
+
+    // ── Hover popover (ET-399) ───────────────────────────────────────────────────────────────────
+
+    /// <summary>What the map's hover popover says about a system: read from what the map already holds, so it is quick to
+    /// call on the UI thread. Jump counts come from <see cref="GetJumpDistancesQuery"/>, asked once per origin on the first
+    /// hover and shown as "counting" until the answer arrives.</summary>
+    public Func<int, MapSystemInfo?> SystemInfo { get; }
+
+    /// <summary>Raised whenever a jump count arrives, so an open popover rereads <see cref="SystemInfo"/>.</summary>
+    [ObservableProperty] private int _infoRevision;
+
+    private MapSystemInfo? _BuildSystemInfo(int systemIndex) =>
+        Graph is { } graph
+            ? MapSystemInfoBuilder.Build(graph, systemIndex, Markers, FleetBadges, Route, [.. _DistanceOrigins(graph).Select(origin => _DistanceFrom(graph, origin, systemIndex))])
+            : null;
+
+    // The followed character, or else your own characters; when a fleet is followed, its commander too.
+    private List<(string Name, int SystemIndex)> _DistanceOrigins(MapGraphDto graph)
+    {
+        var origins = new List<(string Name, int SystemIndex)>();
+        if (IsFollowingCharacter && FollowedCharacter is { } followed && FollowIndex >= 0)
+            origins.Add((followed.Name, FollowIndex));
+        else if (!IsFollowingCharacter)
+            origins.AddRange(Markers.Where(marker => marker.SystemIndex < graph.Systems.Count).Take(MaxOwnDistanceOrigins)
+                .Select(marker => (marker.Label, marker.SystemIndex)));
+        if (IsFollowingFleet && _commanderOrigin is { } commander)
+            origins.Add(commander);
+        return origins;
+    }
+
+    private MapSystemDistance _DistanceFrom(MapGraphDto graph, (string Name, int SystemIndex) origin, int systemIndex)
+    {
+        int solarSystemId = graph.Systems[origin.SystemIndex].SolarSystemId;
+        if (_distances.TryGetValue(solarSystemId, out JumpDistancesDto? distances))
+            return new MapSystemDistance(origin.Name, distances?.JumpsTo(systemIndex), IsPending: false);
+        if (_distancesAsked.Add(solarSystemId))
+            _ = _LoadDistancesAsync(solarSystemId);
+        return new MapSystemDistance(origin.Name, null, IsPending: true);
+    }
+
+    private async Task _LoadDistancesAsync(int solarSystemId)
+    {
+        Result<JumpDistancesDto> result = await _dispatcher.Query(new GetJumpDistancesQuery(solarSystemId));
+        _distances[solarSystemId] = result.IsSuccess ? result.Value : null;
+        InfoRevision++;
     }
 
     /// <summary>What the badges' "12s ago" is measured against.</summary>
@@ -422,6 +475,8 @@ public sealed partial class MapViewModel : ObservableObject, IRefreshableModule,
         {
             SelectedIndex = -1;
             Route = null;
+            _distances.Clear();
+            _distancesAsked.Clear();
             Graph = graph;
             SystemNames = graph.Systems.Select(system => system.Name).Order(StringComparer.OrdinalIgnoreCase).ToList();
         }
@@ -933,10 +988,17 @@ public sealed partial class MapViewModel : ObservableObject, IRefreshableModule,
                         commanders.Contains(member.CharacterId)))]))
         ];
 
+        _commanderOrigin = null;
         if (FollowedFleet is not { } fleet)
             return;
         int? commander = _fleetCommanders.GetValueOrDefault(fleet.Fleet.FleetId);
-        FleetCommanderText = commander is { } commanderId && placed.Any(member => member.CharacterId == commanderId) ? string.Empty : "FC position unknown";
+        bool commanderPlaced = commander is { } commanderId && placed.Any(member => member.CharacterId == commanderId);
+        if (commanderPlaced)
+        {
+            (int commanderSystem, int commanderCharacter, FleetPositionDto commanderPosition) = placed.First(member => member.CharacterId == commander);
+            _commanderOrigin = ("FC " + _NameOf(commanderCharacter, commanderPosition), commanderSystem);
+        }
+        FleetCommanderText = commanderPlaced ? string.Empty : "FC position unknown";
         IReadOnlyCollection<int> members = _MembersOf(fleet);
         List<(int SystemIndex, int CharacterId, FleetPositionDto Position)> inFleet = [.. placed.Where(member => members.Contains(member.CharacterId))];
         int systems = inFleet.Select(member => member.SystemIndex).Distinct().Count();

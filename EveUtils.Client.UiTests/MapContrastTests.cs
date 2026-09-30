@@ -67,6 +67,9 @@ public sealed class MapContrastTests
             .. _Pairs("commander star and name", [accentBright], [canvas]),
             // ET-397: the panel's fold button is a navlink straight on the panel — TextBrush resting (already in "side panel"), TextBright on the row-hover fill.
             .. _Pairs("panel fold button hover", [_Neutral("TextBrightBrush")], [.. panels.Select(panel => _Over(_Neutral("BgRowHoverBrush"), panel))]),
+            // ET-399: the hover popover is drawn on the HUD fill; its lines are the map's text and muted ink, the route yellow, the
+            // security and region colours, and the commander in AccentBright (the security and region sets are in "HUD").
+            .. _Pairs("hover popover", [MapPalette.Text, MapPalette.Muted, MapPalette.Route, accentBright], [hud]),
             .. _Pairs("placeholder accent button", [_Neutral("TextBrightBrush")], [.. panels.Select(panel => _Over(((ISolidColorBrush)theme["AccentSoftBrush"]!).Color, panel))]),
             .. _Pairs("placeholder plain button", [((ISolidColorBrush)theme["TextAccentBrush"]!).Color], [.. panels.Select(panel => _Over(Color.FromArgb(0x22, 0xFF, 0xFF, 0xFF), panel))]),
             .. _Pairs("fleet card chips", [_Neutral("GreenBrush"), _Neutral("WarnBrush"), _Neutral("TextDimBrush"), accentBright, ((ISolidColorBrush)theme["TextAccentBrush"]!).Color], panels)
