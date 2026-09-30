@@ -8,15 +8,19 @@ using Avalonia.VisualTree;
 using EveUtils.Client.Controls.Map;
 using EveUtils.Client.Dialogs;
 using EveUtils.Client.Fleet;
+using EveUtils.Client.Platform;
 using EveUtils.Client.ViewModels;
 using EveUtils.Client.ViewModels.Map;
 using EveUtils.Client.Views;
 using EveUtils.Client.WorldMap;
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Identity;
+using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Fleet.Dtos;
 using EveUtils.Shared.Modules.Fleet.Entities;
 using EveUtils.Shared.Modules.Fleet.Enums;
+using EveUtils.Shared.Modules.Fleet.Events;
+using EveUtils.Shared.Modules.Fleet.Metrics;
 using EveUtils.Shared.Modules.Fleet.Repositories;
 using EveUtils.Shared.Modules.Map.Dtos;
 using EveUtils.Shared.Modules.Map.Enums;
@@ -45,6 +49,9 @@ public sealed class MapFleetCardTests
     private const string MateName = "Mira Solenne";
     private const int Outsider = 91000003;
     private const string OutsiderName = "Oskar Vale";
+    private const int AltOne = 91000011;
+    private const int AltTwo = 91000012;
+    private const int AltThree = 91000013;
 
     private static readonly TimeSpan Wait = TimeSpan.FromSeconds(5);
 
@@ -333,6 +340,135 @@ public sealed class MapFleetCardTests
         tab.Dispose();
         Assert.True(bothMs < 40, $"{bothMs:0.0} ms for both views at {tabMap.DetailLevel}/{cardMap.DetailLevel}");
     }
+    /// <summary>ET-409: five pilots stand in Jita, three of them out of game — one of ours by the local verdict, one of ours
+    /// whose last position was stored before they logged off, and a mate whose own client says so. Only the two in game are
+    /// on the map: the label, the badge and the popover.</summary>
+    [AvaloniaFact]
+    public async Task PilotsWhoAreOffline_AreNotInTheLabelTheBadgeOrThePopover()
+    {
+        using var world = await World.OpenAsync(presence: new PilotPresence([Own, AltOne, AltTwo, AltThree], online: [Own, AltOne]));
+        await world.AddPilotsAsync((AltOne, "Alt One"), (AltTwo, "Alt Two"), (AltThree, "Alt Three"));
+        world.Sight(Own, Jita);
+        world.Sight(AltOne, Jita);
+        world.Sight(AltTwo, Jita, PositionSource.EsiLocation);
+        world.Sight(AltThree, Jita);
+        await world.PublishPresenceAsync(Mate, PresenceState.NotInGame);
+        world.Sight(Mate, Jita);
+
+        FleetMapCard card = world.ShowMetrics();
+        await world.WaitAsync(() => world.Card.IsFollowingFleet);
+        world.Settle();
+        StarMapControl map = card.FindControl<StarMapControl>("CardMap") ?? throw new InvalidOperationException("no map in the card");
+        int jita = world.IndexOf(Jita);
+
+        string[] label = map.MarkerLabelOf(jita)!.Split(", ");
+        string[] popover = world.Card.SystemInfo(jita)!.Here.Select(here => here.Name).ToArray();
+        Assert.Equal(["Alt One", OwnName], label.Order());
+        Assert.Equal(2, world.Card.FleetBadges.Single().Members.Count);
+        Assert.Equal(["Alt One", OwnName], popover.Order());
+    }
+
+    /// <summary>ET-409: a pilot known to be out of game gets no fresh timestamp from the ESI answers that keep repeating the
+    /// spot they logged off at — their "Xs ago" neither counts up from zero nor resets.</summary>
+    [AvaloniaFact]
+    public async Task AnOfflinePilot_IsNotStampedAsSeenAgainByTheEsiFleetPoll()
+    {
+        using var world = await World.OpenAsync();
+        var positions = world.Instance.Services.GetRequiredService<FleetPositionSource>();
+        DateTimeOffset seen = DateTimeOffset.UtcNow.AddSeconds(-30);
+        positions.ObserveEsiFleet([new Esi.EsiFleetMember { CharacterId = Mate, SolarSystemId = Jita }], seen);
+        await world.PublishPresenceAsync(Mate, PresenceState.NotInGame);
+
+        foreach (int second in new[] { 5, 10, 15 })
+            positions.ObserveEsiFleet([new Esi.EsiFleetMember { CharacterId = Mate, SolarSystemId = Jita }], seen.AddSeconds(second));
+
+        Assert.Equal(seen, positions.GetPositions().Single(position => position.CharacterId == Mate).ObservedAt);
+    }
+
+    /// <summary>ET-409: following the fleet frames the pilots in game. One who is out of game and far away must not widen the
+    /// frame. The zoom is the same with and without that pilot, and it is the zoom of the two close systems.</summary>
+    [AvaloniaFact]
+    public async Task FollowFleet_IgnoresAnOfflinePilotFarAway()
+    {
+        using var world = await World.OpenAsync(presence: new PilotPresence([Own, AltOne], online: [Own]));
+        await world.AddPilotsAsync((AltOne, "Alt One"));
+        world.Sight(Own, Jita);
+        world.Sight(Mate, Perimeter);
+        FleetMapCard card = world.ShowMetrics();
+        await world.WaitAsync(() => world.Card.IsFollowingFleet);
+        world.Settle();
+        StarMapControl map = card.FindControl<StarMapControl>("CardMap") ?? throw new InvalidOperationException("no map in the card");
+        double withoutFarPilot = map.ZoomLevel;
+
+        world.Sight(AltOne, Dodixie);
+        world.Settle();
+
+        Assert.Equal(14, withoutFarPilot, 1);
+        Assert.Equal(withoutFarPilot, map.ZoomLevel, 3);
+    }
+
+    /// <summary>ET-409: the overlays settle after the framing was asked for. The followed fleet is framed again against the
+    /// view it ends up with — in the same zoom, centred between the overlays — and stops being framed once the pilot moves
+    /// the map.</summary>
+    [AvaloniaFact]
+    public async Task FollowFleet_FramesAgainWhenTheViewChangesAfterwards_UntilThePilotMovesTheMap()
+    {
+        using var world = await World.OpenAsync();
+        world.Sight(Own, Jita);
+        world.Sight(Mate, Perimeter);
+        FleetMapCard card = world.ShowMetrics();
+        await world.WaitAsync(() => world.Card.IsFollowingFleet);
+        world.Settle();
+        StarMapControl map = card.FindControl<StarMapControl>("CardMap") ?? throw new InvalidOperationException("no map in the card");
+        double framed = map.ZoomLevel;
+
+        map.ViewInset = new Thickness(0, 150, 0, 250);
+        world.Settle();
+
+        Point middle = new Point((map.ScreenPointOf(world.IndexOf(Jita)).X + map.ScreenPointOf(world.IndexOf(Perimeter)).X) / 2,
+                                 (map.ScreenPointOf(world.IndexOf(Jita)).Y + map.ScreenPointOf(world.IndexOf(Perimeter)).Y) / 2);
+        Point view = new Rect(map.Bounds.Size).Deflate(map.ViewInset).Center;
+        Assert.Equal(framed, map.ZoomLevel, 3);
+        Assert.True(Point.Distance(middle, view) < 2, $"the fleet is framed around {middle}, the view's centre is {view}");
+
+        map.ZoomBy(0.5);
+        world.Settle();
+        double zoomed = map.ZoomLevel;
+        map.ViewInset = new Thickness(0, 10, 0, 10);
+        world.Settle();
+
+        Assert.Equal(framed / 2, zoomed, 3);
+        Assert.True(map.ZoomLevel < framed, $"zoom {map.ZoomLevel} after the pilot zoomed out, framed was {framed}");
+    }
+
+    /// <summary>ET-409: the header and the footer are no bands over the map. The map still fills the whole frame, nothing
+    /// that is drawn over it runs the full width, and the zoom buttons and the zoom figure do not overlap.</summary>
+    [AvaloniaFact]
+    public async Task TheCardsControlsFloatOnTheMap_WithoutABandAcrossIt_AndWithoutOverlapping()
+    {
+        using var world = await World.OpenAsync();
+        world.Sight(Own, Jita);
+        world.Sight(Mate, Perimeter);
+        FleetMapCard card = world.ShowMetrics();
+        await world.WaitAsync(() => world.Card.IsFollowingFleet);
+        world.Settle();
+        StarMapControl map = card.FindControl<StarMapControl>("CardMap") ?? throw new InvalidOperationException("no map in the card");
+
+        Assert.Null(card.FindControl<Border>("HeaderBar")!.Background);
+        Assert.Null(card.FindControl<Border>("FooterBar")!.Background);
+        Rect zoomFigure = _BoundsIn(card, card.FindControl<TextBlock>("Zoom")!);
+        Rect[] buttons = card.GetVisualDescendants().OfType<Button>().Where(button => button.Classes.Contains("hudbutton")).Select(button => _BoundsIn(card, button)).ToArray();
+        Assert.Equal(5, buttons.Length);
+        Assert.All(buttons, button => Assert.False(button.Intersects(zoomFigure), $"{button} overlaps the zoom figure {zoomFigure}"));
+        for (int first = 0; first < buttons.Length; first++)
+            for (int second = first + 1; second < buttons.Length; second++)
+                Assert.False(buttons[first].Intersects(buttons[second]), $"{buttons[first]} overlaps {buttons[second]}");
+        Assert.All(new[] { "Zoom", "Spread" }, name => Assert.True(_BoundsIn(card, card.FindControl<TextBlock>(name)!).Width < map.Bounds.Width * 0.8));
+    }
+
+    private static Rect _BoundsIn(Control ancestor, Control control) =>
+        new(control.TranslatePoint(default, ancestor) ?? default, control.Bounds.Size);
+
 
     private static double _PerFrame(int frames, Action draw)
     {
@@ -370,7 +506,8 @@ public sealed class MapFleetCardTests
 
         // A client-only fleet this client takes part in: you and an EVE Together mate on the roster, and an outsider the
         // in-game fleet holds as well.
-        public static async Task<World> OpenAsync(IDialogService? dialogs = null, bool started = true, bool mine = true, int commander = Own)
+        public static async Task<World> OpenAsync(IDialogService? dialogs = null, bool started = true, bool mine = true, int commander = Own,
+            ILocalCharacterPresence? presence = null)
         {
             var names = new FakeExternalLookup { [Outsider] = OutsiderName, [Mate] = MateName, [Own] = OwnName };
             TestClientInstance instance = TestClientInstance.Create(services =>
@@ -379,6 +516,8 @@ public sealed class MapFleetCardTests
                 services.AddSingleton<IExternalCharacterLookup>(names);
                 if (dialogs is not null)
                     services.AddSingleton(dialogs);
+                // Without an EVE client to find, the real verdict calls every registered character offline: here you fly.
+                services.AddSingleton(presence ?? new PilotPresence([Own], [Own]));
             });
             await instance.Services.GetRequiredService<ICharacterRegistry>().AddOrUpdateAsync(new Character(OwnName, Own));
 
@@ -460,6 +599,26 @@ public sealed class MapFleetCardTests
             ItemsControl list = Window.FindControl<ItemsControl>("MemberList") ?? throw new InvalidOperationException("no member list");
             Control row = list.GetRealizedContainers().Single(container => ReferenceEquals(container.DataContext, member));
             return row.TranslatePoint(new Point(row.Bounds.Width / 2, row.Bounds.Height / 2), Window) ?? default;
+        }
+
+        // More of your own characters, in the fleet through the in-game roster.
+        public async Task AddPilotsAsync(params (int CharacterId, string Name)[] pilots)
+        {
+            foreach ((int characterId, string name) in pilots)
+                await Instance.Services.GetRequiredService<ICharacterRegistry>().AddOrUpdateAsync(new Character(name, characterId));
+            Instance.Services.GetRequiredService<InGameFleetRosters>().Record(InGameFleetRosters.KeyOf(null, FleetId),
+                [Own, Mate, Outsider, .. pilots.Select(pilot => pilot.CharacterId)]);
+            if (_window is null)
+                await Card.LoadAsync();
+        }
+
+        // What the pilot's own client says about their game, as it arrives on the fleet stream.
+        public async Task PublishPresenceAsync(int characterId, PresenceState state)
+        {
+            await Instance.Services.GetRequiredService<IEventBus>().PublishAsync(new FleetMetricEvent(
+                new MetricSample(characterId, FleetId, MetricKind.Presence, (double)state, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds())),
+                cancellationToken: TestContext.Current.CancellationToken);
+            UiDispatcher.UIThread.RunJobs();
         }
 
         public void Sight(int characterId, int solarSystemId, PositionSource source = PositionSource.FleetMetric)

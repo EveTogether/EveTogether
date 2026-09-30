@@ -14,6 +14,12 @@ public interface IFleetPositionSource
     IReadOnlyList<FleetPositionDto> GetPositions();
 
     /// <summary>
+    /// Whether this pilot is known to be out of game (ET-70: one verdict for every screen). A known-offline pilot's
+    /// last position is where they logged off, so the map leaves them out; nothing known about them is not offline.
+    /// </summary>
+    bool IsOffline(int characterId);
+
+    /// <summary>
     /// Raised when a character appears or moves to another system; a repeat sighting in the same system only refreshes
     /// <see cref="FleetPositionDto.ObservedAt"/> and raises nothing. Raised on whichever thread observed it (gamelog
     /// reader, event bus, ESI poll) — a UI consumer marshals to its own thread and must not block the caller.

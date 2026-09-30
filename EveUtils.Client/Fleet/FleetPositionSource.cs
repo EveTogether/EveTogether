@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using EveUtils.Client.Esi;
 using EveUtils.Client.Gamelog;
+using EveUtils.Client.Platform;
 using EveUtils.Shared.DependencyInjection;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Fleet.Dtos;
@@ -36,16 +37,21 @@ public sealed class FleetPositionSource : IFleetPositionSource, ISingletonServic
     private readonly Lock _gate = new();
     private readonly SolarSystemIdResolver _systemIds;
     private readonly GamelogClientService? _gamelog;
+    private readonly Dictionary<int, (PresenceState Reported, DateTimeOffset HeardAt)> _heard = new();
     private readonly IDisposable _metricSubscription;
+    private readonly ILocalCharacterPresence? _localPresence;
+    private readonly TimeProvider _clock;
     private readonly ILogger _logger;
 
     public event Action<FleetPositionDto>? PositionChanged;
 
     public FleetPositionSource(IEventBus eventBus, SolarSystemIdResolver systemIds, GamelogClientService? gamelog = null,
-        ILogger<FleetPositionSource>? logger = null)
+        ILogger<FleetPositionSource>? logger = null, ILocalCharacterPresence? localPresence = null, TimeProvider? clock = null)
     {
         _systemIds = systemIds;
         _gamelog = gamelog;
+        _localPresence = localPresence;
+        _clock = clock ?? TimeProvider.System;
         _logger = logger ?? NullLogger<FleetPositionSource>.Instance;
 
         _metricSubscription = eventBus.Subscribe<FleetMetricEvent>(evt => _Guarded(() => _OnFleetMetric(evt.Data)));
@@ -69,9 +75,21 @@ public sealed class FleetPositionSource : IFleetPositionSource, ISingletonServic
             Observe(new FleetPositionDto(member.CharacterId, null, member.SolarSystemId, PositionSource.EsiFleet, polledAt));
     }
 
+    public bool IsOffline(int characterId)
+    {
+        (PresenceState reported, DateTimeOffset heardAt) = _HeardOf(characterId);
+        return FleetMemberPresence.Read(_localPresence?.IsInGame(characterId), reported,
+            FleetMemberPresence.IsSilent(heardAt == default ? null : heardAt, _clock.GetUtcNow())) == FleetMemberPresenceState.Offline;
+    }
+
     /// <summary>Merges one sighting; true when it is a new position (a new character or another system).</summary>
     internal bool Observe(FleetPositionDto observed)
     {
+        // A cached ESI answer for a pilot who is out of game repeats the spot they logged off at on every poll; taking it
+        // would stamp that spot as seen just now, every few seconds.
+        if (_IsCached(observed.Source) && IsOffline(observed.CharacterId))
+            return false;
+
         FleetPositionDto merged;
         lock (_gate)
         {
@@ -131,6 +149,7 @@ public sealed class FleetPositionSource : IFleetPositionSource, ISingletonServic
     // leaves the position as it was rather than confirming it. A sample from before ET-394 carries only the name.
     private void _OnFleetMetric(MetricSample sample)
     {
+        _NoteHeard(sample);
         if (sample.Kind != MetricKind.Location || sample.AbyssalAnchorMs > 0)
             return;
 
@@ -140,6 +159,26 @@ public sealed class FleetPositionSource : IFleetPositionSource, ISingletonServic
 
         Observe(new FleetPositionDto(sample.CharacterId, null, id, PositionSource.FleetMetric,
             DateTimeOffset.FromUnixTimeMilliseconds(sample.UnixMs)));
+    }
+
+    // What a pilot's own client last said about their game, and when we last heard anything from it (ET-70).
+    private void _NoteHeard(MetricSample sample)
+    {
+        var heardAt = DateTimeOffset.FromUnixTimeMilliseconds(sample.UnixMs);
+        lock (_gate)
+        {
+            PresenceState reported = _heard.TryGetValue(sample.CharacterId, out var known) ? known.Reported : PresenceState.Unknown;
+            if (sample.Kind == MetricKind.Presence)
+                reported = Enum.IsDefined((PresenceState)(int)sample.Value) ? (PresenceState)(int)sample.Value : PresenceState.Unknown;
+            if (heardAt >= known.HeardAt)
+                _heard[sample.CharacterId] = (reported, heardAt);
+        }
+    }
+
+    private (PresenceState Reported, DateTimeOffset HeardAt) _HeardOf(int characterId)
+    {
+        lock (_gate)
+            return _heard.GetValueOrDefault(characterId);
     }
 
     // The gamelog and ESI times are UTC; the gamelog parser leaves the kind unspecified.

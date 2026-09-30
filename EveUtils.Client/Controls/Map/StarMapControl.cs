@@ -137,6 +137,7 @@ public sealed class StarMapControl : Control
     private double _fitScale = 1;
     private bool _hasView;
     private MapFocusRequest? _pendingFocus;
+    private MapFocusRequest? _followFraming;
 
     private Point? _pressedAt;
     private Point _pressedCenter;
@@ -163,7 +164,7 @@ public sealed class StarMapControl : Control
         Cursor = GrabCursor;
         DoubleTapped += (_, e) =>
         {
-            ViewMovedByUser?.Invoke(this, EventArgs.Empty);
+            _RaiseViewMovedByUser();
             Point at = e.GetPosition(this);
             _FlyTo(_ToWorldX(at.X), _ToWorldY(at.Y), _ClampScale(_scale * DoubleTapZoom), ZoomDuration);
         };
@@ -282,13 +283,13 @@ public sealed class StarMapControl : Control
 
     public void ZoomBy(double factor)
     {
-        ViewMovedByUser?.Invoke(this, EventArgs.Empty);
+        _RaiseViewMovedByUser();
         _FlyTo(_centerX, _centerY, _ClampScale(_scale * factor), ZoomDuration);
     }
 
     public void ZoomToFit()
     {
-        ViewMovedByUser?.Invoke(this, EventArgs.Empty);
+        _RaiseViewMovedByUser();
         if (Graph is { } graph)
             _FlyTo(graph.Width / 2, graph.Height / 2, _fitScale, FlyDuration);
     }
@@ -299,11 +300,15 @@ public sealed class StarMapControl : Control
         if (change.Property == GraphProperty)
             _OnGraphChanged();
         else if (change.Property == ViewInsetProperty)
-            _UpdateFit();
+            _OnViewSizeChanged();
         else if (change.Property == RouteProperty)
             _OnRouteChanged();
-        else if (change.Property == FocusRequestProperty && FocusRequest is { } request)
-            _Focus(request);
+        else if (change.Property == FocusRequestProperty)
+        {
+            _followFraming = null;
+            if (FocusRequest is { } request)
+                _Focus(request);
+        }
         else if (change.Property == FleetBadgesProperty || change.Property == MarkersProperty || change.Property == RouteProperty
                  || change.Property == InfoRevisionProperty || change.Property == SystemInfoSourceProperty)
             _RefreshPopover();
@@ -312,7 +317,23 @@ public sealed class StarMapControl : Control
     protected override void OnSizeChanged(SizeChangedEventArgs e)
     {
         base.OnSizeChanged(e);
+        _OnViewSizeChanged();
+    }
+
+    // What following framed was measured against the view as it was then. The overlays and the layout settle after the
+    // owner asked for that framing, so a followed group is framed again against the view it ended up with — until the pilot
+    // moves the map themself.
+    private void _OnViewSizeChanged()
+    {
         _UpdateFit();
+        if (_followFraming is { } framing)
+            _Focus(framing);
+    }
+
+    private void _RaiseViewMovedByUser()
+    {
+        _followFraming = null;
+        ViewMovedByUser?.Invoke(this, EventArgs.Empty);
     }
 
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
@@ -348,7 +369,7 @@ public sealed class StarMapControl : Control
             {
                 _isDragging = true;
                 Cursor = DragCursor;
-                ViewMovedByUser?.Invoke(this, EventArgs.Empty);
+                _RaiseViewMovedByUser();
             }
             if (_isDragging)
             {
@@ -395,7 +416,7 @@ public sealed class StarMapControl : Control
     protected override void OnPointerWheelChanged(PointerWheelEventArgs e)
     {
         base.OnPointerWheelChanged(e);
-        ViewMovedByUser?.Invoke(this, EventArgs.Empty);
+        _RaiseViewMovedByUser();
         _flight = null;
         Point at = e.GetPosition(this);
         double worldX = _ToWorldX(at.X), worldY = _ToWorldY(at.Y);
@@ -491,6 +512,8 @@ public sealed class StarMapControl : Control
             _pendingFocus = request;
             return;
         }
+
+        _followFraming = request.Framing == MapFraming.Fleet || request.MinZoom is not null ? request : null;
 
         List<MapSystemDto> systems = request.SystemIndexes
             .Where(index => index >= 0 && index < graph.Systems.Count)

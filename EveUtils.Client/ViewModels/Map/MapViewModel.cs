@@ -90,6 +90,7 @@ public sealed partial class MapViewModel : ObservableObject, IRefreshableModule,
     private readonly HashSet<int> _namesAsked = [];
     private readonly Dictionary<int, JumpDistancesDto?> _distances = [];
     private readonly HashSet<int> _distancesAsked = [];
+    private HashSet<int> _framedFleetSystems = [];
     private (string Name, int SystemIndex)? _commanderOrigin;
     private IReadOnlyList<Character> _characters = [];
     private (long FleetId, string? ServerAddress)? _pinnedFleet;
@@ -722,7 +723,10 @@ public sealed partial class MapViewModel : ObservableObject, IRefreshableModule,
     {
         FollowedCharacter = null;
         if (FollowedFleet is null)
+        {
             IsFollowPaused = false;
+            FocusRequest = null;
+        }
         foreach (MapCharacterRowViewModel row in Characters)
             row.IsFollowed = false;
         FollowIndex = -1;
@@ -732,8 +736,12 @@ public sealed partial class MapViewModel : ObservableObject, IRefreshableModule,
     private void _StopFollowingFleet()
     {
         FollowedFleet = null;
+        _framedFleetSystems = [];
         if (FollowedCharacter is null)
+        {
             IsFollowPaused = false;
+            FocusRequest = null;
+        }
         foreach (MapFleetRowViewModel row in Fleets)
             row.IsFollowed = false;
         FleetSpreadText = string.Empty;
@@ -748,7 +756,10 @@ public sealed partial class MapViewModel : ObservableObject, IRefreshableModule,
         {
             List<int> systems = _FollowedFleetSystems();
             if (systems.Count > 0)
+            {
+                _framedFleetSystems = [.. systems];
                 FocusRequest = new MapFocusRequest(systems, framing: MapFraming.Fleet);
+            }
         }
         else if (FollowIndex >= 0)
             FocusRequest = new MapFocusRequest([FollowIndex], FollowMinZoom);
@@ -806,8 +817,12 @@ public sealed partial class MapViewModel : ObservableObject, IRefreshableModule,
 
     private void _OnBadgeBeat()
     {
-        if (_fleetMembers.Count > 0)
-            _RefreshFleetBadges(_positions.GetPositions().ToDictionary(position => position.CharacterId));
+        if (_fleetMembers.Count == 0 && Markers.Count == 0)
+            return;
+        // Someone going offline moves no position, so this beat is what takes them off the map.
+        _RefreshPositions();
+        if (IsFollowingFleet && !IsFollowPaused && !_FollowedFleetSystems().ToHashSet().SetEquals(_framedFleetSystems))
+            _FocusFollowed();
     }
 
     // Any fleet's news, not only that of a fleet already listed: one that starts, ends or is joined is not (or no longer)
@@ -908,6 +923,9 @@ public sealed partial class MapViewModel : ObservableObject, IRefreshableModule,
     private bool _IsCurrent(FleetPositionDto position) =>
         position.Source == PositionSource.Gamelog || _clock.GetUtcNow() - position.ObservedAt <= FleetPositionExpiry;
 
+    // A pilot who is out of game stands where they logged off: no badge, no name in the popover, no say in the framing.
+    private bool _IsShown(FleetPositionDto position) => _IsCurrent(position) && !_positions.IsOffline(position.CharacterId);
+
     private List<int> _FollowedFleetSystems()
     {
         if (FollowedFleet is not { } fleet)
@@ -917,7 +935,7 @@ public sealed partial class MapViewModel : ObservableObject, IRefreshableModule,
         [
             .. _MembersOf(fleet)
                 .Select(id => positions.GetValueOrDefault(id))
-                .Where(position => position is not null && _IsCurrent(position))
+                .Where(position => position is not null && _IsShown(position))
                 .Select(_SystemOf)
                 .OfType<MapSystemDto>()
                 .Select(system => system.Index)
@@ -958,11 +976,12 @@ public sealed partial class MapViewModel : ObservableObject, IRefreshableModule,
             FleetPositionDto? position = positions.GetValueOrDefault(row.CharacterId);
             MapSystemDto? system = _SystemOf(position);
             row.ShowPosition(position, system);
-            if (system is not null)
+            if (system is not null && !_positions.IsOffline(row.CharacterId))
                 markers.Add(new MapMarker(system.Index, row.Name));
         }
 
-        Markers = markers;
+        if (!Markers.SequenceEqual(markers))
+            Markers = markers;
         OnPropertyChanged(nameof(SelectedHereText));
         OnPropertyChanged(nameof(HasSelectedHere));
         FollowIndex = FollowedCharacter is { } followed ? _SystemOf(positions.GetValueOrDefault(followed.CharacterId))?.Index ?? -1 : -1;
@@ -976,7 +995,7 @@ public sealed partial class MapViewModel : ObservableObject, IRefreshableModule,
     {
         var placed = new List<(int SystemIndex, int CharacterId, FleetPositionDto Position)>();
         foreach (int id in _fleetMembers.Values.SelectMany(ids => ids).Distinct())
-            if (positions.GetValueOrDefault(id) is { } position && _IsCurrent(position) && _SystemOf(position) is { } system)
+            if (positions.GetValueOrDefault(id) is { } position && _IsShown(position) && _SystemOf(position) is { } system)
                 placed.Add((system.Index, id, position));
 
         HashSet<int> commanders = [.. _fleetCommanders.Values.OfType<int>()];
