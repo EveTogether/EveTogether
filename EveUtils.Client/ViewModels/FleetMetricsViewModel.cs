@@ -178,6 +178,41 @@ public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposabl
 
     public bool HasMapCard => FleetMap is not null && IsMapCardOpen;
 
+    partial void OnIsMapCardOpenChanged(bool value) => _ApplyWidthState();
+
+    private double _contentWidth;
+    private FleetMetricsWidthState _widthState;
+
+    /// <summary>Where the map card sits: between the summary and the list once the window is too narrow for it beside them.</summary>
+    public bool IsStacked => _widthState.IsStacked;
+
+    /// <summary>The density hint on a row of its own, above the buttons.</summary>
+    public bool HintOnOwnRow => _widthState.HintOnOwnRow;
+
+    /// <summary>The view reports the width its content root was given; both layout states follow from it.</summary>
+    public void ApplyWidth(double contentWidth)
+    {
+        if (double.IsNaN(contentWidth) || contentWidth <= 0)
+            return;
+
+        _contentWidth = contentWidth;
+        _ApplyWidthState();
+    }
+
+    private void _ApplyWidthState()
+    {
+        if (_contentWidth <= 0)
+            return;
+
+        FleetMetricsWidthState next = FleetMetricsWidth.Resolve(_contentWidth, HasMapCard, _widthState);
+        if (next == _widthState)
+            return;
+
+        _widthState = next;
+        OnPropertyChanged(nameof(IsStacked));
+        OnPropertyChanged(nameof(HintOnOwnRow));
+    }
+
     [RelayCommand]
     private void ToggleMapCard() => IsMapCardOpen = !IsMapCardOpen;
 
