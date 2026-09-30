@@ -2,10 +2,15 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using EveUtils.Client.Killmails;
 using EveUtils.Client.ViewModels.Killmails;
+using EveUtils.Client.ViewModels.Runs;
+using EveUtils.Client.Views;
 using EveUtils.Shared.Identity;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Esi.Http;
@@ -33,6 +38,7 @@ namespace EveUtils.Client.UiTests;
 public sealed class KillmailsOverviewTests
 {
     private const int Pilot = 90000001;
+    private const int OtherPilot = 90000050;
     private const int System1 = 30000142; // Jita
     private const int Gila = 20125;
     private const int Vexor = 626;
@@ -81,17 +87,18 @@ public sealed class KillmailsOverviewTests
     /// <summary>Criterion 3. Red if a character without the scope shows an empty list instead of GRANT ACCESS. The
     /// contrast — a character that did grant it reads normally — is every other criterion here: all of them load
     /// with <c>hasScope: true</c> and see their seeded mails.</summary>
-    [Fact]
+    [AvaloniaFact]
     public async Task Character_WithoutTheScope_ShowsGrantAccess_NotAnEmptyList()
     {
         using TestClientInstance instance = TestClientInstance.Create();
         await _AddAsync(instance, _Kill(1)); // present in storage, so an empty Days here can only mean the gate, not a genuinely empty character
 
         KillmailsOverviewViewModel viewModel = await _LoadAsync(instance, hasScope: false);
+        await _SelectAsync(viewModel, Pilot);
 
         Assert.True(viewModel.NeedsAccess);
         Assert.Empty(viewModel.Days);
-        Assert.True(viewModel.Characters.Single().NeedsAccess);
+        Assert.True(viewModel.SelectedCharacter?.NeedsAccess);
     }
 
     /// <summary>ET-363 AC1. Red if the tile only flips after a reopen: GRANT ACCESS raises
@@ -109,6 +116,7 @@ public sealed class KillmailsOverviewTests
             new RecordingDialogService(), instance.Services, [new Character("Test Pilot", Pilot, GrantedScopes: [])],
             (_, _) => Task.CompletedTask);
         await viewModel.LoadAsync(Ct);
+        await _SelectAsync(viewModel, Pilot);
         Assert.True(viewModel.NeedsAccess);
 
         await registry.AddOrUpdateAsync(new Character("Test Pilot", Pilot, GrantedScopes: [KillmailsScopeCatalog.ReadKillmails]), Ct);
@@ -116,7 +124,7 @@ public sealed class KillmailsOverviewTests
         // NeedsAccess flips to false the moment the triggered read starts, not when it finishes (_ReadAsync's own
         // ordering) — wait for the read to settle too, or the assertion below could catch Days still empty.
         Assert.True(await _WaitForAsync(() => !viewModel.NeedsAccess && !viewModel.IsBusy));
-        Assert.False(viewModel.Characters.Single().NeedsAccess);
+        Assert.False(viewModel.SelectedCharacter?.NeedsAccess);
         Assert.Equal([1], _VisibleIds(viewModel));
         viewModel.Dispose();
     }
@@ -170,6 +178,101 @@ public sealed class KillmailsOverviewTests
         await dispatcher.Send(new SetKillmailRunLinkCommand(Pilot, 2, runId), Ct);
 
         Assert.True(await _WaitForAsync(() => !_VisibleIds(viewModel).Any()));
+        viewModel.Dispose();
+    }
+
+    /// <summary>ET-405 AC3. Red if a killmail two own characters share is listed once per character, or counted twice in
+    /// the totals: All shows the distinct mails, the sum of the per-character screens does not. Filtering on one
+    /// character still gives that character's own list, as the per-character screen did.</summary>
+    [AvaloniaFact]
+    public async Task AllCharacters_ListsASharedKillmailOnce_AndCountsItOnce()
+    {
+        using TestClientInstance instance = TestClientInstance.Create();
+        await _PriceAsync(instance, (Gila, 2_000_000), (Vexor, 1_000_000));
+        await _AddAsync(instance, Pilot, _Kill(1), _Kill(2), _Loss(3, linkedRunId: null));
+        await _AddAsync(instance, OtherPilot, _Kill(2, characterId: OtherPilot), _Kill(4, characterId: OtherPilot));
+        KillmailsOverviewViewModel viewModel = await _LoadAsync(instance, _Granted(Pilot, "Alpha"), _Granted(OtherPilot, "Bravo"));
+
+        Assert.True(viewModel.SelectedCharacter?.IsAll);
+        Assert.Equal([1, 2, 3, 4], _VisibleIds(viewModel).OrderBy(id => id));
+        Assert.Equal(3, viewModel.KillsCount);
+        Assert.Equal(1, viewModel.LossesCount);
+        Assert.Equal("6M", viewModel.IskDestroyedText);
+        Assert.Equal("1M", viewModel.IskLostText);
+        KillmailRowViewModel shared = viewModel.Days.SelectMany(day => day.Rows).Single(row => row.KillmailId == 2);
+        Assert.Equal(["Alpha", "Bravo"], shared.Pilots.Select(pilot => pilot.Name));
+        Assert.Equal(1, shared.ExtraPilotCount);
+
+        await _SelectAsync(viewModel, Pilot);
+        Assert.Equal([1, 2, 3], _VisibleIds(viewModel).OrderBy(id => id));
+        int killsOfPilot = viewModel.KillsCount;
+        await _SelectAsync(viewModel, OtherPilot);
+        Assert.Equal([2, 4], _VisibleIds(viewModel).OrderBy(id => id));
+        Assert.Equal(4, killsOfPilot + viewModel.KillsCount); // the per-character sum counts the shared mail twice
+        viewModel.Dispose();
+    }
+
+    /// <summary>ET-405. Red if a mail that is a loss for one own character and a kill for another shows as a kill, or
+    /// as two rows: the lost ship is the story of the mail and it counts once, as a loss.</summary>
+    [AvaloniaFact]
+    public async Task AllCharacters_AMailThatIsALossForOneAndAKillForAnother_IsOneLoss()
+    {
+        using TestClientInstance instance = TestClientInstance.Create();
+        await _AddAsync(instance, Pilot, _Loss(7, linkedRunId: null));
+        await _AddAsync(instance, OtherPilot, _Kill(7, characterId: OtherPilot));
+        KillmailsOverviewViewModel viewModel = await _LoadAsync(instance, _Granted(Pilot, "Alpha"), _Granted(OtherPilot, "Bravo"));
+
+        KillmailRowViewModel row = viewModel.Days.SelectMany(day => day.Rows).Single();
+
+        Assert.True(row.IsLoss);
+        Assert.Equal(1, viewModel.LossesCount);
+        Assert.Equal(0, viewModel.KillsCount);
+        Assert.Equal(2, row.Pilots.Count);
+        viewModel.Dispose();
+    }
+
+    /// <summary>ET-405 AC1. Red if the filter is not one control that fits: six characters, a 700 px window, and the
+    /// dropdown stays inside it with "All characters" first — the chip row it replaced ran off the right edge.</summary>
+    [AvaloniaFact]
+    public async Task CharacterFilter_IsOneDropdown_ThatFitsA700pxWindow_WithAllFirst()
+    {
+        using TestClientInstance instance = TestClientInstance.Create();
+        Character[] characters = [.. Enumerable.Range(0, 6).Select(index => _Granted(Pilot + index, $"Pilot number {index} Longname"))];
+        KillmailsOverviewViewModel viewModel = await _LoadAsync(instance, characters);
+        KillmailsWindow window = new(viewModel) { Width = 700, Height = 600 };
+
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+        window.UpdateLayout();
+
+        ComboBox filter = window.GetVisualDescendants().OfType<ComboBox>().Single(box => box.Name == "CharacterFilter");
+        Point topLeft = filter.TranslatePoint(default, window) ?? default;
+        Assert.InRange(filter.Bounds.Width, 1, 700);
+        Assert.True(topLeft.X + filter.Bounds.Width <= window.Bounds.Width, $"right edge {topLeft.X + filter.Bounds.Width}");
+        Assert.Equal(7, viewModel.CharacterOptions.Count);
+        Assert.True(viewModel.CharacterOptions[0].IsAll);
+        Assert.Same(viewModel.CharacterOptions[0], filter.SelectedItem);
+        window.Close();
+        viewModel.Dispose();
+    }
+
+    /// <summary>ET-405 AC5. Red if a character without the scope vanishes from the dropdown or its entry cannot start
+    /// the grant: it is listed, flagged, and its own command reaches the allow-scope callback with its id.</summary>
+    [AvaloniaFact]
+    public async Task CharacterFilter_ListsACharacterWithoutAccess_WhoseGrantAccessStaysReachable()
+    {
+        using TestClientInstance instance = TestClientInstance.Create();
+        List<int> granted = [];
+        KillmailsOverviewViewModel viewModel = await _LoadAsync(instance,
+            [_Granted(Pilot, "Alpha"), new Character("Bravo", OtherPilot, GrantedScopes: [])],
+            (id, _) => { granted.Add(id); return Task.CompletedTask; });
+
+        KillmailCharacterOptionViewModel bravo = viewModel.CharacterOptions.Single(option => option.CharacterId == OtherPilot);
+        bravo.GrantAccessCommand.Execute(null);
+
+        Assert.True(bravo.NeedsAccess);
+        Assert.False(viewModel.CharacterOptions.Single(option => option.CharacterId == Pilot).NeedsAccess);
+        Assert.Equal([OtherPilot], granted);
         viewModel.Dispose();
     }
 
@@ -250,22 +353,36 @@ public sealed class KillmailsOverviewTests
         Assert.Equal(expected, row.IskText);
     }
 
-    private static async Task<KillmailsOverviewViewModel> _LoadAsync(TestClientInstance instance, bool hasScope)
+    private static Task<KillmailsOverviewViewModel> _LoadAsync(TestClientInstance instance, bool hasScope) =>
+        _LoadAsync(instance, new Character("Test Pilot", Pilot, GrantedScopes: hasScope ? [KillmailsScopeCatalog.ReadKillmails] : []));
+
+    private static Task<KillmailsOverviewViewModel> _LoadAsync(TestClientInstance instance, params Character[] characters) =>
+        _LoadAsync(instance, characters, (_, _) => Task.CompletedTask);
+
+    private static async Task<KillmailsOverviewViewModel> _LoadAsync(TestClientInstance instance, Character[] characters,
+        Func<int, string, Task> allowScope)
     {
-        Character[] characters = [new Character("Test Pilot", Pilot,
-            GrantedScopes: hasScope ? [KillmailsScopeCatalog.ReadKillmails] : [])];
         KillmailsOverviewViewModel viewModel = new(instance.Services.GetRequiredService<IDispatcher>(),
-            new RecordingDialogService(), instance.Services, characters, (_, _) => Task.CompletedTask);
+            new RecordingDialogService(), instance.Services, characters, allowScope);
         await viewModel.LoadAsync(Ct);
         return viewModel;
+    }
+
+    private static Character _Granted(int characterId, string name) =>
+        new(name, characterId, GrantedScopes: [KillmailsScopeCatalog.ReadKillmails]);
+
+    private static async Task _SelectAsync(KillmailsOverviewViewModel viewModel, int characterId)
+    {
+        viewModel.SelectedCharacter = viewModel.CharacterOptions.Single(option => option.CharacterId == characterId);
+        Assert.True(await _WaitForAsync(() => !viewModel.IsBusy));
     }
 
     private static IEnumerable<int> _VisibleIds(KillmailsOverviewViewModel viewModel) =>
         viewModel.Days.SelectMany(day => day.Rows).Select(row => row.KillmailId);
 
-    private static LocalKillmail _Kill(int killmailId, int shipTypeId = Gila, DateTime? atUtc = null) => new()
+    private static LocalKillmail _Kill(int killmailId, int shipTypeId = Gila, DateTime? atUtc = null, int characterId = Pilot) => new()
     {
-        CharacterId = Pilot,
+        CharacterId = characterId,
         KillmailId = killmailId,
         Hash = $"hash{killmailId}",
         KillmailTimeUtc = atUtc ?? DateTime.UtcNow,
@@ -275,7 +392,7 @@ public sealed class KillmailsOverviewTests
         VictimCharacterId = Pilot + 1000,
         LinkSource = KillmailLinkSource.None,
         ImportedAtUtc = DateTime.UtcNow,
-        Attackers = [new LocalKillmailAttacker { CharacterId = Pilot, KillmailId = killmailId, Ordinal = 0, AttackerCharacterId = Pilot, FinalBlow = true, DamageDone = 100 }]
+        Attackers = [new LocalKillmailAttacker { CharacterId = characterId, KillmailId = killmailId, Ordinal = 0, AttackerCharacterId = characterId, FinalBlow = true, DamageDone = 100 }]
     };
 
     private static LocalKillmail _Loss(int killmailId, Guid? linkedRunId, int shipTypeId = Vexor) => new()
@@ -305,7 +422,10 @@ public sealed class KillmailsOverviewTests
     }
 
     private static Task _AddAsync(TestClientInstance instance, params LocalKillmail[] killmails) =>
-        instance.Services.GetRequiredService<ILocalKillmailRepository>().AddMissingAsync(Pilot, killmails, Ct);
+        _AddAsync(instance, Pilot, killmails);
+
+    private static Task _AddAsync(TestClientInstance instance, int characterId, params LocalKillmail[] killmails) =>
+        instance.Services.GetRequiredService<ILocalKillmailRepository>().AddMissingAsync(characterId, killmails, Ct);
 
     private static Task _PriceAsync(TestClientInstance instance, params (int TypeId, double Price)[] prices) =>
         instance.Services.GetRequiredService<IMarketPriceRepository>().ReplaceAllAsync(
@@ -323,7 +443,7 @@ public sealed class KillmailsOverviewTests
             VictimCharacterId: null, VictimCorporationId: null, VictimAllianceId: null, AttackerCount: 1, FinalBlow: null,
             RunId: null, LinkSource: KillmailLinkSource.None, NotLinkedCandidateCount: 0,
             IskValue: iskValue is { } value ? value : null);
-        return new KillmailRowViewModel(dto, shipName, systemName, regionName: null, isAbyssal: false, securityText: "0.5",
+        return new KillmailRowViewModel(dto, [new CharacterFaceViewModel(Pilot, "Test Pilot")], shipName, systemName, regionName: null, isAbyssal: false, securityText: "0.5",
             counterpartyName: counterparty, TimeZoneInfo.Utc, openDetail: _ => Task.CompletedTask);
     }
 
