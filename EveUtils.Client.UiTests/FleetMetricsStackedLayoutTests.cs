@@ -72,6 +72,30 @@ public sealed class FleetMetricsStackedLayoutTests
     [AvaloniaTheory]
     [InlineData(700)]
     [InlineData(860)]
+    [InlineData(1280)]
+    public async Task TheMapFillsTheWholeInsideOfTheCardFrame(double width)
+    {
+        using var screen = await Screen.OpenAsync(width);
+        FleetMapCard card = screen.Window.FindControl<FleetMapCard>("MapCard") ?? throw new InvalidOperationException("no card");
+        Border frame = card.FindControl<Border>("CardFrame") ?? throw new InvalidOperationException("no card frame");
+        StarMapControl map = card.FindControl<StarMapControl>("CardMap") ?? throw new InvalidOperationException("no map");
+
+        Rect inside = frame.Bounds.Deflate(frame.BorderThickness);
+        Rect mapInFrame = new(map.TranslatePoint(default, frame) ?? throw new InvalidOperationException("detached"), map.Bounds.Size);
+
+        Assert.InRange(mapInFrame.Left, inside.Left - 1, inside.Left + 1);
+        Assert.InRange(mapInFrame.Top, inside.Top - 1, inside.Top + 1);
+        Assert.InRange(mapInFrame.Right, inside.Right - 1, inside.Right + 1);
+        Assert.InRange(mapInFrame.Bottom, inside.Bottom - 1, inside.Bottom + 1);
+
+        Assert.Equal(card.FindControl<Border>("HeaderBar")!.Bounds.Height, map.ViewInset.Top);
+        Assert.Equal(card.FindControl<Border>("FooterBar")!.Bounds.Height, map.ViewInset.Bottom);
+        Assert.True(map.ViewInset.Top > 0 && map.ViewInset.Bottom > 0, $"inset {map.ViewInset}");
+    }
+
+    [AvaloniaTheory]
+    [InlineData(700)]
+    [InlineData(860)]
     public async Task WhenStacked_TheMapCardIsAsWideAsTheSummary_AndHasNoDisclaimer(double width)
     {
         using var screen = await Screen.OpenAsync(width);

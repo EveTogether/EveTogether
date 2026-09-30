@@ -28,7 +28,20 @@
                 </Style>
             </Grid.Styles>
 
-            <Grid Grid.Row="0" ColumnDefinitions="Auto,Auto,*,Auto,Auto,Auto" Margin="12,10,12,8">
+            <!-- The map spans the whole frame; the header and the footer are overlays on it (ET-406), so the map is the
+                 frame's full inside and no card-coloured bar shows above or below it. -->
+            <map:StarMapControl Grid.Row="0" Grid.RowSpan="3" x:Name="CardMap"
+                                Graph="{Binding Graph}"
+                                Markers="{Binding Markers}"
+                                FollowIndex="{Binding FollowIndex}"
+                                FleetBadges="{Binding FleetBadges}"
+                                Clock="{Binding Clock}"
+                                SystemInfoSource="{Binding SystemInfo}"
+                                InfoRevision="{Binding InfoRevision}"
+                                FocusRequest="{Binding FocusRequest}"/>
+
+            <Border x:Name="HeaderBar" Grid.Row="0" Padding="12,10,12,8" Background="{x:Static map:MapPalette.HudBackgroundBrush}">
+            <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto,Auto">
                 <TextBlock Grid.Column="0" Text="MAP" Classes="label" FontSize="9" VerticalAlignment="Center" Margin="0,0,10,0"/>
                 <Border Grid.Column="1" x:Name="FollowChip" Classes="chip" Classes.ok="{Binding IsFollowingFleet}"
                         Classes.warn="{Binding IsFollowPaused}" Classes.dim="{Binding !IsFollowingFleet}">
@@ -50,17 +63,9 @@
                     <mi:MaterialIcon Kind="OpenInNew" Width="16" Height="16"/>
                 </Button>
             </Grid>
+            </Border>
 
-            <Panel Grid.Row="1" MinHeight="260" Background="{x:Static map:MapPalette.BackgroundBrush}" ClipToBounds="True">
-                <map:StarMapControl x:Name="CardMap"
-                                    Graph="{Binding Graph}"
-                                    Markers="{Binding Markers}"
-                                    FollowIndex="{Binding FollowIndex}"
-                                    FleetBadges="{Binding FleetBadges}"
-                                    Clock="{Binding Clock}"
-                                    SystemInfoSource="{Binding SystemInfo}"
-                                    InfoRevision="{Binding InfoRevision}"
-                                    FocusRequest="{Binding FocusRequest}"/>
+            <Panel Grid.Row="1" MinHeight="260">
                 <TextBlock Text="{Binding StatusMessage}" IsVisible="{Binding StatusMessage, Converter={x:Static ObjectConverters.IsNotNull}}"
                            Foreground="{StaticResource TextBrush}" FontSize="12" TextWrapping="Wrap" MaxWidth="300"
                            HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center"/>
@@ -79,7 +84,8 @@
                 </StackPanel>
             </Panel>
 
-            <StackPanel Grid.Row="2" Margin="12,8,12,10" Spacing="6">
+            <Border x:Name="FooterBar" Grid.Row="2" Padding="12,8,12,10" Background="{x:Static map:MapPalette.HudBackgroundBrush}">
+            <StackPanel Spacing="6">
                 <StackPanel Orientation="Horizontal" Spacing="6">
                     <TextBlock x:Name="Spread" Text="{Binding FleetSpreadText}" FontSize="11.5" FontWeight="SemiBold"
                                Foreground="{StaticResource TextBrightBrush}"/>
@@ -109,6 +115,7 @@
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
             </StackPanel>
+            </Border>
         </Grid>
     </Border>
 </UserControl>
