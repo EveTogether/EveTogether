@@ -55,6 +55,9 @@ public sealed partial class MapViewModel : ObservableObject, IRefreshableModule,
     // A repeat sighting in the same system raises no event, so the badges' ages and the expiry are re-read on a beat.
     private static readonly TimeSpan BadgeRefresh = TimeSpan.FromSeconds(5);
 
+    // How long fleet news is gathered before the servers are asked which fleets you are in.
+    private static readonly TimeSpan MembershipWindow = TimeSpan.FromSeconds(1);
+
     public static IReadOnlyList<int> TrailJumpOptions { get; } = [5, 10, 20, 50];
 
     public static IReadOnlyList<TrailSinceOption> TrailSinceOptions { get; } =
@@ -78,6 +81,12 @@ public sealed partial class MapViewModel : ObservableObject, IRefreshableModule,
     private readonly Dictionary<int, string> _names = [];
     private readonly HashSet<int> _namesAsked = [];
     private IReadOnlyList<Character> _characters = [];
+    private (long FleetId, string? ServerAddress)? _pinnedFleet;
+    private bool _pinnedFollowOff;
+    private bool _isReloading;
+    private bool _reloadAgain;
+    private bool _membershipStale;
+    private Task? _reloadRun;
 
     public MapViewModel(IDispatcher dispatcher, ICharacterRegistry registry, IFleetPositionSource positions, MapTrailRecorder trails,
         IMapFleetSource fleets, TimeProvider clock, ICharacterPortraitProvider? portraits = null)
@@ -126,11 +135,12 @@ public sealed partial class MapViewModel : ObservableObject, IRefreshableModule,
     private MapCharacterRowViewModel? _followedCharacter;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsFollowing), nameof(IsFollowingFleet), nameof(NeedsFleetPick), nameof(FollowChipText), nameof(FollowStatusText))]
+    [NotifyPropertyChangedFor(nameof(IsFollowing), nameof(IsFollowingFleet), nameof(NeedsFleetPick), nameof(FollowChipText), nameof(FollowStatusText),
+        nameof(FleetChipText))]
     private MapFleetRowViewModel? _followedFleet;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(FollowChipText), nameof(FollowStatusText))]
+    [NotifyPropertyChangedFor(nameof(FollowChipText), nameof(FollowStatusText), nameof(FleetChipText))]
     private bool _isFollowPaused;
 
     /// <summary>The system of the followed character, ringed on the map; -1 when there is none or the map does not hold it.</summary>
@@ -144,6 +154,16 @@ public sealed partial class MapViewModel : ObservableObject, IRefreshableModule,
 
     /// <summary>How many of the followed fleet's members have no current position; empty when all do.</summary>
     [ObservableProperty] private string _fleetUnplacedText = string.Empty;
+
+    /// <summary>The followed fleet's occupied systems, the one holding its commander first.</summary>
+    [ObservableProperty] private IReadOnlyList<MapFleetSystemChip> _fleetSystemChips = [];
+
+    /// <summary>Why the last "show me this member" went nowhere; empty otherwise.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasMemberNotice))]
+    private string _memberNoticeText = string.Empty;
+
+    public bool HasMemberNotice => MemberNoticeText.Length > 0;
 
     public bool IsFollowOff => FollowMode == MapFollowMode.Off;
     public bool IsFollowCharacter => FollowMode == MapFollowMode.Character;
@@ -160,6 +180,9 @@ public sealed partial class MapViewModel : ObservableObject, IRefreshableModule,
     public string FollowChipText => _FollowedName() is not { } followed
         ? string.Empty
         : IsFollowPaused ? "PAUSED · you moved the map" : "FOLLOWING " + followed.ToUpperInvariant();
+
+    /// <summary>The fleet card's chip, short enough for a 440 px card: the fleet is named in the card's own header.</summary>
+    public string FleetChipText => IsFollowingFleet ? IsFollowPaused ? "PAUSED" : "FOLLOWING FLEET" : "NOT FOLLOWING";
 
     /// <summary>The status bar's line; empty when the map follows nobody.</summary>
     public string FollowStatusText => _FollowedName() is { } followed
@@ -412,9 +435,72 @@ public sealed partial class MapViewModel : ObservableObject, IRefreshableModule,
             _StopFollowingCharacter();
         if (value != MapFollowMode.Fleet)
             _StopFollowingFleet();
-        else
+        else if (!_isReloading)
             _ = _ReloadFleetsAsync();
     }
+
+    // ── Pinned fleet (the fleet card) ───────────────────────────────────────────────────────────
+
+    /// <summary>Ties this map to one fleet, as the card in Fleet metrics is: it follows that fleet as soon as it is one of
+    /// yours — now, or when it starts — until the pilot turns following off with <see cref="ToggleFleetFollowCommand"/>.</summary>
+    public async Task PinFleetAsync(long fleetId, string? serverAddress)
+    {
+        _pinnedFleet = (fleetId, serverAddress);
+        _pinnedFollowOff = false;
+        await LoadAsync();
+    }
+
+    /// <summary>Whether the pinned fleet is one of your active fleets right now; false once it ended.</summary>
+    public bool IsPinnedFleetActive => _PinnedRow() is not null;
+
+    /// <summary>The crosshair: follows the pinned fleet — or, when it is followed but paused, comes back to it — and stops
+    /// following when it is being followed.</summary>
+    [RelayCommand]
+    private void ToggleFleetFollow()
+    {
+        if (IsFollowingFleet && !IsFollowPaused)
+        {
+            _pinnedFollowOff = true;
+            FollowMode = MapFollowMode.Off;
+        }
+        else if (IsFollowingFleet)
+            ResumeFollow();
+        else if (_PinnedRow() is { } pinned)
+        {
+            _pinnedFollowOff = false;
+            FollowFleet(pinned);
+        }
+    }
+
+    /// <summary>Opens on this fleet: waits for the fleets you are in to be read again — the one asked for may have started
+    /// a moment ago — and follows it. A fleet that is not one of yours leaves the map as it was.</summary>
+    public async Task FollowFleetByIdAsync(long fleetId, string? serverAddress)
+    {
+        await _ReloadFleetsAsync(refreshMembership: true);
+        if (_RowOf(fleetId, serverAddress) is { } row)
+            FollowFleet(row);
+    }
+
+    /// <summary>Flies to where this member is and stops following: the pilot looked at one person, not at the fleet. Says
+    /// so when the member has no position from the last ten minutes.</summary>
+    public void ShowMember(int characterId, string name)
+    {
+        FleetPositionDto? position = _positions.GetPositions().FirstOrDefault(sighting => sighting.CharacterId == characterId);
+        if (position is null || !_IsCurrent(position) || _SystemOf(position) is not { } system)
+        {
+            MemberNoticeText = $"{name} has no position from the last {FleetPositionExpiry.TotalMinutes:0} minutes.";
+            return;
+        }
+
+        MemberNoticeText = string.Empty;
+        PauseFollow();
+        FocusRequest = new MapFocusRequest([system.Index], FollowMinZoom);
+    }
+
+    private MapFleetRowViewModel? _PinnedRow() => _pinnedFleet is { } pinned ? _RowOf(pinned.FleetId, pinned.ServerAddress) : null;
+
+    private MapFleetRowViewModel? _RowOf(long fleetId, string? serverAddress) =>
+        Fleets.FirstOrDefault(row => row.Fleet.FleetId == fleetId && (serverAddress is null || row.Fleet.ServerAddress == serverAddress));
 
     /// <summary>Follows this character from now on — an explicit pick, and it resumes a paused map.</summary>
     [RelayCommand]
@@ -508,6 +594,7 @@ public sealed partial class MapViewModel : ObservableObject, IRefreshableModule,
             row.IsFollowed = false;
         FleetSpreadText = string.Empty;
         FleetUnplacedText = string.Empty;
+        FleetSystemChips = [];
     }
 
     private void _FocusFollowed()
@@ -578,15 +665,59 @@ public sealed partial class MapViewModel : ObservableObject, IRefreshableModule,
             _RefreshFleetBadges(_positions.GetPositions().ToDictionary(position => position.CharacterId));
     }
 
-    private void _OnRosterChanged(long fleetId)
+    // Any fleet's news, not only that of a fleet already listed: one that starts, ends or is joined is not (or no longer)
+    // in the list. The fleet module's change signal (RosterReloaded) is what says a fleet's state or membership moved, so
+    // it also re-reads the set of fleets you are in first. The other kinds are screens announcing a pilot they just
+    // removed or changed: the participation set already dropped a removed pilot at once (ET-49), and a sweep asked
+    // now could hand them straight back.
+    private void _OnRosterChanged(FleetRosterChange change) =>
+        _ = _ReloadFleetsAsync(refreshMembership: change.Kind == FleetRosterChangeKind.RosterReloaded);
+
+    // Reloads never overlap: one that is asked for while another runs makes it go round once more, and everyone waiting
+    // gets the run that started last.
+    private Task _ReloadFleetsAsync(bool refreshMembership = false)
     {
-        if (_fleetMembers.ContainsKey(fleetId))
-            _ = _ReloadFleetsAsync();
+        _membershipStale |= refreshMembership;
+        if (_isReloading)
+        {
+            _reloadAgain = true;
+            return _reloadRun ?? Task.CompletedTask;
+        }
+
+        _isReloading = true;
+        _reloadRun = _RunReloadsAsync();
+        return _reloadRun;
+    }
+
+    private async Task _RunReloadsAsync()
+    {
+        try
+        {
+            do
+            {
+                _reloadAgain = false;
+                if (_membershipStale)
+                {
+                    // A busy fleet raises the signal for every move and role change; one sweep of the servers covers the burst.
+                    await Task.Delay(MembershipWindow, _clock);
+                    _membershipStale = false;
+                    _reloadAgain = false;
+                    await _fleets.RefreshActiveFleetsAsync();
+                }
+
+                await _ApplyFleetsAsync();
+            } while (_reloadAgain);
+        }
+        finally
+        {
+            _isReloading = false;
+            _reloadRun = null;
+        }
     }
 
     // The active fleets and their members, re-read when the map loads, FLEET is chosen or a roster moves. A fleet that
     // is no longer active drops out of the list, and following it stops.
-    private async Task _ReloadFleetsAsync()
+    private async Task _ApplyFleetsAsync()
     {
         IReadOnlyList<MapFleetChoice> choices = _fleets.ActiveFleets();
         var members = new Dictionary<long, IReadOnlyCollection<int>>();
@@ -607,6 +738,9 @@ public sealed partial class MapViewModel : ObservableObject, IRefreshableModule,
         foreach (MapFleetRowViewModel row in Fleets)
             row.MembersText = _MembersOf(row).Count == 1 ? "1 member" : $"{_MembersOf(row).Count} members";
 
+        OnPropertyChanged(nameof(IsPinnedFleetActive));
+        if (_PinnedRow() is { } pinned && !_pinnedFollowOff && !IsFollowingFleet)
+            FollowFleet(pinned);
         _RefreshPositions();
         if (IsFollowingFleet && !IsFollowPaused)
             _FocusFollowed();
@@ -703,10 +837,26 @@ public sealed partial class MapViewModel : ObservableObject, IRefreshableModule,
         List<(int SystemIndex, int CharacterId, FleetPositionDto Position)> inFleet = [.. placed.Where(member => members.Contains(member.CharacterId))];
         int systems = inFleet.Select(member => member.SystemIndex).Distinct().Count();
         FleetSpreadText = $"{_Count(inFleet.Count, "member")} in {_Count(systems, "system")}";
+        FleetSystemChips = _SystemChipsOf(inFleet.Select(member => (member.SystemIndex, member.CharacterId)), _fleets.CommanderOf(fleet.Fleet));
         int unplaced = members.Count - inFleet.Count;
         FleetUnplacedText = unplaced == 0
             ? string.Empty
             : $"{_Count(unplaced, "member")} without a position from the last {FleetPositionExpiry.TotalMinutes:0} minutes";
+    }
+
+    private List<MapFleetSystemChip> _SystemChipsOf(IEnumerable<(int SystemIndex, int CharacterId)> placed, int? commanderCharacterId)
+    {
+        if (Graph is not { } graph)
+            return [];
+        return
+        [
+            .. placed.GroupBy(member => member.SystemIndex)
+                .Select(here => new MapFleetSystemChip(here.Key, graph.Systems[here.Key].Name, here.Count(),
+                    HasCommander: commanderCharacterId is { } commander && here.Any(member => member.CharacterId == commander)))
+                .OrderByDescending(chip => chip.HasCommander)
+                .ThenByDescending(chip => chip.Members)
+                .ThenBy(chip => chip.SystemName, StringComparer.OrdinalIgnoreCase)
+        ];
     }
 
     private static string _Count(int count, string noun) => count == 1 ? $"1 {noun}" : $"{count} {noun}s";

@@ -11,7 +11,7 @@
         x:Class="EveUtils.Client.Views.FleetMetricsWindow"
         x:DataType="vm:FleetMetricsViewModel"
         x:Name="Root"
-        Width="720" Height="560" MinWidth="520" MinHeight="320"
+        Width="1160" Height="620" MinWidth="520" MinHeight="320"
         WindowStartupLocation="CenterOwner"
         Title="Fleet metrics">
 
@@ -417,6 +417,13 @@
             </Grid>
         </Border>
 
+        <!-- The fleet on the map (ET-395), 440 wide beside everything below the navigation. The wrapper carries the
+             screen's DataContext so the card can reach OPEN IN MAP and the show/hide switch. -->
+        <Border x:Name="MapCardHost" DockPanel.Dock="Right" Margin="12,0,0,0" IsVisible="{Binding HasMapCard}">
+            <v:FleetMapCard x:Name="MapCard" DataContext="{Binding FleetMap}"
+                            OpenInMapCommand="{Binding $parent[Border].((vm:FleetMetricsViewModel)DataContext).OpenFleetOnMapCommand}"/>
+        </Border>
+
         <!-- Header: fleet name + roll-up totals -->
         <Border DockPanel.Dock="Top" Classes="panel" Padding="14,12" Margin="0,0,0,12">
             <Grid ColumnDefinitions="*,Auto">
@@ -478,10 +485,15 @@
         </Border>
 
         <!-- Density switcher + the hint that names what this density leaves out. -->
-        <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="2,0,0,6">
+        <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto,Auto" Margin="2,0,0,6">
             <TextBlock Grid.Column="0" Text="{Binding LayoutHint}" VerticalAlignment="Center"
                        FontSize="11" Foreground="{DynamicResource TextAccentBrush}" TextWrapping="Wrap"/>
-            <Border Grid.Column="1" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+            <Border Grid.Column="1" IsVisible="{Binding FleetMap, Converter={x:Static ObjectConverters.IsNotNull}}"
+                    BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" VerticalAlignment="Center" Margin="12,0,0,0">
+                <Button x:Name="MapCardToggle" Content="MAP" Classes="viewtab" Classes.active="{Binding IsMapCardOpen}"
+                        ToolTip.Tip="Show or hide the fleet's map" Command="{Binding ToggleMapCardCommand}"/>
+            </Border>
+            <Border Grid.Column="2" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
                     VerticalAlignment="Center" Margin="12,0,0,0">
                 <StackPanel Orientation="Horizontal">
                     <Button Content="LIST" Classes="viewtab" Classes.active="{Binding IsListLayout}"

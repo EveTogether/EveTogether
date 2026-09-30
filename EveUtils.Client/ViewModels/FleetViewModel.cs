@@ -549,10 +549,15 @@ public sealed partial class FleetViewModel : ObservableObject
     /// <summary>Metrics + per-fleet sharing apply once I'm in the fleet (owner or member).</summary>
     public bool ShowMetricsActions => IsMine || IsParticipating;
 
+    /// <summary>MAP (ET-395) stands beside the name of a started fleet you are in — like the AUTO-JOIN chip, outside the
+    /// actions cell, so it never costs JOIN its place on the row.</summary>
+    public bool ShowMapChip => IsInActiveGroup && ShowMetricsActions;
+
     partial void OnIsParticipatingChanged(bool value)
     {
         OnPropertyChanged(nameof(ShowRosterButton));
         OnPropertyChanged(nameof(ShowMetricsActions));
+        OnPropertyChanged(nameof(ShowMapChip));
         OnPropertyChanged(nameof(ShowMetricsButton));
         OnPropertyChanged(nameof(ShowShareButton));
         OnPropertyChanged(nameof(CanJoin));

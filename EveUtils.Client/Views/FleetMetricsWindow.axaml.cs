@@ -252,6 +252,8 @@ public partial class FleetMetricsWindow : ChromedWindow
             viewModel.MoveMemberTo(dropped, _insertionIndex);
             viewModel.CommitOrder();
         }
+        else if (!_dragStarted && _dragging is { } clicked && ViewModel is { IsCompactLayout: true } compact)
+            compact.ShowMemberOnMap(clicked);
 
         EndDrag();
     }
