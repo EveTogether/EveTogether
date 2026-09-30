@@ -24,6 +24,7 @@ public partial class FleetMapCard : UserControl
     {
         AvaloniaXamlLoader.Load(this);
         MapView?.ViewMovedByUser += (_, _) => (DataContext as MapViewModel)?.PauseFollow();
+        LayoutUpdated += (_, _) => _UpdateMapInset();
     }
 
     /// <summary>OPEN IN MAP: the screen the card sits on knows which fleet it is for.</summary>
@@ -41,6 +42,13 @@ public partial class FleetMapCard : UserControl
     }
 
     private StarMapControl? MapView => this.FindControl<StarMapControl>("CardMap");
+
+    // The header and the footer sit on the map; it frames and centres in the part between them.
+    private void _UpdateMapInset()
+    {
+        if (MapView is { } map && this.FindControl<Border>("HeaderBar") is { } header && this.FindControl<Border>("FooterBar") is { } footer)
+            map.ViewInset = new Thickness(0, header.Bounds.Height, 0, footer.Bounds.Height);
+    }
 
     private void OnZoomIn(object? sender, RoutedEventArgs e) => MapView?.ZoomBy(2);
 

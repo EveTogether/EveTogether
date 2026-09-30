@@ -112,7 +112,8 @@ public sealed class MapFleetCardTests
         world.Window.MouseUp(row, MouseButton.Left);
         world.Settle();
 
-        Point middle = new(map.Bounds.Width / 2, map.Bounds.Height / 2);
+        Rect visible = new Rect(map.Bounds.Size).Deflate(map.ViewInset);
+        Point middle = visible.Center;
         Point mateAt = map.ScreenPointOf(world.IndexOf(Dodixie));
         Assert.True(Point.Distance(middle, mateAt) < 3, $"the map is centred at {mateAt}, not on {middle}");
         Assert.True(map.ZoomLevel >= MapViewModel.FollowMinZoom, $"zoom {map.ZoomLevel}");

@@ -67,6 +67,9 @@ public sealed class StarMapControl : Control
     private static readonly IImmutableBrush BackgroundBrush = new ImmutableSolidColorBrush(MapPalette.Background);
     private static readonly ImmutablePen NodeOutline = new(BackgroundBrush, 1.5);
 
+    public static readonly StyledProperty<Thickness> ViewInsetProperty =
+        AvaloniaProperty.Register<StarMapControl, Thickness>(nameof(ViewInset));
+
     public static readonly StyledProperty<MapGraphDto?> GraphProperty =
         AvaloniaProperty.Register<StarMapControl, MapGraphDto?>(nameof(Graph));
 
@@ -149,7 +152,7 @@ public sealed class StarMapControl : Control
 
     static StarMapControl()
     {
-        AffectsRender<StarMapControl>(GraphProperty, RouteProperty, MarkersProperty, SelectedIndexProperty, TrailProperty, FollowIndexProperty,
+        AffectsRender<StarMapControl>(ViewInsetProperty, GraphProperty, RouteProperty, MarkersProperty, SelectedIndexProperty, TrailProperty, FollowIndexProperty,
             FleetBadgesProperty);
         ClipToBoundsProperty.OverrideDefaultValue<StarMapControl>(true);
         FocusableProperty.OverrideDefaultValue<StarMapControl>(true);
@@ -165,6 +168,13 @@ public sealed class StarMapControl : Control
             _FlyTo(_ToWorldX(at.X), _ToWorldY(at.Y), _ClampScale(_scale * DoubleTapZoom), ZoomDuration);
         };
         ResourcesChanged += (_, _) => InvalidateVisual();
+    }
+
+    /// <summary>The edges of the control that overlays cover: the map is framed and centred in what is left.</summary>
+    public Thickness ViewInset
+    {
+        get => GetValue(ViewInsetProperty);
+        set => SetValue(ViewInsetProperty, value);
     }
 
     public MapGraphDto? Graph
@@ -288,6 +298,8 @@ public sealed class StarMapControl : Control
         base.OnPropertyChanged(change);
         if (change.Property == GraphProperty)
             _OnGraphChanged();
+        else if (change.Property == ViewInsetProperty)
+            _UpdateFit();
         else if (change.Property == RouteProperty)
             _OnRouteChanged();
         else if (change.Property == FocusRequestProperty && FocusRequest is { } request)
@@ -388,8 +400,8 @@ public sealed class StarMapControl : Control
         Point at = e.GetPosition(this);
         double worldX = _ToWorldX(at.X), worldY = _ToWorldY(at.Y);
         _scale = _ClampScale(_scale * Math.Pow(WheelStep, e.Delta.Y));
-        _centerX = worldX - (at.X - Bounds.Width / 2) / _scale;
-        _centerY = worldY - (at.Y - Bounds.Height / 2) / _scale;
+        _centerX = worldX - (at.X - _ViewCentre.X) / _scale;
+        _centerY = worldY - (at.Y - _ViewCentre.Y) / _scale;
         _PublishView();
         e.Handled = true;
     }
@@ -433,10 +445,10 @@ public sealed class StarMapControl : Control
 
     private void _UpdateFit()
     {
-        if (Graph is not { } graph || Bounds.Width <= 0 || Bounds.Height <= 0)
+        if (Graph is not { } graph || _ViewSize.Width <= 0 || _ViewSize.Height <= 0)
             return;
 
-        _fitScale = Math.Min(Bounds.Width / graph.Width, Bounds.Height / graph.Height) * FitMargin;
+        _fitScale = Math.Min(_ViewSize.Width / graph.Width, _ViewSize.Height / graph.Height) * FitMargin;
         if (!_hasView || _scale < _fitScale * 0.5)
         {
             _centerX = graph.Width / 2;
@@ -489,7 +501,7 @@ public sealed class StarMapControl : Control
         if (request.Framing == MapFraming.Fleet)
         {
             double left = systems.Min(s => s.X), right = systems.Max(s => s.X), top = systems.Min(s => s.Y), bottom = systems.Max(s => s.Y);
-            _FlyTo((left + right) / 2, (top + bottom) / 2, FleetFrameScale(right - left, bottom - top, Bounds.Size, _fitScale), FlyDuration);
+            _FlyTo((left + right) / 2, (top + bottom) / 2, FleetFrameScale(right - left, bottom - top, _ViewSize, _fitScale), FlyDuration);
             return;
         }
         if (systems.Count == 1)
@@ -499,8 +511,8 @@ public sealed class StarMapControl : Control
         }
 
         double minX = systems.Min(s => s.X), maxX = systems.Max(s => s.X), minY = systems.Min(s => s.Y), maxY = systems.Max(s => s.Y);
-        double scale = Math.Min((Bounds.Width - FramePadding * 2) / Math.Max(maxX - minX, 1),
-                                (Bounds.Height - FramePadding * 2) / Math.Max(maxY - minY, 1));
+        double scale = Math.Min((_ViewSize.Width - FramePadding * 2) / Math.Max(maxX - minX, 1),
+                                (_ViewSize.Height - FramePadding * 2) / Math.Max(maxY - minY, 1));
         _FlyTo((minX + maxX) / 2, (minY + maxY) / 2, Math.Clamp(scale, _fitScale, _fitScale * FrameMaxZoom), FlyDuration);
     }
 
@@ -719,15 +731,21 @@ public sealed class StarMapControl : Control
     private int _NearestAt(Point at, double radiusPixels) =>
         _hitGrid?.Nearest(_ToWorldX(at.X), _ToWorldY(at.Y), radiusPixels / _scale) ?? -1;
 
-    private double _ToWorldX(double screenX) => (screenX - Bounds.Width / 2) / _scale + _centerX;
+    // The part of the control the map is framed and centred in: the control less the overlays that sit on it.
+    private Size _ViewSize => new(Math.Max(0, Bounds.Width - ViewInset.Left - ViewInset.Right),
+                                  Math.Max(0, Bounds.Height - ViewInset.Top - ViewInset.Bottom));
 
-    private double _ToWorldY(double screenY) => (screenY - Bounds.Height / 2) / _scale + _centerY;
+    private Point _ViewCentre => new(ViewInset.Left + _ViewSize.Width / 2, ViewInset.Top + _ViewSize.Height / 2);
+
+    private double _ToWorldX(double screenX) => (screenX - _ViewCentre.X) / _scale + _centerX;
+
+    private double _ToWorldY(double screenY) => (screenY - _ViewCentre.Y) / _scale + _centerY;
 
     private Point _ToScreen(MapSystemDto system) =>
-        new((system.X - _centerX) * _scale + Bounds.Width / 2, (system.Y - _centerY) * _scale + Bounds.Height / 2);
+        new((system.X - _centerX) * _scale + _ViewCentre.X, (system.Y - _centerY) * _scale + _ViewCentre.Y);
 
     private Point _ToScreen(double x, double y) =>
-        new((x - _centerX) * _scale + Bounds.Width / 2, (y - _centerY) * _scale + Bounds.Height / 2);
+        new((x - _centerX) * _scale + _ViewCentre.X, (y - _centerY) * _scale + _ViewCentre.Y);
 
     // ── Drawing ──────────────────────────────────────────────────────────────────────────────────
 
@@ -782,7 +800,7 @@ public sealed class StarMapControl : Control
 
         using (context.PushTransform(Matrix.CreateTranslation(-_centerX, -_centerY)
                                      * Matrix.CreateScale(_scale, _scale)
-                                     * Matrix.CreateTranslation(Bounds.Width / 2, Bounds.Height / 2)))
+                                     * Matrix.CreateTranslation(_ViewCentre.X, _ViewCentre.Y)))
         {
             List<MapRegionDto> visible = graph.Regions
                 .Where(region => world.Intersects(new Rect(region.MinX, region.MinY, region.MaxX - region.MinX, region.MaxY - region.MinY)))
