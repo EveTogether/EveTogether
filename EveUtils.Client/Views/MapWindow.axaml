@@ -512,7 +512,7 @@
                 </Border>
 
                 <!-- Zoom -->
-                <StackPanel HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="10,0,0,34" Spacing="4">
+                <StackPanel HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="10,0,0,10" Spacing="4">
                     <Button Classes="hudbutton" Click="OnZoomIn" ToolTip.Tip="Zoom in">
                         <mi:MaterialIcon Kind="Plus" Width="14" Height="14"/>
                     </Button>
@@ -521,10 +521,6 @@
                     </Button>
                     <Button Classes="hudbutton" Content="ALL" Click="OnZoomAll" ToolTip.Tip="Show all of New Eden"/>
                 </StackPanel>
-
-                <TextBlock HorizontalAlignment="Stretch" VerticalAlignment="Bottom" Margin="10,0,10,6" FontSize="9.5" TextWrapping="Wrap"
-                           Foreground="{StaticResource TextDimSmallBrush}"
-                           Text="Material related to EVE-Online is used with limited permission of CCP Games hf by using official Toolkit. No official affiliation or endorsement by CCP Games hf is stated or implied."/>
             </Panel>
         </DockPanel>
     </Grid>
