@@ -17,6 +17,9 @@ entries under `[Unreleased]` below that were not there yet at the previous night
 
 ## [Unreleased]
 
+- **Fixed: pilots who are offline no longer show on the fleet map.** They are left out of the system card, the name beside your diamonds and the member count, and the "Xs ago" of a logged-out pilot no longer restarts from zero on every refresh. Their last position also no longer stretches what Follow fleet zooms to.
+- **Fixed: Follow fleet and Follow character zoom back in on the group.** When the card's header and footer settled after the map had already zoomed, the map stayed framed for the old view; it now frames again until you move the map yourself.
+- **Changed: no more dark bands across the fleet map.** The header and footer of the map card no longer lie over the map as half-transparent strips; each button, label and note floats on its own small background, and the zoom figure no longer sits against the zoom buttons.
 - **Changed: a tidier left rail.** ESI, INBOX and LOGS now share one LOGS item that opens a small menu with all three. The unread count of your inbox still shows on the LOGS item and next to Inbox in the menu, and LOGS lights up while any of the three is open.
 - **Changed: the fleet list is easier to scan.** The ACTIVE, STANDING BY and FINISHED headings are larger and stand out from the rows, with space between the sections. A started fleet now always has a METRICS button, also in a narrow window, and the "⋯" menu uses normal sentence case instead of capitals.
 - **Fixed: the map in the Fleet metrics card fills the whole card.** Its header and summary now lie over the map instead of leaving a grey bar above and below it.

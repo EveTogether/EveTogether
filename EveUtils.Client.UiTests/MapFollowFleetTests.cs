@@ -8,6 +8,7 @@ using Avalonia.Platform;
 using System.Runtime.InteropServices;
 using EveUtils.Client.Controls.Map;
 using EveUtils.Client.Fleet;
+using EveUtils.Client.Platform;
 using EveUtils.Client.ViewModels.Map;
 using EveUtils.Client.Views;
 using EveUtils.Client.WorldMap;
@@ -367,7 +368,9 @@ public sealed class MapFollowFleetTests
             var names = new FakeExternalLookup { [Outsider] = OutsiderName, [Mate] = MateName };
             TestClientInstance instance = TestClientInstance.Create(services => services
                 .AddSingleton<ISdeAccessor>(MapFixture.Sde())
-                .AddSingleton<IExternalCharacterLookup>(names));
+                .AddSingleton<IExternalCharacterLookup>(names)
+                // Without an EVE client to find, the real verdict calls every registered character offline: here you fly.
+                .AddSingleton<ILocalCharacterPresence>(new PilotPresence([Own], [Own])));
             await instance.Services.GetRequiredService<ICharacterRegistry>().AddOrUpdateAsync(new Character(OwnName, Own));
 
             var repository = instance.Services.GetRequiredService<IFleetRepository>();
