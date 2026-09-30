@@ -276,6 +276,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
     public bool IsEsiActive => ActiveModule == "esi";
     public bool IsInboxActive => ActiveModule == "inbox";
     public bool IsLogsActive => ActiveModule == "logs";
+    public bool IsLogsGroupActive => IsEsiActive || IsInboxActive || IsLogsActive;
     public bool IsCompositionsActive => ActiveModule == "compositions";
     public bool IsToolsActive => ActiveModule == "tools";
 
@@ -326,6 +327,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         OnPropertyChanged(nameof(IsEsiActive));
         OnPropertyChanged(nameof(IsInboxActive));
         OnPropertyChanged(nameof(IsLogsActive));
+        OnPropertyChanged(nameof(IsLogsGroupActive));
         OnPropertyChanged(nameof(IsCompositionsActive));
         OnPropertyChanged(nameof(IsToolsActive));
         OnPropertyChanged(nameof(IsRunsActive));
