@@ -1,0 +1,24 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:EveUtils.Client.ViewModels.Map"
+             xmlns:mi="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="720" d:DesignHeight="420"
+             x:Class="EveUtils.Client.Views.MapPoppedOutPlaceholder"
+             x:DataType="vm:MapViewModel">
+
+    <!-- What the MAP tab shows while the map is in its own window (ET-396, mockup v2 scene 2). -->
+    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="420" Spacing="10">
+        <mi:MaterialIcon Kind="OpenInNew" Width="28" Height="28" HorizontalAlignment="Center"
+                         Foreground="{DynamicResource AccentBrightBrush}"/>
+        <TextBlock x:Name="Title" Text="The map is open in its own window" FontSize="14" FontWeight="SemiBold"
+                   Foreground="{StaticResource TextBrightBrush}" HorizontalAlignment="Center"/>
+        <TextBlock Text="Follow, trail and route stay as you left them. Close that window, or put the map back here, to see it in this tab again."
+                   FontSize="11.5" TextWrapping="Wrap" TextAlignment="Center" Foreground="{StaticResource TextBrush}"/>
+        <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center" Margin="0,6,0,0">
+            <Button x:Name="PutBackHereButton" Classes="accent" Content="PUT IT BACK HERE" Command="{Binding PutBackCommand}"/>
+            <Button x:Name="ShowWindowButton" Content="SHOW THE WINDOW" Command="{Binding ShowWindowCommand}"/>
+        </StackPanel>
+    </StackPanel>
+</UserControl>

@@ -24,7 +24,8 @@ public sealed class MapLauncher(IServiceProvider services, IDialogService dialog
         services.GetRequiredService<MapTrailRecorder>(),
         services.GetRequiredService<IMapFleetSource>(),
         services.GetRequiredService<TimeProvider>(),
-        services.GetService<ICharacterPortraitProvider>());
+        services.GetService<ICharacterPortraitProvider>(),
+        dialogs);
 
     public MapViewModel Open()
     {
@@ -39,5 +40,11 @@ public sealed class MapLauncher(IServiceProvider services, IDialogService dialog
     {
         MapViewModel map = Open();
         await map.FollowFleetByIdAsync(fleetId, serverAddress);
+    }
+
+    public async Task PopOutFollowingFleetAsync(long fleetId, string? serverAddress)
+    {
+        await OpenFollowingFleetAsync(fleetId, serverAddress);
+        dialogs.PopOutMap();
     }
 }

@@ -21,4 +21,8 @@ public interface IMapLauncher
     /// <summary>Opens the MAP tab and has it follow this fleet. <paramref name="serverAddress"/> null matches by fleet id
     /// alone. The tab keeps whatever follow the pilot picked when the fleet is not one of theirs.</summary>
     Task OpenFollowingFleetAsync(long fleetId, string? serverAddress);
+
+    /// <summary>The fleet card's POP OUT (ET-396): the same map as <see cref="OpenFollowingFleetAsync"/>, in a window of its
+    /// own. A map that is out already follows the fleet and comes forward; a floating map is a window anyway.</summary>
+    Task PopOutFollowingFleetAsync(long fleetId, string? serverAddress);
 }

@@ -48,6 +48,9 @@ internal static class OverlayGeometryStore
     /// of which action opened it — the same place is where the pilot keeps dragging it back to anyway.</summary>
     public static string ForCharacterPicker() => "ui.character-picker";
 
+    /// <summary>The popped-out map's key (ET-396). One map, so one key; width and height are remembered with the position.</summary>
+    public static string ForMap() => "ui.map-window";
+
     public static async Task<OverlayGeometry?> LoadAsync(string key)
     {
         if (string.IsNullOrWhiteSpace(key)) return null;

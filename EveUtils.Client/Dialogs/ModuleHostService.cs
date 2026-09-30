@@ -1,10 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using CommunityToolkit.Mvvm.Input;
 using EveUtils.Client.Input;
+using EveUtils.Client.Views;
 using Material.Icons;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -26,6 +28,10 @@ public sealed class ModuleHostService
         public required string Id;
         public bool Shown;        // window currently shown (floating)
         public HostTab? Tab;      // docked tab wrapper
+        public PoppedModuleWindow? Popout;   // the window the content lives in while popped out (ET-396)
+        public HostTab? PlaceholderTab;      // what the tab shows meanwhile
+
+        public HostTab? TabShown => Popout is null ? Tab : PlaceholderTab;
     }
 
     private Window? _owner;
@@ -42,13 +48,26 @@ public sealed class ModuleHostService
 
     /// <summary>Number of modules currently shown as their own (floating) windows — i.e. pop-outs. Docked modules are
     /// tabs inside the main window and are not counted (closing the main window takes them with it).</summary>
-    public int FloatingWindowCount => _modules.Count(m => m.Shown);
+    public int FloatingWindowCount => _modules.Count(m => m.Shown || m.Popout is not null);
+
+    /// <summary>Raised when a module was popped out, put back, or the dock/float switch changed whether one can be.</summary>
+    public event Action? PopOutStateChanged;
+
+    /// <summary>A popped-out module needs the docked host: floating, every module already is a window.</summary>
+    public bool CanPopOut => _host is { IsFloating: false };
+
+    /// <summary>The window a popped-out module lives in, for tests to look into.</summary>
+    internal Window? PopoutOf(string moduleId) => _modules.FirstOrDefault(m => m.Id == moduleId)?.Popout;
+
+    public bool IsPoppedOut(string moduleId) => _modules.Any(m => m.Id == moduleId && m.Popout is not null);
 
     /// <summary>Close every floating module window (used when the main window is closing).</summary>
     public void CloseFloatingWindows()
     {
         foreach (var module in _modules.Where(m => m.Shown).ToList())
             module.Window.Close(); // fires Closed → OnWindowClosed drops it from the set
+        foreach (var module in _modules.Where(m => m.Popout is not null).ToList())
+            _ReleasePopout(module)?.Close();
     }
 
     /// <summary>Open a feature window as a module. Re-opening the same module id re-selects it. <paramref
@@ -105,7 +124,100 @@ public sealed class ModuleHostService
     }
 
     /// <summary>Re-render after a dock/float switch — migrates the open modules to the other mode (no orphans).</summary>
-    public void SwitchMode() => Render(select: null);
+    public void SwitchMode()
+    {
+        Render(select: null);
+        PopOutStateChanged?.Invoke();
+    }
+
+    /// <summary>
+    /// Moves a docked module's content into a window of its own (ET-396). The same view and view model move — nothing
+    /// is rebuilt — and the tab keeps its place with <paramref name="placeholderFor"/>'s control in it. Independent of
+    /// the global DOCK/FLOAT: only this module leaves the main window.
+    /// </summary>
+    public void PopOut(string moduleId, Func<Control, Control> placeholderFor, string geometryKey)
+    {
+        ModuleFrame? frame = _modules.FirstOrDefault(m => m.Id == moduleId);
+        if (_host is null || _host.IsFloating || frame?.Tab is not { } tab) return;
+        if (frame.Popout is not null)
+        {
+            _Raise(frame.Popout);
+            return;
+        }
+
+        // A control has one parent: the tab strip lets go of the content before the window takes it.
+        _host.SelectedHostTab = null;
+        _host.HostTabs.Clear();
+        _FlushLayout(_owner);
+
+        var popout = new PoppedModuleWindow(frame.Window.Title ?? frame.Title, geometryKey, frame.Content,
+            new Size(frame.Window.Width, frame.Window.Height), new Size(frame.Window.MinWidth, frame.Window.MinHeight));
+        frame.Popout = popout;
+        frame.PlaceholderTab = new HostTab
+        {
+            Content = placeholderFor(frame.Content),
+            Title = tab.Title,
+            ModuleKey = tab.ModuleKey,
+            Icon = tab.Icon,
+            CloseCommand = tab.CloseCommand
+        };
+        popout.Closed += (_, _) => _OnPopoutClosed(frame, popout);
+        popout.KeyDown += (_, e) => _OnFloatingWindowKeyDown(e, frame);
+        popout.Show();   // ownerless, like a floating module: minimizing the main window must not take it along
+
+        Render(select: frame);
+        PopOutStateChanged?.Invoke();
+    }
+
+    /// <summary>Puts a popped-out module back into its tab and closes its window.</summary>
+    public void PutBack(string moduleId)
+    {
+        ModuleFrame? frame = _modules.FirstOrDefault(m => m.Id == moduleId);
+        if (frame is null) return;
+        _ReleasePopout(frame)?.Close();
+        Render(select: frame);
+        PopOutStateChanged?.Invoke();
+    }
+
+    /// <summary>Brings a popped-out module's window forward.</summary>
+    public void FocusPopout(string moduleId)
+    {
+        if (_modules.FirstOrDefault(m => m.Id == moduleId)?.Popout is { } popout)
+            _Raise(popout);
+    }
+
+    // Detaches the content from the window and forgets the popped-out state; the caller closes the window when it is
+    // still open, and re-renders.
+    private static PoppedModuleWindow? _ReleasePopout(ModuleFrame frame)
+    {
+        if (frame.Popout is not { } popout) return null;
+        frame.Popout = null;
+        frame.PlaceholderTab = null;
+        popout.Content = null;
+        _FlushLayout(popout);
+        return popout;
+    }
+
+    // A control that changes windows must not still be waiting in the old window's layout queue: that manager would arrange
+    // it under the new one and throw. Running the old window's pass now, after the control left it, empties that queue.
+    private static void _FlushLayout(Window? window) => window?.UpdateLayout();
+
+    // The window's own X: same as PUT BACK IN MAIN WINDOW.
+    private void _OnPopoutClosed(ModuleFrame frame, PoppedModuleWindow popout)
+    {
+        if (!ReferenceEquals(frame.Popout, popout)) return;   // already put back, dismissed or migrated
+        _ReleasePopout(frame);
+        if (_modules.Contains(frame))
+            Render(select: frame);
+        PopOutStateChanged?.Invoke();
+    }
+
+    private static void _Raise(Window window)
+    {
+        if (window.WindowState == WindowState.Minimized)
+            window.WindowState = WindowState.Normal;
+        window.Activate();
+    }
 
     private void Render(ModuleFrame? select)
     {
@@ -113,9 +225,12 @@ public sealed class ModuleHostService
 
         if (_host.IsFloating)
         {
-            // Release any hosted content from the tabs first, then hand it back to each window and show them.
+            // Release any hosted content from the tabs first, then hand it back to each window and show them. A
+            // popped-out module goes back to its own window like the rest: floating, every module is one.
             _host.SelectedHostTab = null;
             _host.HostTabs.Clear();
+            foreach (var popped in _modules.Where(m => m.Popout is not null).ToList())
+                _ReleasePopout(popped)?.Close();
             foreach (var m in _modules)
             {
                 if (!ReferenceEquals(m.Window.Content, m.Content)) m.Window.Content = m.Content;
@@ -135,11 +250,14 @@ public sealed class ModuleHostService
             foreach (var m in _modules)
             {
                 if (m.Shown) { m.Window.Hide(); m.Shown = false; }
-                if (ReferenceEquals(m.Window.Content, m.Content)) m.Window.Content = null;   // steal for the tab
+                if (m.Popout is null && ReferenceEquals(m.Window.Content, m.Content)) m.Window.Content = null;   // steal for the tab
             }
             _host.HostTabs.Clear();
-            foreach (var m in _modules) _host.HostTabs.Add(m.Tab!);
-            _host.SelectedHostTab = (select ?? _modules.LastOrDefault())?.Tab;
+            foreach (var shown in _modules.Select(m => m.TabShown).OfType<HostTab>()) _host.HostTabs.Add(shown);
+            _host.SelectedHostTab = (select ?? _modules.LastOrDefault())?.TabShown;
+
+            // Asking for a popped-out module (rail, shortcut, a fleet's MAP action) raises its window: the tab is only a placeholder.
+            if (select?.Popout is { } popout) _Raise(popout);
         }
     }
 
@@ -147,6 +265,7 @@ public sealed class ModuleHostService
     {
         var index = _modules.IndexOf(frame);
         var removed = _modules.Remove(frame);
+        _ReleasePopout(frame)?.Close();
         frame.Window.Close();   // fires Closed → the window's own cleanup (e.g. EsiMetrics disposes its VM)
         if (removed)
         {

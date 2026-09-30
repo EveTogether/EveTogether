@@ -142,6 +142,30 @@ public sealed class MapFleetCardTests
         tab.Dispose();
     }
 
+    /// <summary>ET-396: the card's POP OUT opens the map following this fleet — the MAP tab's own map, in its own window —
+    /// and not the other fleet.</summary>
+    [AvaloniaFact]
+    public async Task PopOutOnTheCard_PopsTheMapOut_FollowingThisFleet()
+    {
+        var dialogs = new RecordingDialogService();
+        using var world = await World.OpenAsync(dialogs);
+        long other = await world.AddFleetAsync("Sideshow", started: true);
+        await world.RefreshFleetsAsync();
+        world.Sight(Own, Jita);
+        FleetMapCard card = world.ShowMetrics();
+
+        Assert.NotNull(card.FindControl<Button>("PopOutButton"));
+        await world.Metrics.PopOutFleetMapCommand.ExecuteAsync(null);
+
+        MapViewModel tab = dialogs.LastMap ?? throw new InvalidOperationException("the MAP tab was not opened");
+        Assert.Equal(1, dialogs.MapPopOuts);
+        Assert.True(dialogs.IsMapPoppedOut);
+        Assert.True(tab.IsFollowingFleet);
+        Assert.Equal(world.FleetId, tab.FollowedFleet?.Fleet.FleetId);
+        Assert.NotEqual(other, tab.FollowedFleet?.Fleet.FleetId);
+        tab.Dispose();
+    }
+
     /// <summary>Acceptance: the MAP action on the fleet row opens the MAP tab on that row's fleet.</summary>
     [AvaloniaFact]
     public async Task TheMapActionOnAFleetRow_OpensTheMapTab_FollowingThatFleet()

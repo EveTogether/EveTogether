@@ -532,6 +532,27 @@ public sealed class DialogService : IDialogService, ISingletonService
         return Route(new MapWindow(viewModel), "MAP", "map", "map", MaterialIconKind.MapOutline) as MapViewModel ?? viewModel;
     }
 
+    private const string MapModuleId = "map";
+
+    public bool IsMapPoppedOut => _moduleHost.IsPoppedOut(MapModuleId);
+
+    public bool CanPopOutMap => _moduleHost.CanPopOut && !IsMapPoppedOut;
+
+    public event Action? MapPresentationChanged
+    {
+        add => _moduleHost.PopOutStateChanged += value;
+        remove => _moduleHost.PopOutStateChanged -= value;
+    }
+
+    public void PopOutMap() => _moduleHost.PopOut(MapModuleId, content => new MapPoppedOutPlaceholder { DataContext = content.DataContext },
+        OverlayGeometryStore.ForMap());
+
+    internal Window? MapPopoutWindow => _moduleHost.PopoutOf(MapModuleId);
+
+    public void PutBackMap() => _moduleHost.PutBack(MapModuleId);
+
+    public void ShowMapWindow() => _moduleHost.FocusPopout(MapModuleId);
+
     public KillmailsOverviewViewModel ShowKillmails(KillmailsOverviewViewModel viewModel)
     {
         _Observe(viewModel.LoadAsync(), "this screen could not be read");

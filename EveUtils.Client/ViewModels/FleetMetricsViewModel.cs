@@ -186,6 +186,11 @@ public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposabl
     private System.Threading.Tasks.Task OpenFleetOnMapAsync() =>
         _maps?.OpenFollowingFleetAsync(_fleetId, serverAddress: null) ?? System.Threading.Tasks.Task.CompletedTask;
 
+    /// <summary>POP OUT on the card: the map in its own window, following this fleet.</summary>
+    [RelayCommand]
+    private System.Threading.Tasks.Task PopOutFleetMapAsync() =>
+        _maps?.PopOutFollowingFleetAsync(_fleetId, serverAddress: null) ?? System.Threading.Tasks.Task.CompletedTask;
+
     /// <summary>A click on a member in the COMPACT list: the card flies to where they are and stops following.</summary>
     public void ShowMemberOnMap(DpsViewModel member)
     {
