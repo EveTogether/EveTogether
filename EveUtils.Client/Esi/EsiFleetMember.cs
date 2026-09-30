@@ -10,6 +10,9 @@ namespace EveUtils.Client.Esi;
 /// </summary>
 public sealed class EsiFleetMember
 {
+    /// <summary>The <see cref="Role"/> of the in-game fleet's boss.</summary>
+    public const string FleetCommanderRole = "fleet_commander";
+
     [JsonPropertyName("character_id")] public int CharacterId { get; set; }
     [JsonPropertyName("ship_type_id")] public int ShipTypeId { get; set; }
     [JsonPropertyName("role")] public string Role { get; set; } = string.Empty;

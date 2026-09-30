@@ -30,11 +30,15 @@ public sealed class MapFleetSource(IServiceProvider services, IFleetParticipatio
     public Task RefreshActiveFleetsAsync() =>
         services.GetService<FleetParticipationRefresher>()?.RefreshAsync() ?? Task.CompletedTask;
 
+    // The ET roster's FC wins: a human appointed them, and the roster is readable on every client. The in-game boss only
+    // stands in when the roster names nobody (a server fleet whose roster could not be read), and is known on the boss's
+    // client alone.
     public int? CommanderOf(MapFleetChoice fleet) =>
         participation.Current
             .Where(participant => participant.FleetId == fleet.FleetId && participant.ServerAddress == fleet.ServerAddress)
             .Select(participant => participant.FleetCommanderCharacterId)
-            .FirstOrDefault(commander => commander is not null);
+            .FirstOrDefault(commander => commander is not null)
+        ?? inGame.BossOf(fleet.ServerAddress, fleet.FleetId);
 
     public async Task<IReadOnlyCollection<int>> MembersOfAsync(MapFleetChoice fleet)
     {

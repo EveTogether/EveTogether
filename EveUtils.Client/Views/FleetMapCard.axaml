@@ -87,6 +87,8 @@
                 </StackPanel>
                 <TextBlock Text="{Binding FleetUnplacedText}" IsVisible="{Binding HasFleetUnplaced}" FontSize="11" TextWrapping="Wrap"
                            Foreground="{StaticResource TextBrush}"/>
+                <TextBlock x:Name="CommanderNotice" Text="{Binding FleetCommanderText}" IsVisible="{Binding HasFleetCommanderNotice}" FontSize="11"
+                           TextWrapping="Wrap" Foreground="{DynamicResource TextAccentBrush}"/>
                 <TextBlock x:Name="MemberNotice" Text="{Binding MemberNoticeText}" IsVisible="{Binding HasMemberNotice}" FontSize="11"
                            TextWrapping="Wrap" Foreground="{DynamicResource TextAccentBrush}"/>
                 <ItemsControl x:Name="SystemChips" ItemsSource="{Binding FleetSystemChips}">
