@@ -366,6 +366,32 @@ public sealed class RecordingDialogService : IDialogService
 
     public MapViewModel ShowMap(MapViewModel viewModel) => LastMap = viewModel;
 
+    /// <summary>How many times the map was asked to pop out, come back, or show its window (ET-396).</summary>
+    public int MapPopOuts { get; private set; }
+    public int MapPutBacks { get; private set; }
+    public int MapWindowShows { get; private set; }
+
+    public bool IsMapPoppedOut { get; private set; }
+    public bool CanPopOutMap => LastMap is not null && !IsMapPoppedOut;
+
+    public event Action? MapPresentationChanged;
+
+    public void PopOutMap()
+    {
+        MapPopOuts++;
+        IsMapPoppedOut = true;
+        MapPresentationChanged?.Invoke();
+    }
+
+    public void PutBackMap()
+    {
+        MapPutBacks++;
+        IsMapPoppedOut = false;
+        MapPresentationChanged?.Invoke();
+    }
+
+    public void ShowMapWindow() => MapWindowShows++;
+
     /// <summary>The killmail detail screen the shell was asked to open, or null — a hook to drive it without
     /// standing up the real window (ET-333).</summary>
     public KillmailDetailViewModel? LastKillmailDetail { get; private set; }

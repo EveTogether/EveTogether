@@ -17,6 +17,9 @@ public partial class FleetMapCard : UserControl
     public static readonly StyledProperty<ICommand?> OpenInMapCommandProperty =
         AvaloniaProperty.Register<FleetMapCard, ICommand?>(nameof(OpenInMapCommand));
 
+    public static readonly StyledProperty<ICommand?> PopOutCommandProperty =
+        AvaloniaProperty.Register<FleetMapCard, ICommand?>(nameof(PopOutCommand));
+
     public FleetMapCard()
     {
         AvaloniaXamlLoader.Load(this);
@@ -28,6 +31,13 @@ public partial class FleetMapCard : UserControl
     {
         get => GetValue(OpenInMapCommandProperty);
         set => SetValue(OpenInMapCommandProperty, value);
+    }
+
+    /// <summary>POP OUT: the map in its own window, following the screen's fleet.</summary>
+    public ICommand? PopOutCommand
+    {
+        get => GetValue(PopOutCommandProperty);
+        set => SetValue(PopOutCommandProperty, value);
     }
 
     private StarMapControl? MapView => this.FindControl<StarMapControl>("CardMap");

@@ -421,7 +421,8 @@
              screen's DataContext so the card can reach OPEN IN MAP and the show/hide switch. -->
         <Border x:Name="MapCardHost" DockPanel.Dock="Right" Margin="12,0,0,0" IsVisible="{Binding HasMapCard}">
             <v:FleetMapCard x:Name="MapCard" DataContext="{Binding FleetMap}"
-                            OpenInMapCommand="{Binding $parent[Border].((vm:FleetMetricsViewModel)DataContext).OpenFleetOnMapCommand}"/>
+                            OpenInMapCommand="{Binding $parent[Border].((vm:FleetMetricsViewModel)DataContext).OpenFleetOnMapCommand}"
+                            PopOutCommand="{Binding $parent[Border].((vm:FleetMetricsViewModel)DataContext).PopOutFleetMapCommand}"/>
         </Border>
 
         <!-- Header: fleet name + roll-up totals -->

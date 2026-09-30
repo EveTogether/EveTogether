@@ -75,6 +75,7 @@ public sealed partial class MapViewModel : ObservableObject, IRefreshableModule,
     private readonly IMapFleetSource _fleets;
     private readonly TimeProvider _clock;
     private readonly ICharacterPortraitProvider? _portraits;
+    private readonly IDialogService? _dialogs;
     private readonly IDisposable _rosterWatch;
     private readonly ITimer _badgeBeat;
     private readonly Dictionary<long, IReadOnlyCollection<int>> _fleetMembers = [];
@@ -89,7 +90,7 @@ public sealed partial class MapViewModel : ObservableObject, IRefreshableModule,
     private Task? _reloadRun;
 
     public MapViewModel(IDispatcher dispatcher, ICharacterRegistry registry, IFleetPositionSource positions, MapTrailRecorder trails,
-        IMapFleetSource fleets, TimeProvider clock, ICharacterPortraitProvider? portraits = null)
+        IMapFleetSource fleets, TimeProvider clock, ICharacterPortraitProvider? portraits = null, IDialogService? dialogs = null)
     {
         _dispatcher = dispatcher;
         _registry = registry;
@@ -98,6 +99,9 @@ public sealed partial class MapViewModel : ObservableObject, IRefreshableModule,
         _fleets = fleets;
         _clock = clock;
         _portraits = portraits;
+        _dialogs = dialogs;
+        if (dialogs is not null)
+            dialogs.MapPresentationChanged += _OnPresentationChanged;
         _registry.RegistryChanged += _OnRegistryChanged;
         _positions.PositionChanged += _OnPositionChanged;
         _rosterWatch = fleets.WatchRosters(_OnRosterChanged);
@@ -118,6 +122,29 @@ public sealed partial class MapViewModel : ObservableObject, IRefreshableModule,
     [ObservableProperty] private IReadOnlyList<MapMarker> _markers = [];
     [ObservableProperty] private MapFocusRequest? _focusRequest;
     [ObservableProperty] private bool _isLegendOpen;
+
+    // ── Pop-out (ET-396) ─────────────────────────────────────────────────────────────────────────
+
+    /// <summary>The map is in a window of its own and the MAP tab holds a placeholder.</summary>
+    public bool IsPoppedOut => _dialogs?.IsMapPoppedOut == true;
+
+    /// <summary>POP OUT is offered where the map is a tab and not out already; a floating map is a window to begin with.</summary>
+    public bool CanPopOut => _dialogs?.CanPopOutMap == true;
+
+    [RelayCommand]
+    private void PopOut() => _dialogs?.PopOutMap();
+
+    [RelayCommand]
+    private void PutBack() => _dialogs?.PutBackMap();
+
+    [RelayCommand]
+    private void ShowWindow() => _dialogs?.ShowMapWindow();
+
+    private void _OnPresentationChanged()
+    {
+        OnPropertyChanged(nameof(IsPoppedOut));
+        OnPropertyChanged(nameof(CanPopOut));
+    }
 
     // ── Follow ───────────────────────────────────────────────────────────────────────────────────
 
@@ -566,6 +593,8 @@ public sealed partial class MapViewModel : ObservableObject, IRefreshableModule,
 
     public void Dispose()
     {
+        if (_dialogs is not null)
+            _dialogs.MapPresentationChanged -= _OnPresentationChanged;
         _registry.RegistryChanged -= _OnRegistryChanged;
         _positions.PositionChanged -= _OnPositionChanged;
         _rosterWatch.Dispose();

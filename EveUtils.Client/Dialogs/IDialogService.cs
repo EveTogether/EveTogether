@@ -273,6 +273,24 @@ public interface IDialogService
     /// <returns>The map now on screen: the one passed in, or the one already open.</returns>
     MapViewModel ShowMap(MapViewModel viewModel);
 
+    /// <summary>The map is in its own window (ET-396) and its tab, if docked, is a placeholder.</summary>
+    bool IsMapPoppedOut { get; }
+
+    /// <summary>The map can be popped out: it is open and hosted as a tab. A floating map already is a window.</summary>
+    bool CanPopOutMap { get; }
+
+    /// <summary>Raised when <see cref="IsMapPoppedOut"/> or <see cref="CanPopOutMap"/> changed.</summary>
+    event Action? MapPresentationChanged;
+
+    /// <summary>Moves the open map's view into its own window, view model and all; no-op when it is already out.</summary>
+    void PopOutMap();
+
+    /// <summary>Moves the map back into its tab (the window closes).</summary>
+    void PutBackMap();
+
+    /// <summary>Brings the map's own window forward.</summary>
+    void ShowMapWindow();
+
     /// <summary>Opens the KILLMAILS overview (ET-332) as a hosted module — a docked tab or a floating window, like
     /// RUNS. One screen for the whole app, not one per character: it reads a single selected character at a time.
     /// Returns the screen now showing — the one already open, when it was.</summary>
