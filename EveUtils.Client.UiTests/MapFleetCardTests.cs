@@ -403,7 +403,7 @@ public sealed class MapFleetCardTests
         world.Sight(AltOne, Dodixie);
         world.Settle();
 
-        Assert.True(withoutFarPilot > 60, $"two adjacent systems should fill half the view, zoom {withoutFarPilot}");
+        Assert.True(withoutFarPilot > 49.9, $"two adjacent systems zoom at the one-system cap, zoom {withoutFarPilot}");
         Assert.Equal(withoutFarPilot, map.ZoomLevel, 3);
     }
 

@@ -50,7 +50,7 @@ public sealed partial class MapViewModel : ObservableObject, IRefreshableModule,
     public const double SecurityBarWidth = 258;
 
     /// <summary>Following one character never zooms out past this: one system with its neighbours around it. A fleet\r\n    /// gathered in one system gets the same zoom (<c>StarMapControl</c>, SingleSystemZoom).</summary>
-    public const double FollowMinZoom = 40;
+    public const double FollowMinZoom = 50;
 
     /// <summary>How long a fleet member's position stays on the map without being confirmed again (see the class remarks).</summary>
     public static readonly TimeSpan FleetPositionExpiry = TimeSpan.FromMinutes(10);

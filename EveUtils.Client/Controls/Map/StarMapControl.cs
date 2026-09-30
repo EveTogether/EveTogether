@@ -29,15 +29,14 @@ public sealed class StarMapControl : Control
     private const double ConstellationsFrom = 2.6;
     private const double SystemsFrom = 7;
     private const double MinZoom = 0.6;
-    private const double MaxZoom = 130;
+    private const double MaxZoom = 60;
     private const double FitMargin = 0.92;
     private const double SystemFocusZoom = 11;
     private const double FrameMaxZoom = 16;
     private const double FramePadding = 56;
     private const double FleetFramePadding = 40;
-    private const double FleetMaxZoom = 120;
     private const double FleetFill = 0.5;
-    private const double SingleSystemZoom = 40;
+    private const double SingleSystemZoom = 50;
     private const double BadgeRadius = 9;
     private const double MarkerHitRadius = 8;
     private const double BadgeOffset = 10;
@@ -574,9 +573,9 @@ public sealed class StarMapControl : Control
     }
 
     // The follow-fleet zoom for members spread over spanX × spanY world units: the extent fills half the view (the rest is
-    // the systems around it), never more than the view less a 40 px margin, clamped between the whole map and 120×. It
-    // reads the 2D extent only — jumps are no measure of map distance — and can only shrink as either span grows. A group
-    // in one system has no extent to fill the view with, so it gets a fixed zoom that still shows its neighbours.
+    // the systems around it), never more than the view less a 40 px margin, and never deeper than one system gets (50×, its
+    // neighbours a stone's throw away). It reads the 2D extent only — jumps are no measure of map distance — and can only
+    // shrink as either span grows, from one system (no extent at all) out to the whole map.
     internal static double FleetFrameScale(double spanX, double spanY, Size viewport, double fitScale)
     {
         if (spanX < 1 && spanY < 1)
@@ -585,7 +584,7 @@ public sealed class StarMapControl : Control
         double fill = Math.Min(viewport.Width * FleetFill / Math.Max(spanX, 1), viewport.Height * FleetFill / Math.Max(spanY, 1));
         double margin = Math.Min((viewport.Width - FleetFramePadding * 2) / Math.Max(spanX, 1),
                                  (viewport.Height - FleetFramePadding * 2) / Math.Max(spanY, 1));
-        return Math.Clamp(Math.Min(fill, margin), fitScale, fitScale * FleetMaxZoom);
+        return Math.Clamp(Math.Min(fill, margin), fitScale, fitScale * SingleSystemZoom);
     }
 
     internal Point ScreenPointOf(int systemIndex) =>
