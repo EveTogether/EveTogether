@@ -364,7 +364,7 @@ public sealed class RecordingDialogService : IDialogService
     /// <summary>The MAP module the launcher asked for, or null (ET-392).</summary>
     public MapViewModel? LastMap { get; private set; }
 
-    public void ShowMap(MapViewModel viewModel) => LastMap = viewModel;
+    public MapViewModel ShowMap(MapViewModel viewModel) => LastMap = viewModel;
 
     /// <summary>The killmail detail screen the shell was asked to open, or null — a hook to drive it without
     /// standing up the real window (ET-333).</summary>

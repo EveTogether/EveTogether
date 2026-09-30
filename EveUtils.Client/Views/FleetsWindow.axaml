@@ -903,11 +903,17 @@
                                             <!-- A Grid, not a horizontal StackPanel: the name needs a BOUNDED column for its
                                                  CharacterEllipsis trimming to trigger at all — an unbounded stack never clips,
                                                  so a long name would run straight under the chip instead of eliding. -->
-                                            <Grid ColumnDefinitions="*,Auto">
+                                            <Grid ColumnDefinitions="*,Auto,Auto">
                                                 <TextBlock Grid.Column="0" Classes="nm" Text="{Binding Name}"/>
+                                                <!-- ET-395: this fleet on the map. Beside the name for the same reason as the chip after it. -->
+                                                <Button Grid.Column="1" Classes="chip ok" x:Name="MapChip" Content="MAP" Margin="6,0,0,0"
+                                                        IsVisible="{Binding ShowMapChip}"
+                                                        ToolTip.Tip="Open the map, following this fleet"
+                                                        Command="{Binding #FleetsRoot.((vm:FleetsViewModel)DataContext).MapRowCommand}"
+                                                        CommandParameter="{Binding}"/>
                                                 <!-- ET-323: the AUTO-JOIN stand, beside the name rather than in the actions cell
                                                      (FleetRowActionWidthTests measures that cell, and this must never cost it width). -->
-                                                <Button Grid.Column="1" Classes="chip" Classes.ok="{Binding AutoJoinChipIsOk}"
+                                                <Button Grid.Column="2" Classes="chip" Classes.ok="{Binding AutoJoinChipIsOk}"
                                                         Classes.warn="{Binding AutoJoinChipIsWarn}" Classes.dim="{Binding AutoJoinChipIsDim}"
                                                         IsVisible="{Binding ShowAutoJoinChip}" Content="{Binding AutoJoinChipLabel}"
                                                         ToolTip.Tip="{Binding AutoJoinChipTooltip}" Margin="6,0,0,0"

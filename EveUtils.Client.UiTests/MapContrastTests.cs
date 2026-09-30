@@ -56,7 +56,10 @@ public sealed class MapContrastTests
             .. _Pairs("map canvas", canvasTexts, [canvas]),
             .. _Pairs("HUD", hudTexts, [hud]),
             // ET-394: the fleet badge's count is the map background on an AccentBright disc.
-            .. _Pairs("fleet badge count", [MapPalette.Background], [accentBright])
+            .. _Pairs("fleet badge count", [MapPalette.Background], [accentBright]),
+            // ET-395: the fleet card sits on the panel — its chips (following, paused, not following, the commander's system
+            // in green, every other system) and the MAP chip on a fleet row are ink straight on the panel.
+            .. _Pairs("fleet card chips", [_Neutral("GreenBrush"), _Neutral("WarnBrush"), _Neutral("TextDimBrush"), accentBright, ((ISolidColorBrush)theme["TextAccentBrush"]!).Color], panels)
         ];
 
         TestContext.Current.TestOutputHelper?.WriteLine(

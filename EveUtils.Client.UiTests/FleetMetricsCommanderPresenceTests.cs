@@ -63,6 +63,7 @@ public class FleetMetricsCommanderPresenceTests
         TestClientInstance instance, FakeFleetClient fleets)
     {
         var vm = new FleetMetricsViewModel(instance.Services, fleets, Op);
+        vm.IsMapCardOpen = false;   // these tests are about the member list; the fleet card has its own (MapFleetCardTests)
 
         for (var i = 0; i < 100 && vm.Members.Count < fleets.Members.Count; i++)
             await Task.Delay(20);
@@ -190,7 +191,7 @@ public class FleetMetricsCommanderPresenceTests
         await WaitForPresenceAsync(vm, p => p.Known == 2 && p.IsComplete);
         Dispatcher.UIThread.RunJobs();
 
-        var badge = Assert.Single(window.GetVisualDescendants().OfType<Border>(), b => b.Classes.Contains("chip"));
+        var badge = Assert.Single(window.GetVisualDescendants().OfType<Border>(), b => b.Classes.Contains("chip") && b.FindAncestorOfType<FleetMapCard>() is null);
         var text = Assert.IsType<TextBlock>(badge.Child);
         Assert.Equal("◉ 2/2 WITH FC", text.Text);
         Assert.Contains("good", badge.Classes);
@@ -338,7 +339,7 @@ public class FleetMetricsCommanderPresenceTests
         vm.SetLayoutCommand.Execute(layout);
         Control root = Show(vm, docked);
 
-        var badge = Assert.Single(root.GetVisualDescendants().OfType<Border>(), b => b.Classes.Contains("chip"));
+        var badge = Assert.Single(root.GetVisualDescendants().OfType<Border>(), b => b.Classes.Contains("chip") && b.FindAncestorOfType<FleetMapCard>() is null);
         var text = Assert.IsType<TextBlock>(badge.Child);
         Assert.Equal("◉ 1/2 WITH FC (1 unknown)", text.Text);
         Assert.DoesNotContain("good", badge.Classes);
@@ -365,7 +366,7 @@ public class FleetMetricsCommanderPresenceTests
 
         Control root = Show(vm, docked);
 
-        var badge = Assert.Single(root.GetVisualDescendants().OfType<Border>(), b => b.Classes.Contains("chip"));
+        var badge = Assert.Single(root.GetVisualDescendants().OfType<Border>(), b => b.Classes.Contains("chip") && b.FindAncestorOfType<FleetMapCard>() is null);
         var text = Assert.IsType<TextBlock>(badge.Child);
         Assert.Equal("◉ — WITH FC", text.Text);
         Assert.Contains("dim", badge.Classes);

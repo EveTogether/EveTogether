@@ -526,10 +526,10 @@ public sealed class DialogService : IDialogService, ISingletonService
             as RunsOverviewViewModel ?? viewModel;
     }
 
-    public void ShowMap(MapViewModel viewModel)
+    public MapViewModel ShowMap(MapViewModel viewModel)
     {
         _Observe(viewModel.LoadAsync(), "the map could not be read");
-        Route(new MapWindow(viewModel), "MAP", "map", "map", MaterialIconKind.MapOutline);
+        return Route(new MapWindow(viewModel), "MAP", "map", "map", MaterialIconKind.MapOutline) as MapViewModel ?? viewModel;
     }
 
     public KillmailsOverviewViewModel ShowKillmails(KillmailsOverviewViewModel viewModel)

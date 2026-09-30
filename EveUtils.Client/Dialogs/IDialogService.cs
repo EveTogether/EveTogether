@@ -270,7 +270,8 @@ public interface IDialogService
 
     /// <summary>Opens the MAP module (ET-392) as a hosted module — one map for the whole app. When it is open already
     /// that one comes to the front and re-reads its data.</summary>
-    void ShowMap(MapViewModel viewModel);
+    /// <returns>The map now on screen: the one passed in, or the one already open.</returns>
+    MapViewModel ShowMap(MapViewModel viewModel);
 
     /// <summary>Opens the KILLMAILS overview (ET-332) as a hosted module — a docked tab or a floating window, like
     /// RUNS. One screen for the whole app, not one per character: it reads a single selected character at a time.

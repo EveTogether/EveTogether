@@ -427,6 +427,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         _services = services;
         _gamelog = services.GetRequiredService<GamelogClientService>();
         services.GetRequiredService<MapTrailRecorder>(); // records trails from app start, map open or not
+        services.GetRequiredService<IMapLauncher>().MapOpened += _WatchMapStatus;
         _login = services.GetRequiredService<LocalEsiLoginService>();
         _pairing = services.GetRequiredService<ServerPairingService>();
         _busConnector = services.GetRequiredService<IRemoteBusConnector>();
@@ -671,21 +672,16 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
     {
         if (_dialogs is null || _services is null)
             return;
-        var map = new MapViewModel(
-            _services.GetRequiredService<IDispatcher>(),
-            _services.GetRequiredService<ICharacterRegistry>(),
-            _services.GetRequiredService<IFleetPositionSource>(),
-            _services.GetRequiredService<MapTrailRecorder>(),
-            _services.GetRequiredService<IMapFleetSource>(),
-            _services.GetRequiredService<TimeProvider>(),
-            _services.GetService<ICharacterPortraitProvider>());
+        _services.GetRequiredService<IMapLauncher>().Open();
+    }
+
+    // The launcher builds every map, whoever asked for it — the rail, a fleet's row or the fleet card's OPEN IN MAP.
+    private void _WatchMapStatus(MapViewModel map) =>
         map.PropertyChanged += (_, change) =>
         {
             if (change.PropertyName == nameof(MapViewModel.FollowStatusText))
                 MapStatus = map.FollowStatusText;
         };
-        _dialogs.ShowMap(map);
-    }
 
     /// <summary>Opens the ESI-metrics window — non-modal; a fresh view-model per open so its live poll
     /// timer only runs while the window is visible.</summary>

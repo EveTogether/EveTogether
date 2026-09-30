@@ -13,6 +13,7 @@ using EveUtils.Client.Notifications;
 using EveUtils.Client.Runs;
 using EveUtils.Client.ViewModels.Fleets;
 using EveUtils.Client.ViewModels.Runs;
+using EveUtils.Client.WorldMap;
 using EveUtils.Shared.Identity;
 using EveUtils.Shared.Modules.Fleet.Entities;
 using EveUtils.Shared.Modules.Fleet.Metrics;
@@ -795,6 +796,11 @@ public sealed partial class FleetsViewModel
     [RelayCommand]
     private Task MetricsRowAsync(FleetViewModel? row) =>
         row is null ? Task.CompletedTask : row.IsLocal ? OpenMetricsLocal(row) : OpenMetrics(row);
+
+    /// <summary>MAP on a fleet's row (ET-395): the MAP tab, following this fleet.</summary>
+    [RelayCommand]
+    private Task MapRowAsync(FleetViewModel? row) =>
+        row is null ? Task.CompletedTask : _services.GetService<IMapLauncher>()?.OpenFollowingFleetAsync(row.Id, row.ServerAddress) ?? Task.CompletedTask;
 
     [RelayCommand]
     private Task ShareRowAsync(FleetViewModel? row) => row is null ? Task.CompletedTask : OpenSharing(row);

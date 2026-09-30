@@ -1,0 +1,108 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:EveUtils.Client.ViewModels.Map"
+             xmlns:map="using:EveUtils.Client.Controls.Map"
+             xmlns:mi="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="440" d:DesignHeight="560"
+             x:Class="EveUtils.Client.Views.FleetMapCard"
+             x:DataType="vm:MapViewModel"
+             x:Name="Card">
+
+    <!-- The fleet's place on the map (ET-395, mockup v2 scene 3): a second view on the same graph the MAP tab reads, with
+         follow fleet on for this fleet. Only the transform and the overlays are this view's own. -->
+    <Border Classes="panel" Width="440">
+        <Grid RowDefinitions="Auto,*,Auto">
+            <Grid.Styles>
+                <Style Selector="Button.hudbutton">
+                    <Setter Property="Background" Value="{x:Static map:MapPalette.HudBackgroundBrush}"/>
+                    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+                    <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+                    <Setter Property="Width" Value="30"/>
+                    <Setter Property="Height" Value="28"/>
+                    <Setter Property="Padding" Value="0"/>
+                    <Setter Property="FontSize" Value="10"/>
+                    <Setter Property="HorizontalContentAlignment" Value="Center"/>
+                    <Setter Property="VerticalContentAlignment" Value="Center"/>
+                </Style>
+            </Grid.Styles>
+
+            <Grid Grid.Row="0" ColumnDefinitions="Auto,Auto,*,Auto,Auto" Margin="12,10,12,8">
+                <TextBlock Grid.Column="0" Text="MAP" Classes="label" FontSize="9" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                <Border Grid.Column="1" x:Name="FollowChip" Classes="chip" Classes.ok="{Binding IsFollowingFleet}"
+                        Classes.warn="{Binding IsFollowPaused}" Classes.dim="{Binding !IsFollowingFleet}">
+                    <TextBlock Text="{Binding FleetChipText}" LetterSpacing="1.2" FontWeight="SemiBold"/>
+                </Border>
+                <Button Grid.Column="3" x:Name="FollowButton" Classes="hudbutton" Margin="0,0,6,0" Command="{Binding ToggleFleetFollowCommand}"
+                        ToolTip.Tip="Follow this fleet on the map, or stop following. While paused it brings the map back to the fleet.">
+                    <mi:MaterialIcon Kind="Crosshairs" Width="16" Height="16"/>
+                </Button>
+                <Button Grid.Column="4" x:Name="OpenInMapButton" Padding="8,0" Height="28" Command="{Binding #Card.OpenInMapCommand}"
+                        ToolTip.Tip="Open the MAP tab, following this fleet">
+                    <StackPanel Orientation="Horizontal" Spacing="5">
+                        <mi:MaterialIcon Kind="MapOutline" Width="14" Height="14"/>
+                        <TextBlock Text="OPEN IN MAP" FontSize="10" LetterSpacing="1.2" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Button>
+            </Grid>
+
+            <Panel Grid.Row="1" MinHeight="260" Background="{x:Static map:MapPalette.BackgroundBrush}" ClipToBounds="True">
+                <map:StarMapControl x:Name="CardMap"
+                                    Graph="{Binding Graph}"
+                                    Markers="{Binding Markers}"
+                                    FollowIndex="{Binding FollowIndex}"
+                                    FleetBadges="{Binding FleetBadges}"
+                                    Clock="{Binding Clock}"
+                                    FocusRequest="{Binding FocusRequest}"/>
+                <TextBlock Text="{Binding StatusMessage}" IsVisible="{Binding StatusMessage, Converter={x:Static ObjectConverters.IsNotNull}}"
+                           Foreground="{StaticResource TextBrush}" FontSize="12" TextWrapping="Wrap" MaxWidth="300"
+                           HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center"/>
+                <Border x:Name="EndedNote" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="10" Padding="9,4"
+                        IsVisible="{Binding !IsPinnedFleetActive}"
+                        Background="{x:Static map:MapPalette.HudBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+                    <TextBlock Text="This fleet is not running" FontSize="11" Foreground="{StaticResource TextBrightBrush}"/>
+                </Border>
+                <StackPanel HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="10,0,0,10" Spacing="4">
+                    <Button Classes="hudbutton" Click="OnZoomIn" ToolTip.Tip="Zoom in">
+                        <mi:MaterialIcon Kind="Plus" Width="14" Height="14"/>
+                    </Button>
+                    <Button Classes="hudbutton" Click="OnZoomOut" ToolTip.Tip="Zoom out">
+                        <mi:MaterialIcon Kind="Minus" Width="14" Height="14"/>
+                    </Button>
+                </StackPanel>
+            </Panel>
+
+            <StackPanel Grid.Row="2" Margin="12,8,12,10" Spacing="6">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                    <TextBlock x:Name="Spread" Text="{Binding FleetSpreadText}" FontSize="11.5" FontWeight="SemiBold"
+                               Foreground="{StaticResource TextBrightBrush}"/>
+                    <TextBlock Text="·" FontSize="11.5" Foreground="{StaticResource TextBrush}" IsVisible="{Binding IsFollowingFleet}"/>
+                    <TextBlock x:Name="Zoom" Text="{Binding #CardMap.ZoomLevel, StringFormat='{}{0:0.0}×'}" FontSize="11.5"
+                               Foreground="{StaticResource TextBrush}"/>
+                </StackPanel>
+                <TextBlock Text="{Binding FleetUnplacedText}" IsVisible="{Binding HasFleetUnplaced}" FontSize="11" TextWrapping="Wrap"
+                           Foreground="{StaticResource TextBrush}"/>
+                <TextBlock x:Name="MemberNotice" Text="{Binding MemberNoticeText}" IsVisible="{Binding HasMemberNotice}" FontSize="11"
+                           TextWrapping="Wrap" Foreground="{DynamicResource TextAccentBrush}"/>
+                <ItemsControl x:Name="SystemChips" ItemsSource="{Binding FleetSystemChips}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel/>
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:MapFleetSystemChip">
+                            <Border Classes="chip" Classes.good="{Binding HasCommander}" Margin="0,0,6,6"
+                                    ToolTip.Tip="{Binding Tip}">
+                                <TextBlock Text="{Binding Text}"/>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <TextBlock FontSize="9.5" TextWrapping="Wrap" Foreground="{StaticResource TextDimSmallBrush}"
+                           Text="Material related to EVE-Online is used with limited permission of CCP Games hf by using official Toolkit. No official affiliation or endorsement by CCP Games hf is stated or implied."/>
+            </StackPanel>
+        </Grid>
+    </Border>
+</UserControl>
