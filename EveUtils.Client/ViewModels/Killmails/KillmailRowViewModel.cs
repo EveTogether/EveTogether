@@ -1,8 +1,11 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EveUtils.Client.Formatting;
+using EveUtils.Client.ViewModels.Runs;
 using EveUtils.Shared.Modules.Killmails.Dtos;
 
 namespace EveUtils.Client.ViewModels.Killmails;
@@ -16,11 +19,15 @@ public sealed partial class KillmailRowViewModel : ObservableObject
 {
     private readonly Func<KillmailRowViewModel, Task> _openDetail;
 
-    public KillmailRowViewModel(KillmailOverviewRowDto dto, string shipName, string systemName, string? regionName,
-        bool isAbyssal, string securityText, string counterpartyName, TimeZoneInfo timeZone,
-        Func<KillmailRowViewModel, Task> openDetail)
+    public KillmailRowViewModel(KillmailOverviewRowDto dto, IReadOnlyList<CharacterFaceViewModel> pilots, string shipName,
+        string systemName, string? regionName, bool isAbyssal, string securityText, string counterpartyName,
+        TimeZoneInfo timeZone, Func<KillmailRowViewModel, Task> openDetail)
     {
         _openDetail = openDetail;
+        Pilots = pilots;
+        FirstPilot = pilots[0];
+        ExtraPilotCount = pilots.Count - 1;
+        PilotsTooltip = string.Join(Environment.NewLine, pilots.Select(pilot => pilot.Name));
         CharacterId = dto.CharacterId;
         KillmailId = dto.KillmailId;
         IsLoss = dto.IsLoss;
@@ -51,6 +58,21 @@ public sealed partial class KillmailRowViewModel : ObservableObject
         IskText = Isk is { } signed ? IskFormat.Compact(signed) : "no price";
     }
 
+    /// <summary>Every own character involved in this mail, name order — more than one when the same killmail was
+    /// imported for several of them (ET-405), which is still one row and one line in the totals.</summary>
+    public IReadOnlyList<CharacterFaceViewModel> Pilots { get; }
+
+    public CharacterFaceViewModel FirstPilot { get; }
+
+    public int ExtraPilotCount { get; }
+
+    public bool HasExtraPilots => ExtraPilotCount > 0;
+
+    public string ExtraPilotsText => $"+{ExtraPilotCount}";
+
+    public string PilotsTooltip { get; }
+
+    /// <summary>The character whose copy of the mail this row stands for, and so the one its detail opens for.</summary>
     public int CharacterId { get; }
 
     public int KillmailId { get; }

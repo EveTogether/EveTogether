@@ -33,15 +33,18 @@ using CqrsDispatcher = EveUtils.Shared.Cqrs.IDispatcher;
 namespace EveUtils.Client.ViewModels.Killmails;
 
 /// <summary>
-/// ET-332: the KILLMAILS overview, one character at a time — a character tile row (GRANT ACCESS instead of a count
-/// while <c>esi-killmails.read_killmails.v1</c> is missing), a SHOW row (All/Kills/Losses/Not linked, single-select),
-/// a search box, totals and the mails themselves grouped under a local-day header, newest first. A hosted module like
+/// ET-332: the KILLMAILS overview — a character dropdown (ET-405: "All characters" first and by default, then each
+/// character; GRANT ACCESS in the entry while <c>esi-killmails.read_killmails.v1</c> is missing), a SHOW row
+/// (All/Kills/Losses/Not linked, single-select), a search box, totals and the mails themselves grouped under a
+/// local-day header, newest first. A hosted module like
 /// RUNS (<see cref="IDialogService.ShowKillmails"/>): it can dock as a tab or float as its own window.
 ///
-/// <para>Every read is scoped to <see cref="SelectedCharacter"/> alone — switching characters is a fresh
+/// <para>Every read is scoped to <see cref="SelectedCharacter"/> — switching characters is a fresh
 /// <see cref="GetKillmailsOverviewQuery"/>, not a client-side filter over everyone's mails, the same per-character
-/// split the killmail tables themselves keep. The SHOW filter and the search box never read again: both recompute
-/// <see cref="Days"/> from the last read's rows, kept in <c>_allRows</c>.</para>
+/// split the killmail tables themselves keep. For "All characters" the query returns one row per character, and the
+/// same killmail imported for two own characters is merged into one row (ET-405) before it reaches the list or the
+/// totals. The SHOW filter and the search box never read again: both recompute <see cref="Days"/> from the last
+/// read's rows, kept in <c>_allRows</c>.</para>
 ///
 /// <para><b>Nothing is read on the UI thread</b> (the same rule <c>RunsOverviewViewModel</c> states for itself): the
 /// query, the SDE lookups and <see cref="KillmailNames.HydrateAsync"/> all happen inside one <c>Task.Run</c>. A stale
@@ -75,6 +78,13 @@ public sealed partial class KillmailsOverviewViewModel : ViewModelBase, IRefresh
     private readonly KillmailShowFilterTileViewModel _notLinkedFilter;
 
     private IReadOnlyList<KillmailRowViewModel> _allRows = [];
+
+    // Swapped as a whole on a rebuild, never mutated: the read that names the pilots runs on a worker thread.
+    private IReadOnlyDictionary<int, string> _pilotNames = new Dictionary<int, string>();
+
+    /// <summary>The ComboBox pushes null into <see cref="SelectedCharacter"/> while <see cref="CharacterOptions"/> is
+    /// being rebuilt; neither that nor the rebuild's own re-selection may start a read of its own.</summary>
+    private bool _isRebuildingOptions;
 
     /// <summary>Bumped at the start of every <see cref="_ReadAsync"/>; a read whose stamp no longer matches when it
     /// finishes was superseded by a later character switch and its result is thrown away instead of applied.</summary>
@@ -112,7 +122,7 @@ public sealed partial class KillmailsOverviewViewModel : ViewModelBase, IRefresh
         _notLinkedFilter = new KillmailShowFilterTileViewModel(KillmailShowFilter.NotLinked, "Not linked to a run", _SelectFilter);
         Filters = [_allFilter, _killsFilter, _lossesFilter, _notLinkedFilter];
 
-        _RebuildCharacterTiles(characters);
+        _RebuildCharacterOptions(characters);
         _ShowEmpty();
 
         _registry = services.GetService<ICharacterRegistry>();
@@ -143,14 +153,15 @@ public sealed partial class KillmailsOverviewViewModel : ViewModelBase, IRefresh
     // that touches the bound Characters/Days collections has to be posted to the UI thread rather than run inline.
     private void _OnRegistryChanged() => Dispatcher.UIThread.Post(() => _ = _RefreshCharactersAndReadAsync());
 
-    public ObservableCollection<KillmailCharacterOptionViewModel> Characters { get; } = [];
+    /// <summary>"All characters" first, then one entry per character by name.</summary>
+    public ObservableCollection<KillmailCharacterOptionViewModel> CharacterOptions { get; } = [];
 
     public IReadOnlyList<KillmailShowFilterTileViewModel> Filters { get; }
 
     public ObservableCollection<KillmailDayViewModel> Days { get; } = [];
 
-    /// <summary>Bindable so the empty-state GRANT ACCESS button can reach this character's own command — nothing in
-    /// the view binds it TwoWay, selection always flows through a tile's <c>SelectCommand</c>.</summary>
+    /// <summary>Bound TwoWay to the character dropdown, and the empty-state GRANT ACCESS button reaches this
+    /// character's own command through it.</summary>
     [ObservableProperty] private KillmailCharacterOptionViewModel? _selectedCharacter;
 
     private KillmailShowFilter _selectedFilter = KillmailShowFilter.All;
@@ -234,7 +245,7 @@ public sealed partial class KillmailsOverviewViewModel : ViewModelBase, IRefresh
         {
             if (_services.GetService<ICharacterRegistry>() is { } registry)
             {
-                _RebuildCharacterTiles(await registry.GetAllAsync());
+                _RebuildCharacterOptions(await registry.GetAllAsync());
             }
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
@@ -245,47 +256,46 @@ public sealed partial class KillmailsOverviewViewModel : ViewModelBase, IRefresh
         await _ReadAsync();
     }
 
-    /// <summary>Rebuilds every character tile from <paramref name="characters"/>, keeping the same character selected
-    /// by id when it is still there (falling back to the first tile), so a REFRESH never silently jumps the pilot to
+    /// <summary>Rebuilds the dropdown entries from <paramref name="characters"/>, keeping the same entry selected by
+    /// id when it is still there (falling back to "All characters"), so a REFRESH never silently jumps the pilot to
     /// someone else's kills.</summary>
-    private void _RebuildCharacterTiles(IReadOnlyList<Character> characters)
+    private void _RebuildCharacterOptions(IReadOnlyList<Character> characters)
     {
-        int? selectedCharacterId = SelectedCharacter?.CharacterId;
-        Characters.Clear();
-        foreach (Character character in characters.OrderBy(character => character.Name, StringComparer.OrdinalIgnoreCase))
+        int selectedCharacterId = SelectedCharacter?.CharacterId ?? 0;
+        _isRebuildingOptions = true;
+        try
         {
-            if (character.EsiCharacterId is not { } characterId || characterId <= 0)
+            CharacterOptions.Clear();
+            Dictionary<int, string> pilotNames = [];
+            KillmailCharacterOptionViewModel all = KillmailCharacterOptionViewModel.All();
+            CharacterOptions.Add(all);
+            foreach (Character character in characters.OrderBy(character => character.Name, StringComparer.OrdinalIgnoreCase))
             {
-                continue;
+                if (character.EsiCharacterId is not { } characterId || characterId <= 0)
+                {
+                    continue;
+                }
+
+                pilotNames[characterId] = character.Name;
+                CharacterOptions.Add(new KillmailCharacterOptionViewModel(characterId, character.Name,
+                    _faces.FaceOf(characterId, character.Name), !character.HasScope(KillmailsScopeCatalog.ReadKillmails),
+                    id => _allowScope(id, KillmailsScopeCatalog.ReadKillmails)));
             }
 
-            Characters.Add(new KillmailCharacterOptionViewModel(characterId, character.Name,
-                _faces.FaceOf(characterId, character.Name), !character.HasScope(KillmailsScopeCatalog.ReadKillmails),
-                _SelectCharacter, id => _allowScope(id, KillmailsScopeCatalog.ReadKillmails)));
+            _pilotNames = pilotNames;
+            SelectedCharacter = CharacterOptions.FirstOrDefault(option => option.CharacterId == selectedCharacterId) ?? all;
         }
-
-        KillmailCharacterOptionViewModel? selected = selectedCharacterId is { } id
-            ? Characters.FirstOrDefault(tile => tile.CharacterId == id)
-            : null;
-        selected ??= Characters.FirstOrDefault();
-        SelectedCharacter = selected;
-        foreach (KillmailCharacterOptionViewModel tile in Characters)
+        finally
         {
-            tile.IsSelected = ReferenceEquals(tile, selected);
+            _isRebuildingOptions = false;
         }
     }
 
-    private void _SelectCharacter(KillmailCharacterOptionViewModel character)
+    partial void OnSelectedCharacterChanged(KillmailCharacterOptionViewModel? value)
     {
-        if (ReferenceEquals(SelectedCharacter, character))
+        if (_isRebuildingOptions || value is null)
         {
             return;
-        }
-
-        SelectedCharacter = character;
-        foreach (KillmailCharacterOptionViewModel tile in Characters)
-        {
-            tile.IsSelected = ReferenceEquals(tile, character);
         }
 
         _ = _ReadAsync();
@@ -331,7 +341,7 @@ public sealed partial class KillmailsOverviewViewModel : ViewModelBase, IRefresh
         StatusMessage = null;
         try
         {
-            int characterId = character.CharacterId;
+            int? characterId = character.IsAll ? null : character.CharacterId;
             // The dispatcher call, the SDE lookups and KillmailNames.HydrateAsync are all synchronous-under-the-hood
             // SQLite work (plus HydrateAsync's own ESI calls) — one Task.Run for the whole read, the same reason
             // RunsOverviewViewModel keeps its own reads off the UI thread entirely.
@@ -357,7 +367,7 @@ public sealed partial class KillmailsOverviewViewModel : ViewModelBase, IRefresh
             _RefreshTotals();
             _ApplyFilter();
         }
-        // Both RefreshModule and a tile's SelectCommand fire this off without awaiting it (RefreshModule is void by
+        // Both RefreshModule and a dropdown selection fire this off without awaiting it (RefreshModule is void by
         // IRefreshableModule's own contract), so an exception with nobody to catch it would otherwise go unobserved —
         // this is the module's one chance to say so instead of silently doing nothing.
         catch (Exception exception) when (exception is not OperationCanceledException)
@@ -380,7 +390,7 @@ public sealed partial class KillmailsOverviewViewModel : ViewModelBase, IRefresh
     }
 
     private async Task<(Result<IReadOnlyList<KillmailOverviewRowDto>> Result, IReadOnlyList<KillmailRowViewModel> Rows)> _ReadAndBuildAsync(
-        int characterId, CancellationToken cancellationToken)
+        int? characterId, CancellationToken cancellationToken)
     {
         Result<IReadOnlyList<KillmailOverviewRowDto>> result =
             await _dispatcher.Query(new GetKillmailsOverviewQuery(characterId), cancellationToken);
@@ -402,10 +412,25 @@ public sealed partial class KillmailsOverviewViewModel : ViewModelBase, IRefresh
                 .Select(dto => dto.VictimAllianceId).OfType<int>()],
             cancellationToken);
 
-        return (result, [.. dtos.Select(_BuildRow)]);
+        return (result, [.. dtos.GroupBy(dto => dto.KillmailId).Select(_BuildMergedRow)]);
     }
 
-    private KillmailRowViewModel _BuildRow(KillmailOverviewRowDto dto)
+    // One killmail imported for several own characters is one row. A loss outranks a kill when the copies disagree (one
+    // own pilot died, another shot at the same target): the ship that was lost is the story of the mail, and it counts
+    // once, as a loss, in the totals.
+    private KillmailRowViewModel _BuildMergedRow(IGrouping<int, KillmailOverviewRowDto> copies)
+    {
+        List<KillmailOverviewRowDto> byPilotName =
+            [.. copies.OrderBy(copy => _PilotNameOf(copy.CharacterId), StringComparer.OrdinalIgnoreCase)];
+        KillmailOverviewRowDto primary = byPilotName.FirstOrDefault(copy => copy.IsLoss) ?? byPilotName[0];
+        return _BuildRow(primary,
+            [.. byPilotName.Select(copy => _faces.FaceOf(copy.CharacterId, _PilotNameOf(copy.CharacterId)))]);
+    }
+
+    private string _PilotNameOf(int characterId) =>
+        _pilotNames.TryGetValue(characterId, out string? name) ? name : $"character {characterId}";
+
+    private KillmailRowViewModel _BuildRow(KillmailOverviewRowDto dto, IReadOnlyList<CharacterFaceViewModel> pilots)
     {
         SdeSolarSystem? system = _facts.SystemOf(dto.SolarSystemId);
         string systemName = system?.Name ?? $"system {dto.SolarSystemId}";
@@ -413,7 +438,7 @@ public sealed partial class KillmailsOverviewViewModel : ViewModelBase, IRefresh
         bool isAbyssal = AbyssalSpace.IsAbyssalSystem(dto.SolarSystemId);
         string shipName = _sde.GetType(dto.VictimShipTypeId)?.Name ?? $"type {dto.VictimShipTypeId}";
         string counterparty = dto.IsLoss ? _FinalBlowName(dto.FinalBlow) : _VictimName(dto);
-        return new KillmailRowViewModel(dto, shipName, systemName, system?.RegionName, isAbyssal, securityText,
+        return new KillmailRowViewModel(dto, pilots, shipName, systemName, system?.RegionName, isAbyssal, securityText,
             counterparty, _clock.LocalTimeZone, _OpenDetailAsync);
     }
 

@@ -135,29 +135,21 @@
             <Border DockPanel.Dock="Top" Padding="14,10" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource BorderBrush}">
                 <StackPanel Orientation="Horizontal" Spacing="10">
                     <TextBlock Classes="label" Text="CHARACTER" VerticalAlignment="Center"/>
-                    <ItemsControl ItemsSource="{Binding Characters}">
-                        <ItemsControl.ItemsPanel>
-                            <ItemsPanelTemplate><StackPanel Orientation="Horizontal" Spacing="8"/></ItemsPanelTemplate>
-                        </ItemsControl.ItemsPanel>
-                        <ItemsControl.ItemTemplate>
+                    <ComboBox x:Name="CharacterFilter" MinWidth="240" MaxWidth="420"
+                              ItemsSource="{Binding CharacterOptions}" SelectedItem="{Binding SelectedCharacter, Mode=TwoWay}">
+                        <ComboBox.ItemTemplate>
                             <DataTemplate DataType="vk:KillmailCharacterOptionViewModel">
-                                <Button Classes="tile" Classes.on="{Binding IsSelected}" Command="{Binding SelectCommand}">
-                                    <Panel>
-                                        <Border Classes="tilefill"/>
-                                        <Border Classes="tileaccent" IsVisible="{Binding IsSelected}"/>
-                                        <StackPanel Orientation="Horizontal" Spacing="6" Margin="8,5">
-                                            <ctl:HexPortrait Size="18" Source="{Binding Face.Portrait}" Initial="{Binding Face.Initial}"/>
-                                            <TextBlock Classes="tilename" Text="{Binding Name}"/>
-                                            <TextBlock Classes="tilecount" Text="{Binding Count}" IsVisible="{Binding !NeedsAccess}"/>
-                                            <Border Classes="chip warn" IsVisible="{Binding NeedsAccess}">
-                                                <TextBlock Text="GRANT ACCESS"/>
-                                            </Border>
-                                        </StackPanel>
-                                    </Panel>
-                                </Button>
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <ctl:HexPortrait Size="18" IsVisible="{Binding !IsAll}"
+                                                     Source="{Binding Face.Portrait}" Initial="{Binding Face.Initial}"/>
+                                    <TextBlock VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Text="{Binding Name}"/>
+                                    <TextBlock Classes="tilecount" Text="{Binding Count}" IsVisible="{Binding !NeedsAccess}"/>
+                                    <Button Classes="rowaction" Content="GRANT ACCESS" IsVisible="{Binding NeedsAccess}"
+                                            Command="{Binding GrantAccessCommand}"/>
+                                </StackPanel>
                             </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
                 </StackPanel>
             </Border>
 

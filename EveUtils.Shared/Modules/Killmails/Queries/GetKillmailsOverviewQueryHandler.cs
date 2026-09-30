@@ -28,7 +28,7 @@ internal sealed class GetKillmailsOverviewQueryHandler(
             .AsNoTracking()
             .Include(killmail => killmail.Items)
             .Include(killmail => killmail.Attackers)
-            .Where(killmail => killmail.CharacterId == query.CharacterId)
+            .Where(killmail => query.CharacterId == null || killmail.CharacterId == query.CharacterId)
             .OrderByDescending(killmail => killmail.KillmailTimeUtc)
             .AsSplitQuery()
             .ToListAsync(cancellationToken);
@@ -74,13 +74,13 @@ internal sealed class GetKillmailsOverviewQueryHandler(
     private static decimal? _Value(LocalKillmail killmail, IReadOnlyDictionary<int, double> prices) =>
         RunIskFactsReader.KnownLootValue(RunIskFactsReader.LossLines([killmail]), LootKind.Lost, prices);
 
-    // Every run of this character still there to match against — unlike the link pass (LinkKillmailsToRunsCommandHandler),
-    // this read is not windowed: it only runs once, for a screen scoped to one character's own killmails.
-    private async Task<IReadOnlyList<LinkableRun>> _RunsAsync(ClientDbContext db, long characterId, CancellationToken cancellationToken)
+    // Every run still there to match against (of one character, or of all when none is given) — unlike the link pass
+    // (LinkKillmailsToRunsCommandHandler), this read is not windowed: it only runs once per screen read.
+    private async Task<IReadOnlyList<LinkableRun>> _RunsAsync(ClientDbContext db, long? characterId, CancellationToken cancellationToken)
     {
         var runs = await db.Set<Run>()
             .AsNoTracking()
-            .Where(run => run.CharacterId == characterId && !run.DeletedAtUtc.HasValue)
+            .Where(run => (characterId == null || run.CharacterId == characterId) && !run.DeletedAtUtc.HasValue)
             .Select(run => new
             {
                 run.Id, run.CharacterId, run.ActivityKind, run.SolarSystemId, run.StartedAtUtc, run.StoppedAtUtc,
