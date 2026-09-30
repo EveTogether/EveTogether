@@ -48,7 +48,9 @@ public class RemoteRepMetricTests
         var gamelog = instance.Services.GetRequiredService<GamelogClientService>();
         gamelog.MapCharacter(CharacterId, "Pilot");
 
-        var repAt = DateTime.UtcNow;
+        // A fixed whole-second stamp, like the test above: the rate is an integral divided by its span, and with the
+        // sub-millisecond ticks of a wall-clock stamp the two differ in the last bits (99.999999999999986 on a CI run).
+        var repAt = new DateTime(2030, 1, 1, 12, 0, 0, DateTimeKind.Utc);
         gamelog.AddRemoteRep("Pilot", outgoing: true, amount: 500, occurredAt: repAt);
 
         var samples = gamelog.Sample(FleetId, CharacterId, new DateTimeOffset(repAt.AddSeconds(1)).ToUnixTimeMilliseconds()).ToList();

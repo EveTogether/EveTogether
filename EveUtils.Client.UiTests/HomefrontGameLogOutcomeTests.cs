@@ -94,9 +94,12 @@ public sealed class HomefrontGameLogOutcomeTests
         section.Refresh(DateTime.UtcNow);
         Assert.True(section.CanDecide);
         section.SetOutcomeCommand.Execute(HomefrontOutcome.Failed);
+        // A new run starts at Completed (ET-271), so "has an outcome" is true from the first tick: the pick has to be
+        // seen stored before the line is written, or the line could never be shown to arrive after it.
+        await _TickUntilAsync(harness, window, section, runId, run => run.HomefrontOutcome == HomefrontOutcome.Failed);
 
         await harness.WriteLineAsync(_PaleShadowLine());
-        Run run = await _TickUntilAsync(harness, window, section, runId, run => run.HomefrontOutcome is not null, ticks: 30);
+        Run run = await _TickUntilAsync(harness, window, section, runId, _ => false, ticks: 15);
 
         Assert.Equal(HomefrontOutcome.Failed, run.HomefrontOutcome);
         Assert.False(run.HomefrontOutcomeFromGameLog);
