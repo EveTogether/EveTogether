@@ -1,5 +1,6 @@
 using System;
 using Avalonia.Media;
+using EveUtils.Client.Opsec;
 using EveUtils.Client.ViewModels.Runs;
 using EveUtils.Shared.Modules.Gamelog.Models;
 
@@ -25,5 +26,9 @@ public sealed class GameLogRowViewModel(GameLogLine line, CharacterFaceViewModel
 
     public IBrush KindBrush { get; } = GameLogKindPalette.BrushOf(line.Kind);
 
-    public string Text => Line.Text;
+    /// <summary>Travel, docking and notification lines name systems and stations in free text, which cannot be cut
+    /// apart reliably, so OPSEC masks those lines whole (ET-417). Fights, mining and bounties name no place.</summary>
+    public string Text { get; } = line.Kind is GameLogLineKind.Combat or GameLogLineKind.Mining or GameLogLineKind.Bounty
+        ? line.Text
+        : OpsecText.Mark(line.Text);
 }

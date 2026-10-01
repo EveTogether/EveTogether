@@ -4,6 +4,7 @@ using System.Collections.ObjectModel;
 using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
 using EveUtils.Client.Formatting;
+using EveUtils.Client.Opsec;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Runs.Isk;
@@ -59,7 +60,7 @@ public sealed partial class MissionWindowSectionViewModel : RunWindowSection
     public bool IsMissionLocationShown => MissionLocationText.Length > 0;
 
     public string MissionLocationText => _missionLocationSystemName is { Length: > 0 } name
-        ? Context.Services.GetService<ISdeAccessor>()?.FindSolarSystemByName(name)?.Name ?? string.Empty
+        ? OpsecText.Mark(Context.Services.GetService<ISdeAccessor>()?.FindSolarSystemByName(name)?.Name) ?? string.Empty
         : string.Empty;
 
     /// <summary>Set when the capture opened with EVE's own warning sentence for an important (storyline) mission

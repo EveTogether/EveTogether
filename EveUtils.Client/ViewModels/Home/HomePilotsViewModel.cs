@@ -11,6 +11,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using EveUtils.Client.Esi;
 using EveUtils.Client.Gamelog;
 using EveUtils.Client.Imaging;
+using EveUtils.Client.Opsec;
 using EveUtils.Shared.Modules.Sde;
 using EveUtils.Shared.Modules.Skills.Entities;
 using EveUtils.Shared.Modules.Skills.Repositories;
@@ -253,7 +254,7 @@ public sealed partial class HomePilotsViewModel : ObservableObject, IDisposable
         row.ShowSystem(system, null);
         double? security = await Task.Run(() => _sde?.FindSolarSystemByName(system)?.SecurityStatus);
         _security[system] = security;
-        if (row.SystemName == system)
+        if (row.SystemName == OpsecText.Mark(system))
             row.ShowSystem(system, security);
     }
 

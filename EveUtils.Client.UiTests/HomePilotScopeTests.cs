@@ -1,5 +1,6 @@
 using System;
 using EveUtils.Client.Esi;
+using EveUtils.Client.Opsec;
 using EveUtils.Client.ViewModels;
 using EveUtils.Client.ViewModels.Home;
 using EveUtils.Shared.Identity;
@@ -112,7 +113,7 @@ public sealed class HomePilotScopeTests
 
         without.ShowSystem("Hakshma", 0.4);
         Assert.Equal(WhereState.System, without.Where);
-        Assert.Equal("Hakshma", without.SystemName);
+        Assert.Equal(OpsecText.Mark("Hakshma"), without.SystemName);
     }
 
     /// <summary>No client on this PC is "not on this PC" in WHERE and FLYING — never "offline", and never a scope

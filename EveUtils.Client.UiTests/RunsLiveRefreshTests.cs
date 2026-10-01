@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using EveUtils.Client.Opsec;
 using EveUtils.Client.Runs;
 using EveUtils.Client.ViewModels;
 using EveUtils.Client.ViewModels.Home;
@@ -119,7 +120,7 @@ public sealed class RunsLiveRefreshTests
         await ActivityWindowHarness.WaitUntil(() => overview.Tabs[0].Days.Count == 1);
 
         ActivityOverviewRowViewModel row = Assert.Single(Assert.Single(overview.Tabs[0].Days).Rows);
-        Assert.Equal("Homefront", row.SiteText);
+        Assert.Equal(OpsecText.Mark("Homefront"), row.SiteText);
     }
 
     /// <summary>Table row 7: queueing an activity for a server says "queued" on its row straight away. Red before: the
@@ -291,7 +292,7 @@ public sealed class RunsLiveRefreshTests
         Assert.False(detail.IsDeleted);
         Assert.True(detail.CanDelete);
         Assert.Null(detail.StatusMessage);
-        Assert.Equal("Homefront", detail.SiteText);
+        Assert.Equal(OpsecText.Mark("Homefront"), detail.SiteText);
     }
 
     /// <summary>...and one restored from somewhere else comes back on this screen by itself.</summary>

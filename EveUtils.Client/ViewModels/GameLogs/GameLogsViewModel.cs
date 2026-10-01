@@ -335,7 +335,7 @@ public sealed partial class GameLogsViewModel : ViewModelBase, IDisposable
 
         string search = SearchText.Trim();
         return search.Length == 0
-            || row.Text.Contains(search, StringComparison.OrdinalIgnoreCase)
+            || row.Line.Text.Contains(search, StringComparison.OrdinalIgnoreCase)
             || row.CharacterName.Contains(search, StringComparison.OrdinalIgnoreCase);
     }
 

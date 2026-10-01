@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using Avalonia.Headless.XUnit;
 using EveUtils.Client.Dialogs;
 using EveUtils.Client.Notifications;
+using EveUtils.Client.Opsec;
 using EveUtils.Client.Runs;
 using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Shared.Identity;
@@ -38,7 +39,7 @@ public sealed class StartupResumeNoticeServiceTests
         service.ShowPending();
 
         var toast = Assert.Single(toasts.ActionToasts);
-        Assert.Equal("EVE Together closed while Sansha Hideaway was running", toast.Title);
+        Assert.Equal($"EVE Together closed while {OpsecText.Mark("Sansha Hideaway")} was running", toast.Title);
         Assert.Equal(2, toast.Actions.Count);
         Assert.Equal("Resume", toast.Actions[0].Label);
         Assert.Equal("Keep stopped", toast.Actions[1].Label);

@@ -5,6 +5,7 @@ using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
 using EveUtils.Client.Fleet;
 using EveUtils.Client.Gamelog;
+using EveUtils.Client.Opsec;
 using EveUtils.Client.Runs;
 using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Shared.Identity;
@@ -40,7 +41,7 @@ public sealed class HomefrontDetectorTests
         await ActivityWindowHarness.WaitUntil(() => env.Toasts.ActionToasts.Count > 0);
 
         var offer = Assert.Single(env.Toasts.ActionToasts);
-        Assert.Equal("Start Homefront run: Raid: Hall of Sacrifice?", offer.Title);
+        Assert.Equal($"Start Homefront run: {OpsecText.Mark("Raid: Hall of Sacrifice")}?", offer.Title);
         Assert.Equal(["Ignore", "Start"], offer.Actions.Select(action => action.Label));
 
         offer.Actions[1].Run();
@@ -61,7 +62,7 @@ public sealed class HomefrontDetectorTests
         env.Neut(SeenAtUtc.AddSeconds(6));
         await ActivityWindowHarness.WaitUntil(() => env.Toasts.ActionToasts.Count > 0);
 
-        Assert.Equal("Start Homefront run: Stabilize Rift?", Assert.Single(env.Toasts.ActionToasts).Title);
+        Assert.Equal($"Start Homefront run: {OpsecText.Mark("Stabilize Rift")}?", Assert.Single(env.Toasts.ActionToasts).Title);
     }
 
     // One scenario rather than three tests: each rule only means something against the state the one before it left.
@@ -93,7 +94,11 @@ public sealed class HomefrontDetectorTests
         await env.HitAsync("Badger Runner", SeenAtUtc.AddMinutes(4).AddSeconds(5));
         await ActivityWindowHarness.WaitUntil(() => env.Toasts.ActionToasts.Count > 1);
 
-        Assert.Equal(["Start Homefront run: Raid: Hall of Sacrifice?", "Start Homefront run: Raid: Black Market?"],
+        Assert.Equal(
+            [
+                $"Start Homefront run: {OpsecText.Mark("Raid: Hall of Sacrifice")}?",
+                $"Start Homefront run: {OpsecText.Mark("Raid: Black Market")}?"
+            ],
             env.Toasts.ActionToasts.Select(toast => toast.Title));
     }
 

@@ -1,5 +1,6 @@
 using EveUtils.Client.Dialogs;
 using EveUtils.Client.Notifications;
+using EveUtils.Client.Opsec;
 using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Client.ViewModels.Runs;
 using EveUtils.Shared.DependencyInjection;
@@ -51,7 +52,7 @@ public sealed class StartupResumeNoticeService(IServiceProvider services) : ISin
         // (the branch above already reads it when there is one) — sde is still threaded through for the same reason
         // every other reader of RunTypeCatalogue.For now does, even though it can never fire here.
         string what = !string.IsNullOrWhiteSpace(run.SiteName)
-            ? run.SiteName!
+            ? OpsecText.Mark(run.SiteName)
             : RunTypeCatalogue.For(run.ActivityKind, run.SignatureGroupSnapshot, run.SiteTypeId,
                 services.GetService<ISdeAccessor>()).Name;
         toasts.Show($"EVE Together closed while {what} was running",

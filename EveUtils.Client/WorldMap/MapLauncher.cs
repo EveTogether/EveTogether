@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using EveUtils.Client.Dialogs;
 using EveUtils.Client.Fleet;
 using EveUtils.Client.Imaging;
+using EveUtils.Client.Opsec;
 using EveUtils.Client.ViewModels.Map;
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.DependencyInjection;
@@ -53,7 +54,8 @@ public sealed class MapLauncher(IServiceProvider services, IDialogService dialog
         services.GetRequiredService<IMapFleetSource>(),
         services.GetRequiredService<TimeProvider>(),
         services.GetService<ICharacterPortraitProvider>(),
-        dialogs);
+        dialogs,
+        services.GetRequiredService<IOpsecService>());
 
     public MapViewModel Open()
     {

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using EveUtils.Client.Opsec;
 
 namespace EveUtils.Client.Fleet;
 
@@ -24,7 +25,7 @@ public static class FleetRunsInProgress
             if (elapsed < TimeSpan.Zero)
                 elapsed = TimeSpan.Zero;
 
-            var where = string.IsNullOrWhiteSpace(run.SiteName) ? run.SolarSystemName : run.SiteName;
+            var where = OpsecText.Mark(string.IsNullOrWhiteSpace(run.SiteName) ? run.SolarSystemName : run.SiteName);
             var name = nameOf((int)run.CharacterId);
             // Invariant: this is a clock, and the tests run on a machine whose culture is not English (ET-34).
             return string.IsNullOrWhiteSpace(where)

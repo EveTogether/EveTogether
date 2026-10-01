@@ -1,5 +1,6 @@
 using Avalonia.Headless.XUnit;
 using EveUtils.Client.Dialogs;
+using EveUtils.Client.Opsec;
 using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Client.ViewModels.Runs;
 using EveUtils.Shared.Cqrs;
@@ -57,8 +58,8 @@ public sealed class EscalationRegistrationTests
         var detail = new ActivityDetailViewModel(dispatcher, row.ActivitySummaryId);
         await detail.LoadAsync();
 
-        Assert.Equal("Command Relay Outpost", detail.Escalation().EscalationText);
-        Assert.Equal("Amamake", detail.Escalation().EscalationSystemText);
+        Assert.Equal(OpsecText.Mark("Command Relay Outpost"), detail.Escalation().EscalationText);
+        Assert.Equal(OpsecText.Mark("Amamake"), detail.Escalation().EscalationSystemText);
         Assert.NotNull(detail.Escalation().EscalationExpiresAtText);
 
         await using ClientDbContext db = await harness.Services

@@ -16,8 +16,10 @@ namespace EveUtils.Client.UiTests;
 /// </summary>
 public sealed class OpsecCoverageTests
 {
-    private const string PlannedScreens = "ET-417 PR 2: screens, toasts and log views";
-    private const string PlannedMap = "ET-417 PR 3: the map is hidden whole while OPSEC is on";
+    private const string MarkConverter = "Converter={x:Static opsec:OpsecMarkConverter.Instance}";
+    private const string ConverterProof = nameof(OpsecCoverageTests) + "." + nameof(ConverterMarkedBindings_CarryTheConverter);
+    private const string MapWindowProof = nameof(OpsecMapTests) + "." + nameof(OpsecMapTests.MapWindow_OpsecOn_DrawsNoMap_AndSaysWhy);
+    private const string MapCardProof = nameof(OpsecMapTests) + "." + nameof(OpsecMapTests.FleetMapCard_OpsecOn_DrawsNoMap_AndSaysWhy);
 
     private static readonly Regex BindingPath =
         new(@"\{(?:Binding|CompiledBinding|ReflectionBinding)\s+(?:Path=)?([A-Za-z_][A-Za-z0-9_.]*)", RegexOptions.Compiled);
@@ -43,7 +45,7 @@ public sealed class OpsecCoverageTests
         "ViewModels/Activity/ActivityWindowViewModel.cs|ClockHint",
         "ViewModels/Activity/ActivityWindowViewModel.cs|_RowFor(sample.CharacterId).LocationText",
         "ViewModels/Runs/LinkedLossViewModel.cs|LinkedLossRunChoice",
-        "ViewModels/Killmails/KillmailLinkedRunViewModel.cs|SiteText",
+        "ViewModels/Killmails/KillmailDetailViewModel.cs|linkedRun.SiteName",
         "ViewModels/Home/HomePilotRowViewModel.cs|SystemDetailText",
         "ViewModels/FleetMemberMenu.cs|_LocationLine",
         "Fleet/FleetCommanderPresence.cs|Tooltip",
@@ -52,6 +54,7 @@ public sealed class OpsecCoverageTests
         "ViewModels/Runs/RunPublisher.cs|Publish '",
         "Runs/FleetRunWindowPresenter.cs|_Where",
         "Runs/HomefrontDetector.cs|Could not offer a homefront run on {Site}",
+        "Runs/HomefrontDetector.cs|Start Homefront run:",
         "Runs/StartupResumeNoticeService.cs|Stage",
         "Clipboard/ClipboardSignatureOffer.cs|DescribeSignature",
         "ViewModels/Activity/ActivityWindowViewModel.cs|Copied signature {Signature}",
@@ -59,7 +62,88 @@ public sealed class OpsecCoverageTests
     ];
 
     /// <summary>Places proven masked, each with the test (Class.Method) that proves it.</summary>
-    private static readonly IReadOnlyDictionary<string, string> Masked = new Dictionary<string, string>();
+    private static readonly IReadOnlyDictionary<string, string> Masked = new Dictionary<string, string>
+    {
+        // Runs
+        ["Views/Runs/ActivityRowView.axaml|SiteText"] = "RunsOverviewTests.RunSavedWhileScreenIsOpen_AppearsWithoutReopening",
+        ["Views/Runs/ActivityRowView.axaml|SystemLineText"] = "OpsecSourceMarkingTests.ActivityRow_MarksSystemSecurityAndUnknownSystemId",
+        ["Views/Runs/ActivityRowView.axaml|SystemTooltip"] = "OpsecSourceMarkingTests.ActivityRow_MarksSystemSecurityAndUnknownSystemId",
+        ["Views/Runs/RunningBand.axaml|SiteText"] = "RunsOverviewTests.TwoCharactersRunningAtOnce_EachShowTheirOwnLane",
+        // Both take the row's own SiteText, proven on the row.
+        ["Views/Runs/RunsActivityPane.axaml|SiteText"] = "RunsOverviewTests.RunSavedWhileScreenIsOpen_AppearsWithoutReopening",
+        ["Views/Runs/RunsSummaryPane.axaml|Site"] = "RunsOverviewTests.RunSavedWhileScreenIsOpen_AppearsWithoutReopening",
+        ["ViewModels/Runs/RunsActivityPaneViewModel.cs|MetaText"] = "OpsecSourceMarkingTests.RunsActivityPane_MetaText_MarksSystemAndSignature",
+        ["ViewModels/Runs/RunningGroupViewModel.cs|KindText"] = "OpsecSourceMarkingTests.RunningGroup_KindText_MarksTheSystem",
+        ["ViewModels/Home/HomeDashboardViewModel.cs|IdleText"] = "OpsecSourceMarkingTests.HomeDashboard_IdleText_MarksTheLastSite",
+        ["ViewModels/Runs/UnfinishedRunViewModel.cs|TitleText"] = "RunsOverviewTests.UndoingADiscard_PutsTheRunBackInUnfinishedWithoutReopening",
+        ["Views/ActivityDetailWindow.axaml|SiteText"] = "ActivityDetailTests.UndoDelete_RestoresTheActivity",
+        ["Views/Runs/Sections/ActivityDetailSectionView.axaml|LocationText"] = "ActivityDetailTests.LocationText_NamesTheSolarSystemFromTheSde_InBothLocationAndTheActivityHeader",
+        ["Views/Runs/Sections/ActivityDetailSectionView.axaml|SiteText"] = "OpsecSourceMarkingTests.ActivityDetailSection_MarksSiteAndSignature",
+        ["Views/Runs/Sections/ActivityDetailSectionView.axaml|SignatureText"] = "OpsecSourceMarkingTests.ActivityDetailSection_MarksSiteAndSignature",
+        ["ViewModels/Runs/Sections/ActivityDetailSectionViewModel.cs|HeaderSummary"] = "ActivityDetailTests.LocationText_NamesTheSolarSystemFromTheSde_InBothLocationAndTheActivityHeader",
+        ["Views/Runs/Sections/ActivityWindowSectionView.axaml|SignatureSiteText"] = "ActivityWindowTests.ASiteThatNamesItsHulls_PutsThemInTheirOwnRow",
+        ["Views/Runs/Sections/ActivityWindowSectionView.axaml|LocationText"] = "ActivityWindowWiringTests.AJumpLineInTheGamelog_ReachesTheLocationRow",
+        ["Views/Runs/Sections/ActivityWindowSectionView.axaml|EscalationRegisteredText"] = "OpsecSourceMarkingTests.EscalationRegistered_MarksSiteAndDestination",
+        ["ViewModels/Runs/Sections/ActivityWindowSectionViewModel.cs|HeaderSummary"] = "ClipboardSignatureOfferTests.TheMeasuredLine_FillsTheActivitySectionFromTheCatalogue",
+        ["ViewModels/Activity/ActivityWindowViewModel.cs|ClockHint"] = "OpsecSourceMarkingTests.ActivityWindow_ClockHint_MarksTheWaitingAndTheRunningSite",
+        ["ViewModels/Activity/ActivityWindowViewModel.cs|_RowFor(sample.CharacterId).LocationText"] = "ActivityWindowCorrectionTests.TheFleetSection_NamesEveryMemberItHeardFrom_AndSaysWhatTheCountIsMadeOf",
+        ["Views/Runs/Sections/EscalationDetailSectionView.axaml|EscalationText"] = "EscalationRegistrationTests.RegisteringAnEscalation_StoresSiteSystemAndDeadline_VisibleOnTheDetailScreen",
+        ["Views/Runs/Sections/EscalationDetailSectionView.axaml|EscalationSystemText"] = "EscalationRegistrationTests.RegisteringAnEscalation_StoresSiteSystemAndDeadline_VisibleOnTheDetailScreen",
+        ["Views/Runs/Sections/EscalationDetailSectionView.axaml|EscalationJumpsText"] = "EscalationJumpDistanceTests.JumpsNameTheirAnchor_AndStayVisibleAsAnEmptyStateWhenTheyCannotBeRead",
+        ["Views/Runs/Sections/MissionDetailSectionView.axaml|MissionLocationText"] = "OpsecSourceMarkingTests.MissionSections_MarkTheMissionLocation",
+        ["Views/Runs/Sections/MissionWindowSectionView.axaml|MissionLocationText"] = "OpsecSourceMarkingTests.MissionSections_MarkTheMissionLocation",
+        ["ViewModels/Runs/LinkedLossViewModel.cs|LinkedLossRunChoice"] = "OpsecSourceMarkingTests.LinkedLossChoices_MarkTheSiteName",
+        ["Views/EscalationDialogWindow.axaml|DestinationSecurityText"] = "EscalationDestinationSystemTests.TypedDestination_ResolvesIdAndSecurity_FromTheSdeAlone",
+        ["Views/ManualRunStartWindow.axaml|SiteName"] = ConverterProof,
+        ["Views/ManualRunStartWindow.axaml|SignatureGroup"] = ConverterProof,
+        ["ViewModels/Runs/RunPublisher.cs|Publish '"] = "OpsecSourceMarkingTests.RunPublisher_ServerPrompt_CarriesTheMarkedSite",
+        ["Runs/StartupResumeNoticeService.cs|Stage"] = "StartupResumeNoticeServiceTests.Staged_ShowsOneToastNamingTheRun_WithResumeAndKeepStopped",
+        ["Runs/HomefrontDetector.cs|Start Homefront run:"] = "HomefrontDetectorTests.AnOffertorySigilSeenTwice_InAFleet_OffersTheRaidOnce_AndStartOpensItsRun",
+        ["Runs/HomefrontDetector.cs|Could not offer a homefront run on {Site}"] = "OpsecSourceMarkingTests.HomefrontLogLine_MarksTheSite",
+        ["Clipboard/ClipboardSignatureOffer.cs|DescribeSignature"] = "OpsecSourceMarkingTests.SignatureOffer_Toast_MarksSignatureIdAndName",
+        ["ViewModels/Activity/ActivityWindowViewModel.cs|Copied signature {Signature}"] = "OpsecSourceMarkingTests.SignatureDecisionLog_MarksTheSiteName",
+
+        // Killmails
+        ["Views/Killmails/KillmailRowView.axaml|SystemLineText"] = "OpsecScreenMarkingTests.KillmailRow_MarksSystemRegionAndSecurity",
+        ["Views/Killmails/KillmailRowView.axaml|SecurityText"] = "OpsecScreenMarkingTests.KillmailRow_MarksSystemRegionAndSecurity",
+        ["Views/KillmailDetailWindow.axaml|SystemLineText"] = "OpsecSourceMarkingTests.KillmailDetail_MarksSystemRegionSecurityAndTheLinkedSite",
+        ["Views/Killmails/KillmailLinkedRunView.axaml|SiteText"] = "OpsecSourceMarkingTests.KillmailDetail_MarksSystemRegionSecurityAndTheLinkedSite",
+        ["ViewModels/Killmails/KillmailDetailViewModel.cs|linkedRun.SiteName"] = "OpsecSourceMarkingTests.KillmailDetail_MarksSystemRegionSecurityAndTheLinkedSite",
+
+        // Fleet, metrics and overlays
+        ["Views/DpsOverlayWindow.axaml|LocationDisplay"] = "OpsecScreenMarkingTests.DpsLocation_MarksTheSystem",
+        ["Views/FleetMetricsWindow.axaml|LocationDisplay"] = "OfflineMemberLocationTests.AnOfflineCharacterOfOurs_ShowsNoSystem_AndAFleetMateIsUntouched",
+        ["Views/MetricsWindow.axaml|LocationDisplay"] = "OfflineMemberLocationTests.TheMetricsWindow_FollowsAPilotLoggingBackIn",
+        ["ViewModels/FleetMemberMenu.cs|_LocationLine"] = "FleetMemberMenuTests.MemberMenu_ShowsWhatTheCardDoesNot",
+        ["Fleet/FleetCommanderPresence.cs|Tooltip"] = "OpsecScreenMarkingTests.CommanderPresence_Tooltip_MarksTheCommandersSystem",
+        ["Fleet/FleetRunsInProgress.cs|Describe"] = "FleetStopTests.StopDialog_NamesTheRunsThatAreStillGoing",
+        ["Runs/FleetRunWindowPresenter.cs|_Where"] = "FleetRunOfferToastTests.CommanderStart_OffersAToastNamingTheSiteAndSystem_AndOpensNothing",
+
+        // Home and game logs
+        ["Views/Home/HomePilotsBlock.axaml|SystemName"] = "HomePilotLocationTests.ALocationSetAfterTheHomeOpened_ShowsInThePilotRow",
+        ["Views/Home/HomePilotsBlock.axaml|SystemDetailText"] = "OpsecSourceMarkingTests.HomePilotRow_SystemDetailText_MarksTheSecurity",
+        ["ViewModels/Home/HomePilotRowViewModel.cs|SystemDetailText"] = "OpsecSourceMarkingTests.HomePilotRow_SystemDetailText_MarksTheSecurity",
+        ["ViewModels/GameLogs/GameLogRowViewModel.cs|Text"] = "OpsecScreenMarkingTests.GameLogRow_TravelAndNotifyLines_AreMarkedWhole_FightsMiningAndBountiesAreNot",
+
+        // The map is not drawn at all while OPSEC is on, so everything on it is hidden with it.
+        ["Views/MapWindow.axaml|RegionName"] = MapWindowProof,
+        ["Views/MapWindow.axaml|RouteEndsText"] = MapWindowProof,
+        ["Views/MapWindow.axaml|RouteIndexes"] = MapWindowProof,
+        ["Views/MapWindow.axaml|RouteJumpsText"] = MapWindowProof,
+        ["Views/MapWindow.axaml|RouteMessage"] = MapWindowProof,
+        ["Views/MapWindow.axaml|RouteSteps"] = MapWindowProof,
+        ["Views/MapWindow.axaml|SecurityText"] = MapWindowProof,
+        ["Views/MapWindow.axaml|SelectedConstellationText"] = MapWindowProof,
+        ["Views/MapWindow.axaml|SelectedRegionText"] = MapWindowProof,
+        ["Views/MapWindow.axaml|SelectedSecurityText"] = MapWindowProof,
+        ["Views/MapWindow.axaml|SystemInfo"] = MapWindowProof,
+        ["Views/MapWindow.axaml|SystemName"] = MapWindowProof,
+        ["Views/MapWindow.axaml|SystemNames"] = MapWindowProof,
+        ["Views/MapWindow.axaml|TrailJumps"] = MapWindowProof,
+        ["Views/FleetMapCard.axaml|FleetSystemChips"] = MapCardProof,
+        ["Views/FleetMapCard.axaml|SystemInfo"] = MapCardProof,
+        ["ViewModels/Map/MapFleetSystemChip.cs|SystemName"] = MapCardProof,
+    };
 
     /// <summary>Scan hits that are no location at all, each with the reason. A claim a reviewer has to agree with.</summary>
     private static readonly IReadOnlyDictionary<string, string> Exempt = new Dictionary<string, string>
@@ -68,6 +152,10 @@ public sealed class OpsecCoverageTests
         ["Views/FleetRosterWindow.axaml|EsiAutoApplyStructure"] = "whether the in-game wing and squad structure is applied, a fleet setting",
         ["Views/EscalationDialogWindow.axaml|SiteQuery"] = "the text the pilot is typing into a search box: masking an input makes it unusable",
         ["Views/ManualRunStartWindow.axaml|SiteQuery"] = "the text the pilot is typing into a search box: masking an input makes it unusable",
+        ["Views/EscalationDialogWindow.axaml|DestinationSystem"] = "the text the pilot is typing into an input: masking an input makes it unusable",
+        ["Views/ManualRunStartWindow.axaml|LocationName"] = "the text the pilot is typing into an input: masking an input makes it unusable",
+        ["Views/EscalationDialogWindow.axaml|SiteResults"] = "the SDE's catalogue of every site type matching the typed text, the same for every pilot anywhere",
+        ["Views/ManualRunStartWindow.axaml|SiteResults"] = "the SDE's catalogue of every site type matching the typed text, the same for every pilot anywhere",
         ["Views/ManualRunStartWindow.axaml|AsksSiteGroup"] = "a flag that switches part of the form on, no text",
         ["Views/ManualRunStartWindow.axaml|NeedsSite"] = "a flag that switches part of the form on, no text",
         ["Views/ManualRunStartWindow.axaml|SiteGroups"] = "the fixed list of site categories, the same for every pilot anywhere",
@@ -75,14 +163,26 @@ public sealed class OpsecCoverageTests
         ["Views/Home/HomeDashboardView.axaml|SystemStrip"] = "the app and server status strip: \"system\" as in software, not a solar system",
         ["Views/Runs/Sections/MiningWindowSectionView.axaml|SiteRemainingFraction"] = "how much of the site is mined, a share",
         ["Views/Runs/Sections/MiningWindowSectionView.axaml|SiteRemainingLabel"] = "how much of the site is mined, a share",
+        ["Views/Runs/Sections/ActivityWindowSectionView.axaml|SignatureTypeText"] = "the kind of activity (combat site, mission, abyssal), which says what was done, never where",
         ["Views/Runs/Sections/EscalationDetailSectionView.axaml|EscalationEmptyText"] = "a fixed sentence saying no escalation was registered",
+        ["Views/Runs/Sections/EscalationDetailSectionView.axaml|EscalationExpiresAtText"] = "when the escalation expires, a time",
+        ["Views/Runs/Sections/EscalationDetailSectionView.axaml|EscalationObservedText"] = "when the escalation was read from the Agency, a time",
+        ["Views/Runs/Sections/EscalationDetailSectionView.axaml|EscalationJumpsEmptyText"] = "why the jump count could not be read, never a count or a place",
         ["Views/Runs/RunsSummaryPane.axaml|TopSites"] = "an item source; what its rows show is bound, and listed here, as Site",
     };
 
-    /// <summary>Places not handled yet, each with what closes it. This list only shrinks.</summary>
-    private static readonly IReadOnlyDictionary<string, string> KnownGaps = _KnownGaps();
+    /// <summary>Places not handled yet, each with what closes it. Empty since ET-417 masked them all; a new place never goes on it.</summary>
+    private static readonly IReadOnlyDictionary<string, string> KnownGaps = new Dictionary<string, string>();
 
-    private const int KnownGapCount = 76;
+    /// <summary>Bindings straight to a shared DTO, marked in the view through <c>OpsecMarkConverter</c>.</summary>
+    private static readonly string[] ConverterMarked =
+    [
+        "Views/ManualRunStartWindow.axaml|SiteName",
+        "Views/ManualRunStartWindow.axaml|SignatureGroup",
+        "Views/ManualRunStartWindow.axaml|SelectedSite.Name",
+        "Views/ManualRunStartWindow.axaml|SelectedSuggestion.SiteName",
+        "Views/EscalationDialogWindow.axaml|SelectedSite.Name",
+    ];
 
     [Fact]
     public void EveryLocationPlace_IsMaskedExemptOrAKnownGap()
@@ -97,9 +197,9 @@ public sealed class OpsecCoverageTests
     }
 
     [Fact]
-    public void KnownGaps_OnlyShrink()
+    public void KnownGaps_StayEmpty()
     {
-        Assert.Equal(KnownGapCount, KnownGaps.Count);
+        Assert.Empty(KnownGaps);
     }
 
     [Fact]
@@ -125,6 +225,21 @@ public sealed class OpsecCoverageTests
         List<string> unproven = Masked.Where(entry => !tests.Contains(entry.Value)).Select(entry => $"{entry.Key} → {entry.Value}").ToList();
 
         Assert.True(unproven.Count == 0, "Masked without a test proving it:\n" + string.Join('\n', unproven));
+    }
+
+    [Fact]
+    public void ConverterMarkedBindings_CarryTheConverter()
+    {
+        List<string> unmarked = ConverterMarked
+            .Where(place =>
+            {
+                string[] parts = place.Split('|', 2);
+                string view = File.ReadAllText(Path.Combine(_ClientSourceRoot(), parts[0]));
+                return !Regex.IsMatch(view, $@"\{{Binding {Regex.Escape(parts[1])}, {Regex.Escape(MarkConverter)}");
+            })
+            .ToList();
+
+        Assert.True(unmarked.Count == 0, "Bound without OpsecMarkConverter:\n" + string.Join('\n', unmarked));
     }
 
     [Fact]
@@ -168,76 +283,5 @@ public sealed class OpsecCoverageTests
         }
 
         throw new InvalidOperationException("EVE-Together.slnx not found above the test output directory");
-    }
-
-    private static Dictionary<string, string> _KnownGaps()
-    {
-        string[] screens =
-        [
-            "Views/ActivityDetailWindow.axaml|SiteText",
-            "Views/DpsOverlayWindow.axaml|LocationDisplay",
-            "Views/EscalationDialogWindow.axaml|DestinationSecurityText",
-            "Views/EscalationDialogWindow.axaml|DestinationSystem",
-            "Views/EscalationDialogWindow.axaml|SiteResults",
-            "Views/FleetMetricsWindow.axaml|LocationDisplay",
-            "Views/Home/HomePilotsBlock.axaml|SystemDetailText",
-            "Views/Home/HomePilotsBlock.axaml|SystemName",
-            "Views/KillmailDetailWindow.axaml|SystemLineText",
-            "Views/Killmails/KillmailLinkedRunView.axaml|SiteText",
-            "Views/Killmails/KillmailRowView.axaml|SecurityText",
-            "Views/Killmails/KillmailRowView.axaml|SystemLineText",
-            "Views/ManualRunStartWindow.axaml|LocationName",
-            "Views/ManualRunStartWindow.axaml|SignatureGroup",
-            "Views/ManualRunStartWindow.axaml|SiteName",
-            "Views/ManualRunStartWindow.axaml|SiteResults",
-            "Views/MetricsWindow.axaml|LocationDisplay",
-            "Views/Runs/ActivityRowView.axaml|SiteText",
-            "Views/Runs/ActivityRowView.axaml|SystemLineText",
-            "Views/Runs/ActivityRowView.axaml|SystemTooltip",
-            "Views/Runs/RunningBand.axaml|SiteText",
-            "Views/Runs/RunsActivityPane.axaml|SiteText",
-            "Views/Runs/RunsSummaryPane.axaml|Site",
-            "Views/Runs/Sections/ActivityDetailSectionView.axaml|LocationText",
-            "Views/Runs/Sections/ActivityDetailSectionView.axaml|SignatureText",
-            "Views/Runs/Sections/ActivityDetailSectionView.axaml|SiteText",
-            "Views/Runs/Sections/ActivityWindowSectionView.axaml|EscalationRegisteredText",
-            "Views/Runs/Sections/ActivityWindowSectionView.axaml|LocationText",
-            "Views/Runs/Sections/ActivityWindowSectionView.axaml|SignatureSiteText",
-            "Views/Runs/Sections/ActivityWindowSectionView.axaml|SignatureTypeText",
-            "Views/Runs/Sections/EscalationDetailSectionView.axaml|EscalationExpiresAtText",
-            "Views/Runs/Sections/EscalationDetailSectionView.axaml|EscalationJumpsEmptyText",
-            "Views/Runs/Sections/EscalationDetailSectionView.axaml|EscalationJumpsText",
-            "Views/Runs/Sections/EscalationDetailSectionView.axaml|EscalationObservedText",
-            "Views/Runs/Sections/EscalationDetailSectionView.axaml|EscalationSystemText",
-            "Views/Runs/Sections/EscalationDetailSectionView.axaml|EscalationText",
-            "Views/Runs/Sections/MissionDetailSectionView.axaml|MissionLocationText",
-            "Views/Runs/Sections/MissionWindowSectionView.axaml|MissionLocationText",
-            .. Audited.Where(place => !place.StartsWith("ViewModels/Map/", StringComparison.Ordinal)),
-        ];
-
-        string[] map =
-        [
-            "Views/FleetMapCard.axaml|FleetSystemChips",
-            "Views/FleetMapCard.axaml|SystemInfo",
-            "Views/MapWindow.axaml|RegionName",
-            "Views/MapWindow.axaml|RouteEndsText",
-            "Views/MapWindow.axaml|RouteIndexes",
-            "Views/MapWindow.axaml|RouteJumpsText",
-            "Views/MapWindow.axaml|RouteMessage",
-            "Views/MapWindow.axaml|RouteSteps",
-            "Views/MapWindow.axaml|SecurityText",
-            "Views/MapWindow.axaml|SelectedConstellationText",
-            "Views/MapWindow.axaml|SelectedRegionText",
-            "Views/MapWindow.axaml|SelectedSecurityText",
-            "Views/MapWindow.axaml|SystemInfo",
-            "Views/MapWindow.axaml|SystemName",
-            "Views/MapWindow.axaml|SystemNames",
-            "Views/MapWindow.axaml|TrailJumps",
-            "ViewModels/Map/MapFleetSystemChip.cs|SystemName",
-        ];
-
-        return screens.Select(place => (place, PlannedScreens))
-            .Concat(map.Select(place => (place, PlannedMap)))
-            .ToDictionary(entry => entry.place, entry => entry.Item2);
     }
 }

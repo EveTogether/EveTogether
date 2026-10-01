@@ -7,6 +7,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EveUtils.Client.Clipboard;
 using EveUtils.Client.Dialogs;
+using EveUtils.Client.Opsec;
 using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Fleet.Dtos;
@@ -163,8 +164,8 @@ public sealed partial class ActivityWindowSectionViewModel : RunWindowSection
     public string SignatureSiteText => Context.SignatureName is not { } name
         ? "not known yet"
         : SdeSiteDescription.DescribeCommon(Context.MatchedSites) is { Length: > 0 } common
-            ? $"{name} — {common}"
-            : name;
+            ? $"{OpsecText.Mark(name)} — {common}"
+            : OpsecText.Mark(name);
 
     /// <summary>The hulls the site lets in, grouped by ship group and refined where the SDE's own
     /// includedTypeIds/excludedTypeIds narrow a group beyond its plain name (ET-263) — "Cruisers (T1 only)" when the
@@ -263,17 +264,17 @@ public sealed partial class ActivityWindowSectionViewModel : RunWindowSection
             TypedValue = result.ExpiresAtUtc.ToString("o", CultureInfo.InvariantCulture),
             ObservedAtUtc = nowUtc
         });
-        EscalationRegisteredText = $"{result.SiteName} · {result.DestinationSystem}";
+        EscalationRegisteredText = $"{OpsecText.Mark(result.SiteName)} · {OpsecText.Mark(result.DestinationSystem)}";
     }
 
     // ── Where ──────────────────────────────────────────────────────────────────────────────────────
 
     public string LocationText => Context.IsInsideAbyssal
         ? "none — an abyssal pocket has no location"
-        : (Context.LocationDisplay ?? Context.SolarSystem) is { } place
+        : (Context.LocationDisplay ?? OpsecText.Mark(Context.SolarSystem)) is { } place
             // Never behind "not known yet": that line is about us rather than about where he is, and a scan id in
             // brackets after it would read as half a place.
-            ? Context.SignatureId is { Length: > 0 } signature ? $"{place} ({signature})" : place
+            ? Context.SignatureId is { Length: > 0 } signature ? $"{place} ({OpsecText.Mark(signature)})" : place
             : "not known yet";
 
     /// <summary>Shown only once there is a system to show. "not known yet" is a line about us, not about where he
@@ -346,7 +347,7 @@ public sealed partial class ActivityWindowSectionViewModel : RunWindowSection
         if (!IsInPocket)
         {
             HeaderSummary = string.Join(" · ",
-                new[] { Context.SignatureName ?? "no signature", _ShortDemand(), Context.SolarSystem }
+                new[] { OpsecText.Mark(Context.SignatureName) ?? "no signature", _ShortDemand(), OpsecText.Mark(Context.SolarSystem) }
                     .Where(part => part is not null));
             return;
         }

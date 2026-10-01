@@ -74,7 +74,7 @@ public static class CrashLog
         if (_filePath is null) return;
         try
         {
-            File.AppendAllText(_filePath, System.Text.Json.JsonSerializer.Serialize(entry) + Environment.NewLine);
+            File.AppendAllText(_filePath, System.Text.Json.JsonSerializer.Serialize(entry with { Message = DisplayMarkers.Strip(entry.Message) }) + Environment.NewLine);
         }
         catch { /* last-chance logging must never itself throw */ }
     }

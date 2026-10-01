@@ -1,6 +1,7 @@
 <v:ChromedWindow xmlns="https://github.com/avaloniaui" xmlns:v="using:EveUtils.Client.Views"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:EveUtils.Client.ViewModels.Runs"
+        xmlns:opsec="using:EveUtils.Client.Opsec"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d" d:DesignWidth="480"
@@ -27,7 +28,7 @@
                     </ListBox.ItemTemplate>
                 </ListBox>
             </Border>
-            <TextBlock Text="{Binding SelectedSite.Name, StringFormat='Selected: {0}'}"
+            <TextBlock Text="{Binding SelectedSite.Name, Converter={x:Static opsec:OpsecMarkConverter.Instance}, StringFormat='Selected: {0}'}"
                        IsVisible="{Binding HasSelectedSite}" FontSize="11"
                        Foreground="{DynamicResource TextAccentBrush}"/>
             <!-- ET-126: what the catalogue agrees on for the typed name, silent about anything it disagrees on and

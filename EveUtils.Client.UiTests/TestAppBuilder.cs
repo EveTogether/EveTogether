@@ -35,5 +35,8 @@ public static class TestAppBuilder
             .UseHeadless(new AvaloniaHeadlessPlatformOptions
             {
                 UseHeadlessDrawing = false,
-            });
+            })
+            // The real client draws every text block through the OPSEC hook (ET-417); without it here a view would show
+            // the invisible location markers that the client never puts on screen.
+            .AfterSetup(_ => TestOpsec.Install());
 }

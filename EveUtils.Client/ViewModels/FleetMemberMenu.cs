@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using CommunityToolkit.Mvvm.Input;
 using EveUtils.Client.Fleet;
+using EveUtils.Client.Opsec;
 using EveUtils.Shared.Modules.Fleet.Entities;
 using EveUtils.Shared.Modules.Fleet.Metrics;
 
@@ -80,8 +81,8 @@ public static class FleetMemberMenu
     private static string _LocationLine(FleetMemberFacts facts) => facts switch
     {
         { Presence: FleetMemberPresenceState.Offline } => "No location — offline",
-        { Location: { Length: > 0 } system, IsWithCommander: true } => $"In {system} — with the FC",
-        { Location: { Length: > 0 } system } => $"In {system}",
+        { Location: { Length: > 0 } system, IsWithCommander: true } => $"In {OpsecText.Mark(system)} — with the FC",
+        { Location: { Length: > 0 } system } => $"In {OpsecText.Mark(system)}",
         _ => "Not sharing location"
     };
 

@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics.CodeAnalysis;
 using System.Text;
+using EveUtils.Shared.Logging;
 
 namespace EveUtils.Client.Opsec;
 
@@ -11,12 +12,12 @@ namespace EveUtils.Client.Opsec;
 /// rebuilding a single string.
 /// </summary>
 /// <remarks>The markers are the Unicode interlinear annotation anchor and terminator: format characters EVE never
-/// puts in a name. Anything that sends text out of the app without drawing it (Local API, clipboard, log) has to
-/// pass it through <see cref="IOpsecService.Render"/> or <see cref="Strip"/>.</remarks>
+/// puts in a name. They never leave the screen: the clipboard and the log files strip them, and nothing marked is
+/// handed back to the domain, the store or a server.</remarks>
 public static class OpsecText
 {
-    public const char Open = '￹';
-    public const char Close = '￻';
+    public const char Open = DisplayMarkers.Open;
+    public const char Close = DisplayMarkers.Close;
 
     [return: NotNullIfNotNull(nameof(location))]
     public static string? Mark(string? location) =>
