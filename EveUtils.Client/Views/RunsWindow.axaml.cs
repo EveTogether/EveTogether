@@ -8,6 +8,7 @@ using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using EveUtils.Client.Controls;
 using EveUtils.Client.ViewModels.Runs;
 
 namespace EveUtils.Client.Views;
@@ -73,6 +74,7 @@ public partial class RunsWindow : ChromedWindow
         // The band's own width, not the root's: it is what is left after the band's padding, and nothing the band
         // does to its own columns changes the width it is handed, so this cannot feed back into itself.
         _band.GetObservable(BoundsProperty).Subscribe(new WidthObserver(bounds => _ApplyBand(bounds.Width)));
+        _band.LayoutUpdated += (_, _) => _MatchTypeRowHeightToCharacters();
         // The list's own width, not the root's: it is what is left beside the pane (ET-304), and every realised day
         // header — list and the pinned sticky copy alike — is handed the very same width.
         _activityList.GetObservable(BoundsProperty).Subscribe(new WidthObserver(bounds => _ApplyDayHeaderTier(bounds.Width)));
@@ -185,6 +187,21 @@ public partial class RunsWindow : ChromedWindow
         Grid.SetColumn(_typeBlock, stacked ? 0 : 1);
         Grid.SetRow(_characterBlock, stacked ? 1 : 0);
         Grid.SetColumn(_characterBlock, stacked ? 1 : 2);
+    }
+
+    /// <summary>ET-419: a type tile is as tall as a character tile at every width. The characters' rows stretch to the
+    /// strip's height and bottom out at their minimum, so what they came to is read back and handed to the types as
+    /// their cap, rather than the two blocks each guessing a height.</summary>
+    private void _MatchTypeRowHeightToCharacters()
+    {
+        ColumnFlowPanel? characters = _characterBlock.GetVisualDescendants().OfType<ColumnFlowPanel>().FirstOrDefault();
+        ColumnFlowPanel? types = _typeBlock.GetVisualDescendants().OfType<ColumnFlowPanel>().FirstOrDefault();
+        if (characters is null || types is null || characters.Children.Count == 0)
+            return;
+
+        double height = characters.Children[0].Bounds.Height;
+        if (height > 0 && Math.Abs(types.MaxRowHeight - height) > 0.5)
+            types.MaxRowHeight = height;
     }
 
     /// <summary>Every realised day header's totals columns for the list's own width (ET-304), read off

@@ -694,7 +694,8 @@
                             <ItemsControl ItemsSource="{Binding Tiles}">
                                 <ItemsControl.ItemsPanel>
                                     <ItemsPanelTemplate>
-                                        <ctl:ColumnFlowPanel Classes="tiles" ColumnSpacing="10" RowSpacing="4" MinRowHeight="24"/>
+                                        <ctl:ColumnFlowPanel Classes="tiles" ColumnSpacing="10" RowSpacing="4" MinRowHeight="24"
+                                                             MaxRowHeight="44" MaxColumnWidth="240"/>
                                     </ItemsPanelTemplate>
                                 </ItemsControl.ItemsPanel>
                                 <ItemsControl.ItemTemplate>
