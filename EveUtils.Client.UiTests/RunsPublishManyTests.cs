@@ -155,7 +155,7 @@ public sealed class RunsPublishManyTests
         ICqrsDispatcher dispatcher = _Dispatcher(instance);
         await dispatcher.Send(new RebuildActivitySummariesCommand(), cancellationToken);
         var viewModel = new RunsOverviewViewModel(dispatcher, dialogs ?? new RecordingDialogService(), instance.Services,
-            Crew, runClock: false);
+            Crew, runClock: false, time: RunsTestClock.Fixed);
         await viewModel.LoadAsync(cancellationToken);
         return viewModel;
     }

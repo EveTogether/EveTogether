@@ -29,7 +29,7 @@ public sealed class RunsOverviewFleetFilterTests
         await dispatcher.Send(new RebuildActivitySummariesCommand(), cancellationToken);
 
         var vm = new RunsOverviewViewModel(dispatcher, new RecordingDialogService(), instance.Services, NoCrew,
-            runClock: false, fleetFilter: new RunsFleetFilter(42, "Wednesday Homefronts", StartedAtUtc.AddDays(-1)));
+            runClock: false, fleetFilter: new RunsFleetFilter(42, "Wednesday Homefronts", StartedAtUtc.AddDays(-1)), time: RunsTestClock.Fixed);
         await vm.LoadAsync(cancellationToken);
 
         Assert.Equal("Runs for 'Wednesday Homefronts'", vm.FleetFilterText);
@@ -50,7 +50,7 @@ public sealed class RunsOverviewFleetFilterTests
         // RunGroupOrigin stamps RecordedAtUtc off the wall clock, not off the simulated StartedAtUtc — so "younger
         // than the floor" has to be measured against real now, not against the fixture's fictional date.
         var vm = new RunsOverviewViewModel(dispatcher, new RecordingDialogService(), instance.Services, NoCrew,
-            runClock: false, fleetFilter: new RunsFleetFilter(42, "Brand New Fleet", DateTime.UtcNow.AddMinutes(1)));
+            runClock: false, fleetFilter: new RunsFleetFilter(42, "Brand New Fleet", DateTime.UtcNow.AddMinutes(1)), time: RunsTestClock.Fixed);
         await vm.LoadAsync(cancellationToken);
 
         Assert.Empty(vm.Tabs[0].Days);
@@ -67,7 +67,7 @@ public sealed class RunsOverviewFleetFilterTests
         await dispatcher.Send(new RebuildActivitySummariesCommand(), cancellationToken);
 
         var vm = new RunsOverviewViewModel(dispatcher, new RecordingDialogService(), instance.Services, NoCrew,
-            runClock: false, fleetFilter: new RunsFleetFilter(42, "Old Fleet", StartedAtUtc.AddDays(-30)));
+            runClock: false, fleetFilter: new RunsFleetFilter(42, "Old Fleet", StartedAtUtc.AddDays(-30)), time: RunsTestClock.Fixed);
         await vm.LoadAsync(cancellationToken);
 
         Assert.Empty(vm.Tabs[0].Days);

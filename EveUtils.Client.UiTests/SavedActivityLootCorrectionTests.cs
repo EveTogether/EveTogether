@@ -267,7 +267,7 @@ public sealed class SavedActivityLootCorrectionTests
     private static async Task<RunsOverviewViewModel> _OverviewAsync(TestClientInstance instance)
     {
         var overview = new RunsOverviewViewModel(instance.Services.GetRequiredService<IDispatcher>(),
-            new RecordingDialogService(), instance.Services, Crew, runClock: false);
+            new RecordingDialogService(), instance.Services, Crew, runClock: false, time: RunsTestClock.Fixed);
         await overview.LoadAsync(Token);
         return overview;
     }

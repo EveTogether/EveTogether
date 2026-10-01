@@ -83,7 +83,7 @@ public sealed class RunsCrewExternalCharacterTests
         await dispatcher.Send(new RebuildActivitySummariesCommand(), cancellationToken);
 
         var viewModel = new RunsOverviewViewModel(dispatcher, new RecordingDialogService(), instance.Services,
-            [new Character("Jithran", (int)Own)], runClock: false, paneReadDelay: TimeSpan.Zero);
+            [new Character("Jithran", (int)Own)], runClock: false, paneReadDelay: TimeSpan.Zero, time: RunsTestClock.Fixed);
         await viewModel.LoadAsync(cancellationToken);
         return viewModel;
     }

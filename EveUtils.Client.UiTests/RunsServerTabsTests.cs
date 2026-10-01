@@ -188,7 +188,7 @@ public sealed class RunsServerTabsTests
         await dispatcher.Send(new RebuildActivitySummariesCommand(), cancellationToken);
         // No lane clock: nothing closes this view-model, so a DispatcherTimer would tick on for the rest of the run.
         var viewModel = new RunsOverviewViewModel(dispatcher, dialogs ?? new RecordingDialogService(), instance.Services,
-            Crew, runClock: false);
+            Crew, runClock: false, time: RunsTestClock.Fixed);
         await viewModel.LoadAsync(cancellationToken);
         return viewModel;
     }

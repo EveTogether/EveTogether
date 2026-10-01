@@ -282,7 +282,7 @@ public sealed class RunsActivityPaneTests
         // No lane clock, and no wait before the pane reads: the window that would dispose the view model is never
         // closed, and a test should not sleep through a debounce meant for a held-down arrow key.
         var viewModel = new RunsOverviewViewModel(dispatcher, new RecordingDialogService(), instance.Services,
-            Crew, runClock: false, paneReadDelay: TimeSpan.Zero);
+            Crew, runClock: false, paneReadDelay: TimeSpan.Zero, time: RunsTestClock.Fixed);
         await viewModel.LoadAsync(cancellationToken);
 
         var window = new RunsWindow(viewModel) { Width = width, Height = 1400 };
