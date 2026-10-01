@@ -31,6 +31,7 @@ public class KeyboardShortcutRegistryTests
     [AvaloniaTheory]
     [InlineData(ShortcutAction.SaveRun, Key.S, KeyModifiers.Control | KeyModifiers.Shift)]
     [InlineData(ShortcutAction.OpenMap, Key.M, KeyModifiers.Control)]
+    [InlineData(ShortcutAction.ToggleOpsec, Key.O, KeyModifiers.Control | KeyModifiers.Shift)]
     public void NewerDefault_ResolvesWithoutAnyOverride_AndDoesNotConflictWithAnyOtherDefault(ShortcutAction expected, Key key, KeyModifiers modifiers)
     {
         var registry = new KeyboardShortcutRegistry(TestClientInstance.Create().Services);

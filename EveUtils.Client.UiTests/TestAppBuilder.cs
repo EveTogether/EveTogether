@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Headless;
 using EveUtils.Client;
+using EveUtils.Client.Opsec;
 using EveUtils.Client.UiTests;
 
 // Registers the Avalonia application used for every headless UI test in this assembly.
@@ -29,6 +30,7 @@ public static class TestAppBuilder
             // alignment the operator could see on his build measured as perfect here, and AppraisalToolTests was
             // green over a column that really does clip its amount.
             .WithInterFont()
+            .WithOpsecFont()
             .UseSkia()
             .UseHeadless(new AvaloniaHeadlessPlatformOptions
             {

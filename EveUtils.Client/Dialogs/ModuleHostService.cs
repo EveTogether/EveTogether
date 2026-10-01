@@ -305,6 +305,9 @@ public sealed class ModuleHostService
             case ShortcutAction.FocusSearch:
                 ShortcutDispatch.FocusSearch(frame.Content);
                 break;
+            case ShortcutAction.ToggleOpsec:
+                ShortcutDispatch.ToggleOpsec();
+                break;
             default:
                 return;
         }

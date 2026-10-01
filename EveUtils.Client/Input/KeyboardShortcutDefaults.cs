@@ -37,6 +37,7 @@ public static class KeyboardShortcutDefaults
             [ShortcutAction.GoToHome] = [new KeyGesture(Key.D0, KeyModifiers.Control)],
             // Not Ctrl+9 as first proposed for ET-392: that is GoToLastTab, the browser convention.
             [ShortcutAction.OpenMap] = [new KeyGesture(Key.M, KeyModifiers.Control)],
+            [ShortcutAction.ToggleOpsec] = [new KeyGesture(Key.O, KeyModifiers.Control | KeyModifiers.Shift)],
         };
 
     /// <summary>Label shown in the Settings list — what the action does, not its key.</summary>
@@ -62,5 +63,6 @@ public static class KeyboardShortcutDefaults
         [ShortcutAction.SaveRun] = "Save the current run",
         [ShortcutAction.GoToHome] = "Go to the home screen",
         [ShortcutAction.OpenMap] = "Open the map",
+        [ShortcutAction.ToggleOpsec] = "Turn OPSEC mode on or off",
     };
 }

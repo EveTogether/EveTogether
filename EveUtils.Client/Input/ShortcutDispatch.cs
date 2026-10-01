@@ -2,11 +2,13 @@ using System.Linq;
 using Avalonia.Controls;
 using Avalonia.VisualTree;
 using EveUtils.Client.Dialogs;
+using EveUtils.Client.Opsec;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace EveUtils.Client.Input;
 
 /// <summary>
-/// The two shortcut actions that apply the same way in a docked tab and a floating module window, so both
+/// The shortcut actions that apply the same way in a docked tab and a floating module window, so both
 /// <c>MainWindow</c> and <c>ModuleHostService</c> call the same code instead of each reimplementing it.
 /// </summary>
 public static class ShortcutDispatch
@@ -25,5 +27,11 @@ public static class ShortcutDispatch
     {
         var box = content?.GetVisualDescendants().OfType<TextBox>().FirstOrDefault(t => t.Name == SearchBoxName);
         box?.Focus();
+    }
+
+    public static void ToggleOpsec()
+    {
+        if (Program.Services?.GetService<IOpsecService>() is { } opsec)
+            _ = opsec.SetEnabledAsync(!opsec.IsEnabled);
     }
 }

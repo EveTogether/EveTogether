@@ -46,7 +46,7 @@
         <Border DockPanel.Dock="Top" Height="{Binding TitleBarHeight}" Classes="titlebar" x:Name="TitleBar"
                 chrome:WindowDecorationProperties.ElementRole="TitleBar"
                 PointerPressed="OnTitleBarPressed" DoubleTapped="OnTitleBarDoubleTapped">
-            <Grid ColumnDefinitions="*,Auto">
+            <Grid ColumnDefinitions="*,Auto,Auto">
                 <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="10" Margin="14,0"
                             VerticalAlignment="Center" HorizontalAlignment="{Binding BrandAlignment}">
                     <Image Height="{Binding BrandLogoHeight}" Source="avares://EveUtils.Client/Assets/eve-together-badge.png"
@@ -58,7 +58,19 @@
                                IsVisible="{Binding ShowBrandText}"
                                Foreground="{DynamicResource TextAccentBrush}" VerticalAlignment="Center"/>
                 </StackPanel>
-                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Stretch"
+                <!-- OPSEC (ET-417): in the title bar of every layout, so the state is never a guess on stream. Opens
+                     the switch rather than flipping it: a stray click must not unmask anything. -->
+                <Button Grid.Column="1" x:Name="OpsecChip" Classes="opsecchip" IsVisible="{Binding IsOpsecOn}"
+                        Margin="0,0,10,0" VerticalAlignment="Center" Command="{Binding OpenOpsecSettingsCommand}"
+                        ToolTip.Tip="{Binding OpsecChipTooltip}" chrome:WindowDecorationProperties.ElementRole="User">
+                    <Border Classes="chip warn">
+                        <StackPanel Orientation="Horizontal" Spacing="4">
+                            <mi:MaterialIcon Kind="EyeOff"/>
+                            <TextBlock Text="OPSEC" FontWeight="Bold" LetterSpacing="1.5" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Border>
+                </Button>
+                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Stretch"
                             IsVisible="{Binding ShowHeaderWindowButtons}">
                     <!-- User role = clickable on top of the caption area; the maximize button gets the native
                          MaximizeButton role so Windows 11 shows Snap Layouts when hovering it. -->
