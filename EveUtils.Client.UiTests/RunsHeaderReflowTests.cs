@@ -161,6 +161,47 @@ public sealed class RunsHeaderReflowTests
         Assert.True(list.Top >= headerRect.Bottom - 0.5, $"the list starts at {list.Top}, above the header's {headerRect.Bottom}");
     }
 
+    /// <summary>ET-419: with few types the tiles keep a character tile's height and a capped width instead of
+    /// stretching to the block. Counter-proof: before the cap one type was as tall as the strip and as wide as its
+    /// whole column.</summary>
+    [AvaloniaTheory]
+    [InlineData(1920d, 1)]
+    [InlineData(1920d, 2)]
+    [InlineData(1920d, 6)]
+    [InlineData(1200d, 1)]
+    [InlineData(1200d, 2)]
+    [InlineData(1200d, 6)]
+    [InlineData(975d, 2)]
+    public async Task TypeTiles_KeepACharacterTilesHeight_AndACappedWidth(double width, int typeCount)
+    {
+        using var instance = TestClientInstance.Create();
+        Presented presented = await _PresentAsync(instance, width, TestContext.Current.CancellationToken);
+        presented.ViewModel.TypeFilter.Tiles.Clear();
+        foreach (string type in Types.Take(typeCount))
+            presented.ViewModel.TypeFilter.Tiles.Add(new RunFilterTileViewModel(type, type, MaterialIconKind.Sword, null,
+                _ => { }, _ => { }) { Count = 185 });
+        _Settle(presented);
+
+        List<Control> characterTiles = _TilesOf(presented, "CharacterFilterBlock");
+        List<Control> typeTiles = _TilesOf(presented, "TypeFilterBlock");
+        Assert.Equal(typeCount, typeTiles.Count);
+        double characterHeight = characterTiles[0].Bounds.Height;
+        Rect firstType = _Rect(presented, typeTiles[0]);
+        Rect block = _Rect(presented, _Named<Border>(presented, "TypeFilterBlock"));
+        foreach (Control tile in typeTiles)
+        {
+            Assert.True(Math.Abs(tile.Bounds.Height - characterHeight) <= 2,
+                $"type tile {tile.Bounds} vs character tile height {characterHeight} at {width}/{typeCount}");
+            Assert.True(tile.Bounds.Width <= 240.5, $"type tile {tile.Bounds} wider than 240 at {width}/{typeCount}");
+        }
+
+        Assert.True(firstType.Top - block.Top < 60, $"first type tile {firstType} not at the top of {block}");
+    }
+
+    private static List<Control> _TilesOf(Presented presented, string blockName) =>
+        [.. _Named<Border>(presented, blockName).GetVisualDescendants().OfType<Control>()
+            .Where(c => c.IsVisible && c.Classes.Contains("tile"))];
+
     private static bool _Within(Rect inner, Rect outer) =>
         inner.X >= outer.X - 0.5 && inner.Y >= outer.Y - 0.5
         && inner.Right <= outer.Right + 0.5 && inner.Bottom <= outer.Bottom + 0.5;
