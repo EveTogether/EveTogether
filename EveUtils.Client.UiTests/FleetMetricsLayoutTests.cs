@@ -697,7 +697,9 @@ public class FleetMetricsLayoutTests
     public async Task Drag_MarksBetweenRows_WhenTheCardsAreStacked(FleetMetricsLayout layout)
     {
         using var instance = CreateInstance();
-        var (root, vm) = await ShowAsync(instance, layout, Shell.DockedTab, 420);
+        // Tall on purpose: stacked grid cards are ~226 high, so at the default 620 the second card's centre sits on the
+        // window's last pixels and the press that starts the drag lands outside the scroller's viewport.
+        var (root, vm) = await ShowAsync(instance, layout, Shell.DockedTab, 420, height: 1000);
         Assert.False(SideBySide(MemberHost(root, vm)), "420 is too narrow for two columns of anything");
 
         HoldRow(root, vm, from: 1, to: 0);
