@@ -45,7 +45,7 @@ public sealed class LogsGroupTests
 
         Assert.Equal(11, railItems.Length);
         Assert.Equal(1, railItems.Count(b => b.Name == "LogsRailItem"));
-        Assert.Equal(["ESI metrics", "Inbox", "Client logs"],
+        Assert.Equal(["ESI metrics", "Inbox", "Game logs", "Client logs"],
             _OpenGroup(window).Select(i => i.Header as string ?? "Inbox").ToArray());
         window.Close();
     }
@@ -54,6 +54,7 @@ public sealed class LogsGroupTests
     [InlineData("esi")]
     [InlineData("inbox")]
     [InlineData("logs")]
+    [InlineData("gamelogs")]
     public void Flyout_Item_OpensItsModule_AndLightsTheGroup(string railId)
     {
         using var instance = TestClientInstance.Create();

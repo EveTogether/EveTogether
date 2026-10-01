@@ -10,6 +10,7 @@ using EveUtils.Client.Runs;
 using EveUtils.Client.ViewModels;
 using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Client.ViewModels.FitBrowser;
+using EveUtils.Client.ViewModels.GameLogs;
 using EveUtils.Client.ViewModels.Killmails;
 using EveUtils.Client.ViewModels.Map;
 using EveUtils.Client.ViewModels.Runs;
@@ -487,6 +488,13 @@ public sealed class DialogService : IDialogService, ISingletonService
 
     public void ShowLogs(ClientLogViewModel viewModel) =>
         Route(new LogsWindow(viewModel), "APP LOGS", "logs", "app-logs", MaterialIconKind.FileDocumentOutline);
+
+    public GameLogsViewModel ShowGameLogs(GameLogsViewModel viewModel)
+    {
+        _Observe(viewModel.LoadAsync(), "the game logs could not be read");
+        return Route(new GameLogsWindow(viewModel), "GAME LOGS", "gamelogs", "game-logs", MaterialIconKind.ScriptTextOutline)
+            as GameLogsViewModel ?? viewModel;
+    }
 
     public void ShowEsiMetrics(EsiMetricsViewModel viewModel) =>
         Route(new EsiMetricsWindow(viewModel), "ESI METRICS", "esi", "esi-metrics", MaterialIconKind.ChartBar);

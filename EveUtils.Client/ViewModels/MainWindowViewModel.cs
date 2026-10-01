@@ -17,6 +17,7 @@ using EveUtils.Client.Fittings;
 using EveUtils.Client.Notifications;
 using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Client.ViewModels.FitBrowser;
+using EveUtils.Client.ViewModels.GameLogs;
 using EveUtils.Client.ViewModels.Home;
 using EveUtils.Client.ViewModels.Killmails;
 using EveUtils.Client.ViewModels.Map;
@@ -129,6 +130,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         ["appraisal"] = "appraisal",
         ["inbox"] = "inbox",
         ["app-logs"] = "logs",
+        ["game-logs"] = "gamelogs",
         ["settings"] = "settings",
         ["runs"] = "runs",
         ["map"] = "map",
@@ -276,7 +278,8 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
     public bool IsEsiActive => ActiveModule == "esi";
     public bool IsInboxActive => ActiveModule == "inbox";
     public bool IsLogsActive => ActiveModule == "logs";
-    public bool IsLogsGroupActive => IsEsiActive || IsInboxActive || IsLogsActive;
+    public bool IsGameLogsActive => ActiveModule == "gamelogs";
+    public bool IsLogsGroupActive => IsEsiActive || IsInboxActive || IsLogsActive || IsGameLogsActive;
     public bool IsCompositionsActive => ActiveModule == "compositions";
     public bool IsToolsActive => ActiveModule == "tools";
 
@@ -327,6 +330,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         OnPropertyChanged(nameof(IsEsiActive));
         OnPropertyChanged(nameof(IsInboxActive));
         OnPropertyChanged(nameof(IsLogsActive));
+        OnPropertyChanged(nameof(IsGameLogsActive));
         OnPropertyChanged(nameof(IsLogsGroupActive));
         OnPropertyChanged(nameof(IsCompositionsActive));
         OnPropertyChanged(nameof(IsToolsActive));
@@ -357,6 +361,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
             case "killmails": await OpenKillmailsAsync(); break;
             case "inbox": OpenInbox(); break;
             case "logs": OpenLogs(); break;
+            case "gamelogs": await OpenGameLogsAsync(); break;
             case "settings": await OpenSettings(); break;
             case "about": await OpenAbout(); break;
         }
@@ -666,6 +671,18 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         if (_dialogs is null)
             return;
         _dialogs.ShowLogs(Logs);
+    }
+
+    /// <summary>Opens GAME LOGS (ET-410): every character's game log lines in one list. The character list comes from
+    /// the registry as it stands now; a pilot whose log holds lines but who is not linked shows up from the lines.</summary>
+    private async Task OpenGameLogsAsync()
+    {
+        if (_dialogs is null || _services is null)
+            return;
+
+        IReadOnlyList<Character> characters = await _services.GetRequiredService<ICharacterRegistry>().GetAllAsync();
+        _dialogs.ShowGameLogs(new GameLogsViewModel(
+            _services.GetRequiredService<IGameLogLineSource>(), characters, _services.GetService<ICharacterPortraitProvider>()));
     }
 
     /// <summary>Opens the MAP module (ET-392). A fresh view-model per open; the map itself is shared, built once per SDE
