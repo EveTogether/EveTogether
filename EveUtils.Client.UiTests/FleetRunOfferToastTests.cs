@@ -7,6 +7,7 @@ using Avalonia.Threading;
 using EveUtils.Client.Dialogs;
 using EveUtils.Client.Fleet;
 using EveUtils.Client.Notifications;
+using EveUtils.Client.Opsec;
 using EveUtils.Client.Platform;
 using EveUtils.Client.Runs;
 using EveUtils.Client.ViewModels.Activity;
@@ -53,7 +54,7 @@ public sealed class FleetRunOfferToastTests
 
             var toast = Assert.Single(toasts.Toasts);
             Assert.Equal("Fleet run started", toast.Title);
-            Assert.Equal("Blood Watch · Osmon", toast.Message);
+            Assert.Equal($"{OpsecText.Mark("Blood Watch")} · {OpsecText.Mark("Osmon")}", toast.Message);
             Assert.Empty(dialogs.ShownActivityWindowTriggers);
         }
     }

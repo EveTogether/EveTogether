@@ -6,6 +6,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using EveUtils.Client.Controls;
 using EveUtils.Client.Esi;
 using EveUtils.Client.Formatting;
+using EveUtils.Client.Opsec;
 using EveUtils.Shared.Modules.Esi.Http;
 using EveUtils.Shared.Modules.Fleet.Metrics;
 using EveUtils.Shared.Modules.Gamelog.Aggregation;
@@ -302,7 +303,7 @@ public partial class DpsViewModel : ViewModelBase, IFleetMemberMenuHost
     /// itself a refusal.</summary>
     public string? LocationDisplay => IsOffline
         ? "offline"
-        : EveUtils.Shared.Modules.Gamelog.Aggregation.AbyssalSpace.Describe(Location, AbyssalAnchorUtc, DateTime.UtcNow)
+        : EveUtils.Shared.Modules.Gamelog.Aggregation.AbyssalSpace.Describe(OpsecText.Mark(Location), AbyssalAnchorUtc, DateTime.UtcNow)
           ?? EsiLocationReasonText.Describe(LocationUnavailableReason);
 
     /// <summary>

@@ -7,6 +7,7 @@ using EveUtils.Client.Clipboard;
 using EveUtils.Client.Dialogs;
 using EveUtils.Client.Fleet;
 using EveUtils.Client.Notifications;
+using EveUtils.Client.Opsec;
 using EveUtils.Client.Platform;
 using EveUtils.Client.Runs;
 using EveUtils.Client.ViewModels.Activity;
@@ -624,10 +625,10 @@ public sealed class ClipboardSignatureOfferTests
         // pattern-matching this composite group string.
         Assert.Equal("Site", opened.Activity().SignatureTypeText);
         // One description, and the toast that opened this window used the same one.
-        Assert.Equal("Suspicious Signal: Secure the Intel — Homefront Operations · Caldari State · DED 4 · ship-restricted",
+        Assert.Equal($"{OpsecText.Mark("Suspicious Signal: Secure the Intel")} — Homefront Operations · Caldari State · DED 4 · ship-restricted",
             opened.Activity().SignatureSiteText);
         Assert.Equal("Destroyer, Frigate", opened.Activity().ShipRestrictionText);
-        Assert.Equal("Suspicious Signal: Secure the Intel · Homefront Operations · Caldari State · DED 4 · ship-restricted",
+        Assert.Equal($"{OpsecText.Mark("Suspicious Signal: Secure the Intel")} · Homefront Operations · Caldari State · DED 4 · ship-restricted",
             opened.Activity().HeaderSummary);
     }
 

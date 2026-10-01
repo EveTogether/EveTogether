@@ -264,6 +264,19 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
 
     partial void OnIsClipboardWatchingChanged(bool value) => OnPropertyChanged(nameof(ClipboardStatusTooltip));
 
+    /// <summary>OPSEC mode is on (ET-417). The title bar says so for as long as it is: a streamer has to know at a
+    /// glance which state the app is in before showing it.</summary>
+    [ObservableProperty] private bool _isOpsecOn;
+
+    public string OpsecChipTooltip =>
+        $"OPSEC is on: locations are masked and the map is hidden. {_OpsecShortcutText()} turns it off; Settings → Privacy & Sharing has the switch.";
+
+    private string _OpsecShortcutText() =>
+        _services?.GetService<Input.KeyboardShortcutRegistry>()?.DisplayText(Input.ShortcutAction.ToggleOpsec) is { Length: > 0 } shortcut
+            ? shortcut
+            : "Its shortcut";
+
+
     /// <summary>Tooltip for the compact rail status dot (floating mode, where the wide bottom bar does not fit):
     /// the Tranquility line plus any current activity message.</summary>
     public string RailStatusTooltip =>
@@ -536,6 +549,15 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         _clipboardWatch.StateChanged += () =>
             Avalonia.Threading.Dispatcher.UIThread.Post(_ApplyClipboardState);
 
+        // OPSEC state → the title bar chip, followed live: the shortcut can flip it from anywhere, EVE included.
+        var opsec = services.GetRequiredService<Opsec.IOpsecService>();
+        IsOpsecOn = opsec.IsEnabled;
+        opsec.Changed += () =>
+        {
+            IsOpsecOn = opsec.IsEnabled;
+            OnPropertyChanged(nameof(OpsecChipTooltip));
+        };
+
         // Smooth, demo-parity DPS graphs: every tracker (own + fleet) renders through the one shared
         // ~30fps DpsRenderDriver, so the curve scrolls + decays continuously and all graphs share one render path.
         _renderDriver = services.GetRequiredService<DpsRenderDriver>();
@@ -560,6 +582,9 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
     // there to act on or to read, and picking a different destination per state would only change the scroll offset.
     [RelayCommand]
     private Task OpenClipboardSettings() => OpenSettings(Views.SettingsWindow.PrivacyCategory);
+
+    [RelayCommand]
+    private Task OpenOpsecSettings() => OpenSettings(Views.SettingsWindow.PrivacyCategory);
 
     // "Unsupported" is a state of its own rather than a second flavour of off: on a platform that cannot report a
     // clipboard change, showing OFF would suggest the switch does something.

@@ -8,6 +8,7 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using EveUtils.Client.Dialogs;
 using EveUtils.Client.Fleet;
+using EveUtils.Client.Opsec;
 using EveUtils.Client.ViewModels;
 using EveUtils.Client.Views;
 using EveUtils.Shared.Messaging;
@@ -243,7 +244,7 @@ public class FleetMetricsCommanderPresenceTests
         Assert.Equal(FleetCommanderPresenceLevel.Partial, presence.Level);
         Assert.Equal("◉ 5/8 WITH FC (2 unknown)", presence.BadgeText);
         Assert.Equal(
-            "5 of 8 fleet members with a known location are in Jita with the fleet commander. " +
+            $"5 of 8 fleet members with a known location are in {OpsecText.Mark("Jita")} with the fleet commander. " +
             "2 more share no location and are left out of the count.",
             presence.Tooltip);
 

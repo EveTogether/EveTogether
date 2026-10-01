@@ -84,7 +84,9 @@
             </Style>
         </Grid.Styles>
 
-        <DockPanel>
+        <v:OpsecMapPlaceholder IsVisible="{Binding IsHiddenByOpsec}"/>
+
+        <DockPanel IsVisible="{Binding !IsHiddenByOpsec}">
             <!-- ══ Header ══ -->
             <Border DockPanel.Dock="Top" Classes="panel-header" Padding="14,10">
                 <Grid ColumnDefinitions="*,Auto">

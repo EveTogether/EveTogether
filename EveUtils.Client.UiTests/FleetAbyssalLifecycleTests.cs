@@ -7,6 +7,7 @@ using Avalonia.Threading;
 using EveUtils.Client.Dialogs;
 using EveUtils.Client.Fleet;
 using EveUtils.Client.Notifications;
+using EveUtils.Client.Opsec;
 using EveUtils.Client.Platform;
 using EveUtils.Client.Runs;
 using EveUtils.Client.ViewModels.Activity;
@@ -231,7 +232,7 @@ public sealed class FleetAbyssalLifecycleTests
 
             var card = Assert.Single(toasts.ActionToasts);
             Assert.Equal("Fleet run prepared", card.Title);
-            Assert.Equal("Fierce Dark · Osmon — your run starts when you jump in", card.Message);
+            Assert.Equal($"{OpsecText.Mark("Fierce Dark")} · {OpsecText.Mark("Osmon")} — your run starts when you jump in", card.Message);
 
             await bus.PublishAsync(new FleetRunDiscardedEvent(
                 new RunGroupDiscard(FleetId, ActivityKind.Abyssal, GroupCode, DateTime.UtcNow)));

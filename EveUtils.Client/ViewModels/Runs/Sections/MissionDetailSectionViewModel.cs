@@ -4,6 +4,7 @@ using System.Collections.ObjectModel;
 using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
 using EveUtils.Client.Formatting;
+using EveUtils.Client.Opsec;
 using EveUtils.Client.ViewModels.Runs;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Enums;
@@ -78,7 +79,7 @@ public sealed partial class MissionDetailSectionViewModel(ISdeAccessor? sde) : R
             ? sde?.FindSolarSystemByName(locationName)?.Name
             : null;
         IsMissionLocationShown = resolvedMissionLocation is not null;
-        MissionLocationText = resolvedMissionLocation ?? string.Empty;
+        MissionLocationText = OpsecText.Mark(resolvedMissionLocation) ?? string.Empty;
 
         RunParameterDto[] bonuses = [.. detail.Parameters.Where(parameter => parameter.ParameterKey == RunParameterKey.BonusIsk)];
         RunParameterDto? bonus = bonuses.FirstOrDefault();

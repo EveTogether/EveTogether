@@ -11,6 +11,7 @@ using EveUtils.Client.Composition;
 using EveUtils.Client.Esi;
 using EveUtils.Client.Formatting;
 using EveUtils.Client.Messaging;
+using EveUtils.Client.Opsec;
 using EveUtils.Shared.Data;
 using EveUtils.Shared.Identity;
 using EveUtils.Shared.Modules.Esi.Http;
@@ -320,6 +321,10 @@ sealed class Program
                 Console.Error.WriteLine($"[startup] read {importedBounty.Value} bounty line(s) back from the game log");
         }
 
+        // OPSEC mode (ET-417) is read before the first window exists: a stream that ended with it on has to start
+        // masked, not show one frame of where the pilot is while the setting loads.
+        Services.GetRequiredService<IOpsecService>().InitializeAsync().GetAwaiter().GetResult();
+
         BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
 
         // Reaching this line means the desktop lifetime ended on its own rather than the process being cut out
@@ -407,5 +412,6 @@ sealed class Program
             .WithDeveloperTools()
 #endif
             .WithInterFont()
+            .WithOpsecFont()
             .LogToTrace();
 }

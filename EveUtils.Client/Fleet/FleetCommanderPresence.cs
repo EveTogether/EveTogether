@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using EveUtils.Client.Opsec;
 
 namespace EveUtils.Client.Fleet;
 
@@ -109,7 +110,7 @@ public readonly record struct FleetCommanderPresence(
     public string Tooltip => IsUnknown
         ? "Unknown: the fleet has no commander, or nobody's location is known — the commander's own included. "
           + $"Location sharing is opt-in.{OfflineTooltip}{UnknownTooltip}"
-        : $"{InSystem} of {Known} fleet members with a known location are in {CommanderSystem} with the fleet "
+        : $"{InSystem} of {Known} fleet members with a known location are in {OpsecText.Mark(CommanderSystem)} with the fleet "
           + $"commander.{OfflineTooltip}{UnknownTooltip}";
 
     private string UnknownTooltip => UnknownLocations switch

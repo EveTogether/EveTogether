@@ -1264,4 +1264,16 @@
         <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
     </Style>
 
+    <!-- The OPSEC chip in the title bar (ET-417): a Border.chip that can be pressed, with no button chrome of its own. -->
+    <Style Selector="Button.opsecchip">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Padding" Value="0"/>
+        <Setter Property="MinHeight" Value="0"/>
+        <Setter Property="Cursor" Value="Hand"/>
+    </Style>
+    <Style Selector="Button.opsecchip:pointerover /template/ ContentPresenter">
+        <Setter Property="Background" Value="Transparent"/>
+    </Style>
+
 </Styles>

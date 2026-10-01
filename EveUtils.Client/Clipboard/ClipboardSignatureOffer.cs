@@ -8,6 +8,7 @@ using EveUtils.Client.Dialogs;
 using Microsoft.Extensions.DependencyInjection;
 using EveUtils.Client.Fleet;
 using EveUtils.Client.Notifications;
+using EveUtils.Client.Opsec;
 using EveUtils.Client.Platform;
 using EveUtils.Client.Runs;
 using EveUtils.Client.ViewModels.Activity;
@@ -246,7 +247,7 @@ public sealed class ClipboardSignatureOffer : ISingletonService, IDisposable
         catch (Exception ex)
         {
             // The only caller is a clipboard subscription returning void, so an escape here is an unobserved task.
-            _toasts.Show("Run not started", $"Could not open the run on {row.Name}: {ex.Message}", ToastKind.Error);
+            _toasts.Show("Run not started", $"Could not open the run on {OpsecText.Mark(row.Name)}: {ex.Message}", ToastKind.Error);
         }
     }
 
@@ -289,7 +290,9 @@ public sealed class ClipboardSignatureOffer : ISingletonService, IDisposable
     {
         var matches = MatchSites(name);
         var suffix = matches.Count == 0 ? string.Empty : SdeSiteDescription.DescribeMatches(matches);
-        return suffix.Length == 0 ? $"{signatureId} · {name}" : $"{signatureId} · {name} — {suffix}";
+        return suffix.Length == 0
+            ? $"{OpsecText.Mark(signatureId)} · {OpsecText.Mark(name)}"
+            : $"{OpsecText.Mark(signatureId)} · {OpsecText.Mark(name)} — {suffix}";
     }
 
     /// <summary>The one route from a copied site name into the catalogue — the toast and the window it opens must

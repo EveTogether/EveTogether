@@ -8,6 +8,7 @@ using Avalonia.VisualTree;
 using EveUtils.Client.Dialogs;
 using EveUtils.Client.Formatting;
 using EveUtils.Client.Gamelog;
+using EveUtils.Client.Opsec;
 using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Client.ViewModels.Runs;
 using EveUtils.Client.Views;
@@ -300,9 +301,9 @@ public sealed class RunsOverviewTests
         RunningLaneViewModel first = viewModel.Running.Lanes.Single(lane => lane.Character.EsiCharacterId == 90000001);
         RunningLaneViewModel second = viewModel.Running.Lanes.Single(lane => lane.Character.EsiCharacterId == 90000002);
         Assert.True(first.IsRunning);
-        Assert.Equal("Homefront", first.StateText);
+        Assert.Equal(OpsecText.Mark("Homefront"), first.StateText);
         Assert.True(second.IsRunning);
-        Assert.Equal("Sanctum", second.StateText);
+        Assert.Equal(OpsecText.Mark("Sanctum"), second.StateText);
     }
 
     /// <summary>ET-203's root cause, reproduced directly. Measured against the code rather than assumed: a run
@@ -332,7 +333,7 @@ public sealed class RunsOverviewTests
 
         RunningLaneViewModel running = Assert.Single(viewModel.Running.Lanes);
         Assert.True(running.IsRunning);
-        Assert.Equal("Sanctum", running.StateText);
+        Assert.Equal(OpsecText.Mark("Sanctum"), running.StateText);
         Assert.Equal("OPEN", running.ActionText);
     }
 
@@ -357,7 +358,7 @@ public sealed class RunsOverviewTests
         await ActivityWindowHarness.WaitUntil(() => lane.IsRunning); // the refresh reads off the UI thread (ET-290)
 
         Assert.True(lane.IsRunning);
-        Assert.Equal("Homefront", lane.StateText);
+        Assert.Equal(OpsecText.Mark("Homefront"), lane.StateText);
         Assert.Equal("OPEN", lane.ActionText);
     }
 
@@ -489,7 +490,7 @@ public sealed class RunsOverviewTests
         await ActivityWindowHarness.WaitUntil(() => viewModel.UnfinishedRuns.Count > 0); // read off the UI thread (ET-290)
 
         UnfinishedRunViewModel run = Assert.Single(viewModel.UnfinishedRuns);
-        Assert.Equal("Homefront", run.SiteText);
+        Assert.Equal(OpsecText.Mark("Homefront"), run.SiteText);
     }
 
     /// <summary>
@@ -609,7 +610,7 @@ public sealed class RunsOverviewTests
         }
 
         ActivityOverviewRowViewModel row = Assert.Single(Assert.Single(presented.ViewModel.Tabs[0].Days).Rows);
-        Assert.Equal("Homefront", row.SiteText);
+        Assert.Equal(OpsecText.Mark("Homefront"), row.SiteText);
     }
 
     /// <summary>ET-254 AC-1/AC-2: RESUME reopens the run window on exactly this row and picks the clock back up on
@@ -921,7 +922,7 @@ public sealed class RunsOverviewTests
         await ActivityWindowHarness.WaitUntil(() => viewModel.Tabs[0].Days.Count > 0); // read off the UI thread (ET-290)
 
         ActivityOverviewRowViewModel row = Assert.Single(Assert.Single(viewModel.Tabs[0].Days).Rows);
-        Assert.Equal("Homefront", row.SiteText);
+        Assert.Equal(OpsecText.Mark("Homefront"), row.SiteText);
     }
 
     /// <summary>ET-214 round 2: deleting an activity from its own detail screen must not leave this screen's row and

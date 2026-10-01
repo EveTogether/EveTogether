@@ -6,6 +6,7 @@ using Avalonia.Input.Platform;
 using Avalonia.Threading;
 using EveUtils.Client.Input;
 using EveUtils.Client.Notifications;
+using EveUtils.Client.Opsec;
 using EveUtils.Client.Runs;
 using EveUtils.Client.ViewModels;
 using EveUtils.Client.ViewModels.Activity;
@@ -371,8 +372,10 @@ public sealed class DialogService : IDialogService, ISingletonService
 
     public async Task SetClipboardTextAsync(string text)
     {
+        // The clipboard always gets the real value (ET-417): markers are for the screen only, and pasting one into
+        // EVE would carry invisible characters along.
         var clipboard = _owner?.Clipboard;
-        if (clipboard is not null) await clipboard.SetTextAsync(text);
+        if (clipboard is not null) await clipboard.SetTextAsync(OpsecText.Strip(text));
     }
 
     public async Task<string?> GetClipboardTextAsync()

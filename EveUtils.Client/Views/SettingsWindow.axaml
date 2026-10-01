@@ -179,6 +179,21 @@
                     <TextBlock Text="Privacy &amp; Sharing" FontWeight="Bold" FontSize="16"
                                Foreground="{StaticResource TextBrightBrush}"/>
 
+                    <!-- ET-417: applied the moment it is clicked, like the shortcut rows — on stream, a mask that waits
+                         for Save is a mask that comes too late. -->
+                    <StackPanel Spacing="3">
+                        <TextBlock Text="OPSEC" Classes="label" FontSize="9"/>
+                        <CheckBox x:Name="OpsecBox" Content="OPSEC mode: mask locations in every window" Click="OnToggleOpsec"/>
+                        <TextBlock FontSize="10" Opacity="0.6" TextWrapping="Wrap"
+                                   Text="For streaming. While it is on, systems, stations, structures, signatures, routes and jumps are shown as unreadable glyphs, and the map is hidden. Character, corporation and alliance names stay readable. It only changes what EVE Together shows on screen: copying still copies the real value."/>
+                        <CheckBox x:Name="GlobalOpsecBox" Margin="0,6,0,0" Click="OnToggleGlobalOpsec"/>
+                        <TextBlock x:Name="GlobalOpsecUnsupportedBlock" IsVisible="False" FontSize="10" TextWrapping="Wrap"
+                                   Foreground="{DynamicResource TextAccentBrush}"
+                                   Text="Windows only. Elsewhere the shortcut works while EVE Together has focus."/>
+                        <TextBlock x:Name="GlobalOpsecMessageBlock" FontSize="10" TextWrapping="Wrap"
+                                   Foreground="{DynamicResource RedBrush}" IsVisible="False"/>
+                    </StackPanel>
+
                     <StackPanel Spacing="3">
                         <TextBlock Text="FLEET METRICS SHARING" Classes="label" FontSize="9"/>
                         <CheckBox x:Name="ShareCombatBox" Content="Share my live combat data with fleet members (DPS, neut, cap)"/>

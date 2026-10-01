@@ -5,6 +5,7 @@ using Avalonia.Headless.XUnit;
 using EveUtils.Client.Dialogs;
 using EveUtils.Client.Fleet;
 using EveUtils.Client.Notifications;
+using EveUtils.Client.Opsec;
 using EveUtils.Client.Platform;
 using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Client.ViewModels.Runs;
@@ -187,8 +188,8 @@ public sealed class AbyssalFilamentTests
         await detail.LoadAsync();
 
         Assert.True(detail.Activity().IsLocationShown);
-        Assert.Equal("entered from Dresi", detail.Activity().LocationText);
-        Assert.Equal("Abyssal · entered from Dresi", detail.Activity().HeaderSummary);
+        Assert.Equal($"entered from {OpsecText.Mark("Dresi")}", detail.Activity().LocationText);
+        Assert.Equal($"Abyssal · entered from {OpsecText.Mark("Dresi")}", detail.Activity().HeaderSummary);
     }
 
     [AvaloniaFact]

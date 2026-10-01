@@ -53,4 +53,7 @@ public enum ShortcutAction
 
     /// <summary>Docked host only: open the MAP module, or bring it to the front (ET-392).</summary>
     OpenMap,
+
+    /// <summary>Turn OPSEC mode on or off (ET-417). Also claimed system-wide, so it works with EVE Online in front.</summary>
+    ToggleOpsec,
 }

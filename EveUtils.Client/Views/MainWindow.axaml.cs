@@ -468,6 +468,9 @@ public partial class MainWindow : Window
             case ShortcutAction.OpenMap:
                 vm.LaunchModuleCommand.Execute("map");
                 break;
+            case ShortcutAction.ToggleOpsec:
+                ShortcutDispatch.ToggleOpsec();
+                break;
             default:
                 return;
         }

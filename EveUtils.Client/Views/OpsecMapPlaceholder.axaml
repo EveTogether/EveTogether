@@ -1,0 +1,18 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mi="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="720" d:DesignHeight="420"
+             x:Class="EveUtils.Client.Views.OpsecMapPlaceholder">
+
+    <!-- What every map shows while OPSEC is on (ET-417): the shape of the map gives a location away on its own, so it
+         is not drawn at all rather than drawn with its names masked. -->
+    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="380" Spacing="8" Margin="16">
+        <mi:MaterialIcon Kind="EyeOff" Width="28" Height="28" HorizontalAlignment="Center" Foreground="#FFE0B341"/>
+        <TextBlock Text="Hidden by OPSEC" FontSize="14" FontWeight="SemiBold"
+                   Foreground="{StaticResource TextBrightBrush}" HorizontalAlignment="Center"/>
+        <TextBlock Text="The map shows where you are, so it stays hidden while OPSEC is on. Turn OPSEC off to see it again."
+                   FontSize="11.5" TextWrapping="Wrap" TextAlignment="Center" Foreground="{StaticResource TextBrush}"/>
+    </StackPanel>
+</UserControl>

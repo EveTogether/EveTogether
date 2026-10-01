@@ -11,6 +11,7 @@ using EveUtils.Client.Controls.Map;
 using EveUtils.Client.Dialogs;
 using EveUtils.Client.Fleet;
 using EveUtils.Client.Imaging;
+using EveUtils.Client.Opsec;
 using EveUtils.Client.WorldMap;
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Identity;
@@ -82,6 +83,7 @@ public sealed partial class MapViewModel : ObservableObject, IRefreshableModule,
     private readonly TimeProvider _clock;
     private readonly ICharacterPortraitProvider? _portraits;
     private readonly IDialogService? _dialogs;
+    private readonly IOpsecService? _opsec;
     private readonly IDisposable _rosterWatch;
     private readonly ITimer _badgeBeat;
     private readonly Dictionary<long, IReadOnlyCollection<int>> _fleetMembers = [];
@@ -101,7 +103,8 @@ public sealed partial class MapViewModel : ObservableObject, IRefreshableModule,
     private Task? _reloadRun;
 
     public MapViewModel(IDispatcher dispatcher, ICharacterRegistry registry, IFleetPositionSource positions, MapTrailRecorder trails,
-        IMapFleetSource fleets, TimeProvider clock, ICharacterPortraitProvider? portraits = null, IDialogService? dialogs = null)
+        IMapFleetSource fleets, TimeProvider clock, ICharacterPortraitProvider? portraits = null, IDialogService? dialogs = null,
+        IOpsecService? opsec = null)
     {
         _dispatcher = dispatcher;
         _registry = registry;
@@ -113,6 +116,12 @@ public sealed partial class MapViewModel : ObservableObject, IRefreshableModule,
         _dialogs = dialogs;
         if (dialogs is not null)
             dialogs.MapPresentationChanged += _OnPresentationChanged;
+        _opsec = opsec;
+        if (opsec is not null)
+        {
+            IsHiddenByOpsec = opsec.IsEnabled;
+            opsec.Changed += _OnOpsecChanged;
+        }
         _registry.RegistryChanged += _OnRegistryChanged;
         _positions.PositionChanged += _OnPositionChanged;
         _rosterWatch = fleets.WatchRosters(_OnRosterChanged);
@@ -707,10 +716,18 @@ public sealed partial class MapViewModel : ObservableObject, IRefreshableModule,
         _RefreshTrail();
     }
 
+    /// <summary>OPSEC is on (ET-417): the map is not drawn at all, here, in its pop-out or on a fleet's card. Masking
+    /// its names would not do — the shape of the map around a marker gives the place away on its own.</summary>
+    [ObservableProperty] private bool _isHiddenByOpsec;
+
+    private void _OnOpsecChanged() => IsHiddenByOpsec = _opsec?.IsEnabled ?? false;
+
     public void Dispose()
     {
         if (_dialogs is not null)
             _dialogs.MapPresentationChanged -= _OnPresentationChanged;
+        if (_opsec is not null)
+            _opsec.Changed -= _OnOpsecChanged;
         _registry.RegistryChanged -= _OnRegistryChanged;
         _positions.PositionChanged -= _OnPositionChanged;
         _rosterWatch.Dispose();

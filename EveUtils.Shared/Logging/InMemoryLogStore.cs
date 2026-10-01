@@ -57,7 +57,7 @@ public sealed class InMemoryLogStore : ILogStore
                         File.WriteAllLines(_filePath, lines[^(MaxFileEntries / 2)..]);
                 }
 
-                var json = System.Text.Json.JsonSerializer.Serialize(entry);
+                var json = System.Text.Json.JsonSerializer.Serialize(entry with { Message = DisplayMarkers.Strip(entry.Message) });
                 File.AppendAllText(_filePath, json + Environment.NewLine);
             }
         }

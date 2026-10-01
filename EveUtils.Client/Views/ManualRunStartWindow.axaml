@@ -3,6 +3,7 @@
         xmlns:vm="using:EveUtils.Client.ViewModels.Runs"
         xmlns:sde="using:EveUtils.Shared.Modules.Sde.Dtos"
         xmlns:dto="using:EveUtils.Shared.Modules.Runs.Dtos"
+        xmlns:opsec="using:EveUtils.Client.Opsec"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d" d:DesignWidth="520"
@@ -74,16 +75,16 @@
                     <ListBox.ItemTemplate>
                         <DataTemplate x:DataType="dto:UncataloguedSiteSuggestionDto">
                             <TextBlock FontSize="11">
-                                <Run Text="{Binding SiteName}"/><Run Text=" — earlier run · "/><Run Text="{Binding SignatureGroup}"/>
+                                <Run Text="{Binding SiteName, Converter={x:Static opsec:OpsecMarkConverter.Instance}}"/><Run Text=" — earlier run · "/><Run Text="{Binding SignatureGroup, Converter={x:Static opsec:OpsecMarkConverter.Instance}}"/>
                             </TextBlock>
                         </DataTemplate>
                     </ListBox.ItemTemplate>
                 </ListBox>
             </Border>
-            <TextBlock Text="{Binding SelectedSite.Name, StringFormat='Selected: {0}'}"
+            <TextBlock Text="{Binding SelectedSite.Name, Converter={x:Static opsec:OpsecMarkConverter.Instance}, StringFormat='Selected: {0}'}"
                        IsVisible="{Binding HasSelectedSite}" FontSize="11"
                        Foreground="{DynamicResource TextAccentBrush}"/>
-            <TextBlock Text="{Binding SelectedSuggestion.SiteName, StringFormat='Selected: {0}'}"
+            <TextBlock Text="{Binding SelectedSuggestion.SiteName, Converter={x:Static opsec:OpsecMarkConverter.Instance}, StringFormat='Selected: {0}'}"
                        IsVisible="{Binding HasSelectedSuggestion}" FontSize="11"
                        Foreground="{DynamicResource TextAccentBrush}"/>
             <StackPanel Spacing="3" Margin="0,4,0,0" IsVisible="{Binding AsksSiteGroup}">

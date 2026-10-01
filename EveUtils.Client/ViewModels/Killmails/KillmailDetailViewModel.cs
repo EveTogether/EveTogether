@@ -8,6 +8,7 @@ using EveUtils.Client.Fleet;
 using EveUtils.Client.Formatting;
 using EveUtils.Client.Killmails;
 using EveUtils.Client.Imaging;
+using EveUtils.Client.Opsec;
 using EveUtils.Client.ViewModels.FitBrowser;
 using EveUtils.Client.ViewModels.Runs;
 using EveUtils.Shared.Identity;
@@ -235,13 +236,13 @@ public sealed partial class KillmailDetailViewModel : ViewModelBase
         LinkedRunSummaryText = isFailed ? "FAILED" : "SHIP LOST";
 
         IReadOnlyList<LinkedLossRunChoice> otherRuns = [.. linkedRun.OtherRuns.Select(other =>
-            new LinkedLossRunChoice(other.RunId, $"{other.SiteName ?? "unnamed run"} · {other.StartedAtUtc.ToLocalTime():d MMM HH:mm}"))];
+            new LinkedLossRunChoice(other.RunId, $"{OpsecText.Mark(other.SiteName) ?? "unnamed run"} · {other.StartedAtUtc.ToLocalTime():d MMM HH:mm}"))];
 
         DateOnly day = DateOnly.FromDateTime(linkedRun.StartedAtUtc.ToLocalTime());
         LinkedRun = new KillmailLinkedRunViewModel(_dispatcher, detail.CharacterId, detail.KillmailId,
             linkedRun.ActivitySummaryId, day, otherRuns, _OpenRunAsync, () => LoadAsync())
         {
-            SiteText = $"{linkedRun.SiteName ?? "unnamed run"} · {_sde.GetType(detail.VictimShipTypeId)?.Name ?? ShipName}",
+            SiteText = $"{OpsecText.Mark(linkedRun.SiteName) ?? "unnamed run"} · {_sde.GetType(detail.VictimShipTypeId)?.Name ?? ShipName}",
             TimeText = linkedRun.StartedAtUtc.ToLocalTime().ToString("HH:mm", CultureInfo.InvariantCulture),
             IsFailed = isFailed,
             StatusChipText = isFailed ? "FAILED" : "SHIP LOST",
@@ -388,13 +389,13 @@ public sealed partial class KillmailDetailViewModel : ViewModelBase
     {
         if (isAbyssal)
         {
-            return $"Abyssal deadspace · {solarSystemId}";
+            return $"Abyssal deadspace · {OpsecText.Mark(solarSystemId.ToString(CultureInfo.InvariantCulture))}";
         }
 
         SdeSolarSystem? system = _sde.GetSolarSystem(solarSystemId);
         return system is null
-            ? $"system {solarSystemId}"
-            : $"{system.Name} · {system.RegionName ?? "unknown region"} · {RunRowFacts.SecurityText(system.SecurityStatus)}";
+            ? $"system {OpsecText.Mark(solarSystemId.ToString(CultureInfo.InvariantCulture))}"
+            : $"{OpsecText.Mark(system.Name)} · {OpsecText.Mark(system.RegionName) ?? "unknown region"} · {OpsecText.Mark(RunRowFacts.SecurityText(system.SecurityStatus))}";
     }
 
     private static decimal? _SumKnown(IEnumerable<decimal?> values)

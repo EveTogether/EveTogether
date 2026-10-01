@@ -1,10 +1,12 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EveUtils.Client.Formatting;
+using EveUtils.Client.Opsec;
 using EveUtils.Client.ViewModels.Runs;
 using EveUtils.Shared.Modules.Killmails.Dtos;
 
@@ -50,9 +52,9 @@ public sealed partial class KillmailRowViewModel : ObservableObject
         KindGlyph = dto.IsLoss ? "▼" : "▲";
         ShipText = dto.IsLoss ? $"{shipName} — lost" : shipName;
         SystemLineText = isAbyssal
-            ? $"Abyssal deadspace · {dto.SolarSystemId}"
-            : regionName is null ? systemName : $"{systemName} · {regionName}";
-        SecurityText = securityText;
+            ? $"Abyssal deadspace · {OpsecText.Mark(dto.SolarSystemId.ToString(CultureInfo.InvariantCulture))}"
+            : regionName is null ? OpsecText.Mark(systemName) : $"{OpsecText.Mark(systemName)} · {OpsecText.Mark(regionName)}";
+        SecurityText = OpsecText.Mark(securityText);
         AttackerCountText = !dto.IsLoss && dto.AttackerCount == 1 ? "solo"
             : dto.AttackerCount == 1 ? "1 attacker" : $"{dto.AttackerCount} attackers";
         IskText = Isk is { } signed ? IskFormat.Compact(signed) : "no price";

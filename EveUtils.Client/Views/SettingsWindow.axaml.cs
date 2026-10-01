@@ -18,6 +18,7 @@ using EveUtils.Client.Clipboard;
 using EveUtils.Client.Dialogs;
 using EveUtils.Client.Input;
 using EveUtils.Client.LocalApi;
+using EveUtils.Client.Opsec;
 using EveUtils.Client.Updates;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -89,6 +90,12 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
     // Same immediate-persist convention as the rows above (ET-320): a claim already held by another program has
     // to be visible right away, not after a Save the pilot might still cancel.
     private GlobalSaveRunHotKeyService? _globalSaveRunHotKey;
+
+    // OPSEC (ET-417): live, like the two above — on stream the mask cannot wait for Save.
+    private IOpsecService? _opsec;
+    private GlobalOpsecHotKeyService? _globalOpsecHotKey;
+    private CheckBox _opsecBox = null!, _globalOpsecBox = null!;
+    private TextBlock _globalOpsecUnsupportedBlock = null!, _globalOpsecMessageBlock = null!;
 
     /// <summary>Set by the module host so Save/Cancel dismiss the docked tab; null when floating (then we Close()).</summary>
     public Action? CloseRequested { get; set; }
@@ -169,6 +176,11 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
         _globalSaveRunMessageBlock = this.FindControl<TextBlock>("GlobalSaveRunMessageBlock")!;
         BuildShortcutRows();
         SetUpGlobalSaveRunToggle();
+        _opsecBox = this.FindControl<CheckBox>("OpsecBox")!;
+        _globalOpsecBox = this.FindControl<CheckBox>("GlobalOpsecBox")!;
+        _globalOpsecUnsupportedBlock = this.FindControl<TextBlock>("GlobalOpsecUnsupportedBlock")!;
+        _globalOpsecMessageBlock = this.FindControl<TextBlock>("GlobalOpsecMessageBlock")!;
+        SetUpOpsecToggles();
 
         _gamelogDirBox.Text = string.IsNullOrWhiteSpace(currentDirectory) ? detectedDefault : currentDirectory;
         _gamelogDirBox.TextChanged += (_, _) => UpdateHint();
@@ -633,6 +645,58 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
         if (_globalSaveRunHotKey is null) return;
         await _globalSaveRunHotKey.SetEnabledAsync(_globalSaveRunBox.IsChecked ?? false);
         ApplyGlobalSaveRunDisclosure();
+    }
+
+    private void SetUpOpsecToggles()
+    {
+        _opsec = Program.Services?.GetService<IOpsecService>();
+        _globalOpsecHotKey = Program.Services?.GetService<GlobalOpsecHotKeyService>();
+        if (_opsec is not null)
+        {
+            _opsec.Changed += ApplyOpsecDisclosure;
+            Closed += (_, _) => _opsec.Changed -= ApplyOpsecDisclosure;
+        }
+        if (_globalOpsecHotKey is not null)
+        {
+            _globalOpsecHotKey.StateChanged += OnGlobalOpsecStateChanged;
+            Closed += (_, _) => _globalOpsecHotKey.StateChanged -= OnGlobalOpsecStateChanged;
+        }
+
+        ApplyOpsecDisclosure();
+    }
+
+    private void OnGlobalOpsecStateChanged() => Dispatcher.UIThread.Post(ApplyOpsecDisclosure);
+
+    private void ApplyOpsecDisclosure()
+    {
+        _opsecBox.IsChecked = _opsec?.IsEnabled ?? false;
+        _opsecBox.IsEnabled = _opsec is not null;
+
+        var shortcut = _shortcutRegistry?.DisplayText(ShortcutAction.ToggleOpsec);
+        _globalOpsecBox.Content = string.IsNullOrEmpty(shortcut)
+            ? "The OPSEC shortcut also works while EVE Together isn't focused"
+            : $"{shortcut} turns OPSEC on or off even while EVE Together isn't focused";
+        var supported = _globalOpsecHotKey?.IsSupported ?? false;
+        _globalOpsecBox.IsChecked = _globalOpsecHotKey?.IsEnabled ?? true;
+        _globalOpsecBox.IsEnabled = supported;
+        _globalOpsecUnsupportedBlock.IsVisible = _globalOpsecHotKey is not null && !supported;
+
+        var failure = _globalOpsecHotKey?.LastFailure;
+        _globalOpsecMessageBlock.Text = failure ?? "";
+        _globalOpsecMessageBlock.IsVisible = !string.IsNullOrEmpty(failure);
+    }
+
+    private async void OnToggleOpsec(object? sender, RoutedEventArgs e)
+    {
+        if (_opsec is null) return;
+        await _opsec.SetEnabledAsync(_opsecBox.IsChecked ?? false);
+    }
+
+    private async void OnToggleGlobalOpsec(object? sender, RoutedEventArgs e)
+    {
+        if (_globalOpsecHotKey is null) return;
+        await _globalOpsecHotKey.SetEnabledAsync(_globalOpsecBox.IsChecked ?? false);
+        ApplyOpsecDisclosure();
     }
 
     private SettingsResult BuildResult(bool reimportSde)

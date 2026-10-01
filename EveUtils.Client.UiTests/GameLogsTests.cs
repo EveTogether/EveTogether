@@ -11,6 +11,7 @@ using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using EveUtils.Client.Gamelog;
+using EveUtils.Client.Opsec;
 using EveUtils.Client.ViewModels.GameLogs;
 using EveUtils.Client.Views;
 using EveUtils.Shared.Identity;
@@ -184,7 +185,7 @@ public sealed class GameLogsTests : IDisposable
         Assert.Equal(
             [GameLogLineKind.Combat, GameLogLineKind.Mining, GameLogLineKind.Travel, GameLogLineKind.Notify, GameLogLineKind.Bounty],
             viewModel.Rows.Select(row => row.Kind).Distinct());
-        Assert.Equal("Springe von Amarr nach Ashab", viewModel.Rows.Single(row => row.Kind == GameLogLineKind.Travel).Text);
+        Assert.Equal(OpsecText.Mark("Springe von Amarr nach Ashab"), viewModel.Rows.Single(row => row.Kind == GameLogLineKind.Travel).Text);
     }
 
     [AvaloniaFact]
@@ -238,9 +239,9 @@ public sealed class GameLogsTests : IDisposable
 
         await AppendAsync(BravoPath, Line("10:00:00", "notify", "Late arrival"));
 
-        Assert.True(await _WaitForAsync(() => viewModel.Rows.Any(row => row.Text == "Late arrival")));
+        Assert.True(await _WaitForAsync(() => viewModel.Rows.Any(row => row.Text == OpsecText.Mark("Late arrival"))));
         Assert.Equal(viewModel.Rows.OrderBy(row => row.Timestamp), viewModel.Rows);
-        Assert.Equal("Late arrival", viewModel.Rows[0].Text);
+        Assert.Equal(OpsecText.Mark("Late arrival"), viewModel.Rows[0].Text);
     }
 
     /// <summary>A line the watcher read before the screen opened is in the history and arrives live too: it must show once.</summary>
@@ -263,7 +264,7 @@ public sealed class GameLogsTests : IDisposable
         await viewModel.LoadAsync();
         viewModel.FlushPendingNow();
 
-        Assert.Equal(1, viewModel.Rows.Count(row => row.Text == "Written before the screen opened"));
+        Assert.Equal(1, viewModel.Rows.Count(row => row.Text == OpsecText.Mark("Written before the screen opened")));
         Assert.Equal(28, viewModel.Rows.Count);
     }
 
@@ -283,7 +284,7 @@ public sealed class GameLogsTests : IDisposable
             eve.Flush();
 
             Assert.Equal(27, viewModel.Rows.Count);
-            Assert.True(await _WaitForAsync(() => viewModel.Rows.Any(row => row.Text == "EVE is still writing")));
+            Assert.True(await _WaitForAsync(() => viewModel.Rows.Any(row => row.Text == OpsecText.Mark("EVE is still writing"))));
         }
 
         byte[] after = await File.ReadAllBytesAsync(AlphaPath, Ct);

@@ -7,6 +7,7 @@ using Avalonia.Headless.XUnit;
 using EveUtils.Client.Esi;
 using EveUtils.Client.Notifications;
 using EveUtils.Client.Gamelog;
+using EveUtils.Client.Opsec;
 using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Client.ViewModels.Runs.Sections;
 using EveUtils.Client.Platform;
@@ -1039,7 +1040,7 @@ public class ActivityWindowWiringTests
         OverlayShots.Capture(window, "eveutils-activity-manual-start-adopts-site");
 
         Assert.Equal("Sansha Refuge", model.SignatureName);
-        Assert.Equal("Sansha Refuge", model.Activity().SignatureSiteText);
+        Assert.Equal(OpsecText.Mark("Sansha Refuge"), model.Activity().SignatureSiteText);
         Assert.True(model.Activity().HasSignature, "the window still reads no signature for a site the store already had");
         window.Close();
     }
@@ -1279,9 +1280,9 @@ public class ActivityWindowWiringTests
         await ActivityWindowHarness.WaitUntil(() =>
         {
             model.Refresh(DateTime.UtcNow);
-            return model.Activity().LocationText == "Aphend";
+            return model.Activity().LocationText == OpsecText.Mark("Aphend");
         });
-        Assert.Equal("Aphend", model.Activity().LocationText);
+        Assert.Equal(OpsecText.Mark("Aphend"), model.Activity().LocationText);
         Assert.True(model.Activity().IsLocationShown);
     }
 
