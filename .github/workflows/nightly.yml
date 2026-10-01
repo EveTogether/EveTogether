@@ -119,10 +119,11 @@ jobs:
       - name: Run UI and server tests
         shell: pwsh
         run: |
+          # A test silent for 5 minutes is killed and named in the log instead of the job being cancelled at the job limit.
           $PSNativeCommandUseErrorActionPreference = $false
-          dotnet test EveUtils.Client.UiTests/EveUtils.Client.UiTests.csproj -c Release --logger "trx;LogFileName=ui.trx" --results-directory TestResults
+          dotnet test EveUtils.Client.UiTests/EveUtils.Client.UiTests.csproj -c Release --blame-hang --blame-hang-timeout 5m --blame-hang-dump-type none --logger "trx;LogFileName=ui.trx" --results-directory TestResults
           $uiExit = $LASTEXITCODE
-          dotnet test EveUtils.Server.Tests/EveUtils.Server.Tests.csproj -c Release --logger "trx;LogFileName=server.trx" --results-directory TestResults
+          dotnet test EveUtils.Server.Tests/EveUtils.Server.Tests.csproj -c Release --blame-hang --blame-hang-timeout 5m --blame-hang-dump-type none --logger "trx;LogFileName=server.trx" --results-directory TestResults
           $serverExit = $LASTEXITCODE
 
           "## Nightly test results" >> $env:GITHUB_STEP_SUMMARY

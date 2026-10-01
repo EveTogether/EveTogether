@@ -202,7 +202,7 @@ public sealed class RunsHeaderReflowTests
 
         await dispatcher.Send(new RebuildActivitySummariesCommand(), cancellationToken);
         var viewModel = new RunsOverviewViewModel(dispatcher, new RecordingDialogService(), instance.Services,
-            Crew, runClock: false, paneReadDelay: TimeSpan.Zero);
+            Crew, runClock: false, paneReadDelay: TimeSpan.Zero, time: RunsTestClock.Fixed);
         await viewModel.LoadAsync(cancellationToken);
 
         var window = new RunsWindow(viewModel) { Width = width, Height = 1000 };

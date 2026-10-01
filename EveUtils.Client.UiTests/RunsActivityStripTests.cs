@@ -29,7 +29,7 @@ public sealed class RunsActivityStripTests
         CancellationToken cancellationToken = TestContext.Current.CancellationToken;
         IWeekStartService weekStart = instance.Services.GetRequiredService<IWeekStartService>();
         weekStart.Apply(DayOfWeek.Monday);
-        DateOnly today = DateOnly.FromDateTime(DateTime.Now);
+        DateOnly today = DateOnly.FromDateTime(RunsTestClock.Fixed.GetLocalNow().DateTime);
 
         RunsOverviewViewModel viewModel = await _OpenAsync(instance, cancellationToken);
 
@@ -65,7 +65,7 @@ public sealed class RunsActivityStripTests
         using var instance = TestClientInstance.Create();
         CancellationToken cancellationToken = TestContext.Current.CancellationToken;
         ICqrsDispatcher dispatcher = instance.Services.GetRequiredService<ICqrsDispatcher>();
-        DateTime monthStart = new(DateTime.Now.Year, DateTime.Now.Month, 1, 20, 0, 0, DateTimeKind.Local);
+        DateTime monthStart = new(RunsTestClock.Fixed.GetLocalNow().Year, RunsTestClock.Fixed.GetLocalNow().Month, 1, 20, 0, 0, DateTimeKind.Local);
         await _SaveRunAsync(dispatcher, monthStart, cancellationToken);
         await _SaveRunAsync(dispatcher, monthStart.AddDays(1), cancellationToken);
         await _SaveRunAsync(dispatcher, monthStart.AddDays(1).AddHours(1), cancellationToken);
@@ -125,7 +125,7 @@ public sealed class RunsActivityStripTests
         ICqrsDispatcher dispatcher = instance.Services.GetRequiredService<ICqrsDispatcher>();
         await dispatcher.Send(new RebuildActivitySummariesCommand(), cancellationToken);
         var viewModel = new RunsOverviewViewModel(dispatcher, new RecordingDialogService(), instance.Services, Pilot,
-            runClock: false);
+            runClock: false, time: RunsTestClock.Fixed);
         await viewModel.LoadAsync(cancellationToken);
         return viewModel;
     }

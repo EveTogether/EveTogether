@@ -298,7 +298,7 @@ public sealed class FleetRunAutoPublishTests
             await Dispatcher.Send(new RebuildActivitySummariesCommand(), Token);
             // No lane clock: nothing closes this view-model, so a DispatcherTimer would tick on for the rest of the run.
             var overview = new RunsOverviewViewModel(Dispatcher, new RecordingDialogService(), _instance.Services,
-                [new Character("Jithran", (int)Pilot)], runClock: false);
+                [new Character("Jithran", (int)Pilot)], runClock: false, time: RunsTestClock.Fixed);
             await overview.LoadAsync(Token);
             return overview;
         }

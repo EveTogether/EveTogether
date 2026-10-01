@@ -889,7 +889,7 @@ public sealed class RunsOverviewTests
 
     private static async Task<(RunsWindow Window, RunsOverviewViewModel ViewModel)> _WindowAsync(
         TestClientInstance instance, double width, CancellationToken cancellationToken,
-        IReadOnlyList<Character>? characters = null, RecordingDialogService? dialogs = null)
+        IReadOnlyList<Character>? characters = null, RecordingDialogService? dialogs = null, TimeProvider? time = null)
     {
         ICqrsDispatcher dispatcher = _Dispatcher(instance);
         await dispatcher.Send(new RebuildActivitySummariesCommand(), cancellationToken);
@@ -897,7 +897,7 @@ public sealed class RunsOverviewTests
         // No lane clock: a DispatcherTimer here would go on ticking for the rest of the test session, since the
         // window that would dispose the view-model is never closed.
         var viewModel = new RunsOverviewViewModel(dispatcher, dialogs ?? new RecordingDialogService(), instance.Services,
-            characters ?? Crew, runClock: false);
+            characters ?? Crew, runClock: false, time: time ?? RunsTestClock.Fixed);
         await viewModel.LoadAsync(cancellationToken);
         return (new RunsWindow(viewModel) { Width = width, Height = 1400 }, viewModel);
     }
@@ -1017,7 +1017,7 @@ public sealed class RunsOverviewTests
         await _SaveSiteRunAsync(dispatcher, 90000002, groupCode: null, cancellationToken: cancellationToken,
             startedAtUtc: localMonthStartUtc.AddMinutes(5));    // this month's first evening
 
-        Presented presented = await _PresentAsync(instance, 758, cancellationToken);
+        Presented presented = await _PresentAsync(instance, 758, cancellationToken, time: TimeProvider.System);
 
         ActivityOverviewRowViewModel row = Assert.Single(presented.ViewModel.Tabs[0].Days.SelectMany(day => day.Rows));
         Assert.True(row.StartedAtLocal >= new DateTime(DateTime.Now.Year, DateTime.Now.Month, 1));
@@ -1025,10 +1025,10 @@ public sealed class RunsOverviewTests
 
     private static async Task<Presented> _PresentAsync(
         TestClientInstance instance, double width, CancellationToken cancellationToken,
-        IReadOnlyList<Character>? characters = null, RecordingDialogService? dialogs = null)
+        IReadOnlyList<Character>? characters = null, RecordingDialogService? dialogs = null, TimeProvider? time = null)
     {
         (RunsWindow window, RunsOverviewViewModel viewModel) =
-            await _WindowAsync(instance, width, cancellationToken, characters, dialogs);
+            await _WindowAsync(instance, width, cancellationToken, characters, dialogs, time);
 
         var display = new FakeDisplay();
         var host = new ModuleHostService();
@@ -1057,12 +1057,12 @@ public sealed class RunsOverviewTests
     }
 
     /// <summary>A run stopped and left there — the shape ET-179 is about: <c>Stopped</c>, never saved, never thrown
-    /// away. Placed against the wall clock and not against <see cref="StartedAtUtc"/>, because how long ago it was
+    /// away. Placed against the runs screen's clock and not against <see cref="StartedAtUtc"/>, because how long ago it was
     /// stopped is what decides whether the app saves it by itself.</summary>
     private static async Task _StopSiteRunAsync(ICqrsDispatcher dispatcher, long characterId,
         CancellationToken cancellationToken, double hoursSinceStop = 1)
     {
-        DateTime stoppedAtUtc = DateTime.UtcNow.AddHours(-hoursSinceStop);
+        DateTime stoppedAtUtc = RunsTestClock.Fixed.GetUtcNow().UtcDateTime.AddHours(-hoursSinceStop);
         Result<Guid> started = await dispatcher.Send(new StartRunCommand(characterId, ActivityKind.Site,
             stoppedAtUtc.AddMinutes(-15), 1234, "Homefront", 30000142), cancellationToken);
         await dispatcher.Send(new SetRunStoppedCommand(started.Value, stoppedAtUtc), cancellationToken);

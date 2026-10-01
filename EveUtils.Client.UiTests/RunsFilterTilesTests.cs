@@ -45,7 +45,7 @@ public sealed class RunsFilterTilesTests
         ICqrsDispatcher dispatcher = _Dispatcher(instance);
         await dispatcher.Send(new RebuildActivitySummariesCommand(), cancellationToken);
         var viewModel = new RunsOverviewViewModel(dispatcher, new RecordingDialogService(), instance.Services,
-            characters ?? Crew, runClock: false, paneReadDelay: TimeSpan.Zero);
+            characters ?? Crew, runClock: false, paneReadDelay: TimeSpan.Zero, time: RunsTestClock.Fixed);
         await viewModel.LoadAsync(cancellationToken);
         return viewModel;
     }
