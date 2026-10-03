@@ -165,11 +165,12 @@ public sealed class ActivityDetailTests
     }
 
     /// <summary>AC-1, mission half: a mission names its agent and its level and shows MISSION, and carries no
-    /// BOUNTY or LOOT section. Counter-proof: give every kind the same fixed block of sections and this goes red on
+    /// BOUNTY section but a LOOT one even when nothing was looted, so loot forgotten during the run can be added
+    /// afterwards (ET-421). Counter-proof: give every kind the same fixed block of sections and this goes red on
     /// a visible BOUNTY heading. The agent reads as a bare id here because this render path wires no SDE — see
     /// <see cref="Mission_NamesTheAgentFromTheSde_InsteadOfTheBareId"/> for the id resolved into a name.</summary>
     [AvaloniaFact]
-    public async Task Mission_ShowsAgentAndRewards_AndNoBountyOrLootSection()
+    public async Task Mission_ShowsAgentAndRewardsAndALootSection_AndNoBountySection()
     {
         using var instance = TestClientInstance.Create();
         ICqrsDispatcher dispatcher = instance.Services.GetRequiredService<ICqrsDispatcher>();
@@ -188,7 +189,7 @@ public sealed class ActivityDetailTests
         Assert.Contains(texts, text => text == "Level 2");
         Assert.Contains(texts, text => text == "MISSION");
         Assert.DoesNotContain(texts, text => text == "BOUNTY");
-        Assert.DoesNotContain(texts, text => text == "LOOT");
+        Assert.Contains(texts, text => text == "LOOT");
     }
 
     /// <summary>

@@ -43,11 +43,11 @@
                             <TextBlock Text="{Binding SharedText}"/>
                         </Border>
                     </StackPanel>
-                    <Button Grid.Column="2" Classes="rewrite" Content="✎  REWRITE LOOT BY HAND"
+                    <Button Grid.Column="2" Classes="rewrite" Content="{Binding RewriteButtonText}"
                             IsVisible="{Binding Loot.CanOfferLootEdit}"
                             IsEnabled="{Binding Loot.CanEditLoot}"
                             Command="{Binding Loot.BeginLootEditCommand}"
-                            ToolTip.Tip="Replace this character's loot with a list you type or paste. The captures it replaces stay below, excluded."/>
+                            ToolTip.Tip="{Binding RewriteButtonTip}"/>
                     <TextBlock Grid.Column="3" Classes="subtotal" Text="{Binding SubtotalText}"/>
                 </Grid>
 

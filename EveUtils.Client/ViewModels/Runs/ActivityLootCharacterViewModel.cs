@@ -97,7 +97,13 @@ public sealed partial class ActivityLootCharacterViewModel : ObservableObject
         ? "Sharing, and nothing looted on their run yet."
         : Loot.IsReadOnly
             ? "No loot was copied on this character's run."
-            : "No loot was copied on this character's run. Rewrite it by hand to give it some.";
+            : "No loot was copied on this character's run. Add it by hand to give it some.";
+
+    public string RewriteButtonText => Loot.HasCaptures ? "✎  REWRITE LOOT BY HAND" : "＋  ADD LOOT";
+
+    public string RewriteButtonTip => Loot.HasCaptures
+        ? "Replace this character's loot with a list you type or paste. The captures it replaces stay below, excluded."
+        : "Add this character's loot as a list you type or paste.";
 
     public async Task LoadPortraitAsync(ICharacterPortraitProvider portraits)
     {
@@ -117,6 +123,10 @@ public sealed partial class ActivityLootCharacterViewModel : ObservableObject
             OnPropertyChanged(nameof(IsReadOnlyChipShown));
         }
         else if (e.PropertyName is nameof(RunLootViewModel.HasCaptures))
+        {
             OnPropertyChanged(nameof(IsCapturesDisclosureShown));
+            OnPropertyChanged(nameof(RewriteButtonText));
+            OnPropertyChanged(nameof(RewriteButtonTip));
+        }
     }
 }

@@ -211,7 +211,11 @@ public static class RunTypeCatalogue
                 RunSectionId.Activity, RunSectionId.Mission, RunSectionId.Enemies, RunSectionId.Fit,
                 RunSectionId.Fleet, RunSectionId.Bounty, RunSectionId.Loot
             ],
-            DetailSections = [RunSectionId.Activity, RunSectionId.Mission, RunSectionId.Enemies, RunSectionId.Fleet],
+            // LOOT is claimed so a mission saved without any can still be given some afterwards (ET-421).
+            DetailSections =
+            [
+                RunSectionId.Activity, RunSectionId.Mission, RunSectionId.Enemies, RunSectionId.Fleet, RunSectionId.Loot
+            ],
             HasAgent = true,
             // Same four a site loots by, same order (ET-172 backlog gap, closed by ET-237): a courier has nothing to
             // blitz or clear, so the row stays optional with no preselection — IsLootStrategyShown already hides an
