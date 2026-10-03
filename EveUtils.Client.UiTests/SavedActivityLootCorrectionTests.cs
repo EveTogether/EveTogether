@@ -2,6 +2,7 @@ using Avalonia.Headless.XUnit;
 using EveUtils.Client.Dialogs;
 using EveUtils.Client.Runs;
 using EveUtils.Client.ViewModels.Runs;
+using EveUtils.Client.ViewModels.Runs.Sections;
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Data;
 using EveUtils.Shared.Identity;
@@ -224,6 +225,75 @@ public sealed class SavedActivityLootCorrectionTests
         Assert.False(_Block(detail, "Jithran").Loot.IsReadOnly);
     }
 
+    /// <summary>
+    /// ET-421: a mission saved with no loot at all — forgotten during the run — still has a LOOT section with an Add
+    /// loot action, and what is added moves the block, TOTAL ISK and the day. Red without the change: a mission does
+    /// not claim LOOT on the detail screen, so no block exists to add to.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task ASavedMissionWithoutLoot_OffersAddLoot_AndTheLootAddedMovesEveryTotal()
+    {
+        using var instance = _Instance();
+        IDispatcher dispatcher = instance.Services.GetRequiredService<IDispatcher>();
+        await _PriceTritaniumAsync(instance);
+        await _SaveRunAsync(dispatcher, 90000001, groupCode: null, [], ActivityKind.Mission);
+        RunsOverviewViewModel overview = await _OverviewAsync(instance);
+        ActivityDetailViewModel detail = await _DetailAsync(instance, overview);
+
+        Assert.Contains(detail.Sections, section => section.Id == RunSectionId.Loot);
+        ActivityLootCharacterViewModel block = Assert.Single(detail.Loot().LootOverview.Characters);
+        Assert.False(block.Loot.HasCaptures);
+        Assert.True(block.Loot.CanEditLoot);
+        Assert.Equal("＋  ADD LOOT", block.RewriteButtonText);
+
+        block.Loot.BeginLootEditCommand.Execute(null);
+        block.Loot.LootEditor.Text = "Tritanium\t3";
+        Assert.True(await block.Loot.ReplaceLootWithTextAsync(Token));
+        await ActivityWindowHarness.WaitUntil(() => detail.TotalIskText == $"{300m:N0} ISK"
+                                                    && overview.Tabs[0].Days.Single().SummaryText.Contains("+300 ISK net"));
+
+        Assert.Equal($"{300m:N0} ISK", block.SubtotalText);
+        Assert.Equal($"{300m:N0} ISK", detail.Loot().LootOverview.NetIskDisplay);
+        Assert.Equal($"{300m:N0} ISK", detail.TotalIskText);
+        Assert.Contains("+300 ISK net", overview.Tabs[0].Days.Single().SummaryText);
+        Assert.Equal("✎  REWRITE LOOT BY HAND", block.RewriteButtonText);
+    }
+
+    /// <summary>
+    /// ET-421: loot added to a published run that had none goes the way every loot correction goes — the run turns
+    /// Outdated, the revision moves and nothing is pushed until the pilot publishes again. Red without the change on
+    /// a mission: there is no block to add to.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task AddingLootToAPublishedRunWithoutLoot_MarksItChangedSincePublished()
+    {
+        using var instance = _Instance();
+        IDispatcher dispatcher = instance.Services.GetRequiredService<IDispatcher>();
+        await _PriceTritaniumAsync(instance);
+        Guid runId = await _SaveRunAsync(dispatcher, 90000001, groupCode: null, [], ActivityKind.Mission);
+        await _MarkPublishedAsync(instance, runId);
+        int revisionBefore = (await _RunAsync(instance, runId)).Revision;
+        RunsOverviewViewModel overview = await _OverviewAsync(instance);
+        int republished = 0;
+        ActivityDetailViewModel detail = await _DetailAsync(instance, overview, () =>
+        {
+            republished++;
+            return Task.CompletedTask;
+        });
+
+        ActivityLootCharacterViewModel block = Assert.Single(detail.Loot().LootOverview.Characters);
+        block.Loot.BeginLootEditCommand.Execute(null);
+        block.Loot.LootEditor.Text = "Tritanium\t3";
+        Assert.True(await block.Loot.ReplaceLootWithTextAsync(Token));
+        await ActivityWindowHarness.WaitUntil(() => detail.IsPublishedCopyBehind);
+
+        Assert.True(detail.CanRepublish);
+        Run run = await _RunAsync(instance, runId);
+        Assert.Equal(RunSyncState.Outdated, run.SyncState);
+        Assert.Equal(revisionBefore + 1, run.Revision);
+        Assert.Equal(0, republished);
+    }
+
     private sealed class RecordingRebuildHandler(
         ICommandHandler<RebuildActivitySummariesCommand, Result<int>> inner, List<RebuildActivitySummariesCommand> rebuilds)
         : ICommandHandler<RebuildActivitySummariesCommand, Result<int>>
@@ -248,9 +318,9 @@ public sealed class SavedActivityLootCorrectionTests
             Token);
 
     private static async Task<Guid> _SaveRunAsync(IDispatcher dispatcher, long characterId, string? groupCode,
-        IReadOnlyList<long> captureQuantities)
+        IReadOnlyList<long> captureQuantities, ActivityKind kind = ActivityKind.Site)
     {
-        Result<Guid> started = await dispatcher.Send(new StartRunCommand(characterId, ActivityKind.Site, StartedAtUtc,
+        Result<Guid> started = await dispatcher.Send(new StartRunCommand(characterId, kind, StartedAtUtc,
             1234, "Blood Refuge", 30000142, groupCode), Token);
         Assert.True(started.IsSuccess);
         Result saved = await dispatcher.Send(new SaveRunCommand(started.Value, StartedAtUtc.AddMinutes(15), StartedAtUtc.AddMinutes(16),
