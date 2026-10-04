@@ -119,4 +119,28 @@ public sealed class RunMiningLivePersistenceTests
         Assert.Equal(40, firstEntry.Units);
         Assert.Equal(90, secondEntry.Units);
     }
+
+    /// <summary>ET-422: a character on this PC that is not registered (no ESI id) mines elsewhere while a registered
+    /// character flies a mission. Without an id the cycle used to fall back to the app-wide run lookup, found the one
+    /// run running and landed on the mission pilot's run.</summary>
+    [AvaloniaFact]
+    public async Task UnregisteredCharacterMining_NeverLandsOnAnotherCharactersRun()
+    {
+        using var instance = TestClientInstance.Create();
+        IDispatcher dispatcher = instance.Services.GetRequiredService<IDispatcher>();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+
+        Result<Guid> missionRun = await dispatcher.Send(new StartRunCommand(90000001, ActivityKind.Mission, StartedAtUtc,
+            0, "Pirate Invasion", 30000142), cancellationToken);
+        Assert.True(missionRun.IsSuccess);
+
+        var gamelog = instance.Services.GetRequiredService<GamelogClientService>();
+        gamelog.MapCharacter(90000001, "Mission Pilot");
+        await gamelog.AddMiningAsync("Unregistered Miner",
+            new MiningEvent(StartedAtUtc.AddMinutes(1), 125, "Veldspar", IsCritical: false, LostResidue: 4));
+
+        await using ClientDbContext db = await instance.Services
+            .GetRequiredService<IDbContextFactory<ClientDbContext>>().CreateDbContextAsync(cancellationToken);
+        Assert.Empty(await db.Set<RunMiningEntry>().ToListAsync(cancellationToken));
+    }
 }

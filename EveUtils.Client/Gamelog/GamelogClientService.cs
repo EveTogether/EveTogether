@@ -590,7 +590,9 @@ public sealed class GamelogClientService : IFleetMetricSource, ISingletonService
         MetricsChanged?.Invoke();
         await PersistAsync(name);
 
-        long? characterId = _idByName.TryGetValue(name, out var id) ? id : null;
+        // A character with no known id flies no run of its own here (ET-422).
+        if (!_idByName.TryGetValue(name, out var characterId))
+            return;
         using (var scope = _services.CreateScope())
         {
             var dispatcher = scope.ServiceProvider.GetRequiredService<IDispatcher>();
@@ -634,7 +636,9 @@ public sealed class GamelogClientService : IFleetMetricSource, ISingletonService
         MetricsChanged?.Invoke();
         await PersistAsync(name);
 
-        long? characterId = _idByName.TryGetValue(name, out var id) ? id : null;
+        // A character with no known id flies no run of its own here (ET-422).
+        if (!_idByName.TryGetValue(name, out var characterId))
+            return;
         using (var scope = _services.CreateScope())
         {
             var dispatcher = scope.ServiceProvider.GetRequiredService<IDispatcher>();

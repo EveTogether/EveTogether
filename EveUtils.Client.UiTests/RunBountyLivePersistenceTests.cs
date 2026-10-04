@@ -161,4 +161,27 @@ public sealed class RunBountyLivePersistenceTests
         Assert.Equal(400_000m, firstEntry.Isk);
         Assert.Equal(900_000m, secondEntry.Isk);
     }
+
+    /// <summary>ET-422: a character on this PC that is not registered (no ESI id) rats elsewhere while a registered
+    /// character flies a mission. Without an id the payout used to fall back to the app-wide run lookup, found the one
+    /// run running and landed on the mission pilot's run.</summary>
+    [AvaloniaFact]
+    public async Task UnregisteredCharacterBounty_NeverLandsOnAnotherCharactersRun()
+    {
+        using var instance = TestClientInstance.Create();
+        IDispatcher dispatcher = instance.Services.GetRequiredService<IDispatcher>();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+
+        Result<Guid> missionRun = await dispatcher.Send(new StartRunCommand(90000001, ActivityKind.Mission, StartedAtUtc,
+            0, "Pirate Invasion", 30000142), cancellationToken);
+        Assert.True(missionRun.IsSuccess);
+
+        var gamelog = instance.Services.GetRequiredService<GamelogClientService>();
+        gamelog.MapCharacter(90000001, "Mission Pilot");
+        await gamelog.AddBountyAsync("Unregistered Ratter", new BountyEvent(StartedAtUtc.AddMinutes(1), 337_500));
+
+        await using ClientDbContext db = await instance.Services
+            .GetRequiredService<IDbContextFactory<ClientDbContext>>().CreateDbContextAsync(cancellationToken);
+        Assert.Empty(await db.Set<RunBountyEntry>().ToListAsync(cancellationToken));
+    }
 }
