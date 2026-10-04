@@ -112,7 +112,11 @@ public sealed partial class MiningCharacterGroupViewModel : ObservableObject
 
         bool hadOres = HasOres;
         bool hadSeveralOres = HasSeveralOres;
-        Ores.ReconcileTo([.. fresh.Ores.Select(ore => Ores.FirstOrDefault(shown => shown.ShowsSameAs(ore)) ?? ore)]);
+        // A line open for editing (ET-424) stays the object it is while the mining behind it moves on, so what is
+        // typed in its box survives the next tick.
+        Ores.ReconcileTo([.. fresh.Ores.Select(ore => Ores.FirstOrDefault(shown => shown.ShowsSameAs(ore))
+                                                      ?? Ores.FirstOrDefault(shown => shown.IsEditing && shown.IsSameLine(ore))
+                                                      ?? ore)]);
         if (hadOres != HasOres)
         {
             OnPropertyChanged(nameof(HasOres));

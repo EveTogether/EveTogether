@@ -27,9 +27,24 @@ namespace EveUtils.Client.ViewModels.Runs.Sections;
 public sealed partial class MiningDetailSectionViewModel(RunDetailSectionServices services)
     : RunDetailSection(RunSectionId.Mining, "MINING")
 {
+    private MiningLineCorrector? _corrector;
+
     public ObservableCollection<ActivityMiningRowViewModel> Rows { get; } = [];
 
     public ObservableCollection<MiningCharacterGroupViewModel> Groups { get; } = [];
+
+    /// <summary>A correction (ET-424) changed the stored activity, so the screen reads the figures it is made of again —
+    /// the same way a loot correction does.</summary>
+    private MiningLineCorrector Corrector => _corrector ??= new MiningLineCorrector(services.Dispatcher, () =>
+    {
+        RaiseActivityCorrected();
+        return Task.CompletedTask;
+    });
+
+    /// <summary>Only this machine's own pilots' lines are correctable (ET-215's rule for loot): anyone else's run came
+    /// in from a server and could never be published back. No list of own pilots treats every run as own.</summary>
+    private MiningLineCorrector? CorrectorFor(long characterId) =>
+        services.OwnCharacterIds is { } own && !own.Contains(characterId) ? null : Corrector;
 
     [ObservableProperty] private bool _hasMining;
 
@@ -38,6 +53,8 @@ public sealed partial class MiningDetailSectionViewModel(RunDetailSectionService
     [ObservableProperty] private string? _emptyText;
 
     public override bool HasContent => HasMining;
+
+    public override bool RereadsAfterCorrection => true;
 
     public override void Apply(RunDetailSectionInput input)
     {
@@ -88,7 +105,7 @@ public sealed partial class MiningDetailSectionViewModel(RunDetailSectionService
             Rows.Add(new ActivityMiningRowViewModel(
                 entry.RunId, characterByRun[entry.RunId], entry.OreType, entry.Units, entry.CriticalUnits,
                 entry.ResidueUnits, unitPrice is { } price ? price * entry.Units : null, ore?.IsMutanite ?? false,
-                input.NameOf));
+                input.NameOf, corrector: CorrectorFor(characterByRun[entry.RunId])));
         }
 
         _SyncGroups(input, resolved, characterByRun, prices);
@@ -130,25 +147,26 @@ public sealed partial class MiningDetailSectionViewModel(RunDetailSectionService
             Groups.Add(group);
     }
 
-    private static (MiningCharacterGroupViewModel Group, decimal Isk) _ToGroup(CharacterBuild build,
+    private (MiningCharacterGroupViewModel Group, decimal Isk) _ToGroup(CharacterBuild build,
         Dictionary<int, double> prices, IReadOnlyDictionary<string, int> fleetOreUnits, bool isFleetScenario)
     {
-        List<(string Ore, int Units, int Crit, int Residue, decimal? Isk, decimal? UnitPrice, bool IsFixedPrice)> lines =
+        List<(Guid RunId, string Ore, int Units, int Crit, int Residue, decimal? Isk, decimal? UnitPrice, bool IsFixedPrice)> lines =
         [
             .. build.Entries.Select(r =>
             {
                 decimal? unitPrice = r.Ore is { } ore ? MiningValuation.UnitPrice(ore.TypeId, ore.IsMutanite, prices) : null;
-                return (r.Entry.OreType, r.Entry.Units, r.Entry.CriticalUnits, r.Entry.ResidueUnits,
+                return (r.Entry.RunId, r.Entry.OreType, r.Entry.Units, r.Entry.CriticalUnits, r.Entry.ResidueUnits,
                     unitPrice is { } price ? price * r.Entry.Units : (decimal?)null, unitPrice, r.Ore?.IsMutanite ?? false);
             })
         ];
+        MiningLineCorrector? corrector = CorrectorFor(build.CharacterId);
 
         decimal? isk = lines.Any(line => line.Isk is not null) ? lines.Sum(line => line.Isk.GetValueOrDefault()) : null;
         int totalResidue = lines.Sum(line => line.Residue);
         decimal residueIsk = lines.Sum(line => (line.UnitPrice ?? 0m) * line.Residue);
 
         List<ActivityMiningRowViewModel> oreRows = [];
-        foreach ((string ore, int units, int crit, int residue, decimal? lineIsk, decimal? _, bool isFixedPrice) in
+        foreach ((Guid runId, string ore, int units, int crit, int residue, decimal? lineIsk, decimal? _, bool isFixedPrice) in
                  lines.OrderByDescending(line => line.Units))
         {
             double? shareFraction = null;
@@ -166,8 +184,8 @@ public sealed partial class MiningDetailSectionViewModel(RunDetailSectionService
                 shareTooltip = $"{ore} — part of {build.Name}'s own ISK mix";
             }
 
-            var row = new ActivityMiningRowViewModel(Guid.Empty, build.CharacterId, ore, units, crit, residue,
-                lineIsk, isFixedPrice, _ => build.Name, shareFraction, shareTooltip)
+            var row = new ActivityMiningRowViewModel(runId, build.CharacterId, ore, units, crit, residue,
+                lineIsk, isFixedPrice, _ => build.Name, shareFraction, shareTooltip, corrector)
             {
                 IsAlternate = oreRows.Count % 2 == 1
             };

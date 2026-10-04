@@ -87,6 +87,65 @@
         <Setter Property="VerticalAlignment" Value="Center"/>
     </Style>
 
+    <!-- ET-424: a line's edit action. The pencil sits over the right end of the name column and shows only while the
+         pointer is on the row, so a row nobody is correcting reads exactly as it did before; it takes no column. The
+         box it opens sits on a row of its own under the line. -->
+    <Style Selector="Button.rowedit">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Padding" Value="4,0"/>
+        <Setter Property="MinHeight" Value="0"/>
+        <Setter Property="MinWidth" Value="0"/>
+        <Setter Property="FontSize" Value="10.5"/>
+        <Setter Property="HorizontalAlignment" Value="Right"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+        <Setter Property="Opacity" Value="0"/>
+    </Style>
+    <Style Selector="Grid.ledger:pointerover > Button.rowedit, Button.rowedit:focus-visible">
+        <Setter Property="Opacity" Value="1"/>
+    </Style>
+    <Style Selector="Button.rowedit:pointerover /template/ ContentPresenter">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+    </Style>
+    <Style Selector="StackPanel.lineedit">
+        <Setter Property="Margin" Value="16,4,0,2"/>
+        <Setter Property="Spacing" Value="4"/>
+    </Style>
+    <Style Selector="TextBox.unitsbox">
+        <Setter Property="Width" Value="96"/>
+        <Setter Property="MinHeight" Value="0"/>
+        <Setter Property="Padding" Value="6,3"/>
+        <Setter Property="FontSize" Value="10.5"/>
+        <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+    </Style>
+    <Style Selector="Button.lineact">
+        <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
+        <Setter Property="Foreground" Value="{DynamicResource TextAccentBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="CornerRadius" Value="3"/>
+        <Setter Property="Padding" Value="8,3"/>
+        <Setter Property="MinHeight" Value="0"/>
+        <Setter Property="FontSize" Value="10"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+    <Style Selector="Button.lineact.ghost">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}"/>
+    </Style>
+    <Style Selector="Button.lineact:pointerover /template/ ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource BgRowHoverBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}"/>
+        <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+    </Style>
+    <Style Selector="Button.lineact:disabled /template/ ContentPresenter">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+    </Style>
+
     <!-- ET-285: design/mining-ledger/v1/c-compact-table.html's own .sbar, 8px tall, 64px wide, with a real track. -->
     <Style Selector="ctl|MeterBar.share">
         <Setter Property="Height" Value="8"/>

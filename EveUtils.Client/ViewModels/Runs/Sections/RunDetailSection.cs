@@ -45,6 +45,11 @@ public abstract class RunDetailSection : ActivitySection
     /// in it; null to leave it unmentioned.</summary>
     public virtual string? AbsentReason(string noun) => null;
 
+    /// <summary>Whether the section reads itself again after its own correction. A section that draws its lines from the
+    /// summary read alone is current by then; one that builds them in <see cref="LoadAsync"/> — a priced list — is not,
+    /// the way LOOT's blocks re-read themselves.</summary>
+    public virtual bool RereadsAfterCorrection => false;
+
     protected void RaiseActivityCorrected() => ActivityCorrected?.Invoke();
 }
 
