@@ -14,6 +14,7 @@ using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Isk;
 using EveUtils.Shared.Modules.Sde;
 using Microsoft.Extensions.DependencyInjection;
+using CqrsDispatcher = EveUtils.Shared.Cqrs.IDispatcher;
 
 namespace EveUtils.Client.ViewModels.Runs.Sections;
 
@@ -75,6 +76,14 @@ public sealed class MiningWindowSectionViewModel : RunWindowSection
             _gamelog.MiningBoostObserved += _OnMiningBoost;
         }
     }
+
+    /// <summary>What a line's edit action (ET-424) writes through. The rows this window works out again each tick
+    /// pick the correction up from the store; nothing here has to be told.</summary>
+    private MiningLineCorrector? Corrector => Context.Services.GetService<CqrsDispatcher>() is { } dispatcher
+        ? _corrector ??= new MiningLineCorrector(dispatcher)
+        : null;
+
+    private MiningLineCorrector? _corrector;
 
     public ObservableCollection<ActivityMiningRowViewModel> Rows { get; } = [];
 
@@ -358,7 +367,10 @@ public sealed class MiningWindowSectionViewModel : RunWindowSection
             Dictionary<string, (int Units, int Crit, int Residue)> ores = [];
             foreach (RunMiningOreDto entry in character.SelectMany(p => p.MiningEntries))
                 _Add(ores, entry.OreType, entry.Units, entry.CriticalUnits, entry.ResidueUnits);
-            builds.Add(new CharacterBuild(character.Key, character.First().CharacterName, IsLocal: true, ores));
+            // A character standing for several runs here has no single run to correct a line of.
+            Guid[] runIds = [.. character.Select(p => p.RunId).Distinct()];
+            builds.Add(new CharacterBuild(character.Key, character.First().CharacterName, IsLocal: true, ores,
+                RunId: runIds.Length == 1 ? runIds[0] : Guid.Empty));
         }
 
         if (Context.GroupCode is { } groupCode && Context.FleetId is { } fleetId && shares is not null)
@@ -473,8 +485,9 @@ public sealed class MiningWindowSectionViewModel : RunWindowSection
                 shareTooltip = $"{ore} — part of {build.Name}'s own ISK mix";
             }
 
-            oreRows.Add(new ActivityMiningRowViewModel(Guid.Empty, build.CharacterId, ore, units, crit, residue,
-                lineIsk, isFixedPrice, _ => build.Name, shareFraction, shareTooltip));
+            oreRows.Add(new ActivityMiningRowViewModel(build.RunId, build.CharacterId, ore, units, crit, residue,
+                lineIsk, isFixedPrice, _ => build.Name, shareFraction, shareTooltip,
+                build.IsLocal ? Corrector : null));
         }
 
         string? iskTooltip = MiningCharacterGroupViewModel.IskTooltipFor(
@@ -577,7 +590,7 @@ public sealed class MiningWindowSectionViewModel : RunWindowSection
 
     private sealed record CharacterBuild(
         int CharacterId, string Name, bool IsLocal, Dictionary<string, (int Units, int Crit, int Residue)> Ores,
-        bool IsFallback = false, int FallbackUnits = 0, bool IsNotShared = false);
+        bool IsFallback = false, int FallbackUnits = 0, bool IsNotShared = false, Guid RunId = default);
 
     private sealed record BoostState(string Module, int BurstCount, DateTime SinceUtc, DateTime LastAtUtc, int LastReachCount);
 

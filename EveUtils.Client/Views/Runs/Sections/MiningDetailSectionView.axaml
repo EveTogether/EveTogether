@@ -46,9 +46,11 @@
                         <ItemsControl ItemsSource="{Binding Ores}" IsVisible="{Binding HasOres}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate DataType="vr:ActivityMiningRowViewModel">
-                                    <Grid Classes="ledger detailrow" Classes.alt="{Binding IsAlternate}"
-                                          ColumnDefinitions="*,64,24,42,36,48,62" RowDefinitions="Auto,Auto" Margin="0,2,0,0">
+                                    <Grid Classes="ledger detailrow" Classes.alt="{Binding IsAlternate}" Background="Transparent"
+                                          ColumnDefinitions="*,64,24,42,36,48,62" RowDefinitions="Auto,Auto,Auto" Margin="0,2,0,0">
                                         <TextBlock Classes="oretext lead" Text="{Binding OreText}" ToolTip.Tip="{Binding OreText}"/>
+                                        <Button Classes="rowedit" Content="✎" ToolTip.Tip="Correct this line"
+                                                IsVisible="{Binding CanEdit}" Command="{Binding BeginEditCommand}"/>
                                         <ctl:MeterBar Grid.Column="1" Classes="share figure" Fraction="{Binding ShareFraction}"
                                                       Fill="{DynamicResource AccentBrush}" IsVisible="{Binding HasShareBar}"
                                                       ToolTip.Tip="{Binding ShareTooltip}"/>
@@ -61,6 +63,23 @@
                                         <TextBlock Grid.Column="6" Classes="money figure" Text="{Binding ValueText}"
                                                    ToolTip.Tip="{Binding ValueTooltip}"
                                                    IsVisible="{Binding $parent[ItemsControl].((vr:MiningCharacterGroupViewModel)DataContext).HasSeveralOres}"/>
+                                        <StackPanel Grid.Row="2" Grid.ColumnSpan="7" Classes="lineedit" IsVisible="{Binding IsEditing}">
+                                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                                <TextBox Classes="unitsbox" Text="{Binding EditText, Mode=TwoWay}" IsEnabled="{Binding !IsBusy}">
+                                                    <TextBox.KeyBindings>
+                                                        <KeyBinding Gesture="Enter" Command="{Binding SaveEditCommand}"/>
+                                                    </TextBox.KeyBindings>
+                                                </TextBox>
+                                                <Button Classes="lineact" Content="SAVE" IsEnabled="{Binding !IsBusy}"
+                                                        Command="{Binding SaveEditCommand}"/>
+                                                <Button Classes="lineact ghost" Content="REMOVE LINE" IsEnabled="{Binding !IsBusy}"
+                                                        Command="{Binding RemoveLineCommand}"/>
+                                                <Button Classes="lineact ghost" Content="cancel" IsEnabled="{Binding !IsBusy}"
+                                                        Command="{Binding CancelEditCommand}"/>
+                                            </StackPanel>
+                                            <TextBlock Classes="note" Text="{Binding EditError}"
+                                                       IsVisible="{Binding EditError, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+                                        </StackPanel>
                                     </Grid>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>

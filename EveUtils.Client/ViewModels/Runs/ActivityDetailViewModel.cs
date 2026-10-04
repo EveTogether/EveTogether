@@ -97,7 +97,7 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
             .Select(module => module.CreateForDetail?.Invoke(sectionServices))
             .OfType<RunDetailSection>()];
         foreach (RunDetailSection section in _sections)
-            section.ActivityCorrected += () => _ = _ReloadAfterCorrectionAsync();
+            section.ActivityCorrected += () => _ = _ReloadAfterCorrectionAsync(section);
         _runChangesSubscription = runChanges?.Subscribe(_OnRunsChangedAsync);
     }
 
@@ -219,7 +219,7 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
     /// whether the published copy is now behind. Nothing else is read again: the other blocks, and the escalation's
     /// ESI route, did not change.
     /// </summary>
-    private async Task _ReloadAfterCorrectionAsync()
+    private async Task _ReloadAfterCorrectionAsync(RunDetailSection? corrected = null)
     {
         Result<ActivityDetailDto> detail = await _dispatcher.Query(new GetActivityDetailQuery(_activitySummaryId));
         if (!detail.IsSuccess || detail.Value is null)
@@ -229,7 +229,9 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
         }
 
         _lastDetail = detail.Value;
-        _Apply(detail.Value);
+        RunDetailSectionInput input = _Apply(detail.Value);
+        if (corrected is { RereadsAfterCorrection: true })
+            await corrected.LoadAsync(input, followUp: true, CancellationToken.None);
     }
 
     /// <summary>
