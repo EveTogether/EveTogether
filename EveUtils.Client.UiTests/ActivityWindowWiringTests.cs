@@ -273,8 +273,8 @@ public class ActivityWindowWiringTests
         await model.ApplySignatureAsync("SUG-270", "Combat Site", "Drone Cluster", []);
 
         string line = Assert.Single(log.Messages, message => message.Contains("so this waits", StringComparison.Ordinal));
-        Assert.Contains("the open Sansha Hideaway run", line, StringComparison.Ordinal);
-        Assert.DoesNotContain("the open Drone Cluster run", line, StringComparison.Ordinal);
+        Assert.Contains($"the open {OpsecText.Mark("Sansha Hideaway")} run", line, StringComparison.Ordinal);
+        Assert.DoesNotContain($"the open {OpsecText.Mark("Drone Cluster")} run", line, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -298,7 +298,7 @@ public class ActivityWindowWiringTests
         // and leaves nothing waiting (see the test below). The seventeen-minute clock is gone either way.
         Assert.True(model.IsKeepRunButtonVisible);
         Assert.Equal(ActivityRunState.Stopped, model.RunState);
-        Assert.Contains("Sansha Refuge is copied and waiting", model.ClockHint);
+        Assert.Contains($"{OpsecText.Mark("Sansha Refuge")} is copied and waiting", model.ClockHint, StringComparison.Ordinal);
         Assert.Equal(StoredRunState.Stopped, (await _RunAsync(harness, first!.Value)).State);
     }
 
@@ -747,7 +747,7 @@ public class ActivityWindowWiringTests
         // The question, and the three answers to it: START is off, and KEEP is the one that is on in its place.
         Assert.False(model.IsStartButtonVisible);
         Assert.True(model.IsKeepRunButtonVisible);
-        Assert.Contains("Drone Cluster is copied and waiting", model.ClockHint);
+        Assert.Contains($"{OpsecText.Mark("Drone Cluster")} is copied and waiting", model.ClockHint, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -809,7 +809,7 @@ public class ActivityWindowWiringTests
         Assert.Null(model.MissionAgentId);
         Assert.Equal(ActivityRunState.Stopped, model.RunState);
         Assert.True(model.IsKeepRunButtonVisible);
-        Assert.Contains("Aralin Jick is copied and waiting", model.ClockHint);
+        Assert.Contains($"{OpsecText.Mark("Aralin Jick")} is copied and waiting", model.ClockHint, StringComparison.Ordinal);
     }
 
     /// <summary>
