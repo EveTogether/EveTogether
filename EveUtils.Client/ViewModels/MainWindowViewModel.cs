@@ -2587,31 +2587,56 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
     /// Kicks off the update check the way <see cref="StartSdeUpdateCheck"/> does: after the window is up and off the
     /// startup chain, so a feed that never answers holds nothing up.
     /// </summary>
-    public void StartUpdateCheck() => _ = RunUpdateCheckResilientAsync();
+    public void StartUpdateCheck() => _ = RunUpdateChecksAsync(UpdateRecheckInterval);
 
-    private async Task RunUpdateCheckResilientAsync()
+    private static readonly TimeSpan UpdateRecheckInterval = TimeSpan.FromHours(1);
+
+    // The version the toast was last shown for: a "Later" must not bring the same build back on the next check.
+    private string? _offeredVersion;
+
+    // The startup check, then the same check on a timer while the app runs (ET-430). Only the startup one reports
+    // to the status bar; a recheck that fails is not worth interrupting anyone for.
+    internal async Task RunUpdateChecksAsync(TimeSpan interval)
+    {
+        await RunUpdateCheckResilientAsync(isStartup: true);
+
+        using var timer = new PeriodicTimer(interval);
+        while (await timer.WaitForNextTickAsync())
+            await RunUpdateCheckResilientAsync(isStartup: false);
+    }
+
+    private async Task RunUpdateCheckResilientAsync(bool isStartup)
     {
         try
         {
-            await CheckForUpdateAsync();
+            await CheckForUpdateAsync(isStartup);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (isStartup)
         {
             ActivityStatus = $"Update check failed: {ex.Message}";
         }
+        catch (Exception)
+        {
+            // Deliberately silent: the next tick tries again, and the operator never asked for this check.
+        }
     }
 
-    private async Task CheckForUpdateAsync()
+    private async Task CheckForUpdateAsync(bool isStartup)
     {
-        if (_services is null || !await IsStartupUpdateCheckEnabledAsync()) return;
+        // A package already waiting for its restart is the answer; asking again would only offer it a second time.
+        if (_services is null || IsUpdateReady || !await IsStartupUpdateCheckEnabledAsync()) return;
 
         var check = await _services.GetRequiredService<IUpdateService>().CheckAsync(await ResolveUpdateChannelAsync());
 
-        if (UpdateNotice.StartupStatus(check, InstalledVersion) is { } status)
+        if (isStartup && UpdateNotice.StartupStatus(check, InstalledVersion) is { } status)
             ActivityStatus = status;
 
-        if (UpdateNotice.Classify(check) is UpdateNoticeKind.Available)
-            OfferUpdate(check.Value!);
+        if (UpdateNotice.Classify(check) is UpdateNoticeKind.Available && check.Value is { } release
+            && release.Version != _offeredVersion)
+        {
+            _offeredVersion = release.Version;
+            OfferUpdate(release);
+        }
     }
 
     // Read straight from the store rather than from the loaded Settings collection: this runs off the startup chain,
@@ -2624,8 +2649,8 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         return settings.FirstOrDefault(s => s.Key == CheckUpdatesOnStartupSettingKey)?.Value != "false";
     }
 
-    // Bottom right and with no expiry, both deliberate: there is no periodic re-check, so this offer is made exactly
-    // once per session and a toast that walks away on a timer takes that one chance with it.
+    // Bottom right and with no expiry, both deliberate: a build is offered once per session, so a toast that walks
+    // away on a timer takes that one chance with it.
     private void OfferUpdate(AppRelease release) =>
         _services?.GetService<IToastService>()?.Show(
             "Update available",

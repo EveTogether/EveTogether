@@ -1,3 +1,4 @@
+using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Headless.XUnit;
@@ -141,6 +142,31 @@ public class UpdateFlowTests
         var offer = Assert.Single(harness.Toasts.ActionToasts);
         Assert.Equal("Update available", offer.Title);
         Assert.Equal(["Later", "What's new"], offer.Actions.Select(action => action.Label));
+    }
+
+    // ET-430: a "Later" must not bring the same build back on every recheck, and a failing recheck must say nothing —
+    // neither can be seen by looking at the code, only over several ticks.
+    [AvaloniaFact]
+    public async Task Recheck_OffersABuildOnce_AndStaysSilentWhenItFails()
+    {
+        var harness = Build();
+        using var instance = harness.Instance;
+        harness.Updates.OnCheck = () => Task.FromResult(Result<AppRelease?>.Success(Release));
+
+        _ = harness.ViewModel.RunUpdateChecksAsync(TimeSpan.FromMilliseconds(20));
+        for (var attempt = 0; attempt < 200 && harness.Updates.Checks < 3; attempt++)
+            await Task.Delay(10);
+
+        Assert.True(harness.Updates.Checks >= 3, "the recheck never ran");
+        Assert.Single(harness.Toasts.ActionToasts);
+
+        harness.Updates.OnCheck = () => throw new InvalidOperationException("offline");
+        var checksBefore = harness.Updates.Checks;
+        for (var attempt = 0; attempt < 200 && harness.Updates.Checks == checksBefore; attempt++)
+            await Task.Delay(10);
+
+        Assert.DoesNotContain("failed", harness.ViewModel.ActivityStatus ?? "");
+        Assert.Single(harness.Toasts.ActionToasts);
     }
 
     // ET-339: nobody has to restart to have a channel switch reach the next check — the setting is read fresh
