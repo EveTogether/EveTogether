@@ -201,7 +201,7 @@ public sealed partial class KillmailDetailViewModel : ViewModelBase
         bool hasDroppedLines = detail.Items.Any(item => !item.IsDestroyed);
         DroppedText = droppedValue is { } dropped ? IskFormat.Compact(dropped) : hasDroppedLines ? "no price" : "0";
         // Nothing priced still reads as all destroyed: the ship always is.
-        DestroyedShare = 1;
+        DestroyedShare = totalValue > 0 ? (double)(destroyedValue.GetValueOrDefault() / totalValue) : 1;
         DamageTakenText = detail.DamageTaken.ToString("N0", CultureInfo.InvariantCulture);
 
         if (detail.IsLoss)
