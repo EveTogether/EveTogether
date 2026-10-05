@@ -98,12 +98,7 @@ public sealed class CompositionCharacterReadiness(
     private static string _LevelsText(int levels) => levels == 1 ? "1 level" : $"{levels} levels";
     private static string _Time(TimeSpan? time) => time is { } value ? EveDurationFormatter.Format(value) : "—";
 
-    private static string _Date(DateTimeOffset date)
-    {
-        DateTime local = date.ToLocalTime().DateTime;
-        string format = local.Year == DateTime.Now.Year ? "ddd d MMM HH:mm" : "ddd d MMM yyyy HH:mm";
-        return local.ToString(format, CultureInfo.InvariantCulture);
-    }
+    private static string _Date(DateTimeOffset date) => Skills.SkillsQueueViewModel.When(date, DateTimeOffset.UtcNow);
 }
 
 /// <summary>One missing skill level in the readiness pane's MISSING table; <see cref="QueuePosition"/> is the 1-based

@@ -107,12 +107,7 @@ public sealed partial class SkillsOptimiseViewModel : ObservableObject
         _subjects.Add(new _Subject("queue", "training queue", queueRows));
         foreach (var plan in plans ?? [])
         {
-            _subjects.Add(new _Subject("plan", plan.Name, plan.Rows.Select(row =>
-            {
-                var (rank, primary, secondary) = estimator.AttributesOf(row.SkillTypeId);
-                return new RemapTrainingRow(primary, secondary,
-                    SkillPointMath.SkillPointsForLevel(rank, row.Level) - SkillPointMath.SkillPointsForLevel(rank, row.Level - 1));
-            }).ToList()));
+            _subjects.Add(new _Subject("plan", plan.Name, WhatIf.WhatIfCalculator.RemapRows(plan.Rows, estimator)));
         }
 
         if (queueRows.Count == 0 && _subjects.Count == 1)
@@ -228,6 +223,14 @@ public sealed partial class SkillsOptimiseViewModel : ObservableObject
         Plus4SavingText = now - plus4 > TimeSpan.Zero ? $"−{EveDurationFormatter.Format(now - plus4)}" : "already plugged in";
         Plus5SavingText = now - plus5 > TimeSpan.Zero ? $"−{EveDurationFormatter.Format(now - plus5)}" : "already plugged in";
         var plus4Saved = now - plus4;
+        if (subject.Rows.Count == 0)
+        {
+            Plus4SavingText = "";
+            Plus5SavingText = "";
+            ImplantConclusion = $"Nothing to train in this {what} yet.";
+            return;
+        }
+
         ImplantConclusion = plus4Saved <= TimeSpan.Zero
             ? $"A +4 set adds nothing for this {what}: the slots already hold +4 or better."
             : remapSaved > TimeSpan.Zero

@@ -57,7 +57,6 @@ public sealed partial class CompositionMinimumEditorViewModel : ObservableObject
         {
             row.PropertyChanged += _OnMinimumChanged;
         }
-        Entry.PropertyChanged += _OnEntryChanged;
         _Recompute();
     }
 
@@ -142,16 +141,21 @@ public sealed partial class CompositionMinimumEditorViewModel : ObservableObject
     [RelayCommand]
     private void Cancel() => _closed();
 
-    // Picking a name from the "+ add a skill…" list adds it at the default level; the level is set on the row after.
-    private void _OnEntryChanged(object? sender, PropertyChangedEventArgs args)
+    // "+ add a skill…" adds on ADD or Enter only, as the full composition editor does: adding as soon as the text equals
+    // a name would add "Mining" while the pilot is still typing "Mining Upgrades".
+    [RelayCommand]
+    private void AddSkill()
     {
-        if (args.PropertyName != nameof(EditorEntryViewModel.NewSkillText) ||
-            !_skillIds.TryGetValue(Entry.NewSkillText.Trim(), out int skillTypeId))
+        string name = Entry.NewSkillText.Trim();
+        if (!_skillIds.TryGetValue(name, out int skillTypeId))
         {
+            Status = name.Length == 0 ? "" : $"No skill named \"{name}\".";
             return;
         }
-        Entry.AddSkillMinimum(skillTypeId, _typeName(skillTypeId), Entry.NewSkillLevelIndex + 1);
-        Dispatcher.UIThread.Post(() => Entry.NewSkillText = "");
+
+        Status = "";
+        Entry.AddSkillMinimum(skillTypeId, _typeName(skillTypeId), Math.Clamp(Entry.NewSkillLevelIndex + 1, 1, 5));
+        Entry.NewSkillText = "";
     }
 
     private void _OnMinimumsChanged(object? sender, NotifyCollectionChangedEventArgs args)

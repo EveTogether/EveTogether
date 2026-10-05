@@ -71,7 +71,8 @@ public sealed class SkillTargetCurveChart : Control
         bool inDays = axisHours >= 48;
         double unit = inDays ? 24 : 1;
         double span = axisHours / unit;
-        double step = new double[] { 1, 2, 5, 10, 25, 50, 100, 200, 500 }.First(candidate => span / candidate <= 5);
+        double step = new double[] { 1, 2, 5, 10, 25, 50, 100, 200, 500, 1000, 2000, 5000 }
+            .FirstOrDefault(candidate => span / candidate <= 5, Math.Ceiling(span / 5));
         for (double tick = 0; tick <= span; tick += step)
         {
             Label($"{tick:0}{(inDays ? "d" : "h")}", X(tick * unit), Top + height + 12, dim, mono, 9.5, TextAlignment.Center);

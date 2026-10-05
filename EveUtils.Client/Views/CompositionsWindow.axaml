@@ -687,7 +687,7 @@
                                                                                        VerticalAlignment="Center" Foreground="{StaticResource WarnBrush}"
                                                                                        IsVisible="{Binding HasNoEffect}"/>
                                                                             <Button Grid.Column="3" Classes="x" ToolTip.Tip="Remove this minimum"
-                                                                                    Command="{Binding $parent[ItemsControl].((vm:EditorEntryViewModel)DataContext).RemoveSkillMinimumCommand}"
+                                                                                    Command="{Binding $parent[ItemsControl].((vm:CompositionMinimumEditorViewModel)DataContext).Entry.RemoveSkillMinimumCommand}"
                                                                                     CommandParameter="{Binding}">
                                                                                 <mi:MaterialIcon Kind="Close" Width="11" Height="11"/>
                                                                             </Button>
@@ -696,11 +696,16 @@
                                                                 </DataTemplate>
                                                             </ItemsControl.ItemTemplate>
                                                         </ItemsControl>
-                                                        <Grid ColumnDefinitions="*,6,Auto" Margin="0,8,0,0">
+                                                        <Grid ColumnDefinitions="*,6,Auto,6,Auto" Margin="0,8,0,0">
                                                             <AutoCompleteBox FontSize="11" MinHeight="24" FilterMode="ContainsOrdinal" MinimumPrefixLength="2"
                                                                              PlaceholderText="+ add a skill…" Text="{Binding Entry.NewSkillText}"
-                                                                             ItemsSource="{Binding SkillNames}"/>
-                                                            <Button Grid.Column="2" Classes="mk" Content="FROM A PLAN…"
+                                                                             ItemsSource="{Binding SkillNames}">
+                                                                <AutoCompleteBox.KeyBindings>
+                                                                    <KeyBinding Gesture="Enter" Command="{Binding AddSkillCommand}"/>
+                                                                </AutoCompleteBox.KeyBindings>
+                                                            </AutoCompleteBox>
+                                                            <Button Grid.Column="2" Classes="mk" Content="ADD" Command="{Binding AddSkillCommand}"/>
+                                                            <Button Grid.Column="4" Classes="mk" Content="FROM A PLAN…"
                                                                     ToolTip.Tip="Add a skill plan's levels as minimums">
                                                                 <Button.Flyout>
                                                                     <Flyout Placement="BottomEdgeAlignedRight">

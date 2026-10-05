@@ -54,16 +54,22 @@ internal sealed class SkillPlanRepository(IDbContextFactory<SharedDbContext> con
             return false;
         }
 
+        // One source per fit/item/doctrine entry (its ref), or per label for a ref-less + SKILL; a renamed fit updates it.
         var existing = await db.Set<SkillPlanSource>().FirstOrDefaultAsync(s => s.PlanId == planId && s.Source == source.Source
-            && s.SourceRef == source.SourceRef && s.Label == source.Label, cancellationToken);
+            && s.SourceRef == source.SourceRef && (source.SourceRef != null || s.Label == source.Label), cancellationToken);
         if (existing is null)
         {
             source.PlanId = planId;
             db.Set<SkillPlanSource>().Add(source);
         }
+        else if (existing.DroppedLevels == source.DroppedLevels && existing.Label == source.Label)
+        {
+            return false; // nothing new to record — no signal, no rebuild
+        }
         else
         {
             existing.DroppedLevels = source.DroppedLevels;
+            existing.Label = source.Label;
         }
 
         await db.SaveChangesAsync(cancellationToken);

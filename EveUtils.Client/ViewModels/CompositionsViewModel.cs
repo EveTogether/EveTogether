@@ -320,13 +320,13 @@ public sealed partial class CompositionsViewModel : ObservableObject, IRefreshab
     /// <summary>ADD TO PLAN…: the doctrine entry's missing levels into the selected character's "doctrine · fit" plan
     /// (PLANS' + FROM DOCTRINE path), then SKILLS on that plan.</summary>
     [RelayCommand]
-    private Task AddToPlan() => _ObserveAsync(_AddToPlanAndOpenAsync());
+    private Task AddToPlan() => _ObserveAsync(_AddToPlanAndOpenAsync(addRows: true));
 
-    /// <summary>WHAT IF…: the what-if lives on PLANS, so it lands on the same plan.</summary>
+    /// <summary>WHAT IF…: the what-if lives on PLANS, so it opens this fit's plan there; it never writes one.</summary>
     [RelayCommand]
-    private Task WhatIf() => _ObserveAsync(_AddToPlanAndOpenAsync());
+    private Task WhatIf() => _ObserveAsync(_AddToPlanAndOpenAsync(addRows: false));
 
-    private async Task _AddToPlanAndOpenAsync()
+    private async Task _AddToPlanAndOpenAsync(bool addRows)
     {
         if (SelectedReadinessEntry is not { Entry: { } entry } readiness ||
             readiness.SelectedCharacter is not { CharacterId: > 0 } character ||
@@ -359,6 +359,11 @@ public sealed partial class CompositionsViewModel : ObservableObject, IRefreshab
         {
             planId = existing.Id;
         }
+        else if (!addRows)
+        {
+            StatusMessage = $"{character.Name} has no plan \"{planName}\" yet. ADD TO PLAN… makes it, with its what-if.";
+            return;
+        }
         else
         {
             var created = await dispatcher.Send(new CreateSkillPlanCommand(character.CharacterId, planName));
@@ -370,15 +375,22 @@ public sealed partial class CompositionsViewModel : ObservableObject, IRefreshab
             planId = created.Value;
         }
 
-        List<int> seeds = [fit.ShipTypeId, .. fit.Items.Select(item => item.TypeId)];
-        string label = $"{readiness.CompositionName} · {readiness.RoleName} · {readiness.FitName}";
-        SkillPlanBuildResult built = SkillPlanRowFactory.FromDoctrine(validator, seeds, entry.SkillMinimums, snapshot.Levels, label);
-        if (built.Rows.Count > 0)
+        if (addRows)
         {
-            await dispatcher.Send(new AddSkillPlanRowsCommand(character.CharacterId, planId, SkillPlanRowSource.Doctrine,
-                entry.Id.ToString(CultureInfo.InvariantCulture), built.Rows));
+            List<int> seeds = [fit.ShipTypeId, .. (fit.Items ?? []).Select(item => item.TypeId)];
+            string label = $"{readiness.CompositionName} · {readiness.RoleName} · {readiness.FitName}";
+            SkillPlanBuildResult built = SkillPlanRowFactory.FromDoctrine(validator, seeds, entry.SkillMinimums, snapshot.Levels, label);
+            // Sent even with no rows, so the plan lists this entry under IN THIS PLAN and says what was dropped.
+            var added = await dispatcher.Send(new AddSkillPlanRowsCommand(character.CharacterId, planId, SkillPlanRowSource.Doctrine,
+                entry.Id.ToString(CultureInfo.InvariantCulture), built.Rows, built.Label, built.Dropped));
+            if (!added.IsSuccess)
+            {
+                StatusMessage = $"The levels could not be added to \"{planName}\".";
+                return;
+            }
+
+            StatusMessage = built.Message ?? $"{character.Name}: the missing levels are in the plan \"{planName}\".";
         }
-        StatusMessage = built.Message ?? $"{character.Name}: the missing levels are in the plan \"{planName}\".";
 
         SkillsWindowViewModel fresh = new(_services, character.CharacterId);
         fresh.OpenOnPlan(character.CharacterId, planId);

@@ -36,7 +36,7 @@ public static class WhatIfCalculator
         DateTimeOffset now)
     {
         var estimator = new SkillTrainingEstimator(dogma);
-        var remapRows = _RemapRows(planRows, estimator);
+        var remapRows = RemapRows(planRows, estimator);
 
         var asOfQueueDate = _AsQueueStands(planRows, queue, estimator, currentEffectiveAttributes, now);
         var planFirstDate = _PlanFirst(planRows, queue, estimator, currentEffectiveAttributes, now);
@@ -115,7 +115,7 @@ public static class WhatIfCalculator
     // One remap row per plan row, keyed to the skill's own rank and primary/secondary training attribute — the same
     // per-skill lookup SkillTrainingEstimator.AttributesOf makes for a single estimate, generalized to a
     // level-to-level SP delta.
-    private static IReadOnlyList<RemapTrainingRow> _RemapRows(IReadOnlyList<SkillPlanRow> rows, SkillTrainingEstimator estimator)
+    public static IReadOnlyList<RemapTrainingRow> RemapRows(IReadOnlyList<SkillPlanRow> rows, SkillTrainingEstimator estimator)
     {
         var result = new List<RemapTrainingRow>();
         foreach (var row in rows)

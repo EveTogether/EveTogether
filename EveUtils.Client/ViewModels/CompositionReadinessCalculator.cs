@@ -107,17 +107,23 @@ public sealed class CompositionReadinessCalculator(
 
     private static int _LevelCount(IReadOnlyList<SkillGap> gaps) => gaps.Sum(gap => gap.RequiredLevel - gap.CurrentLevel);
 
-    // One row per missing level, priced level by level, with its place in the queue when it is already queued.
-    private List<CompositionMissingLevel> _MissingLevels(IReadOnlyList<SkillGap> gaps, CompositionCharacterSnapshot snapshot) =>
-    [
-        .. gaps.SelectMany(gap => Enumerable.Range(gap.CurrentLevel + 1, gap.RequiredLevel - gap.CurrentLevel), (gap, level) =>
-            new CompositionMissingLevel(gap.SkillTypeId, level, names.TypeName(gap.SkillTypeId),
-                snapshot.Attributes is { } attributes
-                    ? estimator.Estimate(gap.SkillTypeId, level - 1, level, attributes).TrainingTime
-                    : null,
-                snapshot.Queue.FirstOrDefault(queued => queued.SkillTypeId == gap.SkillTypeId && queued.FinishedLevel == level)
-                    is { } entry ? entry.QueuePosition + 1 : null))
-    ];
+    // One row per missing level, priced level by level, with its place in the queue when it is already queued — numbered
+    // among the unfinished entries only, as TRAINING QUEUE numbers them (ESI keeps finished rows until the next login).
+    private List<CompositionMissingLevel> _MissingLevels(IReadOnlyList<SkillGap> gaps, CompositionCharacterSnapshot snapshot)
+    {
+        var now = DateTimeOffset.UtcNow;
+        var visible = snapshot.Queue.Where(e => e.FinishDate is null || e.FinishDate > now).OrderBy(e => e.QueuePosition).ToList();
+        return
+        [
+            .. gaps.SelectMany(gap => Enumerable.Range(gap.CurrentLevel + 1, gap.RequiredLevel - gap.CurrentLevel), (gap, level) =>
+                new CompositionMissingLevel(gap.SkillTypeId, level, names.TypeName(gap.SkillTypeId),
+                    snapshot.Attributes is { } attributes
+                        ? estimator.Estimate(gap.SkillTypeId, level - 1, level, attributes).TrainingTime
+                        : null,
+                    visible.FindIndex(queued => queued.SkillTypeId == gap.SkillTypeId && queued.FinishedLevel == level) is var index and >= 0
+                        ? index + 1 : null))
+        ];
+    }
 
     // The missing levels as an unsaved plan, through the what-if's own scenarios: "as the queue stands" and "plan first".
     private Lazy<IReadOnlyList<WhatIfScenario>>? _Scenarios(

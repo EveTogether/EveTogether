@@ -199,6 +199,11 @@ public sealed partial class SkillsPlansViewModel : ObservableObject
     [RelayCommand]
     private async Task PutPlanFirst()
     {
+        if (SelectedPlan is null || Rows.Count == 0)
+        {
+            return;
+        }
+
         await CopyAsText();
         StatusMessage = "Copied the plan in this order as text. Paste it into the in-game skill queue, in front of what is there.";
     }
@@ -339,7 +344,7 @@ public sealed partial class SkillsPlansViewModel : ObservableObject
         var targetsCalculator = new SkillTargetsCalculator(_calculator, _validator, estimator, _attributes);
 
         var viewModel = new SkillImpactViewModel(scanner, _validator, estimator, _attributes,
-            FitNameResolverFactory.For(_services), $"skill-impact:plan-fit:{_characterId}", _characterName, fit.FitName,
+            FitNameResolverFactory.For(_services), $"skill-impact:plan-fit:{_characterId}:{fit.FitName}", _characterName, fit.FitName,
             fit.Input, _snapshot.Levels, targetsCalculator, fit.AddToPlan)
         {
             PickFit = _PickImpactFitAsync,   // FROM A FIT: switching the fit keeps this character and this plan
@@ -451,9 +456,13 @@ public sealed partial class SkillsPlansViewModel : ObservableObject
             return;
         }
 
-        var stored = await _reader.GetRowsAsync(plan.Id, CancellationToken.None);
-        string text = SkillPlanTextCodec.ToText(stored.Select(row => (row.SkillTypeId, row.Level)).ToList(), _snapshot.Sde);
-        await _dialogs.SetClipboardTextAsync(text);
+        // The order on screen (FLY FIRST, SHORTEST FIRST or BY ATTRIBUTE), the same order SHARE copies.
+        var shown = Rows.Where(row => !row.IsMilestone && row.Row is not null)
+            .Select(row => (row.Row?.SkillTypeId ?? 0, row.Level)).ToList();
+        var pairs = shown.Count > 0
+            ? shown
+            : (await _reader.GetRowsAsync(plan.Id, CancellationToken.None)).Select(row => (row.SkillTypeId, row.Level)).ToList();
+        await _dialogs.SetClipboardTextAsync(SkillPlanTextCodec.ToText(pairs, _snapshot.Sde));
     }
 
     [RelayCommand]
@@ -528,7 +537,7 @@ public sealed partial class SkillsPlansViewModel : ObservableObject
                 .Select(parts => (_snapshot.Sde.TryGetTypeName(int.Parse(parts[0], CultureInfo.InvariantCulture), out var n) ? n : parts[0])
                     + " " + RomanLevel.Text(int.Parse(parts[1], CultureInfo.InvariantCulture)))
                 .ToList();
-            if (levels == 0)
+            if (levels == 0 && source.Id != 0 && source.DroppedLevels.Length == 0 && _AllTrained(source))
             {
                 dropped.Add($"everything of the {label} (already trained)");
             }
@@ -543,7 +552,20 @@ public sealed partial class SkillsPlansViewModel : ObservableObject
     }
 
     private static bool _Matches(SkillPlanRowSource a, string? aRef, string aLabel, SkillPlanRowSource b, string? bRef, string bLabel) =>
-        a == b && (aRef is not null ? aRef == bRef : bRef is null && aLabel == bLabel);
+        a == b && aRef == bRef && (aRef is not null || aLabel == bLabel);
+
+    // A source that added no level is "dropped" only when every level it needs is trained — not when the plan already
+    // held them from another source, or the pilot removed its rows. Only an item can be re-checked from its ref.
+    private bool _AllTrained(SkillPlanSource source)
+    {
+        if (_validator is null || source.Source != SkillPlanRowSource.Item
+            || !int.TryParse(source.SourceRef, NumberStyles.Integer, CultureInfo.InvariantCulture, out var typeId))
+        {
+            return false;
+        }
+
+        return _validator.SkillRequirements([typeId], extra: null, _snapshot.Levels).Count == 0;
+    }
 
     private static string _Kind(SkillPlanRowSource source) => source switch
     {
