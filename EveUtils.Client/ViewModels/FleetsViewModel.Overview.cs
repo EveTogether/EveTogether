@@ -15,6 +15,7 @@ using EveUtils.Client.ViewModels.Fleets;
 using EveUtils.Client.ViewModels.Runs;
 using EveUtils.Client.WorldMap;
 using EveUtils.Shared.Identity;
+using EveUtils.Shared.Modules.Fleet.Dtos;
 using EveUtils.Shared.Modules.Fleet.Entities;
 using EveUtils.Shared.Modules.Fleet.Metrics;
 using EveUtils.Shared.Modules.Settings.Commands;
@@ -406,6 +407,7 @@ public sealed partial class FleetsViewModel
                     : switchTo is not null ? new AsyncRelayCommand(() => LeaveCharacterAsync(fleet!, id))
                     : isCommander ? new RelayCommand(() => ManageRow(fleet)) : new AsyncRelayCommand(() => MetricsRowAsync(fleet)),
                 RevealCommand = fleet is null ? null : new RelayCommand(() => Reveal(fleet)),
+                JoinRunCommand = fleet is null || isCommander ? null : new AsyncRelayCommand(() => JoinLaneRunAsync(fleet)),
                 MenuItems = LaneMenu(fleet, id, isCommander, standingBy),
             };
 
@@ -765,7 +767,10 @@ public sealed partial class FleetsViewModel
     public void Tick(DateTimeOffset now)
     {
         foreach (var lane in Lanes)
+        {
             lane.Tick(now);
+            lane.JoinableRun = _JoinableRunOf(lane, now);
+        }
         foreach (var row in _allRows.Where(r => r.IsInActiveGroup))
             row.Tick(now);
         // Every fleet still to fly, not only the started ones: who is ready matters most before the start (ET-440).
@@ -775,6 +780,22 @@ public sealed partial class FleetsViewModel
                 _ApplyPresence(row, member, now);
             row.RefreshReadiness();
         }
+    }
+
+    private RunGroupCodeStart? _JoinableRunOf(FleetLaneViewModel lane, DateTimeOffset now) =>
+        lane.JoinRunCommand is null || lane.Fleet is not { } fleet || _dialogs.IsActivityWindowOpen
+        || _services.GetService<RunningFleetRuns>() is not { } running
+            ? null
+            : running.Of(fleet.Id, now).FirstOrDefault();
+
+    /// <summary>JOIN FLEET RUN on a lane (ET-440): the commander's run in this pilot's fleet, joined the way its offer
+    /// would have been — for a pilot who joined the fleet late, declined the offer or closed the window.</summary>
+    private async Task JoinLaneRunAsync(FleetViewModel fleet)
+    {
+        if (_services.GetService<RunningFleetRuns>()?.Of(fleet.Id, DateTimeOffset.UtcNow).FirstOrDefault() is not { } start
+            || _services.GetService<FleetRunWindowPresenter>() is not { } presenter)
+            return;
+        await presenter.JoinAsync(start);
     }
 
     /// <summary>

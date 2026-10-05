@@ -183,6 +183,10 @@ internal sealed class Pilot : IDisposable
         instance.Services.GetRequiredService<IFleetParticipation>()
             .Set([new FleetParticipant(characterId, FleetOfTwo.FleetId, ClientOnly: false, FleetOfTwo.JithranId, "fleet.example")]);
         _ = instance.Services.GetRequiredService<FleetRunShares>();
+        // Alive from the start, as Program does: it is what applies a commander's discard to this pilot's own rows.
+        _ = instance.Services.GetRequiredService<FleetRunGroupCodeCoordinator>();
+        _ = instance.Services.GetRequiredService<RunningFleetRuns>();
+        _ = instance.Services.GetRequiredService<FleetMemberBoard>();
 
         ActivityWindowViewModel window = new(kind, instance.Services);
         await window.LoadAsync();

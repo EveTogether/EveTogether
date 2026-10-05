@@ -17,6 +17,8 @@ entries under `[Unreleased]` below that were not there yet at the previous night
 
 ## [Unreleased]
 
+- **Added: join a fleet run that is already going.** Joined the fleet late, missed the offer, or had your run cut loose when the fleet commander discarded theirs? While the commander's run goes, your run window says that your run is not part of it and offers JOIN FLEET RUN. You choose to add the run you have, keeping everything on it, or to stop it and start a new one that joins. Without a run window open, the same button sits on your character's card in Fleets. This needs the updated server.
+- **Changed: the FLEET section counts who is ready to fly.** Before and during a run its header reads, for example, "2 of 3 ready · 1 offline", and your own characters show their status too.
 - **Changed: every SKILLS screen now looks like the approved mockup, and says what each number means.** The SKILLS
   window, the doctrine readiness in COMP and SKILL IMPACT were rebuilt to match mockup v5, screen by screen:
   - **OPTIMISE** lets you pick the training queue or one of your plans. For each, a CHA/INT/MEM/PER/WIL table shows

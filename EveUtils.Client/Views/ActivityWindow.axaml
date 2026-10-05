@@ -646,6 +646,15 @@
                 <!-- Why the window is still here after SAVE. The toast is gone in seconds; this is not. -->
                 <TextBlock x:Name="RunNoticeText" Classes="hint" Margin="0" TextWrapping="Wrap"
                            IsVisible="{Binding HasRunNotice}" Text="{Binding RunNoticeText}"/>
+                <!-- The commander's run is going and this window is not in it (ET-440): joined late, declined the
+                     offer, or cut off by a discard. Said on the window, with the way in beside it. -->
+                <Grid x:Name="JoinFleetRun" ColumnDefinitions="*,Auto" ColumnSpacing="10"
+                      IsVisible="{Binding IsJoinFleetRunShown}">
+                    <TextBlock Classes="hint" Margin="0" TextWrapping="Wrap" VerticalAlignment="Center"
+                               Text="{Binding JoinFleetRunText}"/>
+                    <Button x:Name="JoinFleetRunButton" Grid.Column="1" Classes="accent" VerticalAlignment="Center"
+                            Content="JOIN FLEET RUN" Command="{Binding JoinRunningFleetRunCommand}"/>
+                </Grid>
                 <TextBlock Classes="hint" Margin="0" Text="{Binding ClockHint}"/>
                 <!-- Why there are no run controls, when there are none. An unknown fleet boss is a state, not
                      silence — the same rule as ET-65 AC-7. -->

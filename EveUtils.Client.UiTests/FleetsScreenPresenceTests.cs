@@ -100,4 +100,47 @@ public class FleetsScreenPresenceTests
         await FleetOfTwo.RunJobsAsync();
         OverlayShots.Capture(window, "et440-fleets-screen-presence");
     }
+
+    [AvaloniaFact]
+    public async Task MemberWithoutARunWindow_GetsJoinFleetRun_OnTheirLane()
+    {
+        RecordingFleetTransportClient transport = new();
+        transport.MyFleetsByServer[Server] =
+        [
+            new FleetInfo(FleetId, "Sikrah misc", null, FleetVisibility.Public, FleetState.Active, Jithran, null, null,
+                DateTimeOffset.UtcNow.AddHours(-1), FleetActivation.Active, ActivatedAt: DateTimeOffset.UtcNow.AddMinutes(-30)),
+        ];
+        transport.MembersByFleet[FleetId] =
+        [
+            new FleetMemberInfo(1, Jithran, -1, -1, FleetRole.FleetCommander, false, IsConnected: true),
+            new FleetMemberInfo(2, Raymond, 1, 1, FleetRole.SquadMember, false, IsConnected: true),
+        ];
+        using TestClientInstance instance = TestClientInstance.Create(services =>
+        {
+            services.AddSingleton<IFleetTransportClient>(transport);
+            services.AddSingleton<IDialogService>(new RecordingDialogService());
+            services.AddSingleton<IExternalCharacterLookup>(new FakeExternalLookup { [Jithran] = "Jithran", [Raymond] = "RaymondKrah" });
+        });
+        await instance.Services.GetRequiredService<ICharacterRegistry>().AddOrUpdateAsync(new Character("RaymondKrah", Raymond));
+        await instance.Services.GetRequiredService<IClientSessionStore>()
+            .SaveAsync(Server, new ClientSessionTokens("t", "r", "RaymondKrah", Raymond));
+        _ = instance.Services.GetRequiredService<RunningFleetRuns>();
+        await instance.Services.GetRequiredService<IEventBus>().PublishAsync(new FleetRunRunningEvent(
+            new RunGroupCodeStart(FleetId, EveUtils.Shared.Modules.Runs.Enums.ActivityKind.Mining, "HF-JL33",
+                DateTime.UtcNow.AddMinutes(-20), IsFleetCommander: true), Jithran), EventTarget.Local);
+
+        FleetsViewModel vm = new(instance.Services, runClock: false);
+        for (int attempt = 0; attempt < 150 && !vm.Lanes.Any(lane => lane.Fleet is not null); attempt++)
+        {
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            await Task.Delay(20);
+        }
+        vm.Tick(DateTimeOffset.UtcNow);
+
+        Assert.True(vm.Lanes.Single(lane => lane.Fleet is not null).IsJoinRunShown);
+        FleetsWindow window = new(vm) { Width = 1440, Height = 560 };
+        window.Show();
+        await FleetOfTwo.RunJobsAsync();
+        OverlayShots.Capture(window, "et440-fleets-lane-join-fleet-run");
+    }
 }

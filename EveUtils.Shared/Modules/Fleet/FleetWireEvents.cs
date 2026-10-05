@@ -125,6 +125,13 @@ public sealed class FleetWireEvents : IWireEventCatalog
             return new CompositionChangedEvent(payload, characterId);
         });
 
+        registry.Register("fleet.run-group.running", (payloadJson, characterId) =>
+        {
+            var payload = JsonSerializer.Deserialize<RunGroupCodeStart>(payloadJson)
+                          ?? throw new InvalidOperationException("Invalid fleet.run-group.running payload.");
+            return new FleetRunRunningEvent(payload, characterId);
+        });
+
         registry.Register("fleet.relay-refused", (payloadJson, characterId) =>
         {
             var payload = JsonSerializer.Deserialize<FleetRelayRefusedPayload>(payloadJson)
