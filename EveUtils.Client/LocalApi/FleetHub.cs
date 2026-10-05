@@ -16,9 +16,11 @@ public sealed class FleetHub(LocalApiQueries queries, LocalApiBroadcaster broadc
 {
     public override async Task OnConnectedAsync()
     {
+        var metrics = await queries.GetMetricsAsync(Context.ConnectionAborted);
         var snapshot = new WsSnapshotDto(
-            await queries.GetMetricsAsync(Context.ConnectionAborted),
-            await queries.GetActiveFleetAsync(Context.ConnectionAborted));
+            metrics,
+            await queries.GetActiveFleetAsync(Context.ConnectionAborted),
+            queries.GetHistory(metrics));
         await Clients.Caller.SendAsync("snapshot", snapshot, Context.ConnectionAborted);
         broadcaster.SignalRConnected();
         await base.OnConnectedAsync();

@@ -36,6 +36,8 @@ public class LocalApiWebSocketTests
             Assert.Equal("snapshot", doc.RootElement.GetProperty("type").GetString());
             Assert.True(doc.RootElement.GetProperty("data").TryGetProperty("metrics", out var metrics));
             Assert.Equal(JsonValueKind.Array, metrics.ValueKind); // no gamelog service → empty, but present
+            Assert.True(doc.RootElement.GetProperty("data").TryGetProperty("history", out var history));
+            Assert.Equal(JsonValueKind.Array, history.ValueKind);
             Assert.True(doc.RootElement.TryGetProperty("ts", out _));
         }
         finally { await server.StopAsync(TestContext.Current.CancellationToken); }
