@@ -508,7 +508,7 @@ public class FitDetailTests
 
     // A rank-1 skill (Perception/Willpower) a fitted module needs at V; the character has IV → one gap. typeIds: ship 587,
     // module 1000, skill 3300, +5 Perception implant 30000.
-    private static async Task<FitDetailWindowViewModel> SkillGapVmAsync(IReadOnlyList<int> implantTypeIds)
+    private static async Task<FitDetailWindowViewModel> SkillGapVmAsync(IReadOnlyList<int> implantTypeIds, int perception = 20)
     {
         var data = new FakeDogmaDataAccessor()
             .Type(587, 0, 0)
@@ -519,7 +519,7 @@ public class FitDetailTests
                               new SdeDogmaAttribute(DogmaAttributeIds.SkillSecondaryAttribute, DogmaAttributeIds.Willpower))
             .Type(30000, 0, 0, new SdeDogmaAttribute(DogmaAttributeIds.PerceptionBonus, 5));
         var skillRepo = new FakeSkillRepo(new Dictionary<int, IReadOnlyDictionary<int, int>> { [42] = new Dictionary<int, int> { [3300] = 4 } });
-        var attributes = new CharacterAttributes { CharacterId = 42, Charisma = 20, Intelligence = 20, Memory = 20, Perception = 20, Willpower = 20 };
+        var attributes = new CharacterAttributes { CharacterId = 42, Charisma = 20, Intelligence = 20, Memory = 20, Perception = perception, Willpower = 20 };
 
         var vm = new FitDetailWindowViewModel(Fit("Gap", 587, (1000, "HiSlot0", 1)), FallbackNameResolver.Instance,
             new StubStatsProvider(_ => SampleStats()), sde: null, data: data, characters: [(42, "Sin Krah")],
@@ -530,8 +530,8 @@ public class FitDetailTests
         return vm;
     }
 
-    private static async Task<string?> SkillGapEstimateAsync(IReadOnlyList<int> implantTypeIds) =>
-        (await SkillGapVmAsync(implantTypeIds)).SkillGaps.Single().Estimate;
+    private static async Task<string?> SkillGapEstimateAsync(IReadOnlyList<int> implantTypeIds, int perception = 20) =>
+        (await SkillGapVmAsync(implantTypeIds, perception)).SkillGaps.Single().Estimate;
 
     [Fact]
     public async Task SkillGap_MatchInGameRate_SwitchesToGenericBaseline()
@@ -593,17 +593,23 @@ public class FitDetailTests
         Assert.Equal("Show less", vm.SkillsToggleLabel);
     }
 
+    /// <summary>ESI's attributes already include attribute-implant bonuses, so the training rate follows those figures
+    /// (c4c1781e): a higher reported Perception shortens the time, and the implant list itself adds nothing on top —
+    /// counting it again would train the character faster than the game does.</summary>
     [Fact]
-    public async Task SkillGap_Estimate_ReflectsCharacterAttributesAndImplants()
+    public async Task SkillGap_Estimate_FollowsTheReportedAttributes_AndDoesNotCountImplantsTwice()
     {
-        var withoutImplant = await SkillGapEstimateAsync([]);
-        var withImplant = await SkillGapEstimateAsync([30000]);   // +5 Perception implant raises the primary attribute
+        var baseline = await SkillGapEstimateAsync([]);
+        var withImplantListed = await SkillGapEstimateAsync([30000]);
+        var withHigherReportedPerception = await SkillGapEstimateAsync([30000], perception: 25);
 
-        Assert.NotNull(withoutImplant);
-        Assert.NotNull(withImplant);
-        Assert.Contains("210.7k SP", withoutImplant);                 // SP to train IV→V at rank 1
-        Assert.Contains("210.7k SP", withImplant);                    // same SP — only the rate changed
-        Assert.NotEqual(withoutImplant, withImplant);                 // the implant shortened the Omega time
+        Assert.NotNull(baseline);
+        Assert.NotNull(withImplantListed);
+        Assert.NotNull(withHigherReportedPerception);
+        Assert.Contains("210.7k SP", baseline);                       // SP to train IV→V at rank 1
+        Assert.Contains("210.7k SP", withHigherReportedPerception);   // same SP — only the rate changed
+        Assert.Equal(baseline, withImplantListed);                    // the implant is already inside the reported figures
+        Assert.NotEqual(baseline, withHigherReportedPerception);      // the reported attribute shortens the Omega time
     }
 
     [AvaloniaFact]

@@ -6,11 +6,14 @@ using Avalonia.Input.Platform;
 using Avalonia.Threading;
 using EveUtils.Client.Input;
 using EveUtils.Client.Notifications;
+using EveUtils.Client.Opsec;
 using EveUtils.Client.Runs;
 using EveUtils.Client.ViewModels;
 using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Client.ViewModels.FitBrowser;
+using EveUtils.Client.ViewModels.GameLogs;
 using EveUtils.Client.ViewModels.Killmails;
+using EveUtils.Client.ViewModels.Map;
 using EveUtils.Client.ViewModels.Runs;
 using EveUtils.Client.ViewModels.Skills;
 using EveUtils.Client.ViewModels.Skills.Plans;
@@ -24,6 +27,8 @@ using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.DependencyInjection;
 using Material.Icons;
 using Microsoft.Extensions.DependencyInjection;
+using EveUtils.Client.ViewModels.Coupling;
+using EveUtils.Client.ViewModels.Setup;
 
 namespace EveUtils.Client.Dialogs;
 
@@ -325,12 +330,16 @@ public sealed class DialogService : IDialogService, ISingletonService
         return await _Over(dialog).ShowDialog<IReadOnlyList<int>?>(_owner);
     }
 
-    public async Task<CoupleServerResult?> CoupleServerAsync(
-        Func<string, CancellationToken, Task<string?>> probeServerName, CoupleServerResult? prefill = null)
+    public async Task ShowSetupWizardAsync(SetupWizardViewModel viewModel)
     {
-        if (_owner is null) return null;
-        var dialog = new CoupleServerWindow(probeServerName, prefill);
-        return await _Over(dialog).ShowDialog<CoupleServerResult?>(_owner);
+        if (_owner is null) return;
+        await _Over(new SetupWizardWindow(viewModel)).ShowDialog(_owner);
+    }
+
+    public async Task CoupleServerAsync(ServerCoupleViewModel viewModel)
+    {
+        if (_owner is null) return;
+        await _Over(new CoupleServerWindow(viewModel)).ShowDialog(_owner);
     }
 
     public async Task<string?> SelectServerAsync(string prompt, IReadOnlyList<ServerPickOption> options)
@@ -379,8 +388,10 @@ public sealed class DialogService : IDialogService, ISingletonService
 
     public async Task SetClipboardTextAsync(string text)
     {
+        // The clipboard always gets the real value (ET-417): markers are for the screen only, and pasting one into
+        // EVE would carry invisible characters along.
         var clipboard = _owner?.Clipboard;
-        if (clipboard is not null) await clipboard.SetTextAsync(text);
+        if (clipboard is not null) await clipboard.SetTextAsync(OpsecText.Strip(text));
     }
 
     public async Task<string?> GetClipboardTextAsync()
@@ -423,9 +434,9 @@ public sealed class DialogService : IDialogService, ISingletonService
         Route(new FleetsWindow(viewModel), "FLEETS", "fleet", "fleets", MaterialIconKind.AccountGroupOutline)
             as FleetsViewModel ?? viewModel;
 
-    public void ShowSettings(string currentDirectory, string detectedDefault, bool shareLocation, bool shareBounty, bool shareCombat, bool loadTypeImages, Theming.FactionTheme currentFaction, string sdeVersionLabel, Func<SettingsResult, Task> onApply, bool openFitDetailAfterImport = true, Notifications.ToastPosition toastPosition = Notifications.ToastPosition.TopRight, bool enableLocalApi = false, int localApiPort = LocalApi.LocalApiServer.DefaultPort, string localApiStatusLabel = "", LocalApi.ILocalApiServer? localApiServer = null, bool checkUpdatesOnStartup = true, Clipboard.ClipboardWatchService? clipboardWatch = null, int initialCategory = 0, bool openFleetRunWindowImmediately = false, bool autoPublishFleetRuns = true, bool shareLoot = false, bool shareMining = false, bool autoStartMissions = true, bool autoStartSites = true, DayOfWeek weekStartsOn = DayOfWeek.Monday, bool includeNightlyBuilds = false, Updates.IUpdateService? updates = null, bool offerHomefrontRuns = true)
+    public void ShowSettings(string currentDirectory, string detectedDefault, bool shareLocation, bool shareBounty, bool shareCombat, bool loadTypeImages, Theming.FactionTheme currentFaction, string sdeVersionLabel, Func<SettingsResult, Task> onApply, bool openFitDetailAfterImport = true, Notifications.ToastPosition toastPosition = Notifications.ToastPosition.TopRight, bool enableLocalApi = false, int localApiPort = LocalApi.LocalApiServer.DefaultPort, string localApiStatusLabel = "", LocalApi.ILocalApiServer? localApiServer = null, bool checkUpdatesOnStartup = true, Clipboard.ClipboardWatchService? clipboardWatch = null, int initialCategory = 0, bool openFleetRunWindowImmediately = false, bool autoPublishFleetRuns = true, bool shareLoot = false, bool shareMining = false, bool autoStartMissions = true, bool autoStartSites = true, DayOfWeek weekStartsOn = DayOfWeek.Monday, bool includeNightlyBuilds = false, Updates.IUpdateService? updates = null, bool offerHomefrontRuns = true, Func<Task>? runSetupAgain = null)
     {
-        var window = new SettingsWindow(currentDirectory, detectedDefault, shareLocation, shareBounty, shareCombat, loadTypeImages, currentFaction, sdeVersionLabel, openFitDetailAfterImport, toastPosition, enableLocalApi, localApiPort, localApiStatusLabel, localApiServer, checkUpdatesOnStartup, clipboardWatch, onApply, initialCategory, openFleetRunWindowImmediately, autoPublishFleetRuns, shareLoot, shareMining, autoStartMissions, autoStartSites, weekStartsOn, includeNightlyBuilds, updates, offerHomefrontRuns);
+        var window = new SettingsWindow(currentDirectory, detectedDefault, shareLocation, shareBounty, shareCombat, loadTypeImages, currentFaction, sdeVersionLabel, openFitDetailAfterImport, toastPosition, enableLocalApi, localApiPort, localApiStatusLabel, localApiServer, checkUpdatesOnStartup, clipboardWatch, onApply, initialCategory, openFleetRunWindowImmediately, autoPublishFleetRuns, shareLoot, shareMining, autoStartMissions, autoStartSites, weekStartsOn, includeNightlyBuilds, updates, offerHomefrontRuns, runSetupAgain);
         Route(window, "SETTINGS", "settings", "settings", MaterialIconKind.TuneVariant); // docked tab in docked mode, floating window otherwise
     }
 
@@ -503,6 +514,13 @@ public sealed class DialogService : IDialogService, ISingletonService
     public void ShowLogs(ClientLogViewModel viewModel) =>
         Route(new LogsWindow(viewModel), "APP LOGS", "logs", "app-logs", MaterialIconKind.FileDocumentOutline);
 
+    public GameLogsViewModel ShowGameLogs(GameLogsViewModel viewModel)
+    {
+        _Observe(viewModel.LoadAsync(), "the game logs could not be read");
+        return Route(new GameLogsWindow(viewModel), "GAME LOGS", "gamelogs", "game-logs", MaterialIconKind.ScriptTextOutline)
+            as GameLogsViewModel ?? viewModel;
+    }
+
     public void ShowEsiMetrics(EsiMetricsViewModel viewModel) =>
         Route(new EsiMetricsWindow(viewModel), "ESI METRICS", "esi", "esi-metrics", MaterialIconKind.ChartBar);
 
@@ -512,8 +530,11 @@ public sealed class DialogService : IDialogService, ISingletonService
     public void ShowSettingsBackups(SettingsBackupsViewModel viewModel) =>
         Route(new SettingsBackupsWindow(viewModel), "SETTINGS BACKUPS", "tools", "settings-backups", MaterialIconKind.BackupRestore);
 
-    public void ShowAppraisal(AppraisalViewModel viewModel) =>
+    public void ShowAppraisal(AppraisalViewModel viewModel)
+    {
+        _Observe(viewModel.LoadAsync(), "the appraisal tool could not read its price source");
         Route(new AppraisalWindow(viewModel), "APPRAISAL", "tools", "appraisal", MaterialIconKind.CurrencyUsd);
+    }
 
     public void ShowActivityDetail(ActivityDetailViewModel viewModel, Guid activitySummaryId)
     {
@@ -540,6 +561,33 @@ public sealed class DialogService : IDialogService, ISingletonService
         return Route(new RunsWindow(viewModel), "RUNS", "runs", "runs", MaterialIconKind.RocketLaunchOutline)
             as RunsOverviewViewModel ?? viewModel;
     }
+
+    public MapViewModel ShowMap(MapViewModel viewModel)
+    {
+        _Observe(viewModel.LoadAsync(), "the map could not be read");
+        return Route(new MapWindow(viewModel), "MAP", "map", "map", MaterialIconKind.MapOutline) as MapViewModel ?? viewModel;
+    }
+
+    private const string MapModuleId = "map";
+
+    public bool IsMapPoppedOut => _moduleHost.IsPoppedOut(MapModuleId);
+
+    public bool CanPopOutMap => _moduleHost.CanPopOut && !IsMapPoppedOut;
+
+    public event Action? MapPresentationChanged
+    {
+        add => _moduleHost.PopOutStateChanged += value;
+        remove => _moduleHost.PopOutStateChanged -= value;
+    }
+
+    public void PopOutMap() => _moduleHost.PopOut(MapModuleId, content => new MapPoppedOutPlaceholder { DataContext = content.DataContext },
+        OverlayGeometryStore.ForMap());
+
+    internal Window? MapPopoutWindow => _moduleHost.PopoutOf(MapModuleId);
+
+    public void PutBackMap() => _moduleHost.PutBack(MapModuleId);
+
+    public void ShowMapWindow() => _moduleHost.FocusPopout(MapModuleId);
 
     public KillmailsOverviewViewModel ShowKillmails(KillmailsOverviewViewModel viewModel)
     {

@@ -199,6 +199,7 @@ public partial class MainWindow : Window
         (DataContext as MainWindowViewModel)?.StartSdeUpdateCheck();
         (DataContext as MainWindowViewModel)?.StartUpdateCheck();
         (DataContext as MainWindowViewModel)?.StartStartupResumeNotice();
+        (DataContext as MainWindowViewModel)?.StartFirstStartSetup();   // after the SDE prompt, so the two modals never stack
     }
 
     // The module shell has two responsive axes — DockMode (docked host vs. floating narrow shell) and the
@@ -454,7 +455,11 @@ public partial class MainWindow : Window
                 vm.ReopenLastClosedTabCommand.Execute(null);
                 break;
             case ShortcutAction.RefreshModule:
-                ShortcutDispatch.RefreshModule(vm.SelectedHostTab?.Content);
+                // Home is not a tab, so it is not the selected tab's content either (ET-427).
+                if (vm.IsHomeShown)
+                    vm.Home.RefreshModule();
+                else
+                    ShortcutDispatch.RefreshModule(vm.SelectedHostTab?.Content);
                 break;
             case ShortcutAction.FocusSearch:
                 ShortcutDispatch.FocusSearch(vm.SelectedHostTab?.Content);
@@ -464,6 +469,12 @@ public partial class MainWindow : Window
                 break;
             case ShortcutAction.GoToHome:
                 vm.GoHomeCommand.Execute(null);
+                break;
+            case ShortcutAction.OpenMap:
+                vm.LaunchModuleCommand.Execute("map");
+                break;
+            case ShortcutAction.ToggleOpsec:
+                ShortcutDispatch.ToggleOpsec();
                 break;
             default:
                 return;

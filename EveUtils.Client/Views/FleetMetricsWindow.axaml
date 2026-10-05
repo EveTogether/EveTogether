@@ -11,27 +11,57 @@
         x:Class="EveUtils.Client.Views.FleetMetricsWindow"
         x:DataType="vm:FleetMetricsViewModel"
         x:Name="Root"
-        Width="720" Height="560" MinWidth="520" MinHeight="320"
+        Width="1160" Height="620" MinWidth="520" MinHeight="320"
         WindowStartupLocation="CenterOwner"
         Title="Fleet metrics">
 
-    <DockPanel Margin="14">
+    <!-- Wide: the map card stands right of everything below the navigation (column 1, rows 1-3). Stacked (ET-401, see
+         FleetMetricsWidth): it moves to row 2, between the summary and the list, by changing its cell — the same control,
+         never re-parented, so the map is not rebuilt and no timer is left behind by the swap. -->
+    <Grid x:Name="ContentRoot" Margin="14" RowDefinitions="Auto,Auto,Auto,*" ColumnDefinitions="*,Auto"
+          Classes.stacked="{Binding IsStacked}" Classes.hintrow="{Binding HintOnOwnRow}">
 
-        <!-- On the CONTENT for the same reason the styles below are: the docked tab is handed this DockPanel, and a
+        <!-- On the CONTENT for the same reason the styles below are: the docked tab is handed this Grid, and a
              resource left on the window would not travel with it. -->
-        <DockPanel.Resources>
+        <Grid.Resources>
             <!-- The narrowest a grid card may get. Measured, not chosen freely: at 318 the default 720-wide window
                  still fits two cards per row and the graph below keeps roughly the list graph's proportions instead
                  of a flattened band. A MINIMUM, not a size — the row divides whatever is left over these columns
                  (see FillGridPanel), so a card is anywhere from 318 to just under twice that. -->
             <sys:Double x:Key="FleetMetricsCardMinWidth">318</sys:Double>
-        </DockPanel.Resources>
+        </Grid.Resources>
 
         <!-- These styles belong to the CONTENT, not to the window. Docked is the default shell: ModuleHostService
-             does not show this window, it lifts this DockPanel out and reparents it into a tab in the main window.
+             does not show this window, it lifts this Grid out and reparents it into a tab in the main window.
              Anything left on the window is dropped there — and an ItemTemplate that goes missing sends every member
              row to the app-wide ViewLocator, which renders "Not Found: …DpsView" instead of the row. -->
-        <DockPanel.Styles>
+        <Grid.Styles>
+            <!-- Stacked: summary, then the map, then the list. The card gives up its 440 and takes the full width at a
+                 height the map stays usable at; the summary and the list keep their cells. -->
+            <Style Selector="Grid#ContentRoot > Border#MapCardHost">
+                <Setter Property="Grid.Column" Value="1"/>
+                <Setter Property="Grid.Row" Value="1"/>
+                <Setter Property="Grid.RowSpan" Value="3"/>
+                <Setter Property="Width" Value="440"/>
+                <Setter Property="Margin" Value="12,0,0,0"/>
+            </Style>
+            <Style Selector="Grid.stacked > Border#MapCardHost">
+                <Setter Property="Grid.Column" Value="0"/>
+                <Setter Property="Grid.Row" Value="2"/>
+                <Setter Property="Grid.RowSpan" Value="1"/>
+                <Setter Property="Width" Value="NaN"/>
+                <Setter Property="Height" Value="300"/>
+                <Setter Property="Margin" Value="0,0,0,12"/>
+            </Style>
+
+            <!-- The density hint on its own full-width row above the buttons, instead of a squeezed column beside them. -->
+            <Style Selector="Grid.hintrow Grid#ViewBar > TextBlock#LayoutHintText">
+                <Setter Property="Grid.ColumnSpan" Value="3"/>
+                <Setter Property="Margin" Value="0,0,0,6"/>
+            </Style>
+            <Style Selector="Grid.hintrow Grid#ViewBar > Border.viewbutton">
+                <Setter Property="Grid.Row" Value="1"/>
+            </Style>
             <Style Selector="Button.viewtab">
                 <Setter Property="FontSize" Value="9.5"/>
                 <Setter Property="LetterSpacing" Value="1.4"/>
@@ -362,7 +392,7 @@
                     </Setter.Value>
                 </Setter>
             </Style>
-        </DockPanel.Styles>
+        </Grid.Styles>
 
         <!-- Navigation (ET-171): the whole of this screen's exits, which until now was nothing at all — the density
              switcher and the pop-outs are the only other buttons on it, and neither of them leads anywhere. Both
@@ -373,7 +403,7 @@
              full-bleed strip would be the only thing on it that is not.
 
              Styles live in Themes/EveUtils.axaml so the docked tab and the floating window look alike (ET-42). -->
-        <Border DockPanel.Dock="Top" Classes="fleetnav" Margin="0,0,0,12">
+        <Border Grid.Row="0" Grid.ColumnSpan="2" Classes="fleetnav" Margin="0,0,0,12">
             <Grid ColumnDefinitions="Auto,Auto,Auto,*">
                 <Button Grid.Column="0" x:Name="BackToFleetsButton" Classes="navlink" Margin="0,0,6,0"
                         Command="{Binding BackToFleetsCommand}"
@@ -417,17 +447,26 @@
             </Grid>
         </Border>
 
+        <!-- The fleet on the map (ET-395), 440 wide beside everything below the navigation, or full width between the
+             summary and the list when stacked (ET-401); its cell and size come from the styles above. The wrapper
+             carries the screen's DataContext so the card can reach OPEN IN MAP and the show/hide switch. -->
+        <Border x:Name="MapCardHost" IsVisible="{Binding HasMapCard}">
+            <v:FleetMapCard x:Name="MapCard" DataContext="{Binding FleetMap}"
+                            OpenInMapCommand="{Binding $parent[Border].((vm:FleetMetricsViewModel)DataContext).OpenFleetOnMapCommand}"
+                            PopOutCommand="{Binding $parent[Border].((vm:FleetMetricsViewModel)DataContext).PopOutFleetMapCommand}"/>
+        </Border>
+
         <!-- Header: fleet name + roll-up totals -->
-        <Border DockPanel.Dock="Top" Classes="panel" Padding="14,12" Margin="0,0,0,12">
-            <Grid ColumnDefinitions="*,Auto">
-                <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
+        <Border x:Name="SummaryCard" Grid.Row="1" Classes="panel" Padding="14,12" Margin="0,0,0,12">
+            <Grid ColumnDefinitions="Auto,*">
+                <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center" MaxWidth="300">
                     <TextBlock Text="FLEET METRICS" Classes="label" FontSize="9"/>
                     <TextBlock Text="{Binding FleetName}" FontWeight="Bold" FontSize="15"
                                Foreground="{StaticResource TextBrightBrush}"/>
                     <!-- How much of the fleet stands with the FC. Header-level on purpose: it stays put whichever
                          layout the member list below takes. -->
                     <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,4,0,0">
-                        <Border Classes="chip" Classes.good="{Binding CommanderPresence.IsComplete}"
+                        <Border x:Name="CommanderBadge" Classes="chip" Classes.good="{Binding CommanderPresence.IsComplete}"
                                 Classes.dim="{Binding CommanderPresence.IsUnknown}"
                                 ToolTip.Tip="{Binding CommanderPresence.Tooltip}">
                             <TextBlock Text="{Binding CommanderPresence.BadgeText}"/>
@@ -439,49 +478,61 @@
                 <!-- The fleet's roll-up as design D has it (ET-277): what it deals, takes and repairs, who is being
                      neuted — names, since that is what an FC acts on — and how well it applies. The MINING figure that
                      stood here had no live source and only ever read "—"; NEUT added both directions together. -->
-                <Grid Grid.Column="1" ColumnDefinitions="Auto,Auto,Auto,Auto,Auto,Auto" VerticalAlignment="Center">
-                    <StackPanel Grid.Column="0" Spacing="1" Margin="0,0,16,0" HorizontalAlignment="Right">
+                <!-- A WrapPanel in the star column: beside the name it is the one row it always was, right-aligned; when
+                     the six figures no longer fit the column they wrap to a second row inside the box (ET-401) rather
+                     than push past it. The name column is Auto, so the badge under the name never shares a row with them. -->
+                <WrapPanel x:Name="SummaryFigures" Grid.Column="1" LineSpacing="8" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="16,0,0,0">
+                    <StackPanel Spacing="1" Margin="0,0,16,0" HorizontalAlignment="Right">
                         <TextBlock Text="DEALT" Classes="label" FontSize="9" HorizontalAlignment="Right"/>
                         <TextBlock Text="{Binding DealtTotal}" Classes="mono" FontSize="16"
                                    Foreground="{StaticResource TextBrightBrush}" HorizontalAlignment="Right"/>
                     </StackPanel>
-                    <StackPanel Grid.Column="1" Spacing="1" Margin="0,0,16,0" HorizontalAlignment="Right">
+                    <StackPanel Spacing="1" Margin="0,0,16,0" HorizontalAlignment="Right">
                         <TextBlock Text="RECEIVED" Classes="label" FontSize="9" HorizontalAlignment="Right"/>
                         <TextBlock Text="{Binding ReceivedTotal}" Classes="mono" FontSize="16"
                                    Foreground="{StaticResource TextBrightBrush}" HorizontalAlignment="Right"/>
                     </StackPanel>
-                    <StackPanel Grid.Column="2" Spacing="1" Margin="0,0,16,0" HorizontalAlignment="Right">
+                    <StackPanel Spacing="1" Margin="0,0,16,0" HorizontalAlignment="Right">
                         <TextBlock Text="REPS OUT" Classes="label" FontSize="9" HorizontalAlignment="Right"/>
                         <TextBlock Text="{Binding RepsOutTotal}" Classes="mono" FontSize="16"
                                    Foreground="{StaticResource TextBrightBrush}" HorizontalAlignment="Right"/>
                     </StackPanel>
-                    <StackPanel Grid.Column="3" Spacing="1" Margin="0,0,16,0" HorizontalAlignment="Right" MaxWidth="160">
+                    <StackPanel Spacing="1" Margin="0,0,16,0" HorizontalAlignment="Right" MaxWidth="160">
                         <TextBlock Text="NEUTED" Classes="label" FontSize="9" HorizontalAlignment="Right"/>
                         <TextBlock Text="{Binding NeutedMembers}" FontSize="13" Margin="0,2,0,0"
                                    Classes="neutednames" Classes.anyone="{Binding AnyoneNeuted}"
                                    TextTrimming="CharacterEllipsis" HorizontalAlignment="Right"
                                    ToolTip.Tip="Members with at least 5 GJ/s of energy neutralized on them right now"/>
                     </StackPanel>
-                    <StackPanel Grid.Column="4" Spacing="1" Margin="0,0,16,0" HorizontalAlignment="Right">
+                    <StackPanel Spacing="1" Margin="0,0,16,0" HorizontalAlignment="Right">
                         <TextBlock Text="APPLICATION" Classes="label" FontSize="9" HorizontalAlignment="Right"/>
                         <TextBlock Text="{Binding FleetApplication}" Classes="mono" FontSize="16"
                                    Foreground="{StaticResource TextBrightBrush}" HorizontalAlignment="Right"
                                    ToolTip.Tip="The measured members' application, weighed by the damage each of them deals"/>
                     </StackPanel>
-                    <StackPanel Grid.Column="5" Spacing="1" HorizontalAlignment="Right">
+                    <StackPanel Spacing="1" HorizontalAlignment="Right">
                         <TextBlock Text="BOUNTY" Classes="label" FontSize="9" HorizontalAlignment="Right"/>
                         <TextBlock Text="{Binding BountyTotal}" Classes="mono" FontSize="16"
                                    Foreground="{StaticResource TextDimBrush}" HorizontalAlignment="Right"/>
                     </StackPanel>
-                </Grid>
+                </WrapPanel>
             </Grid>
         </Border>
 
-        <!-- Density switcher + the hint that names what this density leaves out. -->
-        <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="2,0,0,6">
-            <TextBlock Grid.Column="0" Text="{Binding LayoutHint}" VerticalAlignment="Center"
+        <!-- Everything under the map: what the stacked layout puts below it, and what sits left of it otherwise. -->
+        <DockPanel Grid.Row="3">
+
+        <!-- Density switcher + the hint that names what this density leaves out. The hint is beside the buttons while
+             the column is wide enough for it, on a row of its own above them when it is not (ET-401, hintrow style). -->
+        <Grid x:Name="ViewBar" DockPanel.Dock="Top" RowDefinitions="Auto,Auto" ColumnDefinitions="*,Auto,Auto" Margin="2,0,0,6">
+            <TextBlock x:Name="LayoutHintText" Grid.Column="0" Text="{Binding LayoutHint}" VerticalAlignment="Center"
                        FontSize="11" Foreground="{DynamicResource TextAccentBrush}" TextWrapping="Wrap"/>
-            <Border Grid.Column="1" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+            <Border Classes="viewbutton" Grid.Column="1" IsVisible="{Binding FleetMap, Converter={x:Static ObjectConverters.IsNotNull}}"
+                    BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" VerticalAlignment="Center" Margin="12,0,0,0">
+                <Button x:Name="MapCardToggle" Content="MAP" Classes="viewtab" Classes.active="{Binding IsMapCardOpen}"
+                        ToolTip.Tip="Show or hide the fleet's map" Command="{Binding ToggleMapCardCommand}"/>
+            </Border>
+            <Border Classes="viewbutton" Grid.Column="2" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
                     VerticalAlignment="Center" Margin="12,0,0,0">
                 <StackPanel Orientation="Horizontal">
                     <Button Content="LIST" Classes="viewtab" Classes.active="{Binding IsListLayout}"
@@ -541,5 +592,6 @@
                         Background="{DynamicResource AccentBrightBrush}"/>
             </Canvas>
         </Panel>
-    </DockPanel>
+        </DockPanel>
+    </Grid>
 </v:ChromedWindow>

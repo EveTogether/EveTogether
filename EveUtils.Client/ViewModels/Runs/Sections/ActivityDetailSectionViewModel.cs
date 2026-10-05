@@ -1,5 +1,6 @@
 using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
+using EveUtils.Client.Opsec;
 using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Client.ViewModels.Runs;
 using EveUtils.Shared.Modules.Runs.Dtos;
@@ -31,7 +32,7 @@ public sealed partial class ActivityDetailSectionViewModel(ISdeAccessor? sde)
         // An abyssal has no site to record at all — this reads what filament opened it (ET-241), or the type's own
         // honest name while that is unknown, instead of a line about a site that was never going to exist.
         bool isAbyssal = input.RunType.Space is RunSpace.AbyssalPocket;
-        SiteText = detail.SiteName
+        SiteText = OpsecText.Mark(detail.SiteName)
             ?? (isAbyssal
                 ? AbyssalFilamentName.From(detail.Parameters
                     .FirstOrDefault(parameter => parameter.ParameterKey == RunParameterKey.AbyssalFilament)?.TypedValue)
@@ -45,7 +46,7 @@ public sealed partial class ActivityDetailSectionViewModel(ISdeAccessor? sde)
         LocationText = isAbyssal
             ? (knownLocation is { Length: > 0 } entered ? $"entered from {entered}" : string.Empty)
             : knownLocation ?? "not recorded";
-        SignatureText = source?.Signature ?? string.Empty;
+        SignatureText = OpsecText.Mark(source?.Signature) ?? string.Empty;
         IsSignatureShown = !string.IsNullOrWhiteSpace(source?.Signature);
         FitText = source?.FitNameSnapshot ?? "not recognised";
 
@@ -72,5 +73,5 @@ public sealed partial class ActivityDetailSectionViewModel(ISdeAccessor? sde)
     /// boundary case — falls back to the id itself rather than a blank line or an error. Null only when no system
     /// was ever recorded at all.</summary>
     private string? _ResolvedSystemName(int? solarSystemId) =>
-        solarSystemId is not { } id ? null : sde?.GetSolarSystem(id)?.Name ?? $"system {id}";
+        solarSystemId is not { } id ? null : OpsecText.Mark(sde?.GetSolarSystem(id)?.Name ?? $"system {id}");
 }

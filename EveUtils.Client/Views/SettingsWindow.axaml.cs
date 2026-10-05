@@ -18,6 +18,7 @@ using EveUtils.Client.Clipboard;
 using EveUtils.Client.Dialogs;
 using EveUtils.Client.Input;
 using EveUtils.Client.LocalApi;
+using EveUtils.Client.Opsec;
 using EveUtils.Client.Updates;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -27,7 +28,9 @@ namespace EveUtils.Client.Views;
 /// App settings, shown as a hostable module: a docked tab in docked mode, a floating window otherwise.
 /// A left-hand category list (General / Interface / Privacy / Integrations) switches the visible content panel on
 /// the right; each panel groups its settings under sub-headings. Save applies everything at once through the
-/// <see cref="_onApply"/> callback (the caller persists + applies live); Cancel/close applies nothing. Control
+/// <see cref="_onApply"/> callback (the caller persists + applies live), waits for it, and stays open with a
+/// "Saved."/"Could not save" status line (ET-376) — only Cancel and the close button close the window. Re-import
+/// is the one exception: it still saves-and-closes, since the SDE popup it triggers takes over the screen. Control
 /// references are cached at construction so the handlers keep working after the module host re-parents the content
 /// into a tab (which clears the window's own content).
 /// </summary>
@@ -38,11 +41,14 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
     private readonly ClipboardWatchService? _clipboardWatch;
     private readonly Func<SettingsResult, Task>? _onApply;
     private readonly IUpdateService? _updates;
+    private readonly Func<Task>? _runSetupAgain;
 
     // The channel actually in force when this window opened (ET-339) — what "Check now" asks about. It follows
     // Save/Cancel's own rule: nothing the operator has not saved yet takes effect, so a pending, unsaved flip of
-    // the segmented control does not change what Check now checks.
-    private readonly UpdateChannel _effectiveChannel;
+    // the segmented control does not change what Check now checks. Updated after a successful save (ET-376):
+    // since Save no longer closes the window, a "Check now" click after saving must see the channel just saved,
+    // not the one that was in force when the window opened.
+    private UpdateChannel _effectiveChannel;
 
     // Cached at construction (the instances survive the module host re-parenting; FindControl on the window would
     // return null once the content is stolen for a docked tab).
@@ -78,6 +84,9 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
     private TextBlock _shortcutMessageBlock = null!;
     private CheckBox _globalSaveRunBox = null!;
     private TextBlock _globalSaveRunUnsupportedBlock = null!, _globalSaveRunMessageBlock = null!;
+    private TextBlock? _saveStatusBlock;
+    private Button? _saveButton;
+    private Button? _cancelButton;
 
     // Keyboard shortcuts (ET-209): each row persists itself the moment it changes, independent of this window's own
     // Save/Cancel — conflicts have to be visible immediately, not deferred to a batch Save the user might cancel.
@@ -89,6 +98,12 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
     // Same immediate-persist convention as the rows above (ET-320): a claim already held by another program has
     // to be visible right away, not after a Save the pilot might still cancel.
     private GlobalSaveRunHotKeyService? _globalSaveRunHotKey;
+
+    // OPSEC (ET-417): live, like the two above — on stream the mask cannot wait for Save.
+    private IOpsecService? _opsec;
+    private GlobalOpsecHotKeyService? _globalOpsecHotKey;
+    private CheckBox _opsecBox = null!, _globalOpsecBox = null!;
+    private TextBlock _globalOpsecUnsupportedBlock = null!, _globalOpsecMessageBlock = null!;
 
     /// <summary>Set by the module host so Save/Cancel dismiss the docked tab; null when floating (then we Close()).</summary>
     public Action? CloseRequested { get; set; }
@@ -110,8 +125,9 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
     }
 
     public SettingsWindow(string currentDirectory, string detectedDefault, bool shareLocation, bool shareBounty, bool shareCombat, bool loadTypeImages, Theming.FactionTheme currentFaction, string sdeVersionLabel, bool openFitDetailAfterImport = true, Notifications.ToastPosition toastPosition = Notifications.ToastPosition.TopRight, bool enableLocalApi = false, int localApiPort = LocalApi.LocalApiServer.DefaultPort, string localApiStatusLabel = "", ILocalApiServer? localApiServer = null, bool checkUpdatesOnStartup = true, ClipboardWatchService? clipboardWatch = null, Func<SettingsResult, Task>? onApply = null,
-        int initialCategory = 0, bool openFleetRunWindowImmediately = false, bool autoPublishFleetRuns = true, bool shareLoot = false, bool shareMining = false, bool autoStartMissions = true, bool autoStartSites = true, DayOfWeek weekStartsOn = DayOfWeek.Monday, bool includeNightlyBuilds = false, IUpdateService? updates = null, bool offerHomefrontRuns = true) : this()
+        int initialCategory = 0, bool openFleetRunWindowImmediately = false, bool autoPublishFleetRuns = true, bool shareLoot = false, bool shareMining = false, bool autoStartMissions = true, bool autoStartSites = true, DayOfWeek weekStartsOn = DayOfWeek.Monday, bool includeNightlyBuilds = false, IUpdateService? updates = null, bool offerHomefrontRuns = true, Func<Task>? runSetupAgain = null) : this()
     {
+        _runSetupAgain = runSetupAgain;
         _detectedDefault = detectedDefault;
         _localApi = localApiServer;
         _clipboardWatch = clipboardWatch;
@@ -167,8 +183,16 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
         _globalSaveRunBox = this.FindControl<CheckBox>("GlobalSaveRunBox")!;
         _globalSaveRunUnsupportedBlock = this.FindControl<TextBlock>("GlobalSaveRunUnsupportedBlock")!;
         _globalSaveRunMessageBlock = this.FindControl<TextBlock>("GlobalSaveRunMessageBlock")!;
+        _saveStatusBlock = this.FindControl<TextBlock>("SaveStatusBlock");
+        _saveButton = this.FindControl<Button>("SaveButton");
+        _cancelButton = this.FindControl<Button>("CancelButton");
         BuildShortcutRows();
         SetUpGlobalSaveRunToggle();
+        _opsecBox = this.FindControl<CheckBox>("OpsecBox")!;
+        _globalOpsecBox = this.FindControl<CheckBox>("GlobalOpsecBox")!;
+        _globalOpsecUnsupportedBlock = this.FindControl<TextBlock>("GlobalOpsecUnsupportedBlock")!;
+        _globalOpsecMessageBlock = this.FindControl<TextBlock>("GlobalOpsecMessageBlock")!;
+        SetUpOpsecToggles();
 
         _gamelogDirBox.Text = string.IsNullOrWhiteSpace(currentDirectory) ? detectedDefault : currentDirectory;
         _gamelogDirBox.TextChanged += (_, _) => UpdateHint();
@@ -459,9 +483,17 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
 
     private void OnCancel(object? sender, RoutedEventArgs e) => RequestClose();
 
-    private async void OnSave(object? sender, RoutedEventArgs e) => await ApplyAndCloseAsync(reimportSde: false);
+    // Leaves this window as it is: the wizard is modal over the main window, and closing here would drop unsaved edits.
+    private void OnRunSetupAgain(object? sender, RoutedEventArgs e) => _ = _runSetupAgain?.Invoke();
+
+    // ET-376: Save stays open — the window only closes via the close button (Cancel) or re-import (below). This
+    // is the one path with a visible "Saved."/"Could not save" outcome, so the write is always awaited, never
+    // fire-and-forget.
+    private async void OnSave(object? sender, RoutedEventArgs e) => await ApplyAndStayOpenAsync();
 
     // Saves the current settings too (so nothing is lost), and signals the caller to run a forced SDE re-import.
+    // Still closes immediately: the SDE popup that follows takes over the screen, and this window's own SDE label
+    // would go stale the moment re-import starts anyway.
     private async void OnReimportSde(object? sender, RoutedEventArgs e) => await ApplyAndCloseAsync(reimportSde: true);
 
     private async Task ApplyAndCloseAsync(bool reimportSde)
@@ -476,6 +508,69 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
 
         if (_onApply is not null)
             await _onApply(result);
+    }
+
+    // The window stays open: the write is awaited before any confirmation shows (never fire-and-forget). Save and
+    // Cancel are both disabled for the duration — Save so a double-click cannot start a second apply, Cancel so
+    // closing the window mid-save can no longer hide the very outcome this window now stays open to show.
+    private async Task ApplyAndStayOpenAsync()
+    {
+        var result = BuildResult(reimportSde: false);
+
+        if (_saveButton is not null)
+        {
+            _saveButton.IsEnabled = false;
+        }
+        if (_cancelButton is not null)
+        {
+            _cancelButton.IsEnabled = false;
+        }
+        if (_saveStatusBlock is not null)
+        {
+            _saveStatusBlock.IsVisible = false;
+        }
+
+        try
+        {
+            if (_clipboardWatch is not null && _clipboardWatch.IsSupported)
+            {
+                await _clipboardWatch.SetEnabledAsync(_watchClipboardBox.IsChecked ?? false);
+            }
+
+            if (_onApply is not null)
+            {
+                await _onApply(result);
+            }
+
+            // The channel just saved is now the one in force — "Check now" must ask about it, not the channel
+            // that was in force when the window opened (see _effectiveChannel).
+            _effectiveChannel = _channelNightlyButton?.IsChecked == true ? UpdateChannel.Nightly : UpdateChannel.Stable;
+
+            if (_saveStatusBlock is not null)
+            {
+                _saveStatusBlock.Text = "Saved.";
+                _saveStatusBlock.IsVisible = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            if (_saveStatusBlock is not null)
+            {
+                _saveStatusBlock.Text = $"Could not save: {ex.Message}";
+                _saveStatusBlock.IsVisible = true;
+            }
+        }
+        finally
+        {
+            if (_saveButton is not null)
+            {
+                _saveButton.IsEnabled = true;
+            }
+            if (_cancelButton is not null)
+            {
+                _cancelButton.IsEnabled = true;
+            }
+        }
     }
 
     private void RequestClose()
@@ -633,6 +728,58 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
         if (_globalSaveRunHotKey is null) return;
         await _globalSaveRunHotKey.SetEnabledAsync(_globalSaveRunBox.IsChecked ?? false);
         ApplyGlobalSaveRunDisclosure();
+    }
+
+    private void SetUpOpsecToggles()
+    {
+        _opsec = Program.Services?.GetService<IOpsecService>();
+        _globalOpsecHotKey = Program.Services?.GetService<GlobalOpsecHotKeyService>();
+        if (_opsec is not null)
+        {
+            _opsec.Changed += ApplyOpsecDisclosure;
+            Closed += (_, _) => _opsec.Changed -= ApplyOpsecDisclosure;
+        }
+        if (_globalOpsecHotKey is not null)
+        {
+            _globalOpsecHotKey.StateChanged += OnGlobalOpsecStateChanged;
+            Closed += (_, _) => _globalOpsecHotKey.StateChanged -= OnGlobalOpsecStateChanged;
+        }
+
+        ApplyOpsecDisclosure();
+    }
+
+    private void OnGlobalOpsecStateChanged() => Dispatcher.UIThread.Post(ApplyOpsecDisclosure);
+
+    private void ApplyOpsecDisclosure()
+    {
+        _opsecBox.IsChecked = _opsec?.IsEnabled ?? false;
+        _opsecBox.IsEnabled = _opsec is not null;
+
+        var shortcut = _shortcutRegistry?.DisplayText(ShortcutAction.ToggleOpsec);
+        _globalOpsecBox.Content = string.IsNullOrEmpty(shortcut)
+            ? "The OPSEC shortcut also works while EVE Together isn't focused"
+            : $"{shortcut} turns OPSEC on or off even while EVE Together isn't focused";
+        var supported = _globalOpsecHotKey?.IsSupported ?? false;
+        _globalOpsecBox.IsChecked = _globalOpsecHotKey?.IsEnabled ?? true;
+        _globalOpsecBox.IsEnabled = supported;
+        _globalOpsecUnsupportedBlock.IsVisible = _globalOpsecHotKey is not null && !supported;
+
+        var failure = _globalOpsecHotKey?.LastFailure;
+        _globalOpsecMessageBlock.Text = failure ?? "";
+        _globalOpsecMessageBlock.IsVisible = !string.IsNullOrEmpty(failure);
+    }
+
+    private async void OnToggleOpsec(object? sender, RoutedEventArgs e)
+    {
+        if (_opsec is null) return;
+        await _opsec.SetEnabledAsync(_opsecBox.IsChecked ?? false);
+    }
+
+    private async void OnToggleGlobalOpsec(object? sender, RoutedEventArgs e)
+    {
+        if (_globalOpsecHotKey is null) return;
+        await _globalOpsecHotKey.SetEnabledAsync(_globalOpsecBox.IsChecked ?? false);
+        ApplyOpsecDisclosure();
     }
 
     private SettingsResult BuildResult(bool reimportSde)

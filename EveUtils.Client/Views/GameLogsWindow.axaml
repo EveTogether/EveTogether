@@ -1,0 +1,184 @@
+<v:ChromedWindow xmlns="https://github.com/avaloniaui" xmlns:v="using:EveUtils.Client.Views"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vg="using:EveUtils.Client.ViewModels.GameLogs"
+        xmlns:ctl="using:EveUtils.Client.Controls"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="980" d:DesignHeight="640"
+        x:Class="EveUtils.Client.Views.GameLogsWindow"
+        x:DataType="vg:GameLogsViewModel"
+        Width="980" Height="640" MinWidth="640" MinHeight="360"
+        WindowStartupLocation="CenterOwner"
+        Title="Game logs">
+
+    <!-- GAME LOGS (ET-410): the lines of every character's EVE game log in one chronological list, newest at the
+         bottom and following live. A hosted module like KILLMAILS (DialogService.ShowGameLogs). The list is
+         virtualized and its rows have a fixed height, so a day of combat scrolls like a short one. -->
+    <Grid x:Name="GameLogsRoot">
+        <Grid.Styles>
+            <Style Selector="Button.logchip">
+                <Setter Property="Background" Value="#04FFFFFF"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}"/>
+                <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="Padding" Value="0"/>
+                <Setter Property="Cursor" Value="Hand"/>
+                <Setter Property="Opacity" Value="0.55"/>
+                <Setter Property="Template">
+                    <ControlTemplate>
+                        <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}">
+                            <ContentPresenter Content="{TemplateBinding Content}"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter>
+            </Style>
+            <Style Selector="Button.logchip.on">
+                <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+                <Setter Property="Opacity" Value="1"/>
+            </Style>
+            <Style Selector="Button.logchip:pointerover">
+                <Setter Property="Background" Value="{DynamicResource BgRowHoverBrush}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}"/>
+                <Setter Property="Opacity" Value="1"/>
+            </Style>
+            <Style Selector="TextBlock.chipname">
+                <Setter Property="FontSize" Value="12"/>
+                <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+            </Style>
+            <Style Selector="TextBlock.chipcount">
+                <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+                <Setter Property="FontSize" Value="11"/>
+                <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+            </Style>
+
+            <Style Selector="Border.logrow:pointerover">
+                <Setter Property="Background" Value="{DynamicResource BgRowHoverBrush}"/>
+            </Style>
+            <Style Selector="TextBlock.logtime">
+                <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+                <Setter Property="FontSize" Value="11"/>
+                <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+            </Style>
+            <Style Selector="TextBlock.logname">
+                <Setter Property="FontSize" Value="11"/>
+                <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+                <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+            </Style>
+            <Style Selector="TextBlock.logkind">
+                <Setter Property="FontSize" Value="10"/>
+                <Setter Property="FontWeight" Value="Bold"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+            </Style>
+            <Style Selector="TextBlock.logtext">
+                <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+                <Setter Property="FontSize" Value="11"/>
+                <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+                <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+            </Style>
+        </Grid.Styles>
+
+        <DockPanel>
+            <!-- ══ Header ══ -->
+            <Border DockPanel.Dock="Top" Padding="14,12" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource BorderBrush}">
+                <Grid ColumnDefinitions="Auto,Auto,*,Auto" ColumnSpacing="8">
+                    <TextBlock Grid.Column="0" Classes="panel-title" FontSize="13" Text="GAME LOGS"/>
+                    <Border Grid.Column="1" Classes="chip dim">
+                        <TextBlock Text="Local · EVE time (UTC)"/>
+                    </Border>
+                    <TextBlock Grid.Column="3" Classes="hint" Margin="0" VerticalAlignment="Center" Text="{Binding StatusText}"/>
+                </Grid>
+            </Border>
+
+            <!-- ══ Character, period and search ══ -->
+            <Border DockPanel.Dock="Top" Padding="14,10" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource BorderBrush}">
+                <Grid ColumnDefinitions="Auto,Auto,Auto,Auto,*,220" ColumnSpacing="10">
+                    <TextBlock Grid.Column="0" Classes="label" Text="CHARACTER" VerticalAlignment="Center"/>
+                    <ComboBox Grid.Column="1" x:Name="CharacterFilter" MinWidth="240" MaxWidth="420"
+                              ItemsSource="{Binding CharacterOptions}" SelectedItem="{Binding SelectedCharacter, Mode=TwoWay}">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate DataType="vg:GameLogCharacterOptionViewModel">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <ctl:HexPortrait Size="18" IsVisible="{Binding !IsAll}"
+                                                     Source="{Binding Face.Portrait}" Initial="{Binding Face.Initial}"/>
+                                    <TextBlock VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Text="{Binding Label}"/>
+                                    <TextBlock Classes="chipcount" Text="{Binding Count}"/>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+                    <ComboBox Grid.Column="2" x:Name="PeriodFilter" MinWidth="140"
+                              ItemsSource="{Binding PeriodOptions}" SelectedItem="{Binding SelectedPeriod, Mode=TwoWay}">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate DataType="vg:GameLogPeriodOption">
+                                <TextBlock Text="{Binding Label}"/>
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+                    <CalendarDatePicker Grid.Column="3" x:Name="PickedDateFilter" IsVisible="{Binding IsPickDate}"
+                                        SelectedDate="{Binding PickedDate, Mode=TwoWay}"/>
+                    <TextBox Grid.Column="5" x:Name="SearchBox" VerticalAlignment="Center" FontSize="11"
+                             PlaceholderText="Search text or pilot…" Text="{Binding SearchText}"/>
+                </Grid>
+            </Border>
+
+            <!-- ══ Type chips ══ -->
+            <Border DockPanel.Dock="Top" Padding="14,10,14,6" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource BorderBrush}">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Left" Classes="label" Text="TYPE" VerticalAlignment="Top" Margin="0,7,10,0"/>
+                    <ItemsControl x:Name="KindChipList" ItemsSource="{Binding KindChips}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="vg:GameLogKindChipViewModel">
+                                <Button Classes="logchip" Classes.on="{Binding IsOn}" Command="{Binding ToggleCommand}" Margin="0,0,8,4">
+                                    <StackPanel Orientation="Horizontal" Spacing="6" Margin="9,4">
+                                        <Ellipse Width="8" Height="8" Fill="{Binding Brush}" VerticalAlignment="Center"/>
+                                        <TextBlock Classes="chipname" Text="{Binding Label}"/>
+                                        <TextBlock Classes="chipcount" Text="{Binding Count}"/>
+                                    </StackPanel>
+                                </Button>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </DockPanel>
+            </Border>
+
+            <!-- ══ Lines: one virtualized list, newest at the bottom ══ -->
+            <ItemsControl x:Name="LinesList" ItemsSource="{Binding Rows}">
+                <ItemsControl.Template>
+                    <ControlTemplate>
+                        <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+                            <ItemsPresenter ItemsPanel="{TemplateBinding ItemsPanel}"/>
+                        </ScrollViewer>
+                    </ControlTemplate>
+                </ItemsControl.Template>
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate><VirtualizingStackPanel/></ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="vg:GameLogRowViewModel">
+                        <Border Classes="logrow" Height="22" Background="Transparent" ToolTip.Tip="{Binding Text}">
+                            <Grid ColumnDefinitions="3,74,196,62,*" ColumnSpacing="8">
+                                <Border Grid.Column="0" Background="{Binding KindBrush}"/>
+                                <TextBlock Grid.Column="1" Classes="logtime" Text="{Binding TimeText}"/>
+                                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6">
+                                    <ctl:HexPortrait Size="16" Source="{Binding Face.Portrait}" Initial="{Binding Face.Initial}"/>
+                                    <TextBlock Classes="logname" Width="168" Text="{Binding CharacterName}"/>
+                                </StackPanel>
+                                <TextBlock Grid.Column="3" Classes="logkind" Foreground="{Binding KindBrush}" Text="{Binding KindLabel}"/>
+                                <TextBlock Grid.Column="4" Classes="logtext" Text="{Binding Text}"/>
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </DockPanel>
+    </Grid>
+</v:ChromedWindow>

@@ -1,3 +1,5 @@
+using System;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using EveUtils.Shared.Modules.Fleet.Enums;
@@ -376,6 +378,53 @@ public class EsiFleetSyncServiceTests
         Assert.Equal(server, call.ServerAddress);
         Assert.Equal(serverFleetId, call.FleetId);
         Assert.Equal(boss, call.ActingCharacterId); // the boss token clears the server-stored link
+    }
+
+    /// <summary>ET-394: every in-game member's system reaches the live positions — including one who does not use EVE
+    /// Together, who is also held in memory as a member of this fleet for the map — while the roster rows never store it,
+    /// and an unchanged roster still passes a move on.</summary>
+    [Fact]
+    public async Task SyncFleet_PassesEveryMembersSystemToThePositions_WithoutStoringIt()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        using var instance = TestClientInstance.Create();
+        var repository = instance.Services.GetRequiredService<IFleetRepository>();
+        var bus = instance.Services.GetRequiredService<IEventBus>();
+        var positions = instance.Services.GetRequiredService<FleetPositionSource>();
+        var rosters = instance.Services.GetRequiredService<InGameFleetRosters>();
+
+        const int owner = 100;
+        const int outsider = 999;
+        var fleetId = await repository.AddAsync(new FleetEntity { Name = "Doctrine", CreatorCharacterId = owner, State = FleetState.Active }, ct);
+        await repository.AddMemberAsync(new FleetMember { FleetId = fleetId, CharacterId = owner, WingId = -1, SquadId = -1 }, ct);
+        var fleet = await repository.GetAsync(fleetId, ct) ?? throw new InvalidOperationException("fleet was not stored");
+        fleet.EsiFleetId = 999;
+        fleet.EsiFleetBossId = owner;
+        fleet.EsiSyncState = EsiFleetSyncState.Linked;
+        await repository.UpdateAsync(fleet, ct);
+
+        var live = new FakeFleetClient
+        {
+            Members = [new EsiFleetMember { CharacterId = owner, SolarSystemId = 30000142 }, new EsiFleetMember { CharacterId = outsider, SolarSystemId = 30002187 }],
+        };
+        var service = new EsiFleetSyncService(live, repository, instance.Services.GetRequiredService<ICharacterRegistry>(), new NullSessionStore(),
+            new RecordingFleetTransportClient(), bus, new FleetRosterChangeNotifier(new RecordingToastService(), new FakeExternalLookup()),
+            new EsiAvailabilityState(), NullLogger<EsiFleetSyncService>.Instance, positions, rosters);
+
+        await service.SyncFleetAsync(fleet, ct);
+
+        var outsiderPosition = Assert.Single(positions.GetPositions(), position => position.CharacterId == outsider);
+        Assert.Equal((30002187, PositionSource.EsiFleet), (outsiderPosition.SolarSystemId, outsiderPosition.Source));
+        Assert.Equal([owner, outsider], rosters.MembersOf(null, fleetId).Order());
+
+        live.Members = [new EsiFleetMember { CharacterId = owner, SolarSystemId = 30000142 }, new EsiFleetMember { CharacterId = outsider, SolarSystemId = 30000144 }];
+        await Task.Delay(20, ct); // the next poll is a later sighting
+        await service.SyncFleetAsync(fleet, ct);
+
+        Assert.Equal(30000144, Assert.Single(positions.GetPositions(), position => position.CharacterId == outsider).SolarSystemId);
+        var stored = await repository.ListMembersAsync(fleetId, ct);
+        Assert.Equal([owner], stored.Select(member => member.CharacterId));
+        Assert.All(stored, member => Assert.Null(member.SolarSystemId));
     }
 
     private static FleetInfo ServerCoupled(long fleetId, long? esiFleetId, int boss) =>

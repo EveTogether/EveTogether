@@ -4,6 +4,7 @@ using EveUtils.Client.Dialogs;
 using EveUtils.Client.Fleet;
 using EveUtils.Client.Formatting;
 using EveUtils.Client.Killmails;
+using EveUtils.Client.Opsec;
 using EveUtils.Client.ViewModels.Killmails;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Esi;
@@ -80,7 +81,7 @@ public sealed partial class LossDetailSectionViewModel(RunDetailSectionServices 
             int lossKillmailId = loss.KillmailId;
             Losses.Add(new LinkedLossViewModel(services.Dispatcher, loss.CharacterId, loss.KillmailId,
                 [.. loss.OtherRuns.Select(other => new LinkedLossRunChoice(other.RunId,
-                    $"{other.SiteName ?? "unnamed run"} · {other.StartedAtUtc.ToLocalTime():d MMM HH:mm}"))],
+                    $"{OpsecText.Mark(other.SiteName) ?? "unnamed run"} · {other.StartedAtUtc.ToLocalTime():d MMM HH:mm}"))],
                 _ChangedAsync,
                 services.Services is not null ? () => _OpenKillmail(lossCharacterId, lossKillmailId) : null)
             {

@@ -1,3 +1,4 @@
+using System;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -45,6 +46,11 @@ public partial class FleetMetricsWindow : ChromedWindow
     public FleetMetricsWindow()
     {
         AvaloniaXamlLoader.Load(this);
+
+        // On the content root and not on the window: docked, the host lifts the root out of the window (ET-42), and
+        // what this reports is the width the tab gives it.
+        if (this.FindControl<Grid>("ContentRoot") is { } root)
+            root.GetObservable(BoundsProperty).Subscribe(new WidthObserver(root));
 
         // Wired once, on the one ItemsControl, rather than per item template: list, grid and compact then drag
         // identically and a fourth density would need no gesture code of its own. The handlers travel with the
@@ -98,6 +104,13 @@ public partial class FleetMetricsWindow : ChromedWindow
     }
 
     private FleetMetricsViewModel? ViewModel => DataContext as FleetMetricsViewModel;
+
+    private sealed class WidthObserver(Control root) : IObserver<Rect>
+    {
+        public void OnNext(Rect bounds) => (root.DataContext as FleetMetricsViewModel)?.ApplyWidth(bounds.Width);
+        public void OnError(Exception error) { }
+        public void OnCompleted() { }
+    }
 
     // Cards standing beside each other want their drop marker between two columns; rows stacked under each other
     // want it between two rows. Read off where the containers actually landed rather than off the panel type or the
@@ -252,6 +265,8 @@ public partial class FleetMetricsWindow : ChromedWindow
             viewModel.MoveMemberTo(dropped, _insertionIndex);
             viewModel.CommitOrder();
         }
+        else if (!_dragStarted && _dragging is { } clicked && ViewModel is { IsCompactLayout: true } compact)
+            compact.ShowMemberOnMap(clicked);
 
         EndDrag();
     }

@@ -74,6 +74,7 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
     private readonly IReadOnlyDictionary<long, string> _namesById;
     private readonly RunsCharacterNames _characterNames;
     private readonly DispatcherTimer? _clock;
+    private readonly TimeProvider _time;
     private readonly RunsFleetFilter? _fleetFilter;
     private readonly IDisposable? _runChangesSubscription;
     private readonly FleetRunAutoPublisher? _autoPublisher;
@@ -102,7 +103,7 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
     /// reader back to it.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(MonthHeaderText))]
-    private DateTime _viewedMonthLocal = _MonthStart(DateTime.Now);
+    private DateTime _viewedMonthLocal;
 
     public string MonthHeaderText => ViewedMonthLocal.ToString("MMMM yyyy", CultureInfo.InvariantCulture).ToUpperInvariant();
 
@@ -189,8 +190,10 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
     /// a test that wants that read to have happened by the time it looks.</param>
     public RunsOverviewViewModel(CqrsDispatcher dispatcher, IDialogService dialogs, IServiceProvider services,
         IReadOnlyList<Character> characters, bool runClock = true, RunsFleetFilter? fleetFilter = null,
-        TimeSpan? paneReadDelay = null)
+        TimeSpan? paneReadDelay = null, TimeProvider? time = null)
     {
+        _time = time ?? services.GetService<TimeProvider>() ?? TimeProvider.System;
+        _viewedMonthLocal = _MonthStart(_time.GetLocalNow().DateTime);
         _dispatcher = dispatcher;
         _dialogs = dialogs;
         _services = services;
@@ -828,7 +831,7 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
         IReadOnlyList<RunningRunFacts> runningFacts = running ?? [];
 
         if (request.WithAutoSave)
-            await _dispatcher.Send(new SaveRunsLeftUnfinishedCommand(DateTime.UtcNow));
+            await _dispatcher.Send(new SaveRunsLeftUnfinishedCommand(_time.GetUtcNow().UtcDateTime));
         Result<IReadOnlyList<UnfinishedRunDto>> unfinished = await _dispatcher.Query(new GetUnfinishedRunsQuery());
 
         // A bounty or a loot line landing on a run that is still running changes nothing in the list or the strip: a
@@ -1035,7 +1038,7 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
     /// the loot captures and bounty lines it wrote as they came in are already on the row.</summary>
     private async Task _SaveUnfinishedRunAsync(UnfinishedRunViewModel run)
     {
-        DateTime nowUtc = DateTime.UtcNow;
+        DateTime nowUtc = _time.GetUtcNow().UtcDateTime;
         Guid runId = run.RunId;
         DateTime stoppedAtUtc = run.StoppedAtUtc ?? nowUtc;
         Result saved = await Task.Run(() => _dispatcher.Send(new SaveRunCommand(runId, stoppedAtUtc, nowUtc, [], [], [], [])));
@@ -1050,7 +1053,7 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
             return;
 
         Guid runId = run.RunId;
-        Result deleted = await Task.Run(() => _dispatcher.Send(new DeleteRunCommand(runId, DateTime.UtcNow)));
+        Result deleted = await Task.Run(() => _dispatcher.Send(new DeleteRunCommand(runId, _time.GetUtcNow().UtcDateTime)));
         await _AfterFinishingAsync(deleted, "The run could not be thrown away.");
     }
 
@@ -1137,7 +1140,7 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
 
     private DayOfWeek _FirstDay => _weekStart?.FirstDay ?? WeekStartService.SystemDefault();
 
-    private static DateOnly _Today => DateOnly.FromDateTime(DateTime.Now);
+    private DateOnly _Today => DateOnly.FromDateTime(_time.GetLocalNow().DateTime);
 
     /// <summary>A click on a day in the strip: picks it, or — on the day already picked — goes back to the month. The
     /// day stays unfolded either way.</summary>
@@ -1528,7 +1531,7 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
     /// <summary>Text only, never a read: the clocks count from starts the last read already brought.</summary>
     private void _OnClockTick(object? sender, EventArgs e)
     {
-        DateTime nowUtc = DateTime.UtcNow;
+        DateTime nowUtc = _time.GetUtcNow().UtcDateTime;
         Running.Tick(nowUtc);
     }
 
@@ -1566,16 +1569,19 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
             return Task.CompletedTask;
 
         _dialogs.ShowActivityDetail(
+            // Appraisal.Appraisal itself is left null on purpose: the detail sections resolve the user's chosen
+            // provider through Services (below) via IAppraisalProviderSelector, ET-364 — a fixed provider here
+            // would go stale the moment a second one is registered.
             new ActivityDetailViewModel(_dispatcher, row.ActivitySummaryId,
-                _services.GetService<IAppraisalProvider>(), _NameOf,
-                _services.GetService<IEsiClient>(), _services.GetService<IEsiLocationClient>(),
-                _services.GetService<ISdeAccessor>(), _services.GetService<ICharacterPortraitProvider>(),
-                _services.GetService<ITypeImageProvider>(),
+                appraisal: null, nameOf: _NameOf,
+                esi: _services.GetService<IEsiClient>(), locations: _services.GetService<IEsiLocationClient>(),
+                sde: _services.GetService<ISdeAccessor>(), portraits: _services.GetService<ICharacterPortraitProvider>(),
+                images: _services.GetService<ITypeImageProvider>(),
                 // Only this machine's own pilots' runs can be corrected there, or deleted from there (ET-214):
                 // anyone else's came in from a server and could never be published back (ET-215).
-                _namesById.Keys.ToHashSet(),
-                _canPublish ? () => _PublishAsync(row) : null, _dialogs, _services.GetService<RunChangeFeed>(),
-                _services),
+                ownCharacterIds: _namesById.Keys.ToHashSet(),
+                republish: _canPublish ? () => _PublishAsync(row) : null, dialogs: _dialogs,
+                runChanges: _services.GetService<RunChangeFeed>(), services: _services),
             row.ActivitySummaryId);
         return Task.CompletedTask;
     }

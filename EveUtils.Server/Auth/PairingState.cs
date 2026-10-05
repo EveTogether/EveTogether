@@ -1,3 +1,5 @@
+using EveUtils.Grpc;
+
 namespace EveUtils.Server.Auth;
 
 /// <summary>
@@ -11,8 +13,12 @@ public sealed class PairingState
     public required string OAuthState { get; init; }       // CSRF binding for the SSO callback
     public required DateTimeOffset CreatedAt { get; init; }
 
+    /// <summary>The only character allowed to complete this pairing; 0 lets any character through (ET-425).</summary>
+    public int ExpectedCharacterId { get; init; }
+
     public PairingStatus Status { get; set; } = PairingStatus.Pending;
     public string? FailureMessage { get; set; }
+    public PairingFailure Failure { get; set; }
 
     // Filled when the SSO callback has been relayed + exchanged successfully.
     public int CharacterId { get; set; }
@@ -25,4 +31,11 @@ public sealed class PairingState
     /// <summary>The id of the session just issued, handed to the client along with the tokens so a fresh pairing
     /// can name its session from the first second instead of waiting to learn it from a heartbeat (ET-123).</summary>
     public int SessionId { get; set; }
+
+    public void Fail(string message, PairingFailure failure = PairingFailure.Unspecified)
+    {
+        Status = PairingStatus.Failed;
+        FailureMessage = message;
+        Failure = failure;
+    }
 }

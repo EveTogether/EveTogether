@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Material.Icons;
 using EveUtils.Client.Dialogs;
+using EveUtils.Client.Opsec;
 using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Client.Esi;
 using EveUtils.Client.Formatting;
@@ -96,7 +97,7 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
             .Select(module => module.CreateForDetail?.Invoke(sectionServices))
             .OfType<RunDetailSection>()];
         foreach (RunDetailSection section in _sections)
-            section.ActivityCorrected += () => _ = _ReloadAfterCorrectionAsync();
+            section.ActivityCorrected += () => _ = _ReloadAfterCorrectionAsync(section);
         _runChangesSubscription = runChanges?.Subscribe(_OnRunsChangedAsync);
     }
 
@@ -218,7 +219,7 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
     /// whether the published copy is now behind. Nothing else is read again: the other blocks, and the escalation's
     /// ESI route, did not change.
     /// </summary>
-    private async Task _ReloadAfterCorrectionAsync()
+    private async Task _ReloadAfterCorrectionAsync(RunDetailSection? corrected = null)
     {
         Result<ActivityDetailDto> detail = await _dispatcher.Query(new GetActivityDetailQuery(_activitySummaryId));
         if (!detail.IsSuccess || detail.Value is null)
@@ -228,7 +229,9 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
         }
 
         _lastDetail = detail.Value;
-        _Apply(detail.Value);
+        RunDetailSectionInput input = _Apply(detail.Value);
+        if (corrected is { RereadsAfterCorrection: true })
+            await corrected.LoadAsync(input, followUp: true, CancellationToken.None);
     }
 
     /// <summary>
@@ -470,7 +473,7 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
         // The same fallback ACTIVITY's own SiteText uses (ET-241, ET-248): this title bar is a second, independent
         // reading of the same fact, and an abyssal read "site not recorded" up here while the section right below it
         // already correctly read "Fierce Dark" — ET-241 updated ActivityDetailSectionViewModel but missed this copy.
-        SiteText = detail.SiteName
+        SiteText = OpsecText.Mark(detail.SiteName)
             ?? (type.Space is RunSpace.AbyssalPocket
                 ? AbyssalFilamentName.From(detail.Parameters
                     .FirstOrDefault(parameter => parameter.ParameterKey == RunParameterKey.AbyssalFilament)?.TypedValue)

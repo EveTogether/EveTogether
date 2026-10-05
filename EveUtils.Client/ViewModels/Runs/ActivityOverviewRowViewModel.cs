@@ -8,6 +8,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Material.Icons;
 using EveUtils.Client.Formatting;
+using EveUtils.Client.Opsec;
 using EveUtils.Client.Runs;
 using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Shared.Modules.Runs;
@@ -99,15 +100,15 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase, IRunsA
 
         SdeSolarSystem? system = facts?.SystemOf(row.SolarSystemId);
         HasSystem = system is not null;
-        SystemText = system?.Name ?? "—";
-        SecurityText = system is null ? string.Empty : RunRowFacts.SecurityText(system.SecurityStatus);
+        SystemText = OpsecText.Mark(system?.Name) ?? "—";
+        SecurityText = system is null ? string.Empty : OpsecText.Mark(RunRowFacts.SecurityText(system.SecurityStatus));
         SystemLineText = system is null ? SystemText : $"{SystemText} {SecurityText}";
         // Never "system unknown" on the row: a dash, and the why on hover — most runs started by hand simply never
         // learned where they were.
         SystemTooltip = system is not null
             ? null
             : row.SolarSystemId is { } unknownId
-                ? $"Solar system {unknownId} is not in the static data yet"
+                ? $"Solar system {OpsecText.Mark(unknownId.ToString())} is not in the static data yet"
                 : "No solar system was recorded for this activity";
 
         DurationText = Duration.ToString(@"hh\:mm\:ss");
@@ -160,7 +161,7 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase, IRunsA
         // holds whatever the run recorded there, and on 13 of Jithran's 26 September runs that is the group's own
         // name — "Combat Site" — which says nothing a line already reading COMBAT SITE does not.
         ScanSignatureText = _ScanSignature.IsMatch(row.SignatureGroupSnapshot ?? string.Empty)
-            ? row.SignatureGroupSnapshot
+            ? OpsecText.Mark(row.SignatureGroupSnapshot)
             : null;
         EnemiesText = row.EnemyTypeCount > 0
             ? $"{row.EnemyTypeCount} enemy types"
@@ -208,7 +209,7 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase, IRunsA
     /// SITES (ET-294), which name activities they never build a row for.</summary>
     internal static string SiteTextOf(ActivityOverviewRowDto row, RunTypeDefinition type) =>
         !string.IsNullOrWhiteSpace(row.SiteName)
-            ? row.SiteName
+            ? OpsecText.Mark(row.SiteName)
             : type.Space is RunSpace.AbyssalPocket
                 ? AbyssalFilamentName.From(row.AbyssalFilamentText)
                 : "Unnamed site";

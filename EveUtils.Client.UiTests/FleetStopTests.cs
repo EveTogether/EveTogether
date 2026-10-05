@@ -13,6 +13,7 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using EveUtils.Client.Dialogs;
 using EveUtils.Client.Fleet;
+using EveUtils.Client.Opsec;
 using EveUtils.Client.ViewModels;
 using EveUtils.Client.Views;
 using EveUtils.Shared.Cqrs;
@@ -280,7 +281,7 @@ public class FleetStopTests
         await roster.StopCommand.ExecuteAsync(null);
 
         var line = Assert.Single(dialogs.FleetExitPrompt!.RunsInProgress);
-        Assert.StartsWith("Kaska Vex — Fortress Sansha, 00:11:", line, StringComparison.Ordinal);
+        Assert.StartsWith($"Kaska Vex — {OpsecText.Mark("Fortress Sansha")}, 00:11:", line, StringComparison.Ordinal);
     }
 
     /// <summary>With no character of mine besides the FC there is nothing to leave with, so that exit is not

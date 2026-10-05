@@ -178,7 +178,11 @@ public sealed class ServerConnection
                 if (session is null) { SetState(ServerConnectionState.Disconnected); return; } // not paired
                 attachedAccessToken = session.AccessToken;
 
-                SetState(ServerConnectionState.Connecting);
+                // Only the first attempt is "connecting". A retry after a failure stays "reconnecting" until it has
+                // actually succeeded: flipping to Connecting on every attempt made a server that is down flicker in and
+                // out of every "not reachable" indicator, once per backoff cycle.
+                if (State is not ServerConnectionState.Reconnecting)
+                    SetState(ServerConnectionState.Connecting);
                 var channel = _channelFactory.CreatePinned(_serverAddress);
 
                 // Actually establish the connection before reporting Connected. gRPC channels connect lazily, so
@@ -198,6 +202,12 @@ public sealed class ServerConnection
 
                 using var call = client.Attach(headers, cancellationToken: cancellationToken);
                 _call = call;
+
+                // Connected only once the server has answered the attach: its response headers, which a server sends
+                // as soon as it has accepted the session, or — from a server that does not send them up front — its
+                // first message, which a keepalive brings within 15 s. An open channel and a stream object prove
+                // nothing yet, and reporting Connected on them is what made a down server blink green each retry.
+                await call.ResponseHeadersAsync.WaitAsync(ReceiveDeadline, cancellationToken);
                 SetState(ServerConnectionState.Connected);
                 _ = _services.GetRequiredService<PendingServerRevokeFlusher>().FlushAsync(_serverAddress, cancellationToken);
 

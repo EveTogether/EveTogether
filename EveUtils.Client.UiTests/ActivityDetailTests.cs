@@ -5,6 +5,7 @@ using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using EveUtils.Client.Dialogs;
+using EveUtils.Client.Opsec;
 using EveUtils.Client.ViewModels.Runs;
 using EveUtils.Client.Views;
 using EveUtils.Shared.Data;
@@ -88,10 +89,10 @@ public sealed class ActivityDetailTests
             instance.Services.GetRequiredService<IAppraisalProvider>(), sde: sde);
         await viewModel.LoadAsync(cancellationToken);
 
-        Assert.Equal("Cistuvaert", viewModel.Activity().LocationText);
+        Assert.Equal(OpsecText.Mark("Cistuvaert"), viewModel.Activity().LocationText);
         // "Site", not "Combat Site": _SaveSiteRunAsync never records a scanner group, and ET-226 stopped that
         // defaulting to Combat Site — see ActivityDetailTests.KindText_ReadsSite_WhenNoGroupWasEverRecorded.
-        Assert.Equal("Site · Cistuvaert", viewModel.Activity().HeaderSummary);
+        Assert.Equal($"Site · {OpsecText.Mark("Cistuvaert")}", viewModel.Activity().HeaderSummary);
     }
 
     // ── TYPE reads the recorded scanner group, not a default (ET-226) ──────────────────────────────────
@@ -160,15 +161,16 @@ public sealed class ActivityDetailTests
             instance.Services.GetRequiredService<IAppraisalProvider>(), sde: new FakeSdeAccessor());
         await viewModel.LoadAsync(cancellationToken);
 
-        Assert.Equal("system 30000142", viewModel.Activity().LocationText);
+        Assert.Equal(OpsecText.Mark("system 30000142"), viewModel.Activity().LocationText);
     }
 
     /// <summary>AC-1, mission half: a mission names its agent and its level and shows MISSION, and carries no
-    /// BOUNTY or LOOT section. Counter-proof: give every kind the same fixed block of sections and this goes red on
+    /// BOUNTY section but a LOOT one even when nothing was looted, so loot forgotten during the run can be added
+    /// afterwards (ET-421). Counter-proof: give every kind the same fixed block of sections and this goes red on
     /// a visible BOUNTY heading. The agent reads as a bare id here because this render path wires no SDE — see
     /// <see cref="Mission_NamesTheAgentFromTheSde_InsteadOfTheBareId"/> for the id resolved into a name.</summary>
     [AvaloniaFact]
-    public async Task Mission_ShowsAgentAndRewards_AndNoBountyOrLootSection()
+    public async Task Mission_ShowsAgentAndRewardsAndALootSection_AndNoBountySection()
     {
         using var instance = TestClientInstance.Create();
         ICqrsDispatcher dispatcher = instance.Services.GetRequiredService<ICqrsDispatcher>();
@@ -187,7 +189,7 @@ public sealed class ActivityDetailTests
         Assert.Contains(texts, text => text == "Level 2");
         Assert.Contains(texts, text => text == "MISSION");
         Assert.DoesNotContain(texts, text => text == "BOUNTY");
-        Assert.DoesNotContain(texts, text => text == "LOOT");
+        Assert.Contains(texts, text => text == "LOOT");
     }
 
     /// <summary>
@@ -783,7 +785,7 @@ public sealed class ActivityDetailTests
 
         Assert.False(viewModel.IsDeleted);
         Assert.True(viewModel.CanDelete);
-        Assert.Equal("Homefront", viewModel.SiteText);
+        Assert.Equal(OpsecText.Mark("Homefront"), viewModel.SiteText);
         await using ClientDbContext db = await instance.Services
             .GetRequiredService<IDbContextFactory<ClientDbContext>>().CreateDbContextAsync(cancellationToken);
         Assert.Null((await db.Set<Run>().SingleAsync(run => run.Id == runId, cancellationToken)).DeletedAtUtc);

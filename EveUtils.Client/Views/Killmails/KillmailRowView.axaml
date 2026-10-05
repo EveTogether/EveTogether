@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vk="using:EveUtils.Client.ViewModels.Killmails"
+             xmlns:ctl="using:EveUtils.Client.Controls"
              x:Class="EveUtils.Client.Views.Killmails.KillmailRowView"
              x:DataType="vk:KillmailRowViewModel">
 
@@ -13,7 +14,17 @@
         <Panel>
             <Border Classes="rowspine"/>
             <Button Classes="activityrow" Command="{Binding OpenCommand}">
-                <Grid Margin="22,0,14,0" ColumnDefinitions="18,40,18,*,150,100,24" ColumnSpacing="8">
+                <Grid Margin="22,0,14,0" ColumnDefinitions="136,40,18,*,130,100,24" ColumnSpacing="8">
+                    <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center"
+                                ToolTip.Tip="{Binding PilotsTooltip}">
+                        <ctl:HexPortrait Size="18" Source="{Binding FirstPilot.Portrait}" Initial="{Binding FirstPilot.Initial}"/>
+                        <TextBlock Classes="rowline" VerticalAlignment="Center" MaxWidth="86" TextTrimming="CharacterEllipsis"
+                                   Text="{Binding FirstPilot.Name}"/>
+                        <Border Classes="chip dim" IsVisible="{Binding HasExtraPilots}">
+                            <TextBlock Text="{Binding ExtraPilotsText}"/>
+                        </Border>
+                    </StackPanel>
+
                     <TextBlock Grid.Column="1" Classes="rowtime" Text="{Binding TimeText}"/>
 
                     <TextBlock Grid.Column="2" HorizontalAlignment="Center" VerticalAlignment="Center"

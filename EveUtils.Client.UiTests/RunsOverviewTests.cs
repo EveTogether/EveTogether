@@ -8,6 +8,7 @@ using Avalonia.VisualTree;
 using EveUtils.Client.Dialogs;
 using EveUtils.Client.Formatting;
 using EveUtils.Client.Gamelog;
+using EveUtils.Client.Opsec;
 using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Client.ViewModels.Runs;
 using EveUtils.Client.Views;
@@ -300,9 +301,9 @@ public sealed class RunsOverviewTests
         RunningLaneViewModel first = viewModel.Running.Lanes.Single(lane => lane.Character.EsiCharacterId == 90000001);
         RunningLaneViewModel second = viewModel.Running.Lanes.Single(lane => lane.Character.EsiCharacterId == 90000002);
         Assert.True(first.IsRunning);
-        Assert.Equal("Homefront", first.StateText);
+        Assert.Equal(OpsecText.Mark("Homefront"), first.StateText);
         Assert.True(second.IsRunning);
-        Assert.Equal("Sanctum", second.StateText);
+        Assert.Equal(OpsecText.Mark("Sanctum"), second.StateText);
     }
 
     /// <summary>ET-203's root cause, reproduced directly. Measured against the code rather than assumed: a run
@@ -332,7 +333,7 @@ public sealed class RunsOverviewTests
 
         RunningLaneViewModel running = Assert.Single(viewModel.Running.Lanes);
         Assert.True(running.IsRunning);
-        Assert.Equal("Sanctum", running.StateText);
+        Assert.Equal(OpsecText.Mark("Sanctum"), running.StateText);
         Assert.Equal("OPEN", running.ActionText);
     }
 
@@ -357,7 +358,7 @@ public sealed class RunsOverviewTests
         await ActivityWindowHarness.WaitUntil(() => lane.IsRunning); // the refresh reads off the UI thread (ET-290)
 
         Assert.True(lane.IsRunning);
-        Assert.Equal("Homefront", lane.StateText);
+        Assert.Equal(OpsecText.Mark("Homefront"), lane.StateText);
         Assert.Equal("OPEN", lane.ActionText);
     }
 
@@ -489,7 +490,7 @@ public sealed class RunsOverviewTests
         await ActivityWindowHarness.WaitUntil(() => viewModel.UnfinishedRuns.Count > 0); // read off the UI thread (ET-290)
 
         UnfinishedRunViewModel run = Assert.Single(viewModel.UnfinishedRuns);
-        Assert.Equal("Homefront", run.SiteText);
+        Assert.Equal(OpsecText.Mark("Homefront"), run.SiteText);
     }
 
     /// <summary>
@@ -609,7 +610,7 @@ public sealed class RunsOverviewTests
         }
 
         ActivityOverviewRowViewModel row = Assert.Single(Assert.Single(presented.ViewModel.Tabs[0].Days).Rows);
-        Assert.Equal("Homefront", row.SiteText);
+        Assert.Equal(OpsecText.Mark("Homefront"), row.SiteText);
     }
 
     /// <summary>ET-254 AC-1/AC-2: RESUME reopens the run window on exactly this row and picks the clock back up on
@@ -889,7 +890,7 @@ public sealed class RunsOverviewTests
 
     private static async Task<(RunsWindow Window, RunsOverviewViewModel ViewModel)> _WindowAsync(
         TestClientInstance instance, double width, CancellationToken cancellationToken,
-        IReadOnlyList<Character>? characters = null, RecordingDialogService? dialogs = null)
+        IReadOnlyList<Character>? characters = null, RecordingDialogService? dialogs = null, TimeProvider? time = null)
     {
         ICqrsDispatcher dispatcher = _Dispatcher(instance);
         await dispatcher.Send(new RebuildActivitySummariesCommand(), cancellationToken);
@@ -897,7 +898,7 @@ public sealed class RunsOverviewTests
         // No lane clock: a DispatcherTimer here would go on ticking for the rest of the test session, since the
         // window that would dispose the view-model is never closed.
         var viewModel = new RunsOverviewViewModel(dispatcher, dialogs ?? new RecordingDialogService(), instance.Services,
-            characters ?? Crew, runClock: false);
+            characters ?? Crew, runClock: false, time: time ?? RunsTestClock.Fixed);
         await viewModel.LoadAsync(cancellationToken);
         return (new RunsWindow(viewModel) { Width = width, Height = 1400 }, viewModel);
     }
@@ -921,7 +922,7 @@ public sealed class RunsOverviewTests
         await ActivityWindowHarness.WaitUntil(() => viewModel.Tabs[0].Days.Count > 0); // read off the UI thread (ET-290)
 
         ActivityOverviewRowViewModel row = Assert.Single(Assert.Single(viewModel.Tabs[0].Days).Rows);
-        Assert.Equal("Homefront", row.SiteText);
+        Assert.Equal(OpsecText.Mark("Homefront"), row.SiteText);
     }
 
     /// <summary>ET-214 round 2: deleting an activity from its own detail screen must not leave this screen's row and
@@ -1017,7 +1018,7 @@ public sealed class RunsOverviewTests
         await _SaveSiteRunAsync(dispatcher, 90000002, groupCode: null, cancellationToken: cancellationToken,
             startedAtUtc: localMonthStartUtc.AddMinutes(5));    // this month's first evening
 
-        Presented presented = await _PresentAsync(instance, 758, cancellationToken);
+        Presented presented = await _PresentAsync(instance, 758, cancellationToken, time: TimeProvider.System);
 
         ActivityOverviewRowViewModel row = Assert.Single(presented.ViewModel.Tabs[0].Days.SelectMany(day => day.Rows));
         Assert.True(row.StartedAtLocal >= new DateTime(DateTime.Now.Year, DateTime.Now.Month, 1));
@@ -1025,10 +1026,10 @@ public sealed class RunsOverviewTests
 
     private static async Task<Presented> _PresentAsync(
         TestClientInstance instance, double width, CancellationToken cancellationToken,
-        IReadOnlyList<Character>? characters = null, RecordingDialogService? dialogs = null)
+        IReadOnlyList<Character>? characters = null, RecordingDialogService? dialogs = null, TimeProvider? time = null)
     {
         (RunsWindow window, RunsOverviewViewModel viewModel) =
-            await _WindowAsync(instance, width, cancellationToken, characters, dialogs);
+            await _WindowAsync(instance, width, cancellationToken, characters, dialogs, time);
 
         var display = new FakeDisplay();
         var host = new ModuleHostService();
@@ -1057,12 +1058,12 @@ public sealed class RunsOverviewTests
     }
 
     /// <summary>A run stopped and left there — the shape ET-179 is about: <c>Stopped</c>, never saved, never thrown
-    /// away. Placed against the wall clock and not against <see cref="StartedAtUtc"/>, because how long ago it was
+    /// away. Placed against the runs screen's clock and not against <see cref="StartedAtUtc"/>, because how long ago it was
     /// stopped is what decides whether the app saves it by itself.</summary>
     private static async Task _StopSiteRunAsync(ICqrsDispatcher dispatcher, long characterId,
         CancellationToken cancellationToken, double hoursSinceStop = 1)
     {
-        DateTime stoppedAtUtc = DateTime.UtcNow.AddHours(-hoursSinceStop);
+        DateTime stoppedAtUtc = RunsTestClock.Fixed.GetUtcNow().UtcDateTime.AddHours(-hoursSinceStop);
         Result<Guid> started = await dispatcher.Send(new StartRunCommand(characterId, ActivityKind.Site,
             stoppedAtUtc.AddMinutes(-15), 1234, "Homefront", 30000142), cancellationToken);
         await dispatcher.Send(new SetRunStoppedCommand(started.Value, stoppedAtUtc), cancellationToken);

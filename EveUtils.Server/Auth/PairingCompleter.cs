@@ -1,3 +1,4 @@
+using EveUtils.Grpc;
 using EveUtils.Server.Permissions;
 using EveUtils.Shared.DependencyInjection;
 using EveUtils.Shared.Modules.Esi;
@@ -28,13 +29,13 @@ public sealed class PairingCompleter(
     {
         if (!string.Equals(state.OAuthState, callbackState, StringComparison.Ordinal))
         {
-            Fail(state, "OAuth state mismatch.");
+            state.Fail("OAuth state mismatch.");
             return (false, "OAuth state mismatch (possible CSRF).");
         }
 
         if (string.IsNullOrEmpty(esiOptions.ClientSecret))
         {
-            Fail(state, "Server ESI client secret is not configured.");
+            state.Fail("Server ESI client secret is not configured.");
             return (false, "Server ESI client secret is not configured (appsettings.Development.json).");
         }
 
@@ -44,6 +45,16 @@ public sealed class PairingCompleter(
                 code, esiOptions.ClientId, esiOptions.ClientSecret, cancellationToken);
             var identity = await jwtValidator.ValidateAsync(tokens.AccessToken, esiOptions.ClientId, cancellationToken);
 
+            // The client couples one particular character (ET-425); whoever was picked on the EVE page instead gets
+            // nothing stored and no session, rather than a coupling the user never asked for.
+            if (state.ExpectedCharacterId != 0 && state.ExpectedCharacterId != identity.CharacterId)
+            {
+                state.CharacterName = identity.CharacterName;
+                var refusal = $"{identity.CharacterName} signed in, but this coupling is for another character. Nothing was coupled.";
+                state.Fail(refusal, PairingFailure.OtherCharacter);
+                return (false, refusal);
+            }
+
             // Public-server mode: when the allowed-list is disabled the gate is skipped — anyone who
             // completes the ESI auth-flow can pair. The auth-flow (token exchange + JWT validation) stays required.
             if (toggles.IsEnabled(ServerToggles.AllowedListEnabled))
@@ -51,7 +62,7 @@ public sealed class PairingCompleter(
                 var allowed = await repository.FindAllowedAsync(identity.CharacterId, identity.CharacterName, cancellationToken);
                 if (allowed is null)
                 {
-                    Fail(state, $"{identity.CharacterName} is not on the allowed-list.");
+                    state.Fail($"{identity.CharacterName} is not on the allowed-list.");
                     return (false, $"{identity.CharacterName} is not on the allowed-list.");
                 }
             }
@@ -75,14 +86,8 @@ public sealed class PairingCompleter(
         }
         catch (Exception ex)
         {
-            Fail(state, ex.Message);
+            state.Fail(ex.Message);
             return (false, ex.Message);
         }
-    }
-
-    private static void Fail(PairingState state, string message)
-    {
-        state.Status = PairingStatus.Failed;
-        state.FailureMessage = message;
     }
 }

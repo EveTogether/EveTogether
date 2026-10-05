@@ -2,6 +2,7 @@ using System;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.Input;
 using EveUtils.Client.Formatting;
+using EveUtils.Client.Opsec;
 using EveUtils.Shared.Modules.Gamelog.Aggregation;
 using EveUtils.Shared.Modules.Runs;
 using EveUtils.Shared.Modules.Runs.Dtos;
@@ -57,7 +58,7 @@ public sealed partial class UnfinishedRunViewModel(
     // so an unfinished row — stopped, not yet saved — always reads the plain "Abyssal" here, same as a site with no
     // name yet reads "Unnamed site" until it has one.
     public string SiteText { get; } = !string.IsNullOrWhiteSpace(run.SiteName)
-        ? run.SiteName
+        ? OpsecText.Mark(run.SiteName)
         : RunTypeCatalogue.For(run.ActivityKind, run.SignatureGroupSnapshot, run.SiteTypeId).Space
             is RunSpace.AbyssalPocket
             ? "Abyssal"

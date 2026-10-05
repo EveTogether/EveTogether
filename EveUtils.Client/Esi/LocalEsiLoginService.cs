@@ -21,7 +21,7 @@ namespace EveUtils.Client.Esi;
 /// so modules declare their needs once at startup rather than hard-coding scope strings.
 /// </para>
 /// <para>
-/// Call <see cref="SignInAsync(IReadOnlyList{string}?, CancellationToken)"/> to add a new character
+/// Call <see cref="SignInAsync(IReadOnlyList{string}?, CancellationToken, Action{string}?)"/> to add a new character
 /// or <see cref="ReAuthenticateAsync(int, IReadOnlyList{string}, CancellationToken)"/> to extend the
 /// scope grant for an existing character without signing it out.
 /// </para>
@@ -40,9 +40,12 @@ public sealed class LocalEsiLoginService(
     /// in the scope-selection dialog). <c>publicData</c> is always ensured. When null, the full
     /// client scope set from the registry is requested (all features).
     /// </summary>
+    /// <param name="authorizeUrl">Receives the EVE login link, for a browser that did not open by itself.</param>
+    /// <exception cref="EsiSignInDeniedException">The access was not authorized on the EVE login page.</exception>
     public async Task<EsiIdentity> SignInAsync(
         IReadOnlyList<string>? requestedScopes = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        Action<string>? authorizeUrl = null)
     {
         var scopes = ResolveScopes(requestedScopes);
         var pkce = Pkce.Create();
@@ -51,9 +54,13 @@ public sealed class LocalEsiLoginService(
         var listener = new LoopbackCallbackListener(options.CallbackUri);
         var callbackTask = listener.WaitForCallbackAsync(cancellationToken);
 
-        OpenBrowser(BuildAuthorizeUrl(pkce, state, scopes));
+        var url = BuildAuthorizeUrl(pkce, state, scopes);
+        authorizeUrl?.Invoke(url);
+        OpenBrowser(url);
 
         var callback = await callbackTask;
+        if (callback.Error == EsiSignInDeniedException.AccessDenied)
+            throw new EsiSignInDeniedException();
         if (callback.Error is not null)
             throw new InvalidOperationException($"EVE SSO returned an error: {callback.Error}");
         if (!string.Equals(callback.State, state, StringComparison.Ordinal))

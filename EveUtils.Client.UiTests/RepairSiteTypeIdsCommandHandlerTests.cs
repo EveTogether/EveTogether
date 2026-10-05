@@ -172,6 +172,27 @@ public sealed class RepairSiteTypeIdsCommandHandlerTests
         Assert.NotEmpty(signalled);
     }
 
+    /// <summary>ET-388: an uncatalogued relic or data site is not in the catalogue at all, so there is nothing to
+    /// match — the repair must leave it (and the group it was filed under) exactly as it was.</summary>
+    [AvaloniaFact]
+    public async Task UncataloguedSiteWithNoCatalogueMatch_IsLeftAlone()
+    {
+        const string name = "Detected Ruined Rogue Drone Science Outpost";
+        using var instance = TestClientInstance.Create(services => services.AddSingleton<ISdeAccessor>(_SdeWithHomefront()));
+        IDispatcher dispatcher = instance.Services.GetRequiredService<IDispatcher>();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        Guid runId = (await dispatcher.Send(new StartRunCommand(90000001, ActivityKind.Site, StartedAtUtc, 0,
+            name, 30000142, SignatureGroupSnapshot: "Relic Site", SiteTypeSource: SiteTypeSource.Uncatalogued), cancellationToken)).Value;
+
+        Result<int> repaired = await dispatcher.Send(new RepairSiteTypeIdsCommand(), cancellationToken);
+
+        Assert.Equal(0, repaired.Value);
+        Run stored = await _StoredAsync(instance, runId, cancellationToken);
+        Assert.Equal(0, stored.SiteTypeId);
+        Assert.Equal(SiteTypeSource.Uncatalogued, stored.SiteTypeSource);
+        Assert.Equal("Relic Site", stored.SignatureGroupSnapshot);
+    }
+
     private static async Task<Run> _StoredAsync(TestClientInstance instance, Guid runId, CancellationToken cancellationToken)
     {
         await using ClientDbContext db = await instance.Services.GetRequiredService<IDbContextFactory<ClientDbContext>>()

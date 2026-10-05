@@ -35,9 +35,30 @@ public sealed class ColumnFlowPanel : Panel
     public static readonly StyledProperty<double> MinRowHeightProperty =
         AvaloniaProperty.Register<ColumnFlowPanel, double>(nameof(MinRowHeight), 28);
 
+    public static readonly StyledProperty<double> MaxRowHeightProperty =
+        AvaloniaProperty.Register<ColumnFlowPanel, double>(nameof(MaxRowHeight), double.PositiveInfinity);
+
+    public static readonly StyledProperty<double> MaxColumnWidthProperty =
+        AvaloniaProperty.Register<ColumnFlowPanel, double>(nameof(MaxColumnWidth), double.PositiveInfinity);
+
     static ColumnFlowPanel()
     {
-        AffectsMeasure<ColumnFlowPanel>(MaxColumnsProperty, ColumnSpacingProperty, RowSpacingProperty, MinRowHeightProperty);
+        AffectsMeasure<ColumnFlowPanel>(MaxColumnsProperty, ColumnSpacingProperty, RowSpacingProperty, MinRowHeightProperty,
+            MaxRowHeightProperty, MaxColumnWidthProperty);
+    }
+
+    /// <summary>Caps a stretched row, so a block with few tiles keeps tiles of a normal height, top-aligned (ET-419).</summary>
+    public double MaxRowHeight
+    {
+        get => GetValue(MaxRowHeightProperty);
+        set => SetValue(MaxRowHeightProperty, value);
+    }
+
+    /// <summary>Caps a column's width; the columns then sit at the left instead of spreading over the block (ET-419).</summary>
+    public double MaxColumnWidth
+    {
+        get => GetValue(MaxColumnWidthProperty);
+        set => SetValue(MaxColumnWidthProperty, value);
     }
 
     public int MaxColumns
@@ -106,14 +127,16 @@ public sealed class ColumnFlowPanel : Panel
         double scale = LayoutHelper.GetLayoutScale(this);
         // Rows by their snapped edges, like the columns (ET-303): a fractional row height added up row by row put the
         // last tile's bottom a pixel past the block it fills.
-        double height = Math.Max(finalSize.Height, rows * MinRowHeight + (rows - 1) * RowSpacing);
+        double height = Math.Min(Math.Max(finalSize.Height, rows * MinRowHeight + (rows - 1) * RowSpacing),
+            rows * MaxRowHeight + (rows - 1) * RowSpacing);
+        double totalWidth = Math.Min(finalSize.Width, columns * MaxColumnWidth + (columns - 1) * ColumnSpacing);
 
         for (int index = 0; index < Children.Count; index++)
         {
             int column = index / rows;
             int row = index % rows;
-            double x = FillGridGeometry.Edge(column, columns, finalSize.Width, 1, ColumnSpacing, UseLayoutRounding, scale);
-            double width = FillGridGeometry.ColumnWidth(column, columns, finalSize.Width, 1, ColumnSpacing, UseLayoutRounding, scale);
+            double x = FillGridGeometry.Edge(column, columns, totalWidth, 1, ColumnSpacing, UseLayoutRounding, scale);
+            double width = FillGridGeometry.ColumnWidth(column, columns, totalWidth, 1, ColumnSpacing, UseLayoutRounding, scale);
             double y = FillGridGeometry.Edge(row, rows, height, 1, RowSpacing, UseLayoutRounding, scale);
             double rowHeight = FillGridGeometry.ColumnWidth(row, rows, height, 1, RowSpacing, UseLayoutRounding, scale);
             Children[index].Arrange(new Rect(x, y, width, rowHeight));

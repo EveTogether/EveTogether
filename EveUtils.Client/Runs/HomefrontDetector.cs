@@ -8,6 +8,7 @@ using EveUtils.Client.Dialogs;
 using EveUtils.Client.Fleet;
 using EveUtils.Client.Gamelog;
 using EveUtils.Client.Notifications;
+using EveUtils.Client.Opsec;
 using EveUtils.Client.Platform;
 using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Shared.DependencyInjection;
@@ -134,7 +135,7 @@ public sealed class HomefrontDetector : ISingletonService, IDisposable
             if (!await _IsEnabledAsync())
                 return;
 
-            Dispatcher.UIThread.Post(() => _toasts.Show($"Start Homefront run: {site.Name}?", $"{seen} seen in the game log.",
+            Dispatcher.UIThread.Post(() => _toasts.Show($"Start Homefront run: {OpsecText.Mark(site.Name)}?", $"{seen} seen in the game log.",
                 ToastKind.Information,
                 [
                     new ToastAction("Ignore", () => { }),
@@ -145,7 +146,7 @@ public sealed class HomefrontDetector : ISingletonService, IDisposable
         {
             // A settings read that fails costs this one offer, never the gamelog pump that raised it.
             _services.GetService<ILoggerFactory>()?.CreateLogger<HomefrontDetector>()
-                .LogWarning(ex, "Could not offer a homefront run on {Site}.", site.Name);
+                .LogWarning(ex, "Could not offer a homefront run on {Site}.", OpsecText.Mark(site.Name));
         }
     }
 
@@ -271,7 +272,7 @@ public sealed class HomefrontDetector : ISingletonService, IDisposable
         catch (Exception ex)
         {
             // The only caller is a toast button returning void, so an escape here is an unobserved task.
-            _toasts.Show("Run not started", $"Could not open the run on {site.Name}: {ex.Message}", ToastKind.Error);
+            _toasts.Show("Run not started", $"Could not open the run on {OpsecText.Mark(site.Name)}: {ex.Message}", ToastKind.Error);
         }
     }
 

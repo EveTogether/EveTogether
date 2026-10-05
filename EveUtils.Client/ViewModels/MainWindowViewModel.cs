@@ -17,10 +17,14 @@ using EveUtils.Client.Fittings;
 using EveUtils.Client.Notifications;
 using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Client.ViewModels.FitBrowser;
+using EveUtils.Client.ViewModels.GameLogs;
 using EveUtils.Client.ViewModels.Home;
 using EveUtils.Client.ViewModels.Killmails;
+using EveUtils.Client.ViewModels.Map;
 using EveUtils.Client.ViewModels.Runs;
 using EveUtils.Client.ViewModels.Skills;
+using EveUtils.Client.ViewModels.Coupling;
+using EveUtils.Client.ViewModels.Setup;
 using EveUtils.Client.Esi;
 using EveUtils.Client.EveSettings;
 using EveUtils.Client.Platform;
@@ -41,6 +45,7 @@ using EveUtils.Client.Theming;
 using EveUtils.Client.Characters;
 using EveUtils.Client.Transport;
 using EveUtils.Client.Updates;
+using EveUtils.Client.WorldMap;
 using EveUtils.Shared.Transport;
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Identity;
@@ -64,6 +69,7 @@ using EveUtils.Shared.Modules.Gamelog.Events;
 using EveUtils.Shared.Modules.Gamelog.Models;
 using EveUtils.Shared.Modules.Gamelog.Reading;
 using EveUtils.Shared.Modules.Sde;
+using EveUtils.Shared.Modules.Sde.Dtos;
 using EveUtils.Shared.Modules.Sde.Import;
 using EveUtils.Shared.Modules.Settings.Commands;
 using EveUtils.Shared.Modules.Settings.Dtos;
@@ -131,9 +137,11 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         ["appraisal"] = "appraisal",
         ["inbox"] = "inbox",
         ["app-logs"] = "logs",
+        ["game-logs"] = "gamelogs",
         ["settings"] = "settings",
         ["runs"] = "runs",
         ["skills"] = "skills",
+        ["map"] = "map",
     };
 
     private const int RecentlyClosedModulesCapacity = 10;
@@ -179,6 +187,9 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
 
     // Transient activity line: pairing progress, couple/decouple results, errors. Empty = idle.
     [ObservableProperty] private string _activityStatus = "";
+
+    // "Map: following {name}" while the map follows a character; empty otherwise (ET-393).
+    [ObservableProperty] private string _mapStatus = "";
     [ObservableProperty] private string _fittingsStatus = "";
 
     // Tranquility server status (ESI /status/, polled every 30 s by EveServerStatusService). Shown right-aligned
@@ -261,6 +272,19 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
 
     partial void OnIsClipboardWatchingChanged(bool value) => OnPropertyChanged(nameof(ClipboardStatusTooltip));
 
+    /// <summary>OPSEC mode is on (ET-417). The title bar says so for as long as it is: a streamer has to know at a
+    /// glance which state the app is in before showing it.</summary>
+    [ObservableProperty] private bool _isOpsecOn;
+
+    public string OpsecChipTooltip =>
+        $"OPSEC is on: locations are masked and the map is hidden. {_OpsecShortcutText()} turns it off; Settings → Privacy & Sharing has the switch.";
+
+    private string _OpsecShortcutText() =>
+        _services?.GetService<Input.KeyboardShortcutRegistry>()?.DisplayText(Input.ShortcutAction.ToggleOpsec) is { Length: > 0 } shortcut
+            ? shortcut
+            : "Its shortcut";
+
+
     /// <summary>Tooltip for the compact rail status dot (floating mode, where the wide bottom bar does not fit):
     /// the Tranquility line plus any current activity message.</summary>
     public string RailStatusTooltip =>
@@ -271,9 +295,12 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
 
     public bool IsFitsActive => ActiveModule == "fits";
     public bool IsFleetActive => ActiveModule == "fleet";
+    public bool IsMapActive => ActiveModule == "map";
     public bool IsEsiActive => ActiveModule == "esi";
     public bool IsInboxActive => ActiveModule == "inbox";
     public bool IsLogsActive => ActiveModule == "logs";
+    public bool IsGameLogsActive => ActiveModule == "gamelogs";
+    public bool IsLogsGroupActive => IsEsiActive || IsInboxActive || IsLogsActive || IsGameLogsActive;
     public bool IsCompositionsActive => ActiveModule == "compositions";
     public bool IsSkillsActive => ActiveModule == "skills";
     public bool IsToolsActive => ActiveModule == "tools";
@@ -321,9 +348,12 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         OnPropertyChanged(nameof(ActiveModule));
         OnPropertyChanged(nameof(IsFitsActive));
         OnPropertyChanged(nameof(IsFleetActive));
+        OnPropertyChanged(nameof(IsMapActive));
         OnPropertyChanged(nameof(IsEsiActive));
         OnPropertyChanged(nameof(IsInboxActive));
         OnPropertyChanged(nameof(IsLogsActive));
+        OnPropertyChanged(nameof(IsGameLogsActive));
+        OnPropertyChanged(nameof(IsLogsGroupActive));
         OnPropertyChanged(nameof(IsCompositionsActive));
         OnPropertyChanged(nameof(IsSkillsActive));
         OnPropertyChanged(nameof(IsToolsActive));
@@ -344,6 +374,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
             // The home remains the landing shown at startup and when no tab is open.
             case "fits": await OpenFitBrowser(); break;
             case "fleet": OpenFleets(); break;
+            case "map": OpenMap(); break;
             case "compositions": OpenCompositions(); break;
             case "esi": OpenEsiMetrics(); break;
             case "settings-sync": OpenSettingsSync(); break;
@@ -354,6 +385,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
             case "skills": await OpenSkillsAsync(); break;
             case "inbox": OpenInbox(); break;
             case "logs": OpenLogs(); break;
+            case "gamelogs": await OpenGameLogsAsync(); break;
             case "settings": await OpenSettings(); break;
             case "about": await OpenAbout(); break;
         }
@@ -425,6 +457,8 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
     {
         _services = services;
         _gamelog = services.GetRequiredService<GamelogClientService>();
+        services.GetRequiredService<MapTrailRecorder>(); // records trails from app start, map open or not
+        services.GetRequiredService<IMapLauncher>().MapOpened += _WatchMapStatus;
         _login = services.GetRequiredService<LocalEsiLoginService>();
         _pairing = services.GetRequiredService<ServerPairingService>();
         _busConnector = services.GetRequiredService<IRemoteBusConnector>();
@@ -481,8 +515,16 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         // server usable at all", and a character whose session the server dropped is invisible in it as soon as one
         // other character on the same server is healthy (ET-123).
         if (_busConnector is not null)
+        {
             _busConnector.CharacterStateChanged += (address, characterId, state) =>
                 Avalonia.Threading.Dispatcher.UIThread.Post(() => ApplyServerConnectionState(address, characterId, state));
+
+            // A server coming up gains its fits tab, one nobody is coupled to any more loses it, along with its link
+            // chips — whichever screen coupled or decoupled it; the Fleets window's "decouple server" refreshes only
+            // itself (ET-427).
+            _busConnector.CouplingChanged += address =>
+                Avalonia.Threading.Dispatcher.UIThread.Post(() => _ = _RefreshAfterCouplingChangeAsync());
+        }
 
         // Live Tranquility status → the bottom-bar indicator. Seed from the current snapshot (the poller may have
         // already run before this VM existed) and follow further changes.
@@ -528,11 +570,20 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         _clipboardWatch.StateChanged += () =>
             Avalonia.Threading.Dispatcher.UIThread.Post(_ApplyClipboardState);
 
+        // OPSEC state → the title bar chip, followed live: the shortcut can flip it from anywhere, EVE included.
+        var opsec = services.GetRequiredService<Opsec.IOpsecService>();
+        IsOpsecOn = opsec.IsEnabled;
+        opsec.Changed += () =>
+        {
+            IsOpsecOn = opsec.IsEnabled;
+            OnPropertyChanged(nameof(OpsecChipTooltip));
+        };
+
         // Smooth, demo-parity DPS graphs: every tracker (own + fleet) renders through the one shared
         // ~30fps DpsRenderDriver, so the curve scrolls + decays continuously and all graphs share one render path.
         _renderDriver = services.GetRequiredService<DpsRenderDriver>();
 
-        _ = RunStartupResilientAsync();
+        _startupTask = RunStartupResilientAsync();
     }
 
     // Marks every character row whose EVE client is currently running on this machine (matched on the window-title
@@ -552,6 +603,9 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
     // there to act on or to read, and picking a different destination per state would only change the scroll offset.
     [RelayCommand]
     private Task OpenClipboardSettings() => OpenSettings(Views.SettingsWindow.PrivacyCategory);
+
+    [RelayCommand]
+    private Task OpenOpsecSettings() => OpenSettings(Views.SettingsWindow.PrivacyCategory);
 
     // "Unsupported" is a state of its own rather than a second flavour of off: on a platform that cannot report a
     // clipboard change, showing OFF would suggest the switch does something.
@@ -694,6 +748,35 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         _dialogs.ShowLogs(Logs);
     }
 
+    /// <summary>Opens GAME LOGS (ET-410): every character's game log lines in one list. The character list comes from
+    /// the registry as it stands now; a pilot whose log holds lines but who is not linked shows up from the lines.</summary>
+    private async Task OpenGameLogsAsync()
+    {
+        if (_dialogs is null || _services is null)
+            return;
+
+        IReadOnlyList<Character> characters = await _services.GetRequiredService<ICharacterRegistry>().GetAllAsync();
+        _dialogs.ShowGameLogs(new GameLogsViewModel(
+            _services.GetRequiredService<IGameLogLineSource>(), characters, _services.GetService<ICharacterPortraitProvider>()));
+    }
+
+    /// <summary>Opens the MAP module (ET-392). A fresh view-model per open; the map itself is shared, built once per SDE
+    /// build by the map module, so a second open costs no second read of the SDE.</summary>
+    private void OpenMap()
+    {
+        if (_dialogs is null || _services is null)
+            return;
+        _services.GetRequiredService<IMapLauncher>().Open();
+    }
+
+    // The launcher builds every map, whoever asked for it — the rail, a fleet's row or the fleet card's OPEN IN MAP.
+    private void _WatchMapStatus(MapViewModel map) =>
+        map.PropertyChanged += (_, change) =>
+        {
+            if (change.PropertyName == nameof(MapViewModel.FollowStatusText))
+                MapStatus = map.FollowStatusText;
+        };
+
     /// <summary>Opens the ESI-metrics window — non-modal; a fresh view-model per open so its live poll
     /// timer only runs while the window is visible.</summary>
     [RelayCommand]
@@ -735,7 +818,10 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         _dialogs.ShowAppraisal(new AppraisalViewModel(
             _services.GetRequiredService<IEnumerable<IAppraisalProvider>>(),
             _services.GetRequiredService<ISdeAccessor>(),
-            _dialogs));
+            _dialogs,
+            _services.GetService<IAppraisalProviderSelector>(),
+            _services.GetService<IEveWorkbenchKeyStore>(),
+            _services.GetService<IDispatcher>()));
     }
 
     /// <summary>Opens the runs screen (ET-161) — the only place in the app a saved run can be read back, and the
@@ -1221,7 +1307,93 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
     // ── Character management ──────────────────────────────────────────────────────────────────────
 
     [RelayCommand]
-    private Task AddCharacter() => SignInWithScopeDialogAsync(isNew: true);
+    private Task AddCharacter() => RunSetupWizardAsync(SetupWizardEntry.AddCharacter);
+
+    // ── Setup wizard (ET-425) ─────────────────────────────────────────────────────────────────────
+
+    /// <summary>Set once the first-start wizard has been through to Done, skipped or closed, so it does not come back
+    /// on every start for whoever skipped it without adding a character.</summary>
+    private const string SetupCompletedSettingKey = "ui.setup.completed";
+
+    private Task _startupTask = Task.CompletedTask;
+    private Task _sdeCheckTask = Task.CompletedTask;
+
+    /// <summary>
+    /// Opens the first-start wizard on a fresh install: no characters, no coupled server, and not skipped before. Waits
+    /// for the startup load and the SDE prompt so the wizard is not stacked on top of another modal.
+    /// </summary>
+    public void StartFirstStartSetup() => _ = RunFirstStartSetupAsync();
+
+    private async Task RunFirstStartSetupAsync()
+    {
+        if (_services is null || _registry is null) return;
+
+        await _startupTask;
+        await _sdeCheckTask;
+
+        try
+        {
+            using (var scope = _services.CreateScope())
+            {
+                var settings = await scope.ServiceProvider.GetRequiredService<IDispatcher>().Query(new GetSettingsQuery());
+                if (settings.Any(setting => setting.Key == SetupCompletedSettingKey && setting.Value == "true")) return;
+            }
+
+            if ((await _registry.GetAllAsync()).Count > 0) return;
+            if ((await _services.GetRequiredService<IClientSessionStore>().ListServersAsync()).Count > 0) return;
+
+            await RunSetupWizardAsync(SetupWizardEntry.FirstStart);
+        }
+        catch (Exception ex)
+        {
+            ActivityStatus = $"First-start setup failed: {ex.Message}";
+        }
+    }
+
+    /// <summary>Settings › General › Setup: the first-start variant again, welcome included.</summary>
+    private Task RunSetupAgainAsync() => RunSetupWizardAsync(SetupWizardEntry.FirstStart);
+
+    private async Task RunSetupWizardAsync(SetupWizardEntry entry)
+    {
+        if (_dialogs is null || _services is null) return;
+
+        using var wizard = new SetupWizardViewModel(this, entry);
+        wizard.Initialize();
+        await _dialogs.ShowSetupWizardAsync(wizard);
+
+        // Done, Skip and the window's own close all count: the flag only stops the wizard from opening by itself.
+        if (entry is SetupWizardEntry.FirstStart)
+        {
+            using var scope = _services.CreateScope();
+            await scope.ServiceProvider.GetRequiredService<IDispatcher>().Send(new SetSettingCommand(SetupCompletedSettingKey, "true"));
+        }
+    }
+
+    /// <summary>Every server this PC holds a session for, with the characters coupled to it — the wizard's "already
+    /// coupled" choice.</summary>
+    public async Task<IReadOnlyList<KnownServer>> ListKnownServersAsync()
+    {
+        if (_services is null) return [];
+
+        var sessionStore = _services.GetRequiredService<IClientSessionStore>();
+        var servers = new List<KnownServer>();
+        foreach (var address in await sessionStore.ListServersAsync())
+        {
+            var display = _serverRegistry is null ? address : await _serverRegistry.DisplayNameAsync(address);
+            IReadOnlyList<string> coupled = [.. (await sessionStore.LoadAllAsync(address)).Select(session => session.CharacterName)];
+            servers.Add(new KnownServer(address, display, coupled));
+        }
+        return servers;
+    }
+
+    public Task CopyToClipboardAsync(string text) => _dialogs?.SetClipboardTextAsync(text) ?? Task.CompletedTask;
+
+    /// <summary>The server's own name and scopes, or null when it does not answer — the wizard's "Test connection".</summary>
+    public async Task<ServerScopesResponse?> ProbeServerAsync(string address, CancellationToken cancellationToken)
+    {
+        if (_pairing is null) return null;
+        return await _pairing.GetServerScopesAsync(address, cancellationToken);
+    }
 
     /// <summary>
     /// App settings dialog: configure the gamelog directory. Persists the path via the
@@ -1282,7 +1454,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
             loadImages, _theme?.Current ?? FactionTheme.Gallente, SdeVersionLabel(), ApplySettingsAsync, openDetailAfterImport, toastPosition,
             localApiEnabled, localApiPort, localApiStatusLabel, localApi, checkUpdatesOnStartup, _clipboardWatch, initialCategory, openFleetRunWindow,
             autoPublishFleetRuns, shares.IsShared(MetricKind.Loot), shares.IsShared(MetricKind.MiningYield), autoStartMissions, autoStartSites,
-            _weekStart?.FirstDay ?? Calendar.WeekStartService.SystemDefault(), includeNightlyBuilds, _services.GetService<IUpdateService>(), offerHomefrontRuns);
+            _weekStart?.FirstDay ?? Calendar.WeekStartService.SystemDefault(), includeNightlyBuilds, _services.GetService<IUpdateService>(), offerHomefrontRuns, RunSetupAgainAsync);
     }
 
     /// <summary>Opens the About dialog: app identity + version, creator credits with portraits,
@@ -1689,6 +1861,12 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         await _coupling.DecoupleCharacterAsync(link.Address, link.CharacterId);
 
         ActivityStatus = $"Decoupled from {link.DisplayName}.";
+        await RefreshCharactersAsync();
+        await RefreshFittingsTabsAsync();
+    }
+
+    private async Task _RefreshAfterCouplingChangeAsync()
+    {
         await RefreshCharactersAsync();
         await RefreshFittingsTabsAsync();
     }
@@ -2218,142 +2396,89 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
     }
 
     /// <summary>
-    /// Couple a character to a server: ask for the address + optional label, query the server's
-    /// optional scopes, run the SSO pairing, then attach the bus and refresh the per-character links/tabs.
+    /// "Couple to server" for one character, in a window of its own that is the setup wizard's server step (ET-428):
+    /// connecting, Cancel and the errors to retry all show there.
+    /// <para><paramref name="restoreAddress"/> couples a server this client is already paired to again — the way back
+    /// from a session the server has dropped. The window opens on that server, so connecting and signing in are the
+    /// only steps left (ET-123). Deliberately NOT offered after a refused certificate: there the address is precisely
+    /// what is in question (ET-95). The only caller that passes an address is the link's recouple action, which is
+    /// gated on <see cref="ServerLinkViewModel.CanRecouple"/>.</para>
     /// </summary>
-    /// <summary>
-    /// Couple a character to a server: ask for the address + optional label, query the server's
-    /// optional scopes, run the SSO pairing, then attach the bus and refresh links/tabs. Returns true if a
-    /// server was coupled, false if the user cancelled or it failed. Invoked from a character's settings dialog;
-    /// the server decides which character from EVE's signed token.
-    /// </summary>
-    /// <summary>Unauthenticated probe for the couple dialog: returns the server's own name, or null
-    /// if unreachable. Reuses the accept-any-cert scopes probe; display-only (real trust = TOFU at pairing).</summary>
-    private async Task<string?> ProbeServerNameAsync(string address, CancellationToken cancellationToken)
+    /// <param name="expectedCharacterId">The character being coupled; the server refuses any other one that signs in on
+    /// the EVE page (ET-425).</param>
+    public async Task<bool> RunCoupleAsync(string? restoreAddress = null, int expectedCharacterId = 0)
     {
-        if (_pairing is null) return null;
-        var scopes = await _pairing.GetServerScopesAsync(address, cancellationToken);
-        return scopes?.ServerName;
+        if (_dialogs is null) return false;
+
+        var name = Characters.FirstOrDefault(character => character.CharacterId == expectedCharacterId)?.Name ?? "this character";
+        using var couple = new ServerCoupleViewModel(this);
+        await couple.StartAsync(expectedCharacterId, name, restoreAddress);
+        await _dialogs.CoupleServerAsync(couple);
+        return couple.IsCoupled;
     }
 
     /// <summary>
-    /// <paramref name="restoreAddress"/> couples a server this client is already paired to again — the way back from
-    /// a session the server has dropped. The dialog opens with the address and the user's own label already filled
-    /// in, because both are stored with the coupling being restored and retyping them is asking for something the
-    /// client already knows (ET-123).
-    /// <para>Deliberately NOT offered after a refused certificate: there the address is precisely what is in
-    /// question, and handing it back pre-filled would walk the user past the fingerprint check (ET-95). The only
-    /// caller that passes an address is the link's recouple action, which is gated on
-    /// <see cref="ServerLinkViewModel.CanRecouple"/>.</para>
+    /// The one route every coupling takes, from the character dialog and from the setup wizard alike: pair (a second
+    /// EVE login, through the server), remember the server's name, attach the bus and refresh the list and fit tabs.
     /// </summary>
-    public async Task<bool> RunCoupleAsync(string? restoreAddress = null)
+    /// <exception cref="PairingFailedException">The server refused, or the EVE login was declined.</exception>
+    public async Task<PairingResult> CoupleCharacterAsync(string address, string? label, IReadOnlyList<string> scopes,
+        int expectedCharacterId, Action<string>? authorizeUrl = null, CancellationToken cancellationToken = default)
     {
-        if (_pairing is null || _dialogs is null) return false;
+        if (_pairing is null) throw new InvalidOperationException("Server pairing is not available.");
 
-        CoupleServerResult? prefill = null;
-        if (!string.IsNullOrWhiteSpace(restoreAddress))
-        {
-            // The label only — not the server's own name, which the dialog already falls back to on its own; putting
-            // it in the box would turn it into a user label the user never chose.
-            var known = _serverRegistry is null ? null : await _serverRegistry.GetAsync(restoreAddress);
-            prefill = new CoupleServerResult(restoreAddress, known?.Label);
-        }
+        // Record the user label now so the UI can show it even before pairing fills in the server name.
+        if (_serverRegistry is not null)
+            await _serverRegistry.SetAsync(address, label, serverName: null, cancellationToken);
 
-        var couple = await _dialogs.CoupleServerAsync(ProbeServerNameAsync, prefill);
-        if (couple is null) { ActivityStatus = "Coupling cancelled."; return false; }
-        var address = couple.Address;
-
+        PairingResult result;
         try
         {
-            // Record the user label now so the UI can show it even before pairing fills in the server name.
-            if (_serverRegistry is not null)
-                await _serverRegistry.SetAsync(address, couple.Label, serverName: null);
-
-            // ask the server which optional scopes it wants, let the user opt in before pairing.
-            var serverScopes = await _pairing.GetServerScopesAsync(address);
-            var scopes = new List<string>(serverScopes?.RequiredScopes ?? ["publicData"]);
-
-            if (serverScopes is { OptionalScopes.Count: > 0 })
-            {
-                var optional = serverScopes.OptionalScopes
-                    .Select(o => new EsiScopeRequirement(o.Scope, EsiScopeTarget.Server, o.Feature, o.Reason))
-                    .ToList();
-                var chosen = await _dialogs.SelectScopesAsync(optional);
-                if (chosen is null) { ActivityStatus = "Pairing cancelled."; return false; }
-                scopes.AddRange(chosen);
-            }
-
-            var result = await _pairing.PairAsync(address, scopes, status => ActivityStatus = status);
-            // Remember the server's own name so the UI can show it (or the label) instead of the URL.
-            if (_serverRegistry is not null)
-                await _serverRegistry.SetAsync(address, label: null, serverName: result.ServerName);
-            if (_busConnector is not null)
-                await _busConnector.AttachAsync(address, result.CharacterId); // attach with the just-paired char's session
-
-            var affiliation = string.IsNullOrEmpty(result.AllianceName)
-                ? result.CorporationName
-                : $"{result.CorporationName} · {result.AllianceName}";
-            var suffix = string.IsNullOrWhiteSpace(affiliation) ? "" : $" ({affiliation})"; // no empty "()"
-            ActivityStatus = $"Connected to {result.ServerName} as {result.CharacterName}{suffix}";
-            await RefreshCharactersAsync(); // reflect the cloud-synced state on the paired character(s)
-            await RefreshFittingsTabsAsync(); // add the new server's fits tab
-            return true;
+            result = await _pairing.PairAsync(address, scopes, status => ActivityStatus = status,
+                expectedCharacterId, authorizeUrl, cancellationToken);
         }
         catch (Exception ex)
         {
-            ActivityStatus = $"Pairing failed: {ex.Message}";
-            return false;
+            // The pairing's own progress text would otherwise stay in the status bar as if it were still waiting.
+            ActivityStatus = ex is OperationCanceledException ? "Coupling cancelled." : $"Pairing failed: {ex.Message}";
+            throw;
         }
+        // Remember the server's own name so the UI can show it (or the label) instead of the URL.
+        if (_serverRegistry is not null)
+            await _serverRegistry.SetAsync(address, label: null, serverName: result.ServerName, cancellationToken);
+        if (_busConnector is not null)
+            await _busConnector.AttachAsync(address, result.CharacterId); // attach with the just-paired char's session
+
+        var affiliation = string.IsNullOrEmpty(result.AllianceName)
+            ? result.CorporationName
+            : $"{result.CorporationName} · {result.AllianceName}";
+        var suffix = string.IsNullOrWhiteSpace(affiliation) ? "" : $" ({affiliation})"; // no empty "()"
+        ActivityStatus = $"Connected to {result.ServerName} as {result.CharacterName}{suffix}";
+        await RefreshCharactersAsync(); // reflect the cloud-synced state on the paired character(s)
+        await RefreshFittingsTabsAsync(); // add the new server's fits tab
+        return result;
     }
 
     /// <summary>
-    /// Sign in (= add or update a character): show the scope-selection dialog, then run the
-    /// EVE SSO with exactly the chosen scopes. Every sign-in adds/updates a character in the registry,
-    /// so there is just one action — no separate "add character".
+    /// Sign in (= add or update a character) with exactly the chosen scopes, for the setup wizard. Every sign-in adds
+    /// or updates a character in the registry, so there is just one action — no separate "add character".
     /// </summary>
-    private async Task SignInWithScopeDialogAsync(bool isNew)
+    /// <exception cref="EsiSignInDeniedException">The access was not authorized on the EVE login page.</exception>
+    public async Task<EsiIdentity> SignInCharacterAsync(IReadOnlyList<string> scopes, Action<string>? authorizeUrl,
+        CancellationToken cancellationToken)
     {
-        if (_login is null || _dialogs is null || _scopeRegistry is null) return;
+        if (_login is null) throw new InvalidOperationException("EVE sign-in is not available.");
 
-        // 1. Let the user pick which scopes to request (defaults to all, from the registry).
-        var available = _scopeRegistry.GetRequirements(EsiScopeTarget.Client);
-        var selected = await _dialogs.SelectScopesAsync(available);
-        if (selected is null)
+        var identity = await _login.SignInAsync(scopes, cancellationToken, authorizeUrl);
+        ActivityStatus = $"Signed in: {identity.CharacterName} ({identity.CharacterId})";
+        _localCharacter = identity.CharacterName;
+        if (_gamelog is not null)
         {
-            ActivityStatus = "Sign-in cancelled.";
-            return; // user closed the dialog
+            _gamelog.SetCharacter(identity.CharacterName);
+            _gamelog.MapCharacter(identity.CharacterId, identity.CharacterName); // couple id↔name for fleet DPS
         }
-
-        // 2. Run the SSO with the chosen scopes.
-        _signInCts = new CancellationTokenSource(TimeSpan.FromMinutes(3));
-        IsSigningIn = true;
-        try
-        {
-            ActivityStatus = "Signing in… (cancel to abort)";
-            var identity = await _login.SignInAsync(selected, _signInCts.Token);
-            ActivityStatus =$"Signed in: {identity.CharacterName} ({identity.CharacterId})";
-            _localCharacter = identity.CharacterName;
-            if (_gamelog is not null)
-            {
-                _gamelog.SetCharacter(identity.CharacterName);
-                _gamelog.MapCharacter(identity.CharacterId, identity.CharacterName); // couple id↔name for fleet DPS
-            }
-            await RefreshCharactersAsync();
-        }
-        catch (OperationCanceledException)
-        {
-            ActivityStatus = "Sign-in cancelled.";
-        }
-        catch (Exception ex)
-        {
-            ActivityStatus =$"Sign-in failed: {ex.Message}";
-        }
-        finally
-        {
-            IsSigningIn = false;
-            _signInCts?.Dispose();
-            _signInCts = null;
-        }
+        await RefreshCharactersAsync();
+        return identity;
     }
 
     [RelayCommand]
@@ -2450,7 +2575,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
     /// it, so the modal has a shown owner). Decoupled on purpose: a slow/failing startup step (e.g. an unreachable
     /// paired server) must never swallow the check, and its own failure is surfaced instead of silently lost.
     /// </summary>
-    public void StartSdeUpdateCheck() => _ = RunSdeUpdateCheckResilientAsync();
+    public void StartSdeUpdateCheck() => _sdeCheckTask = RunSdeUpdateCheckResilientAsync();
 
     /// <summary>Offers back whatever <c>StopRunsLeftRunningCommand</c> stopped at startup (ET-254) — the window's
     /// Opened event drives this too, for the same reason as <see cref="StartSdeUpdateCheck"/>: a toast needs
@@ -2504,31 +2629,94 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
     /// Kicks off the update check the way <see cref="StartSdeUpdateCheck"/> does: after the window is up and off the
     /// startup chain, so a feed that never answers holds nothing up.
     /// </summary>
-    public void StartUpdateCheck() => _ = RunUpdateCheckResilientAsync();
+    public void StartUpdateCheck() => _ = RunUpdateChecksAsync(UpdateRecheckInterval);
 
-    private async Task RunUpdateCheckResilientAsync()
+    private static readonly TimeSpan UpdateRecheckInterval = TimeSpan.FromHours(1);
+
+    // The version the toast was last shown for: a "Later" must not bring the same build back on the next check.
+    private string? _offeredVersion;
+
+    // Same once-per-build rule for the SDE: the modal startup prompt and the toast share it, so declining at startup
+    // does not bring the same build back an hour later.
+    private long? _offeredSdeBuild;
+
+    // The startup check, then the same check on a timer while the app runs (ET-430). Only the startup one reports
+    // to the status bar; a recheck that fails is not worth interrupting anyone for. The SDE rides the same timer
+    // (ET-431); its startup check is the modal one in CheckSdeUpdateAsync, so only its rechecks run here.
+    internal async Task RunUpdateChecksAsync(TimeSpan interval)
     {
-        try
+        await RunUpdateCheckResilientAsync(isStartup: true);
+
+        using var timer = new PeriodicTimer(interval);
+        while (await timer.WaitForNextTickAsync())
         {
-            await CheckForUpdateAsync();
-        }
-        catch (Exception ex)
-        {
-            ActivityStatus = $"Update check failed: {ex.Message}";
+            await RunUpdateCheckResilientAsync(isStartup: false);
+            await RecheckSdeUpdateAsync();
         }
     }
 
-    private async Task CheckForUpdateAsync()
+    private async Task RecheckSdeUpdateAsync()
     {
-        if (_services is null || !await IsStartupUpdateCheckEnabledAsync()) return;
+        if (_services is null) return;
+
+        try
+        {
+            var check = await _services.GetRequiredService<ISdeImporter>().CheckForUpdateAsync();
+            if (check.UpdateAvailable && check.Remote.BuildNumber != _offeredSdeBuild)
+            {
+                _offeredSdeBuild = check.Remote.BuildNumber;
+                OfferSdeUpdate(check.Remote);
+            }
+        }
+        catch (Exception)
+        {
+            // Deliberately silent, like the app recheck: CCP unreachable, the next tick tries again.
+        }
+    }
+
+    private void OfferSdeUpdate(SdeVersion remote) =>
+        _services?.GetService<IToastService>()?.Show(
+            "EVE static data update",
+            $"A newer EVE static data build ({remote.BuildNumber}) is available (~80 MB).",
+            ToastKind.Information,
+            [
+                new ToastAction("Later", () => { }),
+                new ToastAction("Update", () => _ = RunSdeImportPopupAsync(), ToastActionStyle.Affirmative),
+            ],
+            ToastPosition.BottomRight);
+
+    private async Task RunUpdateCheckResilientAsync(bool isStartup)
+    {
+        try
+        {
+            await CheckForUpdateAsync(isStartup);
+        }
+        catch (Exception ex) when (isStartup)
+        {
+            ActivityStatus = $"Update check failed: {ex.Message}";
+        }
+        catch (Exception)
+        {
+            // Deliberately silent: the next tick tries again, and the operator never asked for this check.
+        }
+    }
+
+    private async Task CheckForUpdateAsync(bool isStartup)
+    {
+        // A package already waiting for its restart is the answer; asking again would only offer it a second time.
+        if (_services is null || IsUpdateReady || !await IsStartupUpdateCheckEnabledAsync()) return;
 
         var check = await _services.GetRequiredService<IUpdateService>().CheckAsync(await ResolveUpdateChannelAsync());
 
-        if (UpdateNotice.StartupStatus(check, InstalledVersion) is { } status)
+        if (isStartup && UpdateNotice.StartupStatus(check, InstalledVersion) is { } status)
             ActivityStatus = status;
 
-        if (UpdateNotice.Classify(check) is UpdateNoticeKind.Available)
-            OfferUpdate(check.Value!);
+        if (UpdateNotice.Classify(check) is UpdateNoticeKind.Available && check.Value is { } release
+            && release.Version != _offeredVersion)
+        {
+            _offeredVersion = release.Version;
+            OfferUpdate(release);
+        }
     }
 
     // Read straight from the store rather than from the loaded Settings collection: this runs off the startup chain,
@@ -2541,8 +2729,8 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         return settings.FirstOrDefault(s => s.Key == CheckUpdatesOnStartupSettingKey)?.Value != "false";
     }
 
-    // Bottom right and with no expiry, both deliberate: there is no periodic re-check, so this offer is made exactly
-    // once per session and a toast that walks away on a timer takes that one chance with it.
+    // Bottom right and with no expiry, both deliberate: a build is offered once per session, so a toast that walks
+    // away on a timer takes that one chance with it.
     private void OfferUpdate(AppRelease release) =>
         _services?.GetService<IToastService>()?.Show(
             "Update available",
@@ -2619,6 +2807,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
 
         if (!check.UpdateAvailable) return;
 
+        _offeredSdeBuild = check.Remote.BuildNumber;
         var message = check.Local is null
             ? $"EVE static data (build {check.Remote.BuildNumber}) is needed for item names and fittings. " +
               "Download it now? (~80 MB)"

@@ -14,6 +14,7 @@ using EveUtils.Client.Formatting;
 using EveUtils.Client.Gamelog;
 using EveUtils.Client.Imaging;
 using EveUtils.Client.Notifications;
+using EveUtils.Client.Opsec;
 using EveUtils.Client.Platform;
 using EveUtils.Client.ViewModels.Runs;
 using EveUtils.Client.ViewModels.Runs.Sections;
@@ -180,14 +181,15 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             .Subscribe<FleetRunPilotResumedEvent>(_OnFleetPilotResumed);
         _fleetLegs = services.GetService<FleetRunLegs>();
         RunLoot = services.GetService<CqrsDispatcher>() is { } dispatcher
-            ? new RunLootViewModel(dispatcher, services.GetService<IAppraisalProvider>(), services.GetService<ISdeAccessor>())
+            ? new RunLootViewModel(dispatcher, sde: services.GetService<ISdeAccessor>(),
+                appraisalSelector: services.GetService<IAppraisalProviderSelector>())
             : null;
         if (RunLoot is not null)
             RunLoot.PropertyChanged += (_, _) => _RefreshSummaries();
         LootOverview = services.GetService<CqrsDispatcher>() is { } overviewDispatcher
             ? new ActivityLootViewModel(() => new RunLootViewModel(overviewDispatcher,
-                    services.GetService<IAppraisalProvider>(), services.GetService<ISdeAccessor>(),
-                    services.GetService<ITypeImageProvider>()),
+                    sde: services.GetService<ISdeAccessor>(), images: services.GetService<ITypeImageProvider>(),
+                    appraisalSelector: services.GetService<IAppraisalProviderSelector>()),
                 services.GetService<ICharacterPortraitProvider>())
             : null;
         if (LootOverview is not null)
@@ -839,7 +841,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         ? "Your own twenty minutes, from your own way in. The clock is a floor — the moment of entry cannot be "
           + "observed, so this is at most what is left."
         : _pendingCopy is { } waiting
-            ? $"{waiting.Name} is copied and waiting. Save or discard this {SignatureName} run and it takes over; "
+            ? $"{OpsecText.Mark(waiting.Name)} is copied and waiting. Save or discard this {OpsecText.Mark(SignatureName)} run and it takes over; "
               + "KEEP drops the copy and puts the clock back on this run."
             : RunState == ActivityRunState.Stopped
                 // STOP is a pause, not an end (Raymond, 2026-09-02): stepping out mid-site and coming back has to
@@ -898,7 +900,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             // One caller is a void hand-over and the other an async void OnOpened, so an escape here is an
             // unobserved task or a crash on the UI thread. Same treatment the signature hand-over gives its own.
             _services.GetService<IToastService>()?.Show("Run not started",
-                $"Could not start the run on {SignatureName}: {ex.Message}", ToastKind.Error);
+                $"Could not start the run on {OpsecText.Mark(SignatureName)}: {ex.Message}", ToastKind.Error);
             _SignatureDecision($"the automatic start failed: {ex.Message}", SignatureName ?? "(no site)");
         }
     }
@@ -1013,7 +1015,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             {
                 await scope.ServiceProvider.GetRequiredService<CqrsDispatcher>()
                     .Send(new DiscardRunCommand(run.Id, DateTime.UtcNow));
-                _SignatureDecision($"closed out the {run.SiteName} run left open in the store", copied);
+                _SignatureDecision($"closed out the {OpsecText.Mark(run.SiteName)} run left open in the store", copied);
                 return false;
             }
 
@@ -1844,8 +1846,10 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     /// guards its own read (ET-287): a lookup outliving one tick must not be started again by the next.</summary>
     private bool _isNamingActingCharacter;
 
-    /// <summary>Guards the unstarted-fleet lookup in <see cref="RefreshFleetCommandAsync"/> the same way (ET-287).</summary>
-    private bool _isCheckingUnstartedFleet;
+    /// <summary>Guards the unstarted-fleet lookup in <see cref="RefreshFleetCommandAsync"/> the same way (ET-287).
+    /// Holds the in-flight task itself (ET-375), not just a flag, so an awaiter joins a lookup already under way
+    /// instead of seeing the throttle interval and moving on with a stale notice.</summary>
+    private Task<(string? Name, int FormingCount)>? _unstartedFleetCheck;
 
     /// <summary>
     /// Offer what this run has looted to the fleet. Clock-driven like the rest of the window, and it only ever hands
@@ -2378,20 +2382,25 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             _unstartedFleetNoticeCheckedAtUtc = null;
         }
         // A text hint can wait briefly: checking every clock tick wastes work, but checking only once hides new fleets.
-        else if (_runCharacterId is not null && !_isCheckingUnstartedFleet
-                 && (_unstartedFleetNoticeCheckedAtUtc is null
+        // An awaiting caller also joins a lookup already under way (ET-375), not only a due interval — see the
+        // field's own doc comment above.
+        else if (_runCharacterId is not null
+                 && (_unstartedFleetCheck is not null || _unstartedFleetNoticeCheckedAtUtc is null
                      || nowUtc - _unstartedFleetNoticeCheckedAtUtc >= UnstartedFleetNoticeRefreshInterval))
         {
-            _unstartedFleetNoticeCheckedAtUtc = nowUtc;
-            _isCheckingUnstartedFleet = true;
+            if (_unstartedFleetCheck is null)
+            {
+                _unstartedFleetNoticeCheckedAtUtc = nowUtc;
+                // Off the UI thread (ET-287) — see _RefreshParticipantsAsync.
+                _unstartedFleetCheck = Task.Run(() => _UnstartedFleetNameAsync());
+            }
             try
             {
-                // Off the UI thread (ET-287) — see _RefreshParticipantsAsync.
-                (UnstartedFleetName, FormingFleetCount) = await Task.Run(() => _UnstartedFleetNameAsync());
+                (UnstartedFleetName, FormingFleetCount) = await _unstartedFleetCheck;
             }
             finally
             {
-                _isCheckingUnstartedFleet = false;
+                _unstartedFleetCheck = null;
             }
         }
     }
@@ -3141,7 +3150,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         foreach (MetricSample sample in members)
             _RowFor(sample.CharacterId).LocationText = sample.AbyssalAnchorMs > 0
                 ? "in abyssal space"
-                : sample.Text ?? "not sharing a system";
+                : OpsecText.Mark(sample.Text) ?? "not sharing a system";
 
         foreach (ActivityFleetMemberViewModel row in FleetMembers)
         {
@@ -3263,7 +3272,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         SolarSystem = offline ? null : snapshot.Location;
         LocationDisplay = offline
             ? "offline"
-            : AbyssalSpace.Describe(snapshot.Location, snapshot.AbyssalAnchor, nowUtc)
+            : AbyssalSpace.Describe(OpsecText.Mark(snapshot.Location), snapshot.AbyssalAnchor, nowUtc)
               ?? EsiLocationReasonText.Describe(snapshot.LocationUnavailableReason);
     }
 
@@ -3802,7 +3811,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         catch (Exception ex)
         {
             _services.GetService<IToastService>()?.Show("Site not switched",
-                $"Could not close the open run to make room for {name}: {ex.Message}", ToastKind.Error);
+                $"Could not close the open run to make room for {OpsecText.Mark(name)}: {ex.Message}", ToastKind.Error);
             _SignatureDecision($"failed: {ex.Message}", name);
             return; // a switch that failed leaves a window nobody should start a run on
         }
@@ -3835,7 +3844,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         // is a site, whatever this window is showing, so that is the kind the waiting window opens as.
         _pendingCopy = new PendingCopy(ActivityKind.Site, name, StartsOnArrival, id, group, sites, null, null, null, []);
         StopRun(DateTime.UtcNow);
-        _SignatureDecision($"the open {SignatureName} run is not this one, so this waits", name);
+        _SignatureDecision($"the open {OpsecText.Mark(SignatureName)} run is not this one, so this waits", name);
         Refresh(DateTime.UtcNow);
     }
 
@@ -3882,7 +3891,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             _pendingCopy = new PendingCopy(ActivityKind.Mission, waiting, StartsOnArrival, null, null, [], agentId,
                 missionLevel, solarSystemId, parameters);
             StopRun(DateTime.UtcNow);
-            _SignatureDecision($"the open {SignatureName} run is not this one, so this waits", waiting);
+            _SignatureDecision($"the open {OpsecText.Mark(SignatureName)} run is not this one, so this waits", waiting);
             Refresh(DateTime.UtcNow);
             return;
         }
@@ -3908,7 +3917,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     private void _SignatureDecision(string what, string name) =>
         _services.GetService<ILoggerFactory>()?.CreateLogger<ActivityWindowViewModel>().LogDiagnostic(
             "Copied signature {Signature}: {What} (run {RunId}, state {State}, group {Group}, fleet {Fleet}).",
-            name, what, RunId, RunState, GroupCode, FleetId);
+            OpsecText.Mark(name), what, RunId, RunState, GroupCode, FleetId);
 
     /// <summary>SAVE is the lock, and so is ET-179 finishing a run left standing: a committed run's loot carries no
     /// controls at all, which is the whole difference between an editable section and a fixed one.</summary>

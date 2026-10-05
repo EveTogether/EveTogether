@@ -9,6 +9,6 @@ namespace EveUtils.Shared.Modules.Killmails.Repositories;
 /// </summary>
 public interface IProvisionalKillmailReader
 {
-    /// <summary>The character's provisional killmails, newest first.</summary>
-    Task<IReadOnlyList<ProvisionalKillmail>> GetForCharacterAsync(int characterId, CancellationToken cancellationToken = default);
+    /// <summary>The character's provisional killmails, newest first; every character's for a null id (ET-405).</summary>
+    Task<IReadOnlyList<ProvisionalKillmail>> GetForCharacterAsync(int? characterId, CancellationToken cancellationToken = default);
 }

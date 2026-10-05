@@ -9,7 +9,7 @@ namespace EveUtils.Shared.Modules.ServerAuth.Services.Implementations;
 /// data folder. POC caveat: a real build derives/wraps this with a KMS or an admin
 /// passphrase-KDF (envelope KEK/DEK) so the key isn't sibling to the database — not resolved here.
 /// </summary>
-internal sealed class AesGcmTokenProtector : ITokenProtector
+public sealed class AesGcmTokenProtector : ITokenProtector
 {
     private const int TagSize = 16;
     private const int NonceSize = 12;

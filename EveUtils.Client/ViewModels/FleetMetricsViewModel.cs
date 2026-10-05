@@ -13,6 +13,8 @@ using EveUtils.Client.Notifications;
 using EveUtils.Client.Platform;
 using EveUtils.Client.Transport;
 using EveUtils.Client.ViewModels.FitBrowser;
+using EveUtils.Client.ViewModels.Map;
+using EveUtils.Client.WorldMap;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Fleet.Dtos;
 using EveUtils.Shared.Modules.Fleet.Entities;
@@ -94,6 +96,7 @@ public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposabl
     private readonly int? _esiFleetBossId;
 
     private readonly DispatcherTimer _presenceSweep;
+    private readonly IMapLauncher? _maps;
 
     // What this screen needs to open its neighbours (ET-171): the fleet it reports on and who is looking at it.
     private readonly FleetInfo _fleet;
@@ -156,6 +159,84 @@ public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposabl
         _presenceSweep = new DispatcherTimer { Interval = PresenceSweepInterval };
         _presenceSweep.Tick += (_, _) => RefreshPresence(DateTimeOffset.UtcNow);
         _presenceSweep.Start();
+
+        // The fleet on the map (ET-395): a second view on the map the MAP tab reads, following this fleet from the start.
+        if (services.GetService<IMapLauncher>() is { } maps)
+        {
+            _maps = maps;
+            FleetMap = maps.Create();
+            _ = FleetMap.PinFleetAsync(_fleetId, serverAddress: null);
+        }
+    }
+
+    /// <summary>The card on the right: this fleet on the map. Null where the map is not part of the app (a test host).</summary>
+    public MapViewModel? FleetMap { get; }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasMapCard))]
+    private bool _isMapCardOpen = true;
+
+    public bool HasMapCard => FleetMap is not null && IsMapCardOpen;
+
+    partial void OnIsMapCardOpenChanged(bool value) => _ApplyWidthState();
+
+    private double _contentWidth;
+    private FleetMetricsWidthState _widthState;
+
+    /// <summary>Where the map card sits: between the summary and the list once the window is too narrow for it beside them.</summary>
+    public bool IsStacked => _widthState.IsStacked;
+
+    /// <summary>The density hint on a row of its own, above the buttons.</summary>
+    public bool HintOnOwnRow => _widthState.HintOnOwnRow;
+
+    /// <summary>The view reports the width its content root was given; both layout states follow from it.</summary>
+    public void ApplyWidth(double contentWidth)
+    {
+        if (double.IsNaN(contentWidth) || contentWidth <= 0)
+            return;
+
+        _contentWidth = contentWidth;
+        _ApplyWidthState();
+    }
+
+    private void _ApplyWidthState()
+    {
+        if (_contentWidth <= 0)
+            return;
+
+        FleetMetricsWidthState next = FleetMetricsWidth.Resolve(_contentWidth, HasMapCard, _widthState);
+        if (next == _widthState)
+            return;
+
+        _widthState = next;
+        OnPropertyChanged(nameof(IsStacked));
+        OnPropertyChanged(nameof(HintOnOwnRow));
+    }
+
+    [RelayCommand]
+    private void ToggleMapCard() => IsMapCardOpen = !IsMapCardOpen;
+
+    /// <summary>OPEN IN MAP: the MAP tab, following this fleet.</summary>
+    [RelayCommand]
+    private System.Threading.Tasks.Task OpenFleetOnMapAsync() =>
+        _maps?.OpenFollowingFleetAsync(_fleetId, serverAddress: null) ?? System.Threading.Tasks.Task.CompletedTask;
+
+    /// <summary>POP OUT on the card: the map in its own window, following this fleet.</summary>
+    [RelayCommand]
+    private System.Threading.Tasks.Task PopOutFleetMapAsync() =>
+        _maps?.PopOutFollowingFleetAsync(_fleetId, serverAddress: null) ?? System.Threading.Tasks.Task.CompletedTask;
+
+    /// <summary>A click on a member in the COMPACT list: the card flies to where they are and stops following.</summary>
+    public void ShowMemberOnMap(DpsViewModel member)
+    {
+        if (FleetMap is null)
+            return;
+        foreach ((int characterId, DpsViewModel tracker) in _trackers)
+            if (ReferenceEquals(tracker, member))
+            {
+                FleetMap.ShowMember(characterId, member.Character);
+                return;
+            }
     }
 
     /// <summary>
@@ -851,6 +932,7 @@ public sealed partial class FleetMetricsViewModel : ObservableObject, IDisposabl
         _dialogs?.CloseFleetOverlay(_fleetId);
 
         _presenceSweep.Stop();
+        FleetMap?.Dispose();
         _subscription.Dispose();
         _rosterSubscription.Dispose();
         _presenceSubscription?.Dispose();

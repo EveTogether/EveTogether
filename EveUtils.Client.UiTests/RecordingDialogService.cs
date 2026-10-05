@@ -8,13 +8,17 @@ using EveUtils.Client.Runs;
 using EveUtils.Client.ViewModels;
 using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Client.ViewModels.FitBrowser;
+using EveUtils.Client.ViewModels.GameLogs;
 using EveUtils.Client.ViewModels.Killmails;
+using EveUtils.Client.ViewModels.Map;
 using EveUtils.Client.ViewModels.Runs;
 using EveUtils.Client.ViewModels.Skills;
 using EveUtils.Client.ViewModels.Skills.Plans;
 using EveUtils.Client.ViewModels.Skills.WhatIf;
 using EveUtils.Shared.Modules.Esi;
 using EveUtils.Shared.Modules.Fittings.Dtos;
+using EveUtils.Client.ViewModels.Coupling;
+using EveUtils.Client.ViewModels.Setup;
 
 namespace EveUtils.Client.UiTests;
 
@@ -105,17 +109,17 @@ public sealed class RecordingDialogService : IDialogService
         LastFittingsOffered = fits;
         return OnSelectFittings(fits);
     }
-    /// <summary>What the couple dialog was opened with, so a test can see whether it would have asked the user to
+    /// <summary>What the couple window was opened on, so a test can see whether it would have asked the user to
     /// retype something the client already knows (ET-123). Null means it has not been opened.</summary>
-    public CoupleServerResult? LastCouplePrefill { get; private set; }
-    public bool CoupleDialogOpened { get; private set; }
+    public ServerCoupleViewModel? LastCouple { get; private set; }
+    public bool CoupleDialogOpened => LastCouple is not null;
 
-    public Task<CoupleServerResult?> CoupleServerAsync(
-        Func<string, CancellationToken, Task<string?>> probeServerName, CoupleServerResult? prefill = null)
+    public Task ShowSetupWizardAsync(SetupWizardViewModel viewModel) => throw NotUsed();
+
+    public Task CoupleServerAsync(ServerCoupleViewModel viewModel)
     {
-        CoupleDialogOpened = true;
-        LastCouplePrefill = prefill;
-        return Task.FromResult<CoupleServerResult?>(null); // cancelled — the pairing round-trip is not what is under test
+        LastCouple = viewModel;
+        return Task.CompletedTask; // closed without coupling — the pairing round-trip is not what is under test
     }
 
     public Task<string?> SelectServerAsync(string prompt, IReadOnlyList<ServerPickOption> options) => throw NotUsed();
@@ -273,7 +277,7 @@ public sealed class RecordingDialogService : IDialogService
     /// <summary>Stands in for the real window's Closed handler, since nothing here opens one — a test drives the
     /// "the run window went away" half of <see cref="ActivityWindowChanged"/> with this.</summary>
     public void CloseActivityWindow() => ActivityWindowChanged?.Invoke(null);
-    public void ShowSettings(string currentDirectory, string detectedDefault, bool shareLocation, bool shareBounty, bool shareCombat, bool loadTypeImages, EveUtils.Client.Theming.FactionTheme currentFaction, string sdeVersionLabel, Func<SettingsResult, Task> onApply, bool openFitDetailAfterImport = true, EveUtils.Client.Notifications.ToastPosition toastPosition = EveUtils.Client.Notifications.ToastPosition.TopRight, bool enableLocalApi = false, int localApiPort = EveUtils.Client.LocalApi.LocalApiServer.DefaultPort, string localApiStatusLabel = "", EveUtils.Client.LocalApi.ILocalApiServer? localApiServer = null, bool checkUpdatesOnStartup = true, EveUtils.Client.Clipboard.ClipboardWatchService? clipboardWatch = null, int initialCategory = 0, bool openFleetRunWindowImmediately = false, bool autoPublishFleetRuns = true, bool shareLoot = false, bool shareMining = false, bool autoStartMissions = true, bool autoStartSites = true, DayOfWeek weekStartsOn = DayOfWeek.Monday, bool includeNightlyBuilds = false, Updates.IUpdateService? updates = null, bool offerHomefrontRuns = true) => throw NotUsed();
+    public void ShowSettings(string currentDirectory, string detectedDefault, bool shareLocation, bool shareBounty, bool shareCombat, bool loadTypeImages, EveUtils.Client.Theming.FactionTheme currentFaction, string sdeVersionLabel, Func<SettingsResult, Task> onApply, bool openFitDetailAfterImport = true, EveUtils.Client.Notifications.ToastPosition toastPosition = EveUtils.Client.Notifications.ToastPosition.TopRight, bool enableLocalApi = false, int localApiPort = EveUtils.Client.LocalApi.LocalApiServer.DefaultPort, string localApiStatusLabel = "", EveUtils.Client.LocalApi.ILocalApiServer? localApiServer = null, bool checkUpdatesOnStartup = true, EveUtils.Client.Clipboard.ClipboardWatchService? clipboardWatch = null, int initialCategory = 0, bool openFleetRunWindowImmediately = false, bool autoPublishFleetRuns = true, bool shareLoot = false, bool shareMining = false, bool autoStartMissions = true, bool autoStartSites = true, DayOfWeek weekStartsOn = DayOfWeek.Monday, bool includeNightlyBuilds = false, Updates.IUpdateService? updates = null, bool offerHomefrontRuns = true, Func<Task>? runSetupAgain = null) => throw NotUsed();
 
     /// <summary>
     /// Answers the update offer (true = download and install). Default: Later.
@@ -312,6 +316,11 @@ public sealed class RecordingDialogService : IDialogService
     public Task<DoctrineEntryPick?> PickDoctrineEntryAsync(DoctrinePickerViewModel viewModel) => OnPickDoctrineEntry(viewModel);
     public void ShowInbox(InboxViewModel viewModel) => throw NotUsed();
     public void ShowLogs(ClientLogViewModel viewModel) => throw NotUsed();
+
+    /// <summary>The GAME LOGS screen the module launcher asked for, or null (ET-410).</summary>
+    public GameLogsViewModel? LastGameLogs { get; private set; }
+
+    public GameLogsViewModel ShowGameLogs(GameLogsViewModel viewModel) => LastGameLogs = viewModel;
     public void ShowEsiMetrics(EsiMetricsViewModel viewModel) => throw NotUsed();
 
     /// <summary>The settings-sync tool the shell was asked to open, or null — how a test asserts the Tools menu
@@ -379,6 +388,37 @@ public sealed class RecordingDialogService : IDialogService
     public SkillsWindowViewModel? LastSkills { get; private set; }
 
     public SkillsWindowViewModel ShowSkills(SkillsWindowViewModel viewModel) => LastSkills = viewModel;
+
+    /// <summary>The MAP module the launcher asked for, or null (ET-392).</summary>
+    public MapViewModel? LastMap { get; private set; }
+
+    public MapViewModel ShowMap(MapViewModel viewModel) => LastMap = viewModel;
+
+    /// <summary>How many times the map was asked to pop out, come back, or show its window (ET-396).</summary>
+    public int MapPopOuts { get; private set; }
+    public int MapPutBacks { get; private set; }
+    public int MapWindowShows { get; private set; }
+
+    public bool IsMapPoppedOut { get; private set; }
+    public bool CanPopOutMap => LastMap is not null && !IsMapPoppedOut;
+
+    public event Action? MapPresentationChanged;
+
+    public void PopOutMap()
+    {
+        MapPopOuts++;
+        IsMapPoppedOut = true;
+        MapPresentationChanged?.Invoke();
+    }
+
+    public void PutBackMap()
+    {
+        MapPutBacks++;
+        IsMapPoppedOut = false;
+        MapPresentationChanged?.Invoke();
+    }
+
+    public void ShowMapWindow() => MapWindowShows++;
 
     /// <summary>The killmail detail screen the shell was asked to open, or null — a hook to drive it without
     /// standing up the real window (ET-333).</summary>

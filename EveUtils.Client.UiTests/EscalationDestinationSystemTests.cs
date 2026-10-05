@@ -1,3 +1,4 @@
+using EveUtils.Client.Opsec;
 using EveUtils.Client.ViewModels.Runs;
 using EveUtils.Shared.Modules.Sde.Dtos;
 using Xunit;
@@ -26,7 +27,7 @@ public sealed class EscalationDestinationSystemTests
         };
 
         Assert.Equal(30003867, dialog.DestinationResolvedSystem?.SolarSystemId);
-        Assert.Equal("0.7 security", dialog.DestinationSecurityText);
+        Assert.Equal($"{OpsecText.Mark("0.7")} security", dialog.DestinationSecurityText);
 
         dialog.RegisterCommand.Execute(null);
 

@@ -4,8 +4,9 @@ namespace EveUtils.Shared.Modules.Sde.Storage;
 /// DDL for the read-only SDE store. Tables are created empty, bulk-loaded in one transaction, then indexed
 /// (CREATE INDEX after the inserts is far cheaper than maintaining indexes per row). The store holds only the
 /// minimal subset we use (data-minimalisation): types/groups/categories, dogma attributes/effects and
-/// per-type dogma, a pre-computed slot/hardpoint table for the fit parsers and the site catalogue. Heavy datasets (map*,
-/// typeMaterials, blueprints) are skipped entirely.
+/// per-type dogma, a pre-computed slot/hardpoint table for the fit parsers, the site catalogue and the universe map
+/// (regions, constellations, systems with 2D position, stargate connections). Heavy datasets (typeMaterials,
+/// blueprints) are skipped entirely.
 /// </summary>
 public static class SdeSchema
 {
@@ -26,9 +27,11 @@ public static class SdeSchema
     /// pair (ET-232) — the individual-hull refinement <c>shipGroupIdsJson</c> alone could not express;
     /// v9 added <c>SolarSystem.regionId</c> and the <c>Region</c>, <c>NpcCorporation</c> and <c>Faction</c> tables
     /// (ET-335) so a killmail's system, region, attacker corporation and faction resolve from the SDE instead of ESI;
-    /// v10 added <c>Type.description</c> for the skill catalogue (ET-351).
+    /// v10 added <c>Type.description</c> for the skill catalogue (ET-351);
+    /// v11 added the <c>Constellation</c> and <c>Jump</c> tables, <c>SolarSystem.constellationId/x2d/y2d</c> and
+    /// <c>Region.factionId</c> for the world map (ET-391).
     /// </summary>
-    public const int SchemaVersion = 10;
+    public const int SchemaVersion = 11;
 
     /// <summary>Schema-creating statements, run before the bulk load.</summary>
     public static readonly string[] CreateTables =
@@ -136,14 +139,19 @@ public static class SdeSchema
         "CREATE TABLE SiteNameAlias (dungeonId INTEGER NOT NULL, nameKey TEXT NOT NULL, locale TEXT NOT NULL);",
         // The mission side of the SDE (ET-173). SolarSystem backs Agent.solarSystemId; agent and site name
         // resolution is only ever by id, never joined against Site's own dungeonId space (see Mission below).
-        // regionId (ET-335) comes straight off mapSolarSystems.jsonl — no constellation table is needed because
-        // the system already carries its region id, not just its constellation id.
+        // regionId (ET-335) comes straight off mapSolarSystems.jsonl, as do constellationId and the schematic 2D
+        // position (ET-391). x2d/y2d are CCP's position2D with y negated: the SDE has y+ = north, the map draws
+        // y+ = down, so consumers use them as screen coordinates as-is. Both are NULL for systems without a
+        // position2D — wormhole and abyssal space, which also have no gates.
         """
         CREATE TABLE SolarSystem (
             solarSystemId  INTEGER PRIMARY KEY,
             nameEn         TEXT NOT NULL,
             securityStatus REAL NOT NULL,
-            regionId       INTEGER NOT NULL
+            regionId       INTEGER NOT NULL,
+            constellationId INTEGER NOT NULL,
+            x2d            REAL,
+            y2d            REAL
         ) WITHOUT ROWID;
         """,
         // Only npcCharacters rows with an `agent` sub-object become a row here (ET-173 AC-2). solarSystemId is
@@ -184,8 +192,14 @@ public static class SdeSchema
         // missionId -> arcId only (ET-173 AC-6, minimal by design); the nextMissions chain graph is a read
         // concern (ET-131), not an import concern.
         "CREATE TABLE EpicArcMission (missionId INTEGER PRIMARY KEY, arcId INTEGER NOT NULL) WITHOUT ROWID;",
-        // Id + English name only (ET-335), resolved through SolarSystem.regionId above.
-        "CREATE TABLE Region (regionId INTEGER PRIMARY KEY, nameEn TEXT NOT NULL) WITHOUT ROWID;",
+        // Id, English name and owning faction (ET-335, ET-391), resolved through SolarSystem.regionId above.
+        "CREATE TABLE Region (regionId INTEGER PRIMARY KEY, nameEn TEXT NOT NULL, factionId INTEGER) WITHOUT ROWID;",
+        "CREATE TABLE Constellation (constellationId INTEGER PRIMARY KEY, nameEn TEXT NOT NULL, regionId INTEGER NOT NULL, factionId INTEGER) WITHOUT ROWID;",
+        // Stargate connections (ET-391). mapStargates.jsonl lists every gate once per side (13978 gates = 6989
+        // connections); the importer stores one row per connection with fromSystemId < toSystemId. A reader that
+        // wants both directions mirrors the row itself — the primary key serves lookups by the lower id, the
+        // IX_Jump_toSystemId index those by the higher id.
+        "CREATE TABLE Jump (fromSystemId INTEGER NOT NULL, toSystemId INTEGER NOT NULL, PRIMARY KEY (fromSystemId, toSystemId)) WITHOUT ROWID;",
         // Id + English name only (ET-335) — a killmail's attacker/victim corporation or faction id resolves here
         // when it belongs to an NPC; a miss means the id is a player's and must go to ESI instead (see
         // ISdeAccessor.GetNpcCorporationName/GetFactionName).
@@ -217,6 +231,7 @@ public static class SdeSchema
         // The two site filter axes. Name search is a substring LIKE, which no index can serve.
         "CREATE INDEX IX_Site_archetypeId ON Site (archetypeId);",
         "CREATE INDEX IX_Site_factionId ON Site (factionId);",
+        "CREATE INDEX IX_Jump_toSystemId ON Jump (toSystemId);",
         "CREATE INDEX IX_Agent_nameKey ON Agent (nameKey);",
         "CREATE INDEX IX_AgentNameAlias_nameKey ON AgentNameAlias (nameKey);"
     ];

@@ -7,6 +7,7 @@ using Avalonia.Headless.XUnit;
 using EveUtils.Client.Esi;
 using EveUtils.Client.Notifications;
 using EveUtils.Client.Gamelog;
+using EveUtils.Client.Opsec;
 using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Client.ViewModels.Runs.Sections;
 using EveUtils.Client.Platform;
@@ -272,8 +273,8 @@ public class ActivityWindowWiringTests
         await model.ApplySignatureAsync("SUG-270", "Combat Site", "Drone Cluster", []);
 
         string line = Assert.Single(log.Messages, message => message.Contains("so this waits", StringComparison.Ordinal));
-        Assert.Contains("the open Sansha Hideaway run", line, StringComparison.Ordinal);
-        Assert.DoesNotContain("the open Drone Cluster run", line, StringComparison.Ordinal);
+        Assert.Contains($"the open {OpsecText.Mark("Sansha Hideaway")} run", line, StringComparison.Ordinal);
+        Assert.DoesNotContain($"the open {OpsecText.Mark("Drone Cluster")} run", line, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -297,7 +298,7 @@ public class ActivityWindowWiringTests
         // and leaves nothing waiting (see the test below). The seventeen-minute clock is gone either way.
         Assert.True(model.IsKeepRunButtonVisible);
         Assert.Equal(ActivityRunState.Stopped, model.RunState);
-        Assert.Contains("Sansha Refuge is copied and waiting", model.ClockHint);
+        Assert.Contains($"{OpsecText.Mark("Sansha Refuge")} is copied and waiting", model.ClockHint, StringComparison.Ordinal);
         Assert.Equal(StoredRunState.Stopped, (await _RunAsync(harness, first!.Value)).State);
     }
 
@@ -746,7 +747,7 @@ public class ActivityWindowWiringTests
         // The question, and the three answers to it: START is off, and KEEP is the one that is on in its place.
         Assert.False(model.IsStartButtonVisible);
         Assert.True(model.IsKeepRunButtonVisible);
-        Assert.Contains("Drone Cluster is copied and waiting", model.ClockHint);
+        Assert.Contains($"{OpsecText.Mark("Drone Cluster")} is copied and waiting", model.ClockHint, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -808,7 +809,7 @@ public class ActivityWindowWiringTests
         Assert.Null(model.MissionAgentId);
         Assert.Equal(ActivityRunState.Stopped, model.RunState);
         Assert.True(model.IsKeepRunButtonVisible);
-        Assert.Contains("Aralin Jick is copied and waiting", model.ClockHint);
+        Assert.Contains($"{OpsecText.Mark("Aralin Jick")} is copied and waiting", model.ClockHint, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -1039,7 +1040,7 @@ public class ActivityWindowWiringTests
         OverlayShots.Capture(window, "eveutils-activity-manual-start-adopts-site");
 
         Assert.Equal("Sansha Refuge", model.SignatureName);
-        Assert.Equal("Sansha Refuge", model.Activity().SignatureSiteText);
+        Assert.Equal(OpsecText.Mark("Sansha Refuge"), model.Activity().SignatureSiteText);
         Assert.True(model.Activity().HasSignature, "the window still reads no signature for a site the store already had");
         window.Close();
     }
@@ -1279,9 +1280,9 @@ public class ActivityWindowWiringTests
         await ActivityWindowHarness.WaitUntil(() =>
         {
             model.Refresh(DateTime.UtcNow);
-            return model.Activity().LocationText == "Aphend";
+            return model.Activity().LocationText == OpsecText.Mark("Aphend");
         });
-        Assert.Equal("Aphend", model.Activity().LocationText);
+        Assert.Equal(OpsecText.Mark("Aphend"), model.Activity().LocationText);
         Assert.True(model.Activity().IsLocationShown);
     }
 

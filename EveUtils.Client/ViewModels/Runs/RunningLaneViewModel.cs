@@ -2,6 +2,7 @@ using System;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using EveUtils.Client.Opsec;
 using EveUtils.Shared.Identity;
 using EveUtils.Shared.Modules.Runs.Dtos;
 
@@ -59,9 +60,9 @@ public sealed partial class RunningLaneViewModel(Character character, CharacterF
         ActionText = run is null ? "START" : "OPEN";
         StateText = run is null
             ? "nothing running"
-            : string.IsNullOrWhiteSpace(run.SiteName) ? "unnamed site" : run.SiteName;
+            : string.IsNullOrWhiteSpace(run.SiteName) ? "unnamed site" : OpsecText.Mark(run.SiteName);
         TypeText = run is null ? string.Empty : typeText;
-        SystemText = run is null ? null : systemText;
+        SystemText = run is null ? null : OpsecText.Mark(systemText);
         Tick(nowUtc);
     }
 

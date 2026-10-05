@@ -1,0 +1,382 @@
+<v:ChromedWindow xmlns="https://github.com/avaloniaui" xmlns:v="using:EveUtils.Client.Views"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:setup="using:EveUtils.Client.ViewModels.Setup"
+        xmlns:dlg="using:EveUtils.Client.Dialogs"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="660" d:DesignHeight="600"
+        x:Class="EveUtils.Client.Views.SetupWizardWindow"
+        x:DataType="setup:SetupWizardViewModel"
+        Width="660" Height="600" CanResize="False"
+        WindowStartupLocation="CenterOwner"
+        Title="EVE Together">
+
+    <Window.Styles>
+        <StyleInclude Source="avares://EveUtils.Client/Views/SetupStyles.axaml"/>
+    </Window.Styles>
+
+    <Window.DataTemplates>
+        <!-- A character row: portrait, name, corp · id, and its chip (server, NO SERVER or ADDED). -->
+        <DataTemplate DataType="setup:SetupCharacterRow">
+            <Border Classes="row" Padding="8" Margin="0,0,0,6">
+                <Grid ColumnDefinitions="48,*,Auto">
+                    <Panel Width="48" Height="48">
+                        <Border Background="{DynamicResource AccentSoftBrush}" IsVisible="{Binding !Character.HasPortrait}">
+                            <TextBlock Text="{Binding Character.Initial}" FontSize="20" FontWeight="Bold"
+                                       Foreground="{DynamicResource AccentBrightBrush}"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <Image Source="{Binding Character.Portrait}" Stretch="UniformToFill"
+                               IsVisible="{Binding Character.HasPortrait}"/>
+                    </Panel>
+                    <StackPanel Grid.Column="1" Margin="10,0" VerticalAlignment="Center" Spacing="1">
+                        <TextBlock Text="{Binding Character.Name}" FontWeight="SemiBold"
+                                   Foreground="{StaticResource TextBrightBrush}"/>
+                        <TextBlock FontSize="10" TextTrimming="CharacterEllipsis" Foreground="{StaticResource TextDimSmallBrush}">
+                            <Run Text="{Binding Character.Affiliation}"/><Run Text=" · "/><Run Text="{Binding Character.CharacterId}" FontFamily="{StaticResource MonoFont}"/>
+                        </TextBlock>
+                    </StackPanel>
+                    <Border Grid.Column="2" Classes="chip" Classes.good="{Binding IsCoupled}" Classes.dim="{Binding !IsCoupled}">
+                        <TextBlock Text="{Binding ChipText}" FontFamily="{StaticResource MonoFont}" LetterSpacing="1"/>
+                    </Border>
+                </Grid>
+            </Border>
+        </DataTemplate>
+
+        <DataTemplate DataType="dlg:ScopeChoiceViewModel">
+            <v:ScopeChoiceRow/>
+        </DataTemplate>
+    </Window.DataTemplates>
+
+    <Panel>
+        <DockPanel Background="#FF0C100E">
+
+            <!-- Header: ◆ title · round · Skip setup / Cancel -->
+            <Border DockPanel.Dock="Top" Classes="panel-header">
+                <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto">
+                    <TextBlock Text="◆" Classes="diamond" Margin="0,0,7,0"/>
+                    <TextBlock Grid.Column="1" Text="{Binding HeaderTitle}" Classes="panel-title" VerticalAlignment="Center"/>
+                    <Border Grid.Column="2" IsVisible="{Binding ShowRoundBadge}" Margin="8,0,0,0" Padding="6,2"
+                            BorderThickness="1" BorderBrush="{DynamicResource BorderBrush}" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding RoundText}" FontFamily="{StaticResource MonoFont}" FontSize="9"
+                                   LetterSpacing="1.4" Foreground="{DynamicResource AccentBrightBrush}"/>
+                    </Border>
+                    <Button Grid.Column="4" Classes="link skip" Content="{Binding StopText}"
+                            Command="{Binding RequestStopCommand}" IsVisible="{Binding ShowStopButton}" Padding="0"/>
+                </Grid>
+            </Border>
+
+            <!-- Stepper -->
+            <Border DockPanel.Dock="Top" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource DividerBrush}" Padding="18,12,18,10">
+                <Grid ColumnDefinitions="*,Auto">
+                    <ItemsControl ItemsSource="{Binding Stepper}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate><UniformGrid Rows="1"/></ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="setup:StepSegment">
+                                <StackPanel Spacing="5" Margin="0,0,4,0">
+                                    <Panel Height="3">
+                                        <Border Classes="bar" Classes.done="{Binding IsDone}" Classes.cur="{Binding IsCurrent}"
+                                                IsVisible="{Binding !IsLoop}"/>
+                                        <Line StartPoint="0,1.5" EndPoint="2000,1.5" StrokeThickness="3" Stroke="#14FFFFFF"
+                                              StrokeDashArray="2,1.33" ClipToBounds="True" IsVisible="{Binding IsLoop}"/>
+                                    </Panel>
+                                    <StackPanel Orientation="Horizontal" Spacing="4">
+                                        <TextBlock Text="{Binding Label}" Classes="steplabel"
+                                                   Classes.done="{Binding IsDone}" Classes.cur="{Binding IsCurrent}"/>
+                                        <TextBlock Text="OPTIONAL" FontSize="8" LetterSpacing="1" VerticalAlignment="Center"
+                                                   Foreground="{StaticResource TextDimBrush}" IsVisible="{Binding IsOptional}"/>
+                                    </StackPanel>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <TextBlock Grid.Column="1" Text="↻ per character" FontSize="9" Margin="6,0,0,0"
+                               VerticalAlignment="Bottom" Foreground="{StaticResource TextDimBrush}"/>
+                </Grid>
+            </Border>
+
+            <!-- Footer -->
+            <Border DockPanel.Dock="Bottom" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource DividerBrush}" Padding="18,12">
+                <Grid ColumnDefinitions="Auto,*,Auto">
+                    <Button Content="← Back" Command="{Binding CharacterBackCommand}" IsVisible="{Binding ShowCharacterBack}"/>
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8">
+                        <Button Classes="accent" Content="Get started →" Command="{Binding GetStartedCommand}"
+                                IsVisible="{Binding IsWelcome}"/>
+                        <Panel IsVisible="{Binding IsCharacterStep}">
+                            <Button Classes="accent" Content="Sign in with EVE Online →" Command="{Binding SignInCommand}"
+                                    IsVisible="{Binding !IsSignInWaiting}"/>
+                        </Panel>
+                        <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding IsServerStep}">
+                            <Button Content="Not now" Command="{Binding NotNowCommand}" IsVisible="{Binding Server.ShowNotNow}"/>
+                            <Button Classes="accent" Content="{Binding Server.CoupleButtonText}" Command="{Binding Server.CoupleCommand}"
+                                    IsVisible="{Binding Server.ShowCoupleButton}"/>
+                            <Button Classes="accent" Content="Next →" Command="{Binding NotNowCommand}"
+                                    IsVisible="{Binding Server.IsCoupled}"/>
+                        </StackPanel>
+                        <Panel IsVisible="{Binding IsDoneStep}">
+                            <Button Classes="accent" Content="Open EVE Together" Command="{Binding CloseWizardCommand}"
+                                    IsVisible="{Binding IsFirstStart}"/>
+                            <Button Classes="accent" Content="Close" Command="{Binding CloseWizardCommand}"
+                                    IsVisible="{Binding !IsFirstStart}"/>
+                        </Panel>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+                <Panel Margin="22,18">
+
+                    <!-- ── Welcome ── -->
+                    <StackPanel IsVisible="{Binding IsWelcome}">
+                        <TextBlock Classes="h2" Text="Welcome to EVE Together"/>
+                        <TextBlock Classes="intro" Text="EVE Together tracks your runs, fits, skills and kills per character, on this PC. With a server you can also fly together: shared fleets, runs and fits with your corp."/>
+                        <TextBlock Classes="label" Text="FOR EACH CHARACTER"/>
+                        <UniformGrid Columns="3" Margin="0,8,0,14">
+                            <Border Classes="row" Padding="10" Margin="0,0,8,0">
+                                <StackPanel Spacing="3">
+                                    <TextBlock Text="1" FontFamily="{StaticResource MonoFont}" FontSize="18" FontWeight="SemiBold" Foreground="{DynamicResource AccentBrightBrush}"/>
+                                    <TextBlock Text="Add the character" FontSize="11" Foreground="{StaticResource TextBrightBrush}"/>
+                                    <TextBlock Classes="small" Text="Sign in with EVE Online in your browser. You choose what the app may read."/>
+                                </StackPanel>
+                            </Border>
+                            <Border Classes="row" Padding="10" Margin="4,0" BorderBrush="{DynamicResource DividerBrush}">
+                                <StackPanel Spacing="3">
+                                    <TextBlock Text="2" FontFamily="{StaticResource MonoFont}" FontSize="18" FontWeight="SemiBold" Foreground="{DynamicResource AccentBrightBrush}"/>
+                                    <TextBlock FontSize="11" Foreground="{StaticResource TextBrightBrush}" TextWrapping="Wrap">
+                                        <Run Text="Couple a server"/><Run Text=" · optional" FontSize="10" Foreground="{StaticResource TextDimSmallBrush}"/>
+                                    </TextBlock>
+                                    <TextBlock Classes="small" Text="Only if your corp or friends run an EVE Together server. Per character."/>
+                                </StackPanel>
+                            </Border>
+                            <Border Classes="row" Padding="10" Margin="8,0,0,0" BorderBrush="{DynamicResource DividerBrush}">
+                                <StackPanel Spacing="3">
+                                    <TextBlock Text="↻" FontFamily="{StaticResource MonoFont}" FontSize="18" FontWeight="SemiBold" Foreground="{DynamicResource AccentBrightBrush}"/>
+                                    <TextBlock Text="Another one?" FontSize="11" Foreground="{StaticResource TextBrightBrush}"/>
+                                    <TextBlock Classes="small" Text="Repeat for as many characters as you like, then see an overview."/>
+                                </StackPanel>
+                            </Border>
+                        </UniformGrid>
+                        <Border Classes="callout">
+                            <DockPanel>
+                                <Border Classes="calloutEdge" DockPanel.Dock="Left"/>
+                                <StackPanel>
+                                    <TextBlock Classes="calloutTitle" Text="Your password never reaches EVE Together"/>
+                                    <TextBlock Classes="small" Foreground="{StaticResource TextBrush}" Text="You sign in on CCP's own login page. EVE Together receives a token for the access you picked, stored encrypted on this PC."/>
+                                </StackPanel>
+                            </DockPanel>
+                        </Border>
+                        <TextBlock Classes="small" Margin="0,4,0,0">
+                            <Run Text="About a minute per character. You can skip at any point and open this setup again from "/><Run Text="Settings › General" FontWeight="Bold"/><Run Text="."/>
+                        </TextBlock>
+                    </StackPanel>
+
+                    <!-- ── Character: waiting for the browser ── -->
+                    <StackPanel IsVisible="{Binding IsCharacterStep}">
+                        <StackPanel IsVisible="{Binding IsSignInWaiting}">
+                            <TextBlock Classes="h2" Text="Sign in with EVE Online"/>
+                            <TextBlock Classes="intro">
+                                <Run Text="Your browser opened CCP's login page. Pick the character there and press "/><Run Text="Authorize" FontWeight="Bold"/><Run Text="."/>
+                            </TextBlock>
+                            <Border Classes="row" Padding="14">
+                                <Grid ColumnDefinitions="Auto,*">
+                                    <Panel Width="26" Height="26" VerticalAlignment="Center">
+                                        <Ellipse Stroke="#1AFFFFFF" StrokeThickness="3"/>
+                                        <Arc Classes="spin" Stroke="{DynamicResource AccentBrightBrush}" StrokeThickness="3"
+                                             StartAngle="-90" SweepAngle="90"/>
+                                    </Panel>
+                                    <StackPanel Grid.Column="1" Margin="14,0,0,0" Spacing="2">
+                                        <TextBlock Text="Waiting for EVE Online…" FontWeight="SemiBold" Foreground="{StaticResource TextBrightBrush}" Margin="0,0,0,6"/>
+                                        <TextBlock Classes="stepDone" FontSize="11" Text="1.  Browser opened"/>
+                                        <TextBlock Classes="stepNow" FontSize="11" Text="{Binding WaitingAccountStep, StringFormat='2.  {0}'}"/>
+                                        <TextBlock FontSize="11" Text="3.  Authorize the access you picked"/>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+                            <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,8,0,0">
+                                <Button Content="Cancel sign-in" Command="{Binding CancelWaitingCommand}"/>
+                                <Button Classes="link" Content="Browser didn't open? Copy the login link" Command="{Binding CopyLoginLinkCommand}"/>
+                            </StackPanel>
+                            <TextBlock Classes="small" Margin="0,10,0,0" Text="Waits up to 3 minutes, then stops on its own."/>
+                        </StackPanel>
+
+                        <!-- ── Character: choose access ── -->
+                        <StackPanel IsVisible="{Binding ShowCharacterForm}">
+                            <TextBlock Classes="h2" Text="{Binding CharacterTitle}"/>
+                            <TextBlock Classes="intro" Text="{Binding CharacterIntro}"/>
+
+                            <Border Classes="callout err" IsVisible="{Binding IsSignInCancelled}">
+                                <DockPanel>
+                                    <Border Classes="calloutEdge err" DockPanel.Dock="Left"/>
+                                    <StackPanel>
+                                        <TextBlock Classes="calloutTitle" Text="Sign-in was cancelled"/>
+                                        <TextBlock TextWrapping="Wrap" Text="{Binding SignInCancelledText}"/>
+                                        <WrapPanel Margin="0,10,0,0">
+                                            <Button Classes="accent" Content="Try again" Command="{Binding SignInCommand}" Margin="0,0,8,0"/>
+                                            <Button Content="Change access" Command="{Binding ChangeAccessCommand}" Margin="0,0,8,0"/>
+                                            <Button Content="Stop here, show overview" Command="{Binding FinishCommand}" IsVisible="{Binding ShowStopHere}"/>
+                                            <Button Content="Close" Command="{Binding CloseWizardCommand}" IsVisible="{Binding ShowErrorClose}"/>
+                                        </WrapPanel>
+                                    </StackPanel>
+                                </DockPanel>
+                            </Border>
+
+                            <Border Classes="callout err" IsVisible="{Binding IsSignInNoAnswer}">
+                                <DockPanel>
+                                    <Border Classes="calloutEdge err" DockPanel.Dock="Left"/>
+                                    <StackPanel>
+                                        <TextBlock Classes="calloutTitle" Text="No answer from the browser"/>
+                                        <TextBlock TextWrapping="Wrap" Text="Nothing came back from the EVE login page within 3 minutes. Was the tab closed, or did the browser not open?"/>
+                                        <WrapPanel Margin="0,10,0,0">
+                                            <Button Classes="accent" Content="Try again" Command="{Binding SignInCommand}" Margin="0,0,8,0"/>
+                                            <Button Content="Copy the login link" Command="{Binding SignInAndCopyLinkCommand}" Margin="0,0,8,0"/>
+                                            <Button Content="Stop here, show overview" Command="{Binding FinishCommand}" IsVisible="{Binding ShowStopHere}"/>
+                                            <Button Content="Close" Command="{Binding CloseWizardCommand}" IsVisible="{Binding ShowErrorClose}"/>
+                                        </WrapPanel>
+                                    </StackPanel>
+                                </DockPanel>
+                            </Border>
+
+                            <Border Classes="callout err" IsVisible="{Binding IsSignInFailed}">
+                                <DockPanel>
+                                    <Border Classes="calloutEdge err" DockPanel.Dock="Left"/>
+                                    <StackPanel>
+                                        <TextBlock Classes="calloutTitle" Text="Sign-in failed"/>
+                                        <TextBlock TextWrapping="Wrap" Text="{Binding SignInError}"/>
+                                        <WrapPanel Margin="0,10,0,0">
+                                            <Button Classes="accent" Content="Try again" Command="{Binding SignInCommand}" Margin="0,0,8,0"/>
+                                            <Button Content="Stop here, show overview" Command="{Binding FinishCommand}" IsVisible="{Binding ShowStopHere}"/>
+                                            <Button Content="Close" Command="{Binding CloseWizardCommand}" IsVisible="{Binding ShowErrorClose}"/>
+                                        </WrapPanel>
+                                    </StackPanel>
+                                </DockPanel>
+                            </Border>
+
+                            <StackPanel IsVisible="{Binding ShowSameAccess}">
+                                <TextBlock Classes="label" Text="ACCESS TO GRANT"/>
+                                <Border Classes="callout" Margin="0,0,0,10">
+                                    <DockPanel>
+                                        <Border Classes="calloutEdge" DockPanel.Dock="Left"/>
+                                        <StackPanel>
+                                            <TextBlock Classes="calloutTitle" Text="{Binding SameAccessTitle}"/>
+                                            <TextBlock Classes="small" Foreground="{StaticResource TextBrush}" Text="{Binding SameAccessSummary}"/>
+                                            <Button Classes="link" Content="Change access…" Command="{Binding ChangeAccessCommand}"
+                                                    Padding="0" Margin="0,10,0,0" HorizontalAlignment="Left"/>
+                                        </StackPanel>
+                                    </DockPanel>
+                                </Border>
+                            </StackPanel>
+
+                            <StackPanel IsVisible="{Binding ShowScopeList}">
+                                <Grid ColumnDefinitions="*,Auto,Auto">
+                                    <TextBlock Classes="label" Text="ACCESS TO GRANT" VerticalAlignment="Center"/>
+                                    <Button Grid.Column="1" Classes="link" Content="Select all" Command="{Binding SelectAllScopesCommand}"/>
+                                    <Button Grid.Column="2" Classes="link" Content="Select none" Command="{Binding SelectNoScopesCommand}"/>
+                                </Grid>
+                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Background="{StaticResource BgPanelBrush}"
+                                        Padding="6" MaxHeight="196">
+                                    <ScrollViewer>
+                                        <ItemsControl ItemsSource="{Binding ScopeChoices}"/>
+                                    </ScrollViewer>
+                                </Border>
+                                <TextBlock Classes="small" Margin="0,6,0,0" Text="Opt-in items are off by default. You can add or drop access later; nothing here is final."/>
+                            </StackPanel>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <!-- ── Server (optional, for the character just added) ── -->
+                    <StackPanel IsVisible="{Binding IsServerStep}">
+                        <TextBlock Classes="h2">
+                            <Run Text="{Binding Server.Title}"/><Run Text=" · optional" FontSize="10" FontWeight="Normal" Foreground="{StaticResource TextDimSmallBrush}"/>
+                        </TextBlock>
+                        <ContentControl Content="{Binding CurrentRow}" Margin="0,4,0,0"/>
+                        <TextBlock Classes="intro" Margin="0,4,0,8" Text="A server is run by your corp or friends. Coupled, this character can form fleets with others, share fits and runs. Without one, it works fully on this PC."/>
+
+                        <v:ServerCoupleView DataContext="{Binding Server}"/>
+                    </StackPanel>
+
+                    <!-- ── Another? ── -->
+                    <StackPanel IsVisible="{Binding IsAnotherStep}">
+                        <TextBlock Classes="h2" Text="Add another character?"/>
+                        <TextBlock Classes="intro" Text="{Binding AnotherIntro}"/>
+                        <TextBlock Classes="label" Text="{Binding AddedLabel}"/>
+                        <ItemsControl ItemsSource="{Binding AddedRows}"/>
+                        <UniformGrid Columns="2" Margin="0,14,0,0">
+                            <Button Classes="choice" Command="{Binding AddAnotherCommand}" Margin="0,0,5,0">
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="+ Yes, add another" FontWeight="SemiBold" FontSize="13" Foreground="{StaticResource TextBrightBrush}"/>
+                                    <TextBlock Classes="small" Text="Same steps: sign in, then optionally a server. Character on another EVE account? Log out on the EVE page first."/>
+                                </StackPanel>
+                            </Button>
+                            <Button Classes="choice primary" Command="{Binding FinishCommand}" Margin="5,0,0,0">
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="No, I'm done" FontWeight="SemiBold" FontSize="13" Foreground="{StaticResource TextBrightBrush}"/>
+                                    <TextBlock Classes="small" Text="See an overview of every character you added and its server."/>
+                                </StackPanel>
+                            </Button>
+                        </UniformGrid>
+                    </StackPanel>
+
+                    <!-- ── Done ── -->
+                    <StackPanel IsVisible="{Binding IsDoneStep}">
+                        <TextBlock Classes="h2" Text="{Binding DoneTitle}"/>
+                        <TextBlock Classes="intro" Text="{Binding DoneIntro}"/>
+                        <ItemsControl ItemsSource="{Binding AddedRows}" IsVisible="{Binding HasAddedRows}"/>
+                        <TextBlock Classes="small" Text="No characters were added." IsVisible="{Binding !HasAddedRows}"/>
+                        <TextBlock Classes="label" Text="WHERE TO FIND IT LATER" Margin="0,14,0,4"/>
+                        <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+                            <StackPanel>
+                                <Grid ColumnDefinitions="170,*" Margin="10,7">
+                                    <TextBlock Text="Another character" FontWeight="SemiBold" FontSize="11" Foreground="{StaticResource TextBrightBrush}"/>
+                                    <TextBlock Grid.Column="1" FontSize="11" TextWrapping="Wrap">
+                                        <Run Text="+ ADD CHARACTER" FontFamily="{StaticResource MonoFont}" FontSize="10" Foreground="{DynamicResource TextAccentBrush}"/><Run Text=" under the character list (these same steps)"/>
+                                    </TextBlock>
+                                </Grid>
+                                <Border Height="1" Background="{DynamicResource DividerBrush}"/>
+                                <Grid ColumnDefinitions="170,*" Margin="10,7">
+                                    <TextBlock Text="A server for a character" FontWeight="SemiBold" FontSize="11" Foreground="{StaticResource TextBrightBrush}"/>
+                                    <TextBlock Grid.Column="1" FontSize="11" TextWrapping="Wrap">
+                                        <Run Text="The character's gear button → "/><Run Text="Couple to server" FontFamily="{StaticResource MonoFont}" FontSize="10" Foreground="{DynamicResource TextAccentBrush}"/>
+                                    </TextBlock>
+                                </Grid>
+                                <Border Height="1" Background="{DynamicResource DividerBrush}"/>
+                                <Grid ColumnDefinitions="170,*" Margin="10,7">
+                                    <TextBlock Text="Change a character's access" FontWeight="SemiBold" FontSize="11" Foreground="{StaticResource TextBrightBrush}"/>
+                                    <TextBlock Grid.Column="1" FontSize="11" TextWrapping="Wrap">
+                                        <Run Text="The character's gear button → "/><Run Text="Re-authenticate" FontFamily="{StaticResource MonoFont}" FontSize="10" Foreground="{DynamicResource TextAccentBrush}"/>
+                                    </TextBlock>
+                                </Grid>
+                                <StackPanel IsVisible="{Binding IsFirstStart}">
+                                    <Border Height="1" Background="{DynamicResource DividerBrush}"/>
+                                    <Grid ColumnDefinitions="170,*" Margin="10,7">
+                                        <TextBlock Text="This setup" FontWeight="SemiBold" FontSize="11" Foreground="{StaticResource TextBrightBrush}"/>
+                                        <TextBlock Grid.Column="1" FontSize="11" TextWrapping="Wrap">
+                                            <Run Text="SETTINGS" FontFamily="{StaticResource MonoFont}" FontSize="10" Foreground="{DynamicResource TextAccentBrush}"/><Run Text=" › General › Setup"/>
+                                        </TextBlock>
+                                    </Grid>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </Panel>
+            </ScrollViewer>
+        </DockPanel>
+
+        <!-- Skip / Cancel: names what stays and offers the overview -->
+        <Border Background="#9902050A" IsVisible="{Binding IsStopDialogOpen}">
+            <Border Width="420" Background="#FF0C100E" BorderBrush="{DynamicResource BorderStrongBrush}" BorderThickness="1"
+                    Padding="16" HorizontalAlignment="Center" VerticalAlignment="Center" BoxShadow="0 12 32 0 #73000000">
+                <StackPanel>
+                    <TextBlock Classes="h2" Text="{Binding StopDialogTitle}"/>
+                    <TextBlock Classes="intro" Margin="0,6,0,0" Text="{Binding StopDialogText}"/>
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,14,0,0">
+                        <Button Content="Back" Command="{Binding StopDialogBackCommand}"/>
+                        <Button Content="Show overview" Command="{Binding StopDialogShowOverviewCommand}" IsVisible="{Binding HasAddedRows}"/>
+                        <Button Classes="accent" Content="{Binding StopText}" Command="{Binding StopDialogConfirmCommand}"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </Border>
+    </Panel>
+</v:ChromedWindow>

@@ -3,54 +3,106 @@
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
 [![.NET](https://img.shields.io/badge/.NET-10.0-512BD4.svg)](https://dotnet.microsoft.com/)
 
-A **local-first**, **fully autonomous** ops-sec tooling suite for EVE Online — fits, assets,
-skills, fleet sync and killboard in one desktop app, with an optional self-hosted server.
-
-- **Client** — desktop app on **Avalonia** (C#/MVVM), local **SQLite**, own ESI connector + gRPC client.
-- **Server** — self-hosted (Docker), **configurable** database engine (SQLite / MySQL / SQL Server /
-  PostgreSQL), serving Minimal-API + Blazor + gRPC + SignalR on one TLS endpoint.
-- **Shared** — data layer + CQRS infra + identity/logging/messaging + **all modules** (vertical slices).
+A **local-first**, **fully autonomous** ops-sec toolkit for EVE Online — fits, fleets, compositions,
+runs, killmails and a map of New Eden in one desktop app, with an optional self-hosted server for
+flying as a group.
 
 EVE Together is **open source** and **data-minimising** by design: it hosts nothing for you, and you
-can see exactly what is stored and sent. It runs live against `login.eveonline.com`.
+can see exactly what is stored and sent. Your data lives in a local SQLite database on your own PC.
 
 <p align="center">
-  <img src="docs/images/home-dashboard.png" alt="Home dashboard" width="49%">
-  <img src="docs/images/fleet.png" alt="Fleet and live metrics" width="49%">
+  <img src="docs/images/runs-overview.png" alt="The Runs screen: a calendar and activity strip, filters by run type and character, and a day-by-day list with ISK per run" width="100%">
 </p>
 
-> **Status: pre-1.0, in active development.** The architecture is in place; some pieces are still
-> being built out (see [Status](#status)). Coding conventions live in [`AGENTS.md`](AGENTS.md).
+> **Beta.** EVE Together is usable day to day, but versions follow [SemVer](https://semver.org/) and
+> pre-1.0 releases may contain breaking changes. Coding conventions live in [`AGENTS.md`](AGENTS.md).
+
+---
+
+## What it does
+
+Every entry in the left rail of the app is one module:
+
+| Module | What you get |
+|--------|--------------|
+| **Home** | The start screen: ISK earned today, this week and this month, your pilots with skill-queue standing, the runs going right now and the latest ones, your fleets, best drops, the 30-day activity chart and a system strip. |
+| **Fits** | A browser for your local library and every coupled server's shared fits, as ship cards with price. Import from ESI, an EFT block, DNA or an eveship.fit link; push to ESI or export. The radial fit detail shows capacitor, offence, defence, targeting and drones, recalculated for the skills and implants of a character you pick. |
+| **Fleet** | Plan fleets with wings, squads and members, start and stop them, and couple them to your live in-game fleet: structure, invites, moves and kicks. Fleet metrics shows live DPS, mining, bounty and the fleet on a map, and a pop-out overlay keeps the figures on a second screen. |
+| **Map** | All of New Eden as a zoomable map with route planning (shortest, safer, less secure; avoid lowsec or nullsec), system search, hover cards, following one of your characters or a whole fleet, and a trail of where a character has been. Routes are worked out on your own PC. The map can pop out into its own window. |
+| **Runs** | What you flew and what it paid: Homefront, Abyssal, mission, mining, combat, data and relic sites. A running band shows what is going on now; the list is grouped per day with a calendar, an activity strip, type and character filters and a day / week / month summary of ISK by source. Start a run by hand from Tools, or let the app offer one. |
+| **Kills** | Your own kills and losses from ESI, for all characters at once, with totals, a full killmail detail view and the loss linked to the run you lost the ship in. Paste a killmail link to import it immediately. |
+| **Comp** | Fleet compositions: role groups with minimum pilots and the fits approved for each, shared through a server or kept local. |
+| **Tools** | **EVE Settings Sync** copies EVE's window layout, overview and account settings between characters, with a backup first. **Appraisal** values pasted items at cached market prices. **Start Run** starts a run by hand. |
+| **Logs** | **Game logs** (all characters in one list, filtered by character, type and day), **Inbox**, **ESI metrics** and the **Client logs**. |
+| **Settings / About** | Gamelog folder, data folder, faction theme (Gallente, Amarr, Caldari, Minmatar), toasts, week start, fit images, clipboard watch, the local API server, keyboard shortcuts and the update channel. |
+
+Characters are added from the character column with EVE SSO; each one picks the ESI scopes it
+grants (location, ship type, fleets, fittings, skills and skill queue, implants, killmails) and
+features that need a scope you did not grant say so instead of failing silently. A character can be
+removed again, which deletes its tokens and cached data from your PC.
+
+Live metrics — DPS, repairs, neuts, mining, bounty and location — are read from your EVE game logs.
+English, German, Russian, French, Spanish, Japanese and Chinese clients are supported.
+
+<p align="center">
+  <img src="docs/images/fits-overview.png" alt="The fit browser showing saved ship fits as cards with hull, class, owner and price" width="49%">
+  <img src="docs/images/fit-details.png" alt="The radial fit detail with the fitting ring and capacitor, offence and defence stats" width="49%">
+</p>
+<p align="center">
+  <img src="docs/images/fleet-composition.png" alt="The composition editor with role groups, approved fits and minimum pilots" width="49%">
+  <img src="docs/images/map.png" alt="The map of New Eden with follow, route planning and system search panels" width="49%">
+</p>
+<p align="center">
+  <img src="docs/images/killmail.png" alt="A killmail detail with the loss linked to its run, the fit as flown and what dropped" width="49%">
+  <img src="docs/images/composition.png" alt="Several modules open as separate windows: the map, runs, a killmail and a running mission" width="49%">
+</p>
 
 ---
 
 ## Install
 
-**Desktop client** — download the latest build for your OS from the
-[**Releases**](https://github.com/EveTogether/EveTogether/releases) page: Windows (`.zip`), Linux
-(`.tar.gz` / `.AppImage`) or macOS (`.zip`, arm64 + x64). The builds are self-contained — no separate
-.NET install needed.
+**Desktop client** — download the latest build from the
+[**Releases**](https://github.com/EveTogether/EveTogether/releases) page. The builds are Velopack
+packages and are self-contained, so there is no separate .NET install:
 
-**Server** — self-hosted via Docker; see [`docs/server-installation.md`](docs/server-installation.md).
+| OS | Download |
+|----|----------|
+| Windows | `-Setup.exe` installer, or the `-Portable.zip` |
+| Linux | `.AppImage` |
+| macOS | `-Setup.pkg` (arm64 and x64) |
 
-> **Pre-1.0:** expect breaking changes between releases; versions follow [SemVer](https://semver.org/).
-> To build from source instead, see [Requirements](#requirements) and [Running](#running).
+Installed builds update themselves: Settings → Updates has a *Check for updates on startup* toggle, a
+**Stable / Nightly** channel switch and a *Check now* button. Stable is the default; nightly is an opt-in
+rolling build of `main`.
+
+**Where your data lives** — in `%LOCALAPPDATA%\EveTogetherData` on Windows (Settings → Show Data Folder opens
+it): settings, sign-ins, fits, runs, caches and backups. The first start of a version that predates the rename
+moves the old `EveUtils` folder over by itself.
+
+**Server** — optional and self-hosted via Docker (`ghcr.io/evetogether/eve-together-server`); see
+[`docs/server-installation.md`](docs/server-installation.md). You only need it for the together features:
+shared fits and compositions, server fleets and fleet-wide live metrics. Solo play needs nothing but the client.
+
+To build from source instead, see [Requirements](#requirements) and [Running](#running).
 
 ---
 
 ## Requirements
 
+**To use the app:** nothing beyond the installer. Playing with live metrics needs EVE's game logs on the same PC;
+the first start downloads EVE's static data (about 100 MB) once.
+
+**To build from source:**
+
 | Tool | Version |
 |------|---------|
 | .NET SDK | **10.0+** (`.slnx`) |
-| `dotnet-ef` | 10.0+ |
-| Avalonia templates | `dotnet new install Avalonia.Templates` (only to scaffold the client) |
+| `dotnet-ef` | 10.0+ (only for migrations) |
 
-The client and the server-in-dev run on SQLite → **no external database** needed. Live ESI auth needs
-an EVE SSO app (`client_id`/`secret`) — see [Configuration](#configuration).
+The client and the server-in-dev run on SQLite → **no external database** needed. Live ESI auth against the
+server needs an EVE SSO app (`client_id`/`secret`) — see [Configuration](#configuration).
 
 ---
-
 ## Architecture
 
 Three core projects — **`EveUtils.Client`** (Avalonia desktop), **`EveUtils.Server`** (self-hosted Docker
@@ -78,7 +130,7 @@ for the full guide, including how to register the EVE application.
 
 For local development, put credentials in `EveUtils.Server/appsettings.Development.json` (gitignored).
 
-**Client** — SQLite fixed (default `eve-utils-client.db`); ESI via the bundled public app.
+**Client** — local SQLite (`eve-utils-client.db` in the data folder); ESI sign-in via the bundled public app.
 
 ---
 
@@ -106,7 +158,7 @@ dotnet run --project EveUtils.Client                       # Avalonia desktop
 dotnet run --project EveUtils.Client -- --smoke            # headless data/CQRS verification
 ```
 
-Server admin UI (Blazor): **Dashboard** (permission toggles + shared fits), **Logs**, **AllowedList**.
+Server control panel (Blazor): **Dashboard** (state tiles and what needs attention), **Data** (characters, compositions, shared fits, fleets, runs and sessions), **Allowed list**, **Users** and **Roles**, **API keys**, **Backup** (one AES-256 encrypted archive), **ESI** metrics and **Logs**.
 
 ### Endpoints (server)
 
@@ -147,26 +199,16 @@ See [`AGENTS.md`](AGENTS.md) for the full conventions before you write code.
 
 ---
 
-## Status
+## Releases
 
-- ✅ Build green (.NET 10, 0 warnings), 8 projects.
-- ✅ Vertical-slice modules (Ships/Settings/Sync/Esi/Fittings/Gamelog/ServerAuth) with internal
-  entities/repos/CQRS; data access via `IDbContextFactory<SharedDbContext>`; per-module handler and
-  permission registration.
-- ✅ **Local + remote event bus** — in-process (`InProcessEventBus`) + gRPC bidi stream (`EventBusStream`),
-  auth-gated.
-- ✅ **EVE SSO live** — Mode A (local PKCE+confidential) and Mode B (server-redirect + pairing) against
-  `login.eveonline.com`; multi-character; per-character encrypted token store + background refresh.
-- ✅ **Permission gate server-side** — two-layer (`fit.sync`/`fit.manage`), persistent toggles on the
-  Blazor dashboard.
-- ✅ **Fittings end-to-end** — ESI import, local + server-shared fits, share/download/delete via gRPC,
-  cross-character push.
-- ✅ **gRPC + TOFU cert pinning**, auto-reconnect with backoff, server session refresh + expired-session cleanup.
-- ✅ **Gamelog/DPS** — live tailing + combat parsing + DPS stream (SignalR).
-- ⏳ Server on MySQL/SQL Server/PostgreSQL: stacks ready, runtime test needs a running engine.
+Releases are built by the GitHub Actions release pipeline: publishing a GitHub Release tagged `vX.Y.Z` attaches the
+Velopack builds for Windows, Linux and macOS and publishes the server image to
+`ghcr.io/evetogether/eve-together-server` (`:latest` and `:X.Y.Z`). The notes of a release come from the matching
+section of [`CHANGELOG.md`](CHANGELOG.md). A nightly pre-release of `main` is published separately for those who
+opt in. Server stacks other than SQLite (MySQL, SQL Server, PostgreSQL) are built and migrated but still need
+wider testing against running engines.
 
 ---
-
 ## Documentation
 
 | Document | What it covers |

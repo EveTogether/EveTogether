@@ -2,6 +2,7 @@ using System.Globalization;
 using Avalonia.Threading;
 using EveUtils.Client.Dialogs;
 using EveUtils.Client.Notifications;
+using EveUtils.Client.Opsec;
 using EveUtils.Client.Platform;
 using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Shared.DependencyInjection;
@@ -338,7 +339,7 @@ public sealed class FleetRunWindowPresenter : ISingletonService, IDisposable
     private sealed record Offer(RunGroupCodeStart Start, bool IsPrepared);
 
     private static string _Where(RunGroupCodeStart start) =>
-        string.Join(" · ", new[] { _SiteOf(start), start.SolarSystemName }
+        string.Join(" · ", new[] { OpsecText.Mark(_SiteOf(start)), OpsecText.Mark(start.SolarSystemName) }
             .Where(part => !string.IsNullOrWhiteSpace(part))) is { Length: > 0 } named
             ? named
             : "Site and system not known";

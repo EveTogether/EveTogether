@@ -11,6 +11,7 @@ using Avalonia.VisualTree;
 using EveUtils.Client.Dialogs;
 using EveUtils.Client.Fleet;
 using EveUtils.Client.Gamelog;
+using EveUtils.Client.Opsec;
 using EveUtils.Client.Platform;
 using EveUtils.Client.ViewModels;
 using EveUtils.Client.Views;
@@ -64,7 +65,7 @@ public class OfflineMemberLocationTests
         // Ours and flying: unchanged.
         Assert.False(commander.IsOffline);
         Assert.Equal("Jita", commander.KnownLocation);
-        Assert.Equal("Jita", commander.LocationDisplay);
+        Assert.Equal(OpsecText.Mark("Jita"), commander.LocationDisplay);
 
         // Ours and parked: ESI's logoff spot is still on the row's raw Location, and is shown to nobody.
         Assert.True(alt.IsOffline);
@@ -75,7 +76,7 @@ public class OfflineMemberLocationTests
         // Someone else's pilot: we cannot see their client, so we claim nothing.
         Assert.False(stranger.IsOffline);
         Assert.Equal("Amarr", stranger.KnownLocation);
-        Assert.Equal("Amarr", stranger.LocationDisplay);
+        Assert.Equal(OpsecText.Mark("Amarr"), stranger.LocationDisplay);
     }
 
     /// <summary>
@@ -133,7 +134,7 @@ public class OfflineMemberLocationTests
         // badge's note goes away because there is no longer anybody it does not know about.
         await harness.SetInGameAsync(Commander, Alt);
         Assert.False(alt.IsOffline);
-        Assert.Equal("Jita", alt.LocationDisplay);
+        Assert.Equal(OpsecText.Mark("Jita"), alt.LocationDisplay);
         Assert.True(alt.IsWithCommander);
 
         var presence = await harness.WaitForPresenceAsync(p => p.Known == 3);
@@ -225,7 +226,7 @@ public class OfflineMemberLocationTests
         Assert.Null(row.SystemDisplay);                 // the home card, which already says "Offline"
 
         row.InEve = true;
-        Assert.Equal("Amarr", row.SystemDisplay);
+        Assert.Equal(OpsecText.Mark("Amarr"), row.SystemDisplay);
     }
 
     // ---- the per-character metrics window reads the same verdict ------------------------------------------------
@@ -261,7 +262,7 @@ public class OfflineMemberLocationTests
         var parked = vm.Rows.Single(r => r.Character == Names[Alt]);
 
         Assert.False(flying.Dps.IsOffline);
-        Assert.Equal("Jita", flying.LocationDisplay);
+        Assert.Equal(OpsecText.Mark("Jita"), flying.LocationDisplay);
         Assert.True(parked.Dps.IsOffline);
         Assert.Equal("offline", parked.LocationDisplay);   // not "Amarr", which is only where they logged off
 
@@ -296,7 +297,7 @@ public class OfflineMemberLocationTests
 
         await harness.SetInGameAsync(Commander, Alt);
 
-        Assert.Equal("Amarr", row.LocationDisplay);
+        Assert.Equal(OpsecText.Mark("Amarr"), row.LocationDisplay);
         Assert.Contains(nameof(CharacterMetricsRowViewModel.LocationDisplay), changed);
     }
 
@@ -317,7 +318,7 @@ public class OfflineMemberLocationTests
         var row = Assert.Single(vm.Rows);
         Assert.False(row.Dps.IsLocalCharacter);
         Assert.False(row.Dps.IsOffline);
-        Assert.Equal("Amarr", row.LocationDisplay);
+        Assert.Equal(OpsecText.Mark("Amarr"), row.LocationDisplay);
     }
 
     // ---- harness ------------------------------------------------------------------------------------------------

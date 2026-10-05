@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
 using EveUtils.Client.Gamelog;
+using EveUtils.Client.Opsec;
 using EveUtils.Client.ViewModels;
 using EveUtils.Client.ViewModels.Home;
 using EveUtils.Shared.Identity;
@@ -42,7 +43,7 @@ public sealed class HomePilotLocationTests
         await _SettleAsync();
 
         Assert.Equal(WhereState.System, row.Where);
-        Assert.Equal("Jita", row.SystemName);
+        Assert.Equal(OpsecText.Mark("Jita"), row.SystemName);
     }
 
     /// <summary>A jump after the first system moves the row on the next tick, not only the first detection.</summary>
@@ -65,7 +66,7 @@ public sealed class HomePilotLocationTests
         pilots.Tick(DateTime.UtcNow);
         await _SettleAsync();
 
-        Assert.Equal("Perimeter", row.SystemName);
+        Assert.Equal(OpsecText.Mark("Perimeter"), row.SystemName);
     }
 
     private static async Task _SettleAsync()

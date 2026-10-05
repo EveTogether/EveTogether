@@ -16,6 +16,7 @@ using CommunityToolkit.Mvvm.Input;
 using EveUtils.Client.Dialogs;
 using EveUtils.Client.Esi;
 using EveUtils.Client.Fleet;
+using EveUtils.Client.Opsec;
 using EveUtils.Client.ViewModels;
 using EveUtils.Client.Views;
 using EveUtils.Shared.Messaging;
@@ -277,7 +278,7 @@ public class FleetMemberMenuTests
 
         Assert.Contains("Squad Commander", headers);                              // position in the fleet
         Assert.Contains("No fit assigned", headers);                              // the ship, honestly absent
-        Assert.Contains("In Jita — with the FC", headers);                        // shared location + FC verdict
+        Assert.Contains($"In {OpsecText.Mark("Jita")} — with the FC", headers);   // shared location + FC verdict
         Assert.Contains(headers, h => h.StartsWith("Last update", StringComparison.Ordinal));
     }
 

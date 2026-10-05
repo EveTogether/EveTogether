@@ -16,12 +16,12 @@ internal sealed class ProvisionalKillmailRepository(IDbContextFactory<SharedDbCo
         await db.SaveChangesAsync(cancellationToken);
     }
 
-    public async Task<IReadOnlyList<ProvisionalKillmail>> GetForCharacterAsync(int characterId, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<ProvisionalKillmail>> GetForCharacterAsync(int? characterId, CancellationToken cancellationToken = default)
     {
         await using var db = await contextFactory.CreateDbContextAsync(cancellationToken);
         return await db.Set<ProvisionalKillmail>()
             .AsNoTracking()
-            .Where(killmail => killmail.CharacterId == characterId)
+            .Where(killmail => characterId == null || killmail.CharacterId == characterId)
             .OrderByDescending(killmail => killmail.KillmailTimeUtc)
             .ToListAsync(cancellationToken);
     }

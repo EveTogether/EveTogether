@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -752,7 +753,24 @@ public sealed partial class FleetRosterViewModel : ObservableObject, IDisposable
                 string.IsNullOrWhiteSpace(lastError) ? $"Could not leave '{FleetName}'." : lastError, ToastKind.Error);
     }
 
+    // Every fleet command signals a reload that nobody awaits, so reloads overlap; run one at a time, in order, or a
+    // read taken before a change can finish last and put the older roster on screen.
+    private readonly SemaphoreSlim _reloadGate = new(1, 1);
+
     private async Task ReloadAsync()
+    {
+        await _reloadGate.WaitAsync();
+        try
+        {
+            await _ReloadCoreAsync();
+        }
+        finally
+        {
+            _reloadGate.Release();
+        }
+    }
+
+    private async Task _ReloadCoreAsync()
     {
         await _LoadCoupledCompositionAsync();   // the band name + the picker's composition scope
         await _EvaluateEsiScopesAsync();         // proactive disable + tooltip for the scope-requiring ESI buttons

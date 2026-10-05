@@ -182,13 +182,14 @@ public static class RunTypeCatalogue
     {
         // Not "Combat Site": a site whose group could not be resolved reads as what is actually known about it — a
         // site — never the specific kind this ticket exists to stop defaulting to (ET-226 AC-3). This is also the
-        // only site row Tools → Start run can ever land on (ET-255): a manual start has no scanner group to give,
-        // so "Site" in that picker always resolves here, never to one of the six rows below it.
+        // only site row a manual start without a group lands on (ET-255): "Site" in that picker resolves here
+        // unless a group was given (ET-388), never to one of the six rows below it by guess.
         [RunTypeId.Unknown] = _Site(RunTypeId.Unknown, "Site", MaterialIconKind.MapMarkerOutline,
             ManualStartRequirement.Site),
-        // The six rows below, plus Homefront further down, are resolved only from a copied signature's scanner
-        // group (or, for Homefront, its archetype, ET-228) — never from this dialog's own choice. No ManualStart:
-        // each still flies, just as Unknown's own "Site" row above.
+        // The six rows below, plus Homefront further down, are resolved only from a scanner group (or, for
+        // Homefront, its archetype, ET-228): a copied signature's, or the one the manual start asks for when a site
+        // is typed in by hand (ET-388) — never guessed from a name. No ManualStart: each still flies, just as
+        // Unknown's own "Site" row above.
         [RunTypeId.CombatSite] = _Site(RunTypeId.CombatSite, "Combat Site", MaterialIconKind.SkullOutline),
         [RunTypeId.DataSite] = _Site(RunTypeId.DataSite, "Data Site", MaterialIconKind.DatabaseOutline),
         [RunTypeId.RelicSite] = _Site(RunTypeId.RelicSite, "Relic Site", MaterialIconKind.DiamondStone),
@@ -210,7 +211,11 @@ public static class RunTypeCatalogue
                 RunSectionId.Activity, RunSectionId.Mission, RunSectionId.Enemies, RunSectionId.Fit,
                 RunSectionId.Fleet, RunSectionId.Bounty, RunSectionId.Loot
             ],
-            DetailSections = [RunSectionId.Activity, RunSectionId.Mission, RunSectionId.Enemies, RunSectionId.Fleet],
+            // LOOT is claimed so a mission saved without any can still be given some afterwards (ET-421).
+            DetailSections =
+            [
+                RunSectionId.Activity, RunSectionId.Mission, RunSectionId.Enemies, RunSectionId.Fleet, RunSectionId.Loot
+            ],
             HasAgent = true,
             // Same four a site loots by, same order (ET-172 backlog gap, closed by ET-237): a courier has nothing to
             // blitz or clear, so the row stays optional with no preselection — IsLootStrategyShown already hides an

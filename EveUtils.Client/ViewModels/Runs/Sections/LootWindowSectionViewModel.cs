@@ -79,11 +79,20 @@ public sealed partial class LootWindowSectionViewModel : RunWindowSection
 
     public override void Load(IReadOnlyList<SettingDto>? settings)
     {
-        // Anything unreadable reads as clipboard, which is the only default that cannot surprise anyone.
         if (settings is not null)
-            LootMode = settings.FirstOrDefault(s => s.Key == LootModeSettingKey(Context.Kind))?.Value == nameof(ActivityLootMode.CargoDiff)
-                ? ActivityLootMode.CargoDiff
-                : ActivityLootMode.Clipboard;
+        {
+            string? stored = settings.FirstOrDefault(setting => setting.Key == LootModeSettingKey(Context.Kind))?.Value;
+            LootMode = stored switch
+            {
+                nameof(ActivityLootMode.CargoDiff) => ActivityLootMode.CargoDiff,
+                nameof(ActivityLootMode.Clipboard) => ActivityLootMode.Clipboard,
+                // Nothing chosen yet (ET-384): an abyssal run has a hold worth naming from the start, so start + end
+                // hold is the default rather than something to find; other kinds have no hold to name and keep the
+                // clipboard-only default.
+                _ => Context.Kind is ActivityKind.Abyssal ? ActivityLootMode.CargoDiff : ActivityLootMode.Clipboard
+            };
+        }
+
         _SyncChoices();
         // A window reopened mid-run shows what the others shared before it existed.
         _ = _SyncSharedAsync();

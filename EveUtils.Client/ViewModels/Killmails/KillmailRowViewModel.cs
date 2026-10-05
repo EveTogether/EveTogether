@@ -1,8 +1,13 @@
 using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EveUtils.Client.Formatting;
+using EveUtils.Client.Opsec;
+using EveUtils.Client.ViewModels.Runs;
 using EveUtils.Shared.Modules.Killmails.Dtos;
 using EveUtils.Shared.Modules.Killmails.Entities;
 
@@ -17,11 +22,15 @@ public sealed partial class KillmailRowViewModel : ObservableObject
 {
     private readonly Func<KillmailRowViewModel, Task> _openDetail;
 
-    public KillmailRowViewModel(KillmailOverviewRowDto dto, string shipName, string systemName, string? regionName,
-        bool isAbyssal, string securityText, string counterpartyName, TimeZoneInfo timeZone,
-        Func<KillmailRowViewModel, Task> openDetail)
+    public KillmailRowViewModel(KillmailOverviewRowDto dto, IReadOnlyList<CharacterFaceViewModel> pilots, string shipName,
+        string systemName, string? regionName, bool isAbyssal, string securityText, string counterpartyName,
+        TimeZoneInfo timeZone, Func<KillmailRowViewModel, Task> openDetail)
     {
         _openDetail = openDetail;
+        Pilots = pilots;
+        FirstPilot = pilots[0];
+        ExtraPilotCount = pilots.Count - 1;
+        PilotsTooltip = string.Join(Environment.NewLine, pilots.Select(pilot => pilot.Name));
         CharacterId = dto.CharacterId;
         KillmailId = dto.KillmailId;
         IsLoss = dto.IsLoss;
@@ -44,9 +53,9 @@ public sealed partial class KillmailRowViewModel : ObservableObject
         KindGlyph = dto.IsLoss ? "▼" : "▲";
         ShipText = dto.IsLoss ? $"{shipName} — lost" : shipName;
         SystemLineText = isAbyssal
-            ? $"Abyssal deadspace · {dto.SolarSystemId}"
-            : regionName is null ? systemName : $"{systemName} · {regionName}";
-        SecurityText = securityText;
+            ? $"Abyssal deadspace · {OpsecText.Mark(dto.SolarSystemId.ToString(CultureInfo.InvariantCulture))}"
+            : regionName is null ? OpsecText.Mark(systemName) : $"{OpsecText.Mark(systemName)} · {OpsecText.Mark(regionName)}";
+        SecurityText = OpsecText.Mark(securityText);
         AttackerCountText = !dto.IsLoss && dto.AttackerCount == 1 ? "solo"
             : dto.AttackerCount == 1 ? "1 attacker" : $"{dto.AttackerCount} attackers";
         IskText = Isk is { } signed ? IskFormat.Compact(signed) : "no price";
@@ -54,9 +63,13 @@ public sealed partial class KillmailRowViewModel : ObservableObject
 
     /// <summary>ET-340: a killmail parsed from pasted clipboard text, not yet confirmed by the real ESI mail.
     /// Never linked to a run, never counted in kill/loss counts or ISK totals — both left null/default here.</summary>
-    public KillmailRowViewModel(ProvisionalKillmail provisional, string shipName, TimeZoneInfo timeZone)
+    public KillmailRowViewModel(ProvisionalKillmail provisional, CharacterFaceViewModel pilot, string shipName, TimeZoneInfo timeZone)
     {
         _openDetail = _ => Task.CompletedTask; // nothing to open yet — RawText has no detail screen (ET-340)
+        Pilots = [pilot];
+        FirstPilot = pilot;
+        ExtraPilotCount = 0;
+        PilotsTooltip = pilot.Name;
         CharacterId = provisional.CharacterId;
         KillmailId = 0;
         IsLoss = false;
@@ -84,6 +97,21 @@ public sealed partial class KillmailRowViewModel : ObservableObject
         IskText = "no price";
     }
 
+    /// <summary>Every own character involved in this mail, name order — more than one when the same killmail was
+    /// imported for several of them (ET-405), which is still one row and one line in the totals.</summary>
+    public IReadOnlyList<CharacterFaceViewModel> Pilots { get; }
+
+    public CharacterFaceViewModel FirstPilot { get; }
+
+    public int ExtraPilotCount { get; }
+
+    public bool HasExtraPilots => ExtraPilotCount > 0;
+
+    public string ExtraPilotsText => $"+{ExtraPilotCount}";
+
+    public string PilotsTooltip { get; }
+
+    /// <summary>The character whose copy of the mail this row stands for, and so the one its detail opens for.</summary>
     public int CharacterId { get; }
 
     public int KillmailId { get; }

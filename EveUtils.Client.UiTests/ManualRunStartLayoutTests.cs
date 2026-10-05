@@ -79,6 +79,34 @@ public class ManualRunStartLayoutTests
         window.Close();
     }
 
+    // ET-388: a typed name the catalogue does not have asks for its site group, and that row has to fit the fixed
+    // width and grow the dialog rather than run off it.
+    [AvaloniaFact]
+    public void TheSiteGroupChoice_AppearsForATypedName_AndStaysInsideTheDialog()
+    {
+        using var instance = TestClientInstance.Create(services =>
+            services.AddSingleton<ISdeAccessor>(new FakeSdeAccessor().AddSite(Site)));
+        var window = _Dialog(instance);
+        var vm = (ManualRunStartViewModel)window.DataContext!;
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+        window.UpdateLayout();
+        double heightBefore = window.Bounds.Height;
+        Assert.DoesNotContain(((Control)window.Content!).GetVisualDescendants().OfType<ListBox>(),
+            list => list.IsEffectivelyVisible && ReferenceEquals(list.ItemsSource, vm.SiteGroups));
+
+        vm.SiteQuery = "Detected Ruined Rogue Drone Science Outpost";
+        Dispatcher.UIThread.RunJobs();
+        window.UpdateLayout();
+
+        ListBox groups = Assert.Single(((Control)window.Content!).GetVisualDescendants().OfType<ListBox>(),
+            list => list.IsEffectivelyVisible && ReferenceEquals(list.ItemsSource, vm.SiteGroups));
+        double right = (groups.TranslatePoint(default, window) ?? default).X + groups.Bounds.Width;
+        Assert.True(right <= window.Bounds.Width + 0.5, $"the group choice runs off the dialog: {right:F1} > {window.Bounds.Width:F0}");
+        Assert.True(window.Bounds.Height > heightBefore, "the dialog did not grow for the group choice");
+        window.Close();
+    }
+
     // ET-79: everything a pilot reads is English. "ACHTERAF INVOEREN" shipped on this very dialog and no test saw
     // it, because no test was looking — this one reads the XAML the way a pilot reads the screen.
     [Fact]

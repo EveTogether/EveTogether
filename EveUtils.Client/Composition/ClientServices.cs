@@ -31,6 +31,10 @@ using EveUtils.Shared.Modules.Messaging;
 using EveUtils.Shared.Modules.Settings.Repositories;
 using EveUtils.Shared.Modules.Esi;
 using EveUtils.Shared.Modules.Esi.Http;
+using EveUtils.Shared.Modules.Market.Services;
+using EveUtils.Shared.Modules.Market.Services.Implementations;
+using EveUtils.Shared.Modules.ServerAuth.Services;
+using EveUtils.Shared.Modules.ServerAuth.Services.Implementations;
 using EveUtils.Client.Skills;
 using EveUtils.Client.Implants;
 using EveUtils.Client.Killmails;
@@ -75,6 +79,12 @@ public static class ClientServices
         services.AddPermissionRegistry(); // foundation: code-derived registry + OwnerAllPolicy
         services.AddCqrs();              // dispatcher behind the permission gate
         services.AddEventBus();          // local (in-process) event bus (+ remote-forward gate)
+        // The EVE Workbench personal access token (ET-364), its own AES-256-GCM key file. Registered ahead of
+        // AddSharedServices so its MarketPriceAppraisalProvider registers after this and stays the plain
+        // GetService<IAppraisalProvider>() default; IAppraisalProviderSelector honors the user's actual choice.
+        services.AddSingleton<ITokenProtector>(_ => new AesGcmTokenProtector(DataDirectory()));
+        services.AddSingleton<IEveWorkbenchKeyStore, EveWorkbenchKeyStore>();
+        services.AddSingleton<IAppraisalProvider, EveWorkbenchAppraisalProvider>();
         services.AddSharedServices(ExecutionHost.Client);    // central marker-scan over the shared assembly
         services.AddAutoServices(typeof(ClientServices).Assembly, ExecutionHost.Client); // host-only marker-tagged services
         services.AddSingleton<IWireEventCatalog, FleetWireEvents>(); // deserialize fleet invite events aimed at us
@@ -118,6 +128,7 @@ public static class ClientServices
         services.AddSingleton(TimeProvider.System); // injectable clock
         services.AddSingleton<IThemeService, ThemeService>(); // runtime faction theming (live swap + persistence)
         services.AddSingleton<Calendar.IWeekStartService, Calendar.WeekStartService>(); // week-start setting (live swap + persistence)
+        services.AddSingleton<Opsec.IOpsecService, Opsec.OpsecService>(); // OPSEC mode, ET-417 (live switch + persistence)
         // Public corp/alliance lookups go through ICharacterInfoService + the shared metered IEsiAffiliationResolver.
         // EsiExternalCharacterSource + ExternalCharacterLookup carry lifetime markers → auto-registered.
         // IExternalCharacterCache/EfExternalCharacterCache now live in Shared (Modules/Fleet/Repositories) and

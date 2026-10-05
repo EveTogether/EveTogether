@@ -35,6 +35,7 @@ public sealed class FakeRemoteBusConnector : IRemoteBusConnector
 
     public event Action<string, ServerConnectionState> StateChanged = (_, _) => { };
     public event Action<string, int, ServerConnectionState> CharacterStateChanged = (_, _, _) => { };
+    public event Action<string> CouplingChanged = _ => { };
 
     public void RaiseStateChanged(string serverAddress, ServerConnectionState state)
     {

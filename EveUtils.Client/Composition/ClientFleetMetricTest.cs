@@ -164,10 +164,10 @@ public static class ClientFleetMetricTest
         IServiceProvider services, FleetMetricPublisher publisher, IFleetParticipation participation, IEventBus bus, CancellationToken ct)
     {
         var ok = true;
-        var location = services.GetRequiredService<LocationMetricSource>();
-        const long systemId = 30000142; // Jita, a stand-in solar_system_id
-
-        location.SetSystem(Character, systemId); // a position is known — only the share decision should gate it
+        // A position is known — only the share decision should gate it. The id is whatever this machine's SDE says
+        // Jita is (0 without an SDE, when only the name travels).
+        services.GetRequiredService<GamelogClientService>().SetLocation("Pilot", "Jita", DateTime.UtcNow);
+        var systemId = services.GetRequiredService<SolarSystemIdResolver>().Resolve("Jita") ?? 0;
 
         var captured = new List<FleetMetricEvent>();
         using (var subscription = bus.Subscribe<FleetMetricEvent>(evt => captured.Add(evt)))
@@ -193,7 +193,8 @@ public static class ClientFleetMetricTest
             await publisher.PublishTickAsync(Now(), ct);
             var loc = captured.FirstOrDefault(e => e.Data.Kind == MetricKind.Location);
             ok &= Check("server fleet, opt-in → a Location sample is published", loc is not null);
-            ok &= Check("Location sample carries the solar-system id", loc is { Data.Value: systemId });
+            ok &= Check("Location sample carries the solar-system id", loc?.Data.Value == systemId);
+            ok &= Check("Location sample still carries the name for older clients", loc?.Data.Text == "Jita");
             ok &= Check("Location sample scoped + stamped",
                 loc?.Data.FleetId == FleetId && loc?.Data.CharacterId == Character);
 

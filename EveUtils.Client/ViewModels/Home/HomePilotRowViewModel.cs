@@ -5,6 +5,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EveUtils.Client.Esi;
 using EveUtils.Client.Formatting;
+using EveUtils.Client.Opsec;
 using EveUtils.Client.ViewModels.Runs;
 using EveUtils.Shared.Modules.Location;
 using EveUtils.Shared.Modules.Skills;
@@ -105,9 +106,9 @@ public sealed partial class HomePilotRowViewModel : ObservableObject
     /// <summary>The system from this PC's game log, and its security from the SDE (resolved by the caller, cached).</summary>
     internal void ShowSystem(string? systemName, double? security)
     {
-        SystemName = systemName;
+        SystemName = OpsecText.Mark(systemName);
         SystemDetailText = security is { } sec
-            ? $"{RunRowFacts.SecurityText(sec)} · on this PC"
+            ? $"{OpsecText.Mark(RunRowFacts.SecurityText(sec))} · on this PC"
             : "on this PC";
         _ShowWhere();
     }

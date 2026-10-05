@@ -13,6 +13,7 @@ using EveUtils.Client.Notifications;
 using EveUtils.Client.Runs;
 using EveUtils.Client.ViewModels.Fleets;
 using EveUtils.Client.ViewModels.Runs;
+using EveUtils.Client.WorldMap;
 using EveUtils.Shared.Identity;
 using EveUtils.Shared.Modules.Fleet.Entities;
 using EveUtils.Shared.Modules.Fleet.Metrics;
@@ -492,17 +493,17 @@ public sealed partial class FleetsViewModel
                      .Where(key => key != fleet.Key)
                      .Select(key => _allRows.FirstOrDefault(r => r.Key == key))
                      .OfType<FleetViewModel>())
-            items.Add(new($"switch to {other.Name}",
+            items.Add(new($"Switch to {other.Name}",
                 fleet.Info.CreatorCharacterId == characterId ? null : new AsyncRelayCommand(() => SwitchCharacterAsync(other, characterId)),
                 fleet.Info.CreatorCharacterId == characterId ? $"{NameOf(characterId)} commands {fleet.Name} — a fleet keeps its owner" : null));
 
         if (fleet.IsMine && isCommander)
-            items.Add(new("STOP the fleet", new AsyncRelayCommand(() => StopRowAsync(fleet))));
+            items.Add(new("Stop the fleet", new AsyncRelayCommand(() => StopRowAsync(fleet))));
         else
-            items.Add(new($"LEAVE {fleet.Name}", new AsyncRelayCommand(() => LeaveCharacterAsync(fleet, characterId))));
-        items.Add(new(fleet.RosterButtonLabel.ToLowerInvariant(), new RelayCommand(() => ManageRow(fleet))));
-        items.Add(new("metrics", new AsyncRelayCommand(() => MetricsRowAsync(fleet))));
-        items.Add(new("sharing", new AsyncRelayCommand(() => OpenSharing(fleet))));
+            items.Add(new($"Leave {fleet.Name}", new AsyncRelayCommand(() => LeaveCharacterAsync(fleet, characterId))));
+        items.Add(new(fleet.IsMine ? "Manage fleet" : "View fleet", new RelayCommand(() => ManageRow(fleet))));
+        items.Add(new("Metrics", new AsyncRelayCommand(() => MetricsRowAsync(fleet))));
+        items.Add(new("Sharing", new AsyncRelayCommand(() => OpenSharing(fleet))));
         return items;
     }
 
@@ -646,22 +647,22 @@ public sealed partial class FleetsViewModel
         var folded = new List<FleetMemberMenuItemViewModel>();
         bool inFleet = row.IsMine || row.IsParticipating;
         if (inFleet && !row.IsFinished && !row.ShowMetricsButton)
-            folded.Add(new("METRICS", new AsyncRelayCommand(() => MetricsRowAsync(row))));
+            folded.Add(new("Metrics", new AsyncRelayCommand(() => MetricsRowAsync(row))));
         if (row.IsMine && !row.IsFinished && !row.ShowShareButton)
-            folded.Add(new("SHARE", new AsyncRelayCommand(() => OpenSharing(row))));
+            folded.Add(new("Share", new AsyncRelayCommand(() => OpenSharing(row))));
         if (row.CanLeave && !row.ShowLeave)
-            folded.Add(new("LEAVE", new AsyncRelayCommand(() => LeaveRowAsync(row))));
+            folded.Add(new("Leave", new AsyncRelayCommand(() => LeaveRowAsync(row))));
         if (row.CanSignOff && !row.ShowSignOff)
-            folded.Add(new("SIGN OFF", new AsyncRelayCommand(() => SignOffRowAsync(row))));
+            folded.Add(new("Sign off", new AsyncRelayCommand(() => SignOffRowAsync(row))));
         if (row.IsLocal && row.IsMine && !row.IsFinished)
         {
-            folded.Add(new("ADD CHARACTER", new AsyncRelayCommand(() => AddLocalCharacter(row))));
-            folded.Add(new("ADD EXTERNAL PILOT", new AsyncRelayCommand(() => AddLocalExternal(row))));
+            folded.Add(new("Add character", new AsyncRelayCommand(() => AddLocalCharacter(row))));
+            folded.Add(new("Add external pilot", new AsyncRelayCommand(() => AddLocalExternal(row))));
         }
         if (row.ShowOwnerActions && !row.IsFinished)
-            folded.Add(new("EDIT", new AsyncRelayCommand(() => EditFleet(row))));
+            folded.Add(new("Edit", new AsyncRelayCommand(() => EditFleet(row))));
         if (row.IsMine && !row.IsFinished)
-            folded.Add(new("DISBAND", new AsyncRelayCommand(() => DeleteRowAsync(row)), "Archives the fleet. Not the same as STOP."));
+            folded.Add(new("Disband", new AsyncRelayCommand(() => DeleteRowAsync(row)), "Archives the fleet. Not the same as STOP."));
 
         bool wantsJoin = row.CanJoin || row.CanRequest;
         double onTheRow = row.StandingActionsWidth + row.JoinActionWidth
@@ -672,9 +673,9 @@ public sealed partial class FleetsViewModel
         foreach (var item in folded)
             row.OverflowItems.Add(item);
         if (row.CanJoin && !row.ShowJoin)
-            row.OverflowItems.Add(new("JOIN WITH ANOTHER CHARACTER", row.JoinEnabled ? new AsyncRelayCommand(() => Join(row)) : null, row.JoinHint));
+            row.OverflowItems.Add(new("Join with another character", row.JoinEnabled ? new AsyncRelayCommand(() => Join(row)) : null, row.JoinHint));
         if (row.CanRequest && !row.ShowRequest)
-            row.OverflowItems.Add(new("REQUEST FOR ANOTHER CHARACTER", row.JoinEnabled ? new AsyncRelayCommand(() => Request(row)) : null, row.JoinHint));
+            row.OverflowItems.Add(new("Request for another character", row.JoinEnabled ? new AsyncRelayCommand(() => Request(row)) : null, row.JoinHint));
         row.OverflowChanged();
     }
 
@@ -795,6 +796,11 @@ public sealed partial class FleetsViewModel
     [RelayCommand]
     private Task MetricsRowAsync(FleetViewModel? row) =>
         row is null ? Task.CompletedTask : row.IsLocal ? OpenMetricsLocal(row) : OpenMetrics(row);
+
+    /// <summary>MAP on a fleet's row (ET-395): the MAP tab, following this fleet.</summary>
+    [RelayCommand]
+    private Task MapRowAsync(FleetViewModel? row) =>
+        row is null ? Task.CompletedTask : _services.GetService<IMapLauncher>()?.OpenFollowingFleetAsync(row.Id, row.ServerAddress) ?? Task.CompletedTask;
 
     [RelayCommand]
     private Task ShareRowAsync(FleetViewModel? row) => row is null ? Task.CompletedTask : OpenSharing(row);

@@ -4,12 +4,16 @@ using EveUtils.Client.Theming;
 using EveUtils.Client.ViewModels;
 using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Client.ViewModels.FitBrowser;
+using EveUtils.Client.ViewModels.GameLogs;
 using EveUtils.Client.ViewModels.Killmails;
+using EveUtils.Client.ViewModels.Map;
 using EveUtils.Client.ViewModels.Runs;
 using EveUtils.Client.ViewModels.Skills;
 using EveUtils.Shared.Modules.Esi;
 using EveUtils.Shared.Modules.Fittings.Dtos;
 using EveUtils.Shared.Modules.Fleet.Entities;
+using EveUtils.Client.ViewModels.Coupling;
+using EveUtils.Client.ViewModels.Setup;
 
 namespace EveUtils.Client.Dialogs;
 
@@ -58,20 +62,12 @@ public interface IDialogService
     Task<IReadOnlyList<int>?> PickCharactersAsync(string prompt, IReadOnlyList<CharacterPickOption> options,
         IReadOnlyList<int>? preselectedCharacterIds = null);
 
-    /// <summary>
-    /// Couple-server dialog: asks for a server address + optional label. Returns the result,
-    /// or null if cancelled. <paramref name="probeServerName"/> is called on open and (debounced) on every
-    /// address change to show the server's own name before pairing — an unauthenticated, accept-any-
-    /// cert probe; null/throw means "not reachable". Real trust is still established via TOFU at pairing.
-    /// </summary>
-    /// <param name="prefill">
-    /// What is already known about the coupling being restored, filling the fields in so the user only has to
-    /// connect and sign in (ET-123). Null for a fresh coupling, where nothing is known yet. Only offered where the
-    /// address is not in question — never after a refused certificate, which is exactly the case where the user has
-    /// to check the address is still answered by their own server.
-    /// </param>
-    Task<CoupleServerResult?> CoupleServerAsync(
-        Func<string, CancellationToken, Task<string?>> probeServerName, CoupleServerResult? prefill = null);
+    /// <summary>The setup wizard (ET-425), modal over the main window until it is done, skipped or closed.</summary>
+    Task ShowSetupWizardAsync(SetupWizardViewModel viewModel);
+
+    /// <summary>"Couple to server" for one character (ET-428): the wizard's server step in a window of its own, modal
+    /// until it is closed. Whether it coupled is on the view-model.</summary>
+    Task CoupleServerAsync(ServerCoupleViewModel viewModel);
 
     /// <summary>
     /// Server-picker dialog: choose which coupled server to share a fit to. Returns the chosen
@@ -203,7 +199,7 @@ public interface IDialogService
     /// none), <paramref name="detectedDefault"/> the platform-probed fallback (Auto-detect). On Save the view invokes
     /// <paramref name="onApply"/> with the chosen values (the caller persists + applies live); Cancel/close does nothing.
     /// </summary>
-    void ShowSettings(string currentDirectory, string detectedDefault, bool shareLocation, bool shareBounty, bool shareCombat, bool loadTypeImages, FactionTheme currentFaction, string sdeVersionLabel, Func<SettingsResult, Task> onApply, bool openFitDetailAfterImport = true, Notifications.ToastPosition toastPosition = Notifications.ToastPosition.TopRight, bool enableLocalApi = false, int localApiPort = LocalApi.LocalApiServer.DefaultPort, string localApiStatusLabel = "", LocalApi.ILocalApiServer? localApiServer = null, bool checkUpdatesOnStartup = true, Clipboard.ClipboardWatchService? clipboardWatch = null, int initialCategory = 0, bool openFleetRunWindowImmediately = false, bool autoPublishFleetRuns = true, bool shareLoot = false, bool shareMining = false, bool autoStartMissions = true, bool autoStartSites = true, DayOfWeek weekStartsOn = DayOfWeek.Monday, bool includeNightlyBuilds = false, Updates.IUpdateService? updates = null, bool offerHomefrontRuns = true);
+    void ShowSettings(string currentDirectory, string detectedDefault, bool shareLocation, bool shareBounty, bool shareCombat, bool loadTypeImages, FactionTheme currentFaction, string sdeVersionLabel, Func<SettingsResult, Task> onApply, bool openFitDetailAfterImport = true, Notifications.ToastPosition toastPosition = Notifications.ToastPosition.TopRight, bool enableLocalApi = false, int localApiPort = LocalApi.LocalApiServer.DefaultPort, string localApiStatusLabel = "", LocalApi.ILocalApiServer? localApiServer = null, bool checkUpdatesOnStartup = true, Clipboard.ClipboardWatchService? clipboardWatch = null, int initialCategory = 0, bool openFleetRunWindowImmediately = false, bool autoPublishFleetRuns = true, bool shareLoot = false, bool shareMining = false, bool autoStartMissions = true, bool autoStartSites = true, DayOfWeek weekStartsOn = DayOfWeek.Monday, bool includeNightlyBuilds = false, Updates.IUpdateService? updates = null, bool offerHomefrontRuns = true, Func<Task>? runSetupAgain = null);
 
     /// <summary>Per-fleet sharing dialog: per character a three-way override per metric. Returns true if the user saved.</summary>
     Task<bool> ShowFleetSharingAsync(ViewModels.FleetShareViewModel viewModel);
@@ -239,6 +235,10 @@ public interface IDialogService
     /// <summary>Shows the client log window non-modally so new entries keep arriving while it is open.</summary>
     void ShowLogs(ClientLogViewModel viewModel);
 
+    /// <summary>Shows the GAME LOGS screen (ET-410): every character's EVE game log lines in one list, as a hosted
+    /// module — a docked tab or a floating window.</summary>
+    GameLogsViewModel ShowGameLogs(GameLogsViewModel viewModel);
+
     /// <summary>Shows the client ESI-metrics window non-modally so the per-bucket counters keep
     /// updating live while it is open.</summary>
     void ShowEsiMetrics(EsiMetricsViewModel viewModel);
@@ -271,6 +271,29 @@ public interface IDialogService
     /// other feature modules. One screen, not one per pilot: the running band already holds a lane each. Returns the
     /// screen now showing — the one already open, when it was.</summary>
     RunsOverviewViewModel ShowRuns(RunsOverviewViewModel viewModel);
+
+    /// <summary>Opens the MAP module (ET-392) as a hosted module — one map for the whole app. When it is open already
+    /// that one comes to the front and re-reads its data.</summary>
+    /// <returns>The map now on screen: the one passed in, or the one already open.</returns>
+    MapViewModel ShowMap(MapViewModel viewModel);
+
+    /// <summary>The map is in its own window (ET-396) and its tab, if docked, is a placeholder.</summary>
+    bool IsMapPoppedOut { get; }
+
+    /// <summary>The map can be popped out: it is open and hosted as a tab. A floating map already is a window.</summary>
+    bool CanPopOutMap { get; }
+
+    /// <summary>Raised when <see cref="IsMapPoppedOut"/> or <see cref="CanPopOutMap"/> changed.</summary>
+    event Action? MapPresentationChanged;
+
+    /// <summary>Moves the open map's view into its own window, view model and all; no-op when it is already out.</summary>
+    void PopOutMap();
+
+    /// <summary>Moves the map back into its tab (the window closes).</summary>
+    void PutBackMap();
+
+    /// <summary>Brings the map's own window forward.</summary>
+    void ShowMapWindow();
 
     /// <summary>Opens the KILLMAILS overview (ET-332) as a hosted module — a docked tab or a floating window, like
     /// RUNS. One screen for the whole app, not one per character: it reads a single selected character at a time.

@@ -46,7 +46,7 @@
         <Border DockPanel.Dock="Top" Height="{Binding TitleBarHeight}" Classes="titlebar" x:Name="TitleBar"
                 chrome:WindowDecorationProperties.ElementRole="TitleBar"
                 PointerPressed="OnTitleBarPressed" DoubleTapped="OnTitleBarDoubleTapped">
-            <Grid ColumnDefinitions="*,Auto">
+            <Grid ColumnDefinitions="*,Auto,Auto">
                 <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="10" Margin="14,0"
                             VerticalAlignment="Center" HorizontalAlignment="{Binding BrandAlignment}">
                     <Image Height="{Binding BrandLogoHeight}" Source="avares://EveUtils.Client/Assets/eve-together-badge.png"
@@ -58,7 +58,19 @@
                                IsVisible="{Binding ShowBrandText}"
                                Foreground="{DynamicResource TextAccentBrush}" VerticalAlignment="Center"/>
                 </StackPanel>
-                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Stretch"
+                <!-- OPSEC (ET-417): in the title bar of every layout, so the state is never a guess on stream. Opens
+                     the switch rather than flipping it: a stray click must not unmask anything. -->
+                <Button Grid.Column="1" x:Name="OpsecChip" Classes="opsecchip" IsVisible="{Binding IsOpsecOn}"
+                        Margin="0,0,10,0" VerticalAlignment="Center" Command="{Binding OpenOpsecSettingsCommand}"
+                        ToolTip.Tip="{Binding OpsecChipTooltip}" chrome:WindowDecorationProperties.ElementRole="User">
+                    <Border Classes="chip warn">
+                        <StackPanel Orientation="Horizontal" Spacing="4">
+                            <mi:MaterialIcon Kind="EyeOff"/>
+                            <TextBlock Text="OPSEC" FontWeight="Bold" LetterSpacing="1.5" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Border>
+                </Button>
+                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Stretch"
                             IsVisible="{Binding ShowHeaderWindowButtons}">
                     <!-- User role = clickable on top of the caption area; the maximize button gets the native
                          MaximizeButton role so Windows 11 shows Snap Layouts when hovering it. -->
@@ -140,12 +152,15 @@
              a compact status dot in the rail replaces it there. ── -->
         <Border DockPanel.Dock="Bottom" x:Name="StatusBar" BorderBrush="{DynamicResource BorderBrush}"
                 BorderThickness="0,1,0,0" Padding="12,7" IsVisible="{Binding !IsFloating}">
-            <Grid ColumnDefinitions="*,Auto,Auto">
+            <Grid ColumnDefinitions="*,Auto,Auto,Auto">
                 <TextBlock Grid.Column="0" Text="{Binding ActivityStatus}" VerticalAlignment="Center"
                            Foreground="{DynamicResource TextAccentBrush}" FontSize="11"/>
+                <TextBlock Grid.Column="1" Text="{Binding MapStatus}" VerticalAlignment="Center" Margin="0,0,14,0"
+                           Foreground="{DynamicResource TextAccentBrush}" FontSize="11"
+                           IsVisible="{Binding MapStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
                 <!-- Clipboard watch state. It sits in the always-visible strip rather than in settings: a feature
                      that can see everything you copy has to be readable as off without going looking for it. -->
-                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center"
+                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center"
                             Margin="0,0,14,0" ToolTip.Tip="{Binding ClipboardStatusTooltip}"
                             Background="Transparent" Cursor="Hand" Tapped="OnClipboardStatusTapped">
                     <Panel Width="9" Height="9" VerticalAlignment="Center">
@@ -156,7 +171,7 @@
                     <TextBlock Text="{Binding ClipboardStatus}" VerticalAlignment="Center" FontSize="11"
                                LetterSpacing="1" Opacity="0.85"/>
                 </StackPanel>
-                <TextBlock Grid.Column="2" Text="{Binding TranquilityStatus}" VerticalAlignment="Center"
+                <TextBlock Grid.Column="3" Text="{Binding TranquilityStatus}" VerticalAlignment="Center"
                            Foreground="{Binding TranquilityBrush}" FontSize="11" FontWeight="SemiBold" LetterSpacing="1"
                            ToolTip.Tip="EVE Tranquility server status (ESI /status/, refreshed every 30s)."/>
             </Grid>
@@ -231,6 +246,14 @@
                                 <TextBlock Text="FLEET" FontSize="9" LetterSpacing="1" HorizontalAlignment="Center"/>
                             </StackPanel>
                         </Button>
+                        <Button Classes="railitem" Classes.active="{Binding IsMapActive}"
+                                Command="{Binding LaunchModuleCommand}" CommandParameter="map"
+                                ToolTip.Tip="Map — New Eden, routes and where your characters are">
+                            <StackPanel HorizontalAlignment="Center" Spacing="5">
+                                <mi:MaterialIcon Classes="rail" Kind="MapOutline"/>
+                                <TextBlock Text="MAP" FontSize="9" LetterSpacing="1" HorizontalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
                         <Button Classes="railitem" Classes.active="{Binding IsRunsActive}"
                                 Command="{Binding LaunchModuleCommand}" CommandParameter="runs"
                                 ToolTip.Tip="Runs — what you flew, and what is running right now">
@@ -291,32 +314,47 @@
                             </StackPanel>
                         </Button>
                         <Border Classes="rail-divider"/>
-                        <Button Classes="railitem" Classes.active="{Binding IsEsiActive}"
-                                Command="{Binding LaunchModuleCommand}" CommandParameter="esi" ToolTip.Tip="ESI metrics">
-                            <StackPanel HorizontalAlignment="Center" Spacing="5">
-                                <mi:MaterialIcon Classes="rail" Kind="ChartBar"/>
-                                <TextBlock Text="ESI" FontSize="9" LetterSpacing="1" HorizontalAlignment="Center"/>
-                            </StackPanel>
-                        </Button>
-                        <Button Classes="railitem" Classes.active="{Binding IsInboxActive}"
-                                Command="{Binding LaunchModuleCommand}" CommandParameter="inbox" ToolTip.Tip="Inbox">
+                        <!-- Logs group (ET-408): ESI metrics, Inbox and the client log are rarely used, so they share one
+                             flyout like Tools. The rail item carries the Inbox unread badge and lights for any of the three. -->
+                        <Button Classes="railitem" Classes.active="{Binding IsLogsGroupActive}" x:Name="LogsRailItem"
+                                ToolTip.Tip="ESI metrics, inbox, game logs and client logs">
+                            <Button.Flyout>
+                                <MenuFlyout Placement="Right">
+                                    <TextBlock Classes="menuHeader" Text="LOGS" IsHitTestVisible="False"/>
+                                    <MenuItem Header="ESI metrics" Command="{Binding LaunchModuleCommand}" CommandParameter="esi">
+                                        <MenuItem.Icon><mi:MaterialIcon Kind="ChartBar"/></MenuItem.Icon>
+                                    </MenuItem>
+                                    <MenuItem Command="{Binding LaunchModuleCommand}" CommandParameter="inbox">
+                                        <MenuItem.Header>
+                                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                                <TextBlock Text="Inbox" VerticalAlignment="Center"/>
+                                                <Border x:Name="InboxMenuBadge" IsVisible="{Binding Inbox.HasUnread}" Background="#FFCC4444"
+                                                        CornerRadius="7" Padding="4,0" MinWidth="14" Height="14" VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding Inbox.UnreadCount}" FontSize="8" FontWeight="Bold"
+                                                               Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
+                                            </StackPanel>
+                                        </MenuItem.Header>
+                                        <MenuItem.Icon><mi:MaterialIcon Kind="EmailOutline"/></MenuItem.Icon>
+                                    </MenuItem>
+                                    <MenuItem Header="Game logs" Command="{Binding LaunchModuleCommand}" CommandParameter="gamelogs">
+                                        <MenuItem.Icon><mi:MaterialIcon Kind="ScriptTextOutline"/></MenuItem.Icon>
+                                    </MenuItem>
+                                    <MenuItem Header="Client logs" Command="{Binding LaunchModuleCommand}" CommandParameter="logs">
+                                        <MenuItem.Icon><mi:MaterialIcon Kind="FileDocumentOutline"/></MenuItem.Icon>
+                                    </MenuItem>
+                                </MenuFlyout>
+                            </Button.Flyout>
                             <StackPanel HorizontalAlignment="Center" Spacing="5">
                                 <Panel HorizontalAlignment="Center">
-                                    <mi:MaterialIcon Classes="rail" Kind="EmailOutline"/>
-                                    <Border IsVisible="{Binding Inbox.HasUnread}" Background="#FFCC4444" CornerRadius="7"
+                                    <mi:MaterialIcon Classes="rail" Kind="FileDocumentOutline"/>
+                                    <Border x:Name="LogsRailBadge" IsVisible="{Binding Inbox.HasUnread}" Background="#FFCC4444" CornerRadius="7"
                                             Padding="4,0" MinWidth="14" Height="14" Margin="0,-7,-8,0"
                                             HorizontalAlignment="Right" VerticalAlignment="Top" IsHitTestVisible="False">
                                         <TextBlock Text="{Binding Inbox.UnreadCount}" FontSize="8" FontWeight="Bold"
                                                    Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                     </Border>
                                 </Panel>
-                                <TextBlock Text="INBOX" FontSize="9" LetterSpacing="1" HorizontalAlignment="Center"/>
-                            </StackPanel>
-                        </Button>
-                        <Button Classes="railitem" Classes.active="{Binding IsLogsActive}"
-                                Command="{Binding LaunchModuleCommand}" CommandParameter="logs" ToolTip.Tip="Client logs">
-                            <StackPanel HorizontalAlignment="Center" Spacing="5">
-                                <mi:MaterialIcon Classes="rail" Kind="FileDocumentOutline"/>
                                 <TextBlock Text="LOGS" FontSize="9" LetterSpacing="1" HorizontalAlignment="Center"/>
                             </StackPanel>
                         </Button>

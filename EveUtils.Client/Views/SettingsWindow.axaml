@@ -11,11 +11,15 @@
 
     <DockPanel>
 
-        <!-- Footer: Save / Cancel (applies everything on Save; cancel/close applies nothing) -->
+        <!-- Footer: Save / Cancel. Save applies everything, waits for it, and stays open with a status line
+             (ET-376); the sole exception is re-import (OnReimportSde), which still closes because the SDE popup
+             takes over the screen. Cancel/close applies nothing. -->
         <Border DockPanel.Dock="Bottom" Classes="panel-header" BorderThickness="0,1,0,0" Padding="16,10">
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
-                <Button Content="Cancel" Click="OnCancel"/>
-                <Button Content="Save" Click="OnSave" Classes="accent"/>
+                <TextBlock x:Name="SaveStatusBlock" IsVisible="False" VerticalAlignment="Center" FontSize="11"
+                           Opacity="0.8" Margin="0,0,8,0"/>
+                <Button x:Name="CancelButton" Content="Cancel" Click="OnCancel"/>
+                <Button x:Name="SaveButton" Content="Save" Click="OnSave" Classes="accent"/>
             </StackPanel>
         </Border>
 
@@ -50,6 +54,13 @@
                 <StackPanel x:Name="GeneralPanel" Spacing="18">
                     <TextBlock Text="General" FontWeight="Bold" FontSize="16"
                                Foreground="{StaticResource TextBrightBrush}"/>
+
+                    <StackPanel Spacing="3">
+                        <TextBlock Text="SETUP" Classes="label" FontSize="9"/>
+                        <TextBlock Text="Walk through the first-start setup again: add characters, each with an optional server. What you already have stays."
+                                   FontSize="10" TextWrapping="Wrap" Margin="0,0,0,5"/>
+                        <Button Content="Run setup again" Click="OnRunSetupAgain" HorizontalAlignment="Left"/>
+                    </StackPanel>
 
                     <StackPanel Spacing="3">
                         <TextBlock Text="GAMELOG DIRECTORY" Classes="label" FontSize="9"/>
@@ -179,6 +190,21 @@
                     <TextBlock Text="Privacy &amp; Sharing" FontWeight="Bold" FontSize="16"
                                Foreground="{StaticResource TextBrightBrush}"/>
 
+                    <!-- ET-417: applied the moment it is clicked, like the shortcut rows — on stream, a mask that waits
+                         for Save is a mask that comes too late. -->
+                    <StackPanel Spacing="3">
+                        <TextBlock Text="OPSEC" Classes="label" FontSize="9"/>
+                        <CheckBox x:Name="OpsecBox" Content="OPSEC mode: mask locations in every window" Click="OnToggleOpsec"/>
+                        <TextBlock FontSize="10" Opacity="0.6" TextWrapping="Wrap"
+                                   Text="For streaming. While it is on, systems, stations, structures, signatures, routes and jumps are shown as unreadable glyphs, and the map is hidden. Character, corporation and alliance names stay readable. It only changes what EVE Together shows on screen: copying still copies the real value."/>
+                        <CheckBox x:Name="GlobalOpsecBox" Margin="0,6,0,0" Click="OnToggleGlobalOpsec"/>
+                        <TextBlock x:Name="GlobalOpsecUnsupportedBlock" IsVisible="False" FontSize="10" TextWrapping="Wrap"
+                                   Foreground="{DynamicResource TextAccentBrush}"
+                                   Text="Windows only. Elsewhere the shortcut works while EVE Together has focus."/>
+                        <TextBlock x:Name="GlobalOpsecMessageBlock" FontSize="10" TextWrapping="Wrap"
+                                   Foreground="{DynamicResource RedBrush}" IsVisible="False"/>
+                    </StackPanel>
+
                     <StackPanel Spacing="3">
                         <TextBlock Text="FLEET METRICS SHARING" Classes="label" FontSize="9"/>
                         <CheckBox x:Name="ShareCombatBox" Content="Share my live combat data with fleet members (DPS, neut, cap)"/>
@@ -200,9 +226,9 @@
                         <CheckBox x:Name="WatchClipboardBox" Content="Watch the clipboard for fits and inventory listings"/>
                         <TextBlock x:Name="ClipboardUnsupportedBlock" IsVisible="False" FontSize="10" TextWrapping="Wrap"
                                    Foreground="{DynamicResource TextAccentBrush}"
-                                   Text="Windows only. Other systems give no notification when the clipboard changes, and the alternative — checking it on a timer — would have to remember what was on it to spot a change. That is exactly what this feature promises not to do, so it stays off here instead of pretending to work."/>
+                                   Text="Works on Windows, and on Linux under Wayland with wl-clipboard installed. macOS and X11-only Linux sessions give no notification when the clipboard changes, and the alternative — checking it on a timer — would have to remember what was on it to spot a change. That is exactly what this feature promises not to do, so it stays off here instead of pretending to work."/>
                         <TextBlock FontSize="10" Opacity="0.6" TextWrapping="Wrap"
-                                   Text="Off by default. While it is on, Windows tells EVE Together whenever you copy something. It reads the text and looks at its shape only: an EFT fit block starting with [Ship, name], or a tab-separated inventory listing of more than one row. Those two are handed to the features listed below."/>
+                                   Text="Off by default. While it is on, your system tells EVE Together whenever you copy something. It reads the text and looks at its shape only: an EFT fit block starting with [Ship, name], or a tab-separated inventory listing of more than one row. Those two are handed to the features listed below."/>
                         <TextBlock FontSize="10" Opacity="0.6" TextWrapping="Wrap"
                                    Text="Everything else — a password, a link, part of a conversation — is dropped the moment it is read. It is not stored, not kept in a buffer for later, never written to the log window or a log file, and never attached to an error report. No clipboard text leaves your machine: the local API server never sees it either."/>
                         <TextBlock x:Name="ClipboardConsumersBlock" FontSize="10" Opacity="0.75" TextWrapping="Wrap"

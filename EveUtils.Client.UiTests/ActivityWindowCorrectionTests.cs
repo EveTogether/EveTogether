@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
+using EveUtils.Client.Opsec;
 using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Client.Views;
 using EveUtils.Shared.Data;
@@ -50,7 +51,7 @@ public sealed class ActivityWindowCorrectionTests
 
         Assert.Equal(2, model.FleetMembers.Count);
         Assert.Equal(["Char 1", "Char 2"], model.FleetMembers.Select(member => member.Name));
-        Assert.Equal(["Bhizheba", "Amarr"], model.FleetMembers.Select(member => member.LocationText));
+        Assert.Equal([OpsecText.Mark("Bhizheba"), OpsecText.Mark("Amarr")], model.FleetMembers.Select(member => member.LocationText));
 
         // The count and the list are the same fact, and the line beside them says which fact that is.
         Assert.Equal(model.FleetMembers.Count, model.FleetMemberCount);
@@ -85,7 +86,7 @@ public sealed class ActivityWindowCorrectionTests
 
         Assert.Equal(3, model.FleetMemberCount);
         Assert.NotEqual(withoutThird, model.FleetStatusText);
-        Assert.Contains(model.FleetMembers, member => member is { CharacterId: 3, LocationText: "Jita" });
+        Assert.Contains(model.FleetMembers, member => member.CharacterId == 3 && member.LocationText == OpsecText.Mark("Jita"));
     }
 
     [Fact]

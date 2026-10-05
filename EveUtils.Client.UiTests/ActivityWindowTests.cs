@@ -20,6 +20,7 @@ using Avalonia.VisualTree;
 using EveUtils.Client.Clipboard;
 using EveUtils.Client.Esi;
 using EveUtils.Client.Fleet;
+using EveUtils.Client.Opsec;
 using EveUtils.Client.Theming;
 using EveUtils.Client.ViewModels;
 using EveUtils.Client.ViewModels.Activity;
@@ -318,7 +319,7 @@ public class ActivityWindowTests
         model.SolarSystem = system;
         model.SignatureId = signatureId;
 
-        Assert.Equal(expected, activity.LocationText);
+        Assert.Equal(expected, OpsecText.Strip(activity.LocationText));
         // The value being right is half of it: without the notification the row never redraws.
         Assert.Contains(nameof(activity.LocationText), changed);
     }
@@ -1177,8 +1178,8 @@ public class ActivityWindowTests
     {
         var model = _Site(_Entry("Haunted Yard"));
 
-        Assert.Equal("Haunted Yard", model.Activity().SignatureSiteText);
-        Assert.Equal("Haunted Yard", model.Activity().HeaderSummary);
+        Assert.Equal(OpsecText.Mark("Haunted Yard"), model.Activity().SignatureSiteText);
+        Assert.Equal(OpsecText.Mark("Haunted Yard"), model.Activity().HeaderSummary);
         Assert.False(model.Activity().HasShipRestriction);
         Assert.Null(model.Activity().ShipRestrictionText);
     }
@@ -1191,9 +1192,9 @@ public class ActivityWindowTests
     {
         var model = _Site(_Entry("Sleeper Cache", restricted: true));
 
-        Assert.Equal("Sleeper Cache — ship-restricted", model.Activity().SignatureSiteText);
+        Assert.Equal($"{OpsecText.Mark("Sleeper Cache")} — ship-restricted", model.Activity().SignatureSiteText);
         Assert.False(model.Activity().HasShipRestriction);
-        Assert.Equal("Sleeper Cache · ship-restricted", model.Activity().HeaderSummary);
+        Assert.Equal($"{OpsecText.Mark("Sleeper Cache")} · ship-restricted", model.Activity().HeaderSummary);
     }
 
     [Fact]
@@ -1203,7 +1204,7 @@ public class ActivityWindowTests
 
         Assert.True(model.Activity().HasShipRestriction);
         Assert.Equal("Frigate", model.Activity().ShipRestrictionText);
-        Assert.Equal("Limited Sleeper Cache — ship-restricted", model.Activity().SignatureSiteText);
+        Assert.Equal($"{OpsecText.Mark("Limited Sleeper Cache")} — ship-restricted", model.Activity().SignatureSiteText);
     }
 
     /// <summary>ET-263: a homefront's T1-only cruisers (here: three fixture frigates standing in for the group) come
@@ -1276,14 +1277,14 @@ public class ActivityWindowTests
 
         // Both are restricted, so that holds; the ratings disagree, so no DED is claimed. What is never said is
         // how many rows our own catalogue happens to carry — that is our problem, not the pilot's.
-        Assert.Equal("SCC Secure Key Storage — ship-restricted", model.Activity().SignatureSiteText);
+        Assert.Equal($"{OpsecText.Mark("SCC Secure Key Storage")} — ship-restricted", model.Activity().SignatureSiteText);
         Assert.DoesNotContain("catalogue", model.Activity().SignatureSiteText, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("entries", model.Activity().SignatureSiteText, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("DED", model.Activity().SignatureSiteText, StringComparison.Ordinal);
 
         // Which hulls is the open question, so the row that would answer it stays away rather than picking one.
         Assert.False(model.Activity().HasShipRestriction);
-        Assert.Equal("SCC Secure Key Storage · ship-restricted", model.Activity().HeaderSummary);
+        Assert.Equal($"{OpsecText.Mark("SCC Secure Key Storage")} · ship-restricted", model.Activity().HeaderSummary);
     }
 
     [Fact]
@@ -1294,8 +1295,8 @@ public class ActivityWindowTests
         var matches = new[] { _Entry("Angel Hideaway", ded: 3, restricted: true) };
         var model = _Site(matches);
 
-        Assert.Equal($"Angel Hideaway — {SdeSiteDescription.DescribeCommon(matches)}", model.Activity().SignatureSiteText);
-        Assert.Equal($"Angel Hideaway · {SdeSiteDescription.DescribeCommon(matches)}", model.Activity().HeaderSummary);
+        Assert.Equal($"{OpsecText.Mark("Angel Hideaway")} — {SdeSiteDescription.DescribeCommon(matches)}", model.Activity().SignatureSiteText);
+        Assert.Equal($"{OpsecText.Mark("Angel Hideaway")} · {SdeSiteDescription.DescribeCommon(matches)}", model.Activity().HeaderSummary);
         Assert.Equal(SdeSiteDescription.DescribeMatches(matches), SdeSiteDescription.DescribeCommon(matches));
     }
 

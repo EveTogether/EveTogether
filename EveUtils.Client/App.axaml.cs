@@ -53,6 +53,14 @@ public partial class App : Application
             _ = globalSaveRunHotKey.InitializeAsync();
             desktop.Exit += (_, _) => globalSaveRunHotKey.Dispose();
 
+            // OPSEC mode (ET-417): the masking hook goes in before any window, so nothing is ever drawn unmasked.
+            // The state itself was read in Program, before Avalonia started.
+            var opsecRenderer = new Opsec.OpsecTextRenderer(Program.Services.GetRequiredService<Opsec.IOpsecService>());
+            desktop.Exit += (_, _) => opsecRenderer.Dispose();
+            var globalOpsecHotKey = Program.Services.GetRequiredService<Opsec.GlobalOpsecHotKeyService>();
+            _ = globalOpsecHotKey.InitializeAsync();
+            desktop.Exit += (_, _) => globalOpsecHotKey.Dispose();
+
             // Global safety net: surface unhandled UI-thread errors as a message box instead of crashing.
             InstallGlobalErrorHandler();
 

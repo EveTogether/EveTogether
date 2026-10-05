@@ -3,6 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Headless.XUnit;
 using EveUtils.Client.Esi;
+using EveUtils.Client.Opsec;
 using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Client.ViewModels.Runs;
 using EveUtils.Shared.Cqrs;
@@ -56,7 +57,7 @@ public sealed class EscalationJumpDistanceTests
             esi: new FakeRouteEsiClient([30000001, 1, 2, 3, 4, 5, 30003867]),
             locations: new FakeLocationClient(30000001));
         await reachable.LoadAsync();
-        Assert.Equal("6 jumps from here", reachable.Escalation().EscalationJumpsText);
+        Assert.Equal($"{OpsecText.Mark("6")} jumps from here", reachable.Escalation().EscalationJumpsText);
         Assert.Null(reachable.Escalation().EscalationJumpsEmptyText);
 
         // ESI unreachable: the line must say so — not fall silent (which reads as "no destination") and not show a

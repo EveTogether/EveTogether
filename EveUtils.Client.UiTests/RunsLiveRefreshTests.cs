@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using EveUtils.Client.Opsec;
 using EveUtils.Client.Runs;
 using EveUtils.Client.ViewModels;
 using EveUtils.Client.ViewModels.Home;
@@ -72,12 +73,13 @@ public sealed class RunsLiveRefreshTests
     {
         using var instance = TestClientInstance.Create();
         ICqrsDispatcher dispatcher = _Dispatcher(instance);
-        Guid runId = await _StartAsync(dispatcher, DateTime.UtcNow.AddMinutes(-20));
-        await dispatcher.Send(new SetRunStoppedCommand(runId, DateTime.UtcNow.AddMinutes(-5)), Token);
+        DateTime nowUtc = RunsTestClock.Fixed.GetUtcNow().UtcDateTime;
+        Guid runId = await _StartAsync(dispatcher, nowUtc.AddMinutes(-20));
+        await dispatcher.Send(new SetRunStoppedCommand(runId, nowUtc.AddMinutes(-5)), Token);
         RunsOverviewViewModel overview = await _OverviewAsync(instance);
         Assert.Single(overview.UnfinishedRuns);
 
-        await dispatcher.Send(new SaveRunCommand(runId, DateTime.UtcNow.AddMinutes(-5), DateTime.UtcNow, [], [], [], []), Token);
+        await dispatcher.Send(new SaveRunCommand(runId, nowUtc.AddMinutes(-5), nowUtc, [], [], [], []), Token);
         await ActivityWindowHarness.WaitUntil(() => overview.UnfinishedRuns.Count == 0 && overview.Tabs[0].Days.Count == 1);
 
         Assert.Empty(overview.UnfinishedRuns);
@@ -118,7 +120,7 @@ public sealed class RunsLiveRefreshTests
         await ActivityWindowHarness.WaitUntil(() => overview.Tabs[0].Days.Count == 1);
 
         ActivityOverviewRowViewModel row = Assert.Single(Assert.Single(overview.Tabs[0].Days).Rows);
-        Assert.Equal("Homefront", row.SiteText);
+        Assert.Equal(OpsecText.Mark("Homefront"), row.SiteText);
     }
 
     /// <summary>Table row 7: queueing an activity for a server says "queued" on its row straight away. Red before: the
@@ -290,7 +292,7 @@ public sealed class RunsLiveRefreshTests
         Assert.False(detail.IsDeleted);
         Assert.True(detail.CanDelete);
         Assert.Null(detail.StatusMessage);
-        Assert.Equal("Homefront", detail.SiteText);
+        Assert.Equal(OpsecText.Mark("Homefront"), detail.SiteText);
     }
 
     /// <summary>...and one restored from somewhere else comes back on this screen by itself.</summary>
@@ -380,7 +382,7 @@ public sealed class RunsLiveRefreshTests
         await dispatcher.Send(new StartRunCommand(Pilot, ActivityKind.Site, DateTime.UtcNow.AddMinutes(-10), 1234,
             "Homefront", 30000142), Token);
 
-        var overview = new RunsOverviewViewModel(dispatcher, new RecordingDialogService(), instance.Services, Crew, runClock: false);
+        var overview = new RunsOverviewViewModel(dispatcher, new RecordingDialogService(), instance.Services, Crew, runClock: false, time: RunsTestClock.Fixed);
         Stopwatch load = Stopwatch.StartNew();
         await overview.LoadAsync(Token);
         load.Stop();
@@ -502,10 +504,11 @@ public sealed class RunsLiveRefreshTests
         await _Dispatcher(instance).Send(new RebuildActivitySummariesCommand(), Token);
     }
 
-    private static async Task<RunsOverviewViewModel> _OverviewAsync(TestClientInstance instance, RecordingDialogService? dialogs = null)
+    private static async Task<RunsOverviewViewModel> _OverviewAsync(TestClientInstance instance, RecordingDialogService? dialogs = null,
+        TimeProvider? time = null)
     {
         var overview = new RunsOverviewViewModel(_Dispatcher(instance), dialogs ?? new RecordingDialogService(),
-            instance.Services, Crew, runClock: false);
+            instance.Services, Crew, runClock: false, time: time ?? RunsTestClock.Fixed);
         await overview.LoadAsync(Token);
         return overview;
     }

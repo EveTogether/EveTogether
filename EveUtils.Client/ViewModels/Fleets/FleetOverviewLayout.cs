@@ -62,14 +62,15 @@ public static class FleetOverviewLayout
     public const double LaneGap = 6;
 
     /// <summary>
-    /// The actions cell on a fleet row. The narrow state has room for two buttons and an overflow (scherm 10); the
+    /// The actions cell on a fleet row. The narrow state has room for STOP/START, MANAGE/VIEW, METRICS and an overflow
+    /// (45 + 60 + 61 + 31 = 197 — METRICS stands on a started fleet at every width, ET-407); the
     /// wide one starts at the 250 px that holds scherm 1's four, and grows to 320 — enough for the heaviest row this
     /// screen can draw, your own started invite-only fleet at STOP · REQUEST · MANAGE · METRICS · SHARE · "⋯" = 311.
     /// It only grows out of width the fleet name does not need: every fixed column and gap of the wide table comes to
     /// 720 px, and the name is served first up to <see cref="NameFloor"/> — comfortably past the 210 px it has at the
     /// breakpoint — so the actions cell stays at its floor until the name has room to spare.
     /// </summary>
-    public const double NarrowActionsWidth = 150;
+    public const double NarrowActionsWidth = 200;
     public const double MinActionsWidth = 250;
     public const double MaxActionsWidth = 320;
     public const double FixedColumnsWidth = 720;

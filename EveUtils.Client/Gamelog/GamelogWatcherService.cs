@@ -26,7 +26,7 @@ namespace EveUtils.Client.Gamelog;
 /// channel so the (timer-driven, possibly overlapping) parse callbacks never touch a tracker concurrently
 /// (<see cref="EveUtils.Shared.Modules.Gamelog.Aggregation.LiveDpsTracker"/> is single-owner).
 /// </summary>
-public sealed class GamelogWatcherService : ISingletonService
+public sealed class GamelogWatcherService : ISingletonService, IGameLogLineSource
 {
     /// <summary>Settings key for the user-configured gamelog directory.</summary>
     public const string GamelogDirectorySettingKey = GameLogLocations.DirectorySettingKey;
@@ -44,6 +44,7 @@ public sealed class GamelogWatcherService : ISingletonService
     private readonly MiningResidueCorrelator _miningResidue = new();
 
     private GameLogWatcher? _watcher;
+    private GameLogLineBuffer? _lineBuffer;
     private Task? _pump;
     private CancellationTokenSource? _pumpCts;
 
@@ -96,10 +97,25 @@ public sealed class GamelogWatcherService : ISingletonService
         return GameLogLocations.Resolve(settings.FirstOrDefault(s => s.Key == GamelogDirectorySettingKey)?.Value);
     }
 
+    public event Action? BufferReplaced;
+
+    /// <summary>Built on first use, so a run that never opens GAME LOGS keeps no lines; it starts at the watcher's
+    /// offsets of that moment and reads what came before from the files.</summary>
+    public GameLogLineBuffer? CurrentBuffer
+    {
+        get
+        {
+            lock (_gate)
+                return _watcher is null ? null : _lineBuffer ??= new GameLogLineBuffer(_watcher);
+        }
+    }
+
     private void StartOn(string directory)
     {
         lock (_gate)
         {
+            _lineBuffer?.Dispose();
+            _lineBuffer = null;
             _watcher?.Dispose();
 
             var watcher = new GameLogWatcher(directory);
@@ -111,6 +127,8 @@ public sealed class GamelogWatcherService : ISingletonService
             _watcher = watcher;
             CurrentDirectory = directory;
         }
+
+        BufferReplaced?.Invoke();
     }
 
     // All parsed events funnel through one channel so metric mutations happen on a single thread (the pump),
@@ -217,6 +235,8 @@ public sealed class GamelogWatcherService : ISingletonService
     {
         lock (_gate)
         {
+            _lineBuffer?.Dispose();
+            _lineBuffer = null;
             _watcher?.Dispose();
             _watcher = null;
         }

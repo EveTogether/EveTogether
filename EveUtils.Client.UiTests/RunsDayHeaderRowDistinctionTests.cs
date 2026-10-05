@@ -202,7 +202,7 @@ public sealed class RunsDayHeaderRowDistinctionTests
     {
         var dispatcher = instance.Services.GetRequiredService<ICqrsDispatcher>();
         var viewModel = new RunsOverviewViewModel(dispatcher, new RecordingDialogService(), instance.Services,
-            [new Character("Jithran", 90000001)], runClock: false, paneReadDelay: TimeSpan.Zero);
+            [new Character("Jithran", 90000001)], runClock: false, paneReadDelay: TimeSpan.Zero, time: RunsTestClock.Fixed);
         await viewModel.LoadAsync(cancellationToken);
         foreach (RunsDayViewModel day in viewModel.Tabs[0].Days)
             day.IsExpanded = true;

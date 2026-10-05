@@ -14,6 +14,7 @@ using EveUtils.Shared.Modules.Esi;
 using EveUtils.Shared.Modules.ServerAuth.Services;
 using EveUtils.Shared.Runtime;
 using EveUtils.Shared.Transport;
+using Grpc.Core;
 using GrpcPairing = EveUtils.Grpc.Pairing;
 using EveUtils.Shared.DependencyInjection;
 
@@ -31,6 +32,13 @@ public sealed class ServerPairingService(
     IClientSessionStore sessionStore) : ISingletonService
 {
     /// <summary>
+    /// How long one call to a server may take before the server counts as unreachable (ET-428). Without it the pairing
+    /// channel's retry policy (five attempts, each with its own connect timeout) kept an unreachable address busy for
+    /// over a minute, and nothing could stop it.
+    /// </summary>
+    public static readonly TimeSpan ContactTimeout = TimeSpan.FromSeconds(10);
+
+    /// <summary>
     /// Queries the server's declared scopes so the client can show an opt-in popup for the
     /// optional ones before pairing. Uses a permissive HTTP probe — the real cert is verified via TOFU
     /// during the gRPC pairing that follows.
@@ -43,7 +51,7 @@ public sealed class ServerPairingService(
             {
                 ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
             };
-            using var http = new HttpClient(handler) { BaseAddress = new Uri(serverAddress) };
+            using var http = new HttpClient(handler) { BaseAddress = new Uri(serverAddress), Timeout = ContactTimeout };
             http.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", AppInfo.UserAgent(ExecutionHost.Client));
             return await http.GetFromJsonAsync<ServerScopesResponse>("/api/server/scopes", cancellationToken);
         }
@@ -53,10 +61,18 @@ public sealed class ServerPairingService(
         }
     }
 
+    /// <param name="expectedCharacterId">The character this coupling is for; the server refuses any other one that signs
+    /// in on the EVE page (ET-425). 0 couples whoever signs in.</param>
+    /// <param name="authorizeUrl">Receives the EVE login link, for a browser that did not open by itself.</param>
+    /// <exception cref="PairingFailedException">The server refused or the EVE login was declined.</exception>
+    /// <exception cref="ServerUnreachableException">The server did not answer within <see cref="ContactTimeout"/>.</exception>
+    /// <exception cref="OperationCanceledException">The caller cancelled, at any point of the pairing.</exception>
     public async Task<PairingResult> PairAsync(
         string serverAddress,
         IReadOnlyList<string>? scopes = null,
         Action<string>? status = null,
+        int expectedCharacterId = 0,
+        Action<string>? authorizeUrl = null,
         CancellationToken cancellationToken = default)
     {
         var pairingSecret = TokenSecurity.GenerateToken();
@@ -66,11 +82,13 @@ public sealed class ServerPairingService(
         using var pinning = channelFactory.CreateForPairing(serverAddress);
         var client = new GrpcPairing.PairingClient(pinning.Channel);
 
-        var startRequest = new StartPairingRequest { PairingChallenge = pairingChallenge };
+        var startRequest = new StartPairingRequest { PairingChallenge = pairingChallenge, ExpectedCharacterId = expectedCharacterId };
         if (scopes is not null)
             startRequest.Scopes.AddRange(scopes); // server includes these in the authorize URL
 
-        var start = await client.StartPairingAsync(startRequest, cancellationToken: cancellationToken);
+        var start = await _CallAsync(serverAddress,
+            deadline => client.StartPairingAsync(startRequest, deadline: deadline, cancellationToken: cancellationToken).ResponseAsync,
+            cancellationToken);
 
         // TOFU: pin the cert presented on this first contact.
         var fingerprint = pinning.PresentedFingerprint();
@@ -78,21 +96,29 @@ public sealed class ServerPairingService(
             trustStore.Pin(serverAddress, fingerprint);
 
         status?.Invoke("Opening browser for EVE SSO…");
+        authorizeUrl?.Invoke(start.AuthorizeUrl);
         OpenBrowser(start.AuthorizeUrl); // redirect lands on the server's own callback; the server completes the exchange
 
         status?.Invoke("Waiting for the server to complete pairing…");
         ClaimPairingReply claim;
         while (true)
         {
-            claim = await client.ClaimPairingAsync(
-                new ClaimPairingRequest { PairingId = start.PairingId, PairingSecret = pairingSecret },
-                cancellationToken: cancellationToken);
+            var claimRequest = new ClaimPairingRequest { PairingId = start.PairingId, PairingSecret = pairingSecret };
+            claim = await _CallAsync(serverAddress,
+                deadline => client.ClaimPairingAsync(claimRequest, deadline: deadline, cancellationToken: cancellationToken).ResponseAsync,
+                cancellationToken);
             if (claim.Completed)
                 break;
             if (!string.Equals(claim.Message, "Pairing not completed yet.", StringComparison.Ordinal))
-                throw new InvalidOperationException(claim.Message);
+                throw new PairingFailedException(claim.Failure, claim.CharacterName, claim.Message);
             await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
         }
+
+        // A server from before ET-425 ignores the expected character, so the same rule is held here as well: the session
+        // it issued for someone else is never saved, and nothing on this PC gets coupled.
+        if (expectedCharacterId != 0 && claim.CharacterId != expectedCharacterId)
+            throw new PairingFailedException(PairingFailure.OtherCharacter, claim.CharacterName,
+                $"{claim.CharacterName} signed in, but this coupling is for another character. Nothing was coupled.");
 
         await sessionStore.SaveAsync(
             serverAddress,
@@ -105,6 +131,25 @@ public sealed class ServerPairingService(
 
         return new PairingResult(
             claim.CharacterName, claim.CharacterId, claim.ServerName, claim.CorporationName, claim.AllianceName);
+    }
+
+    /// <summary>One call with its own <see cref="ContactTimeout"/> deadline, which also caps the channel's retries. A call
+    /// the caller cancelled stays a cancellation; one the server never answered becomes <see cref="ServerUnreachableException"/>.</summary>
+    private static async Task<TReply> _CallAsync<TReply>(string serverAddress, Func<DateTime, Task<TReply>> call,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await call(DateTime.UtcNow + ContactTimeout);
+        }
+        catch (RpcException ex) when (ex.StatusCode is StatusCode.Cancelled && cancellationToken.IsCancellationRequested)
+        {
+            throw new OperationCanceledException(cancellationToken);
+        }
+        catch (RpcException ex) when (ex.StatusCode is StatusCode.Unavailable or StatusCode.DeadlineExceeded)
+        {
+            throw new ServerUnreachableException(serverAddress, ContactTimeout, ex);
+        }
     }
 
     private static void OpenBrowser(string url)

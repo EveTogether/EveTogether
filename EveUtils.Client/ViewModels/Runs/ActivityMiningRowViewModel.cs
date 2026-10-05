@@ -1,3 +1,6 @@
+using System.Globalization;
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using EveUtils.Client.Formatting;
 using EveUtils.Shared.Modules.Runs.Isk;
 
@@ -12,9 +15,12 @@ namespace EveUtils.Client.ViewModels.Runs;
 /// not sent per-ore lines (ET-234's total-only fallback), where there is no fleet-wide ore total to compare against.</summary>
 /// <param name="nameOf">Turns a character id into a name where the caller has one — see
 /// <see cref="ActivityRunRowViewModel"/> for why this is not always possible yet.</param>
-public sealed class ActivityMiningRowViewModel(
+/// <param name="corrector">What the line's edit action (ET-424) writes through. Null for a line that is not this
+/// machine's to correct — someone else's, or one that stands for several runs at once — which then has no edit action.</param>
+public sealed partial class ActivityMiningRowViewModel(
     Guid runId, long characterId, string oreType, int units, int criticalUnits, int residueUnits, decimal? value,
-    bool isFixedPrice, Func<long, string>? nameOf = null, double? shareFraction = null, string? shareTooltip = null)
+    bool isFixedPrice, Func<long, string>? nameOf = null, double? shareFraction = null, string? shareTooltip = null,
+    MiningLineCorrector? corrector = null) : ObservableObject
 {
     /// <summary>What an ISK figure holding Mutanite says on hover (ET-288) — the fact ET-229 used to append to the
     /// figure itself as " (NPC price)", which no ISK column in the run window has room for.</summary>
@@ -79,6 +85,85 @@ public sealed class ActivityMiningRowViewModel(
     /// once the row's final position in its character group is known. Unused (stays false) on the run window,
     /// which does not stripe its own copy of this table.</summary>
     public bool IsAlternate { get; set; }
+
+    private readonly MiningLineCorrector? _corrector = corrector;
+
+    /// <summary>Whether the line has an edit action at all — see <paramref name="corrector"/>.</summary>
+    public bool CanEdit => _corrector is not null && RunId != Guid.Empty;
+
+    /// <summary>The box under the line is open: the units to set, or the whole line to take off the run.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsNotEditing))]
+    private bool _isEditing;
+
+    public bool IsNotEditing => !IsEditing;
+
+    [ObservableProperty] private string _editText = string.Empty;
+
+    /// <summary>Why the last correction was not taken, beside the box it was typed in.</summary>
+    [ObservableProperty] private string? _editError;
+
+    /// <summary>A correction is being written; the box waits rather than take a second click on top of the first.</summary>
+    [ObservableProperty] private bool _isBusy;
+
+    [RelayCommand]
+    private void BeginEdit()
+    {
+        EditText = Units.ToString(CultureInfo.InvariantCulture);
+        EditError = null;
+        IsEditing = true;
+    }
+
+    [RelayCommand]
+    private void CancelEdit() => IsEditing = false;
+
+    [RelayCommand]
+    private async Task SaveEditAsync()
+    {
+        if (_corrector is null || IsBusy)
+            return;
+
+        if (!int.TryParse(EditText.Trim(), NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out int newUnits) || newUnits < 1)
+        {
+            EditError = "Enter a whole number of units, at least 1.";
+            return;
+        }
+
+        if (newUnits == Units)
+        {
+            IsEditing = false;
+            return;
+        }
+
+        await _StoreAsync(() => _corrector.SetUnitsAsync(RunId, OreText, newUnits));
+    }
+
+    [RelayCommand]
+    private async Task RemoveLineAsync()
+    {
+        if (_corrector is null || IsBusy)
+            return;
+
+        await _StoreAsync(() => _corrector.RemoveAsync(RunId, OreText));
+    }
+
+    private async Task _StoreAsync(Func<Task<string?>> store)
+    {
+        IsBusy = true;
+        try
+        {
+            EditError = await store();
+            IsEditing = EditError is not null;
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    /// <summary>The same line of the same run, whatever its figures now say — what lets the run window keep the row a
+    /// pilot has open for editing while the mining behind it moves on.</summary>
+    public bool IsSameLine(ActivityMiningRowViewModel other) => RunId == other.RunId && OreText == other.OreText;
 
     /// <summary>Whether <paramref name="other"/> draws exactly this row — what lets the run window keep the row it
     /// already shows rather than rebuild its container every clock tick (ET-287).</summary>

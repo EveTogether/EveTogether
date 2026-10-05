@@ -5,6 +5,7 @@ using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EveUtils.Client.Clipboard;
+using EveUtils.Client.Opsec;
 using EveUtils.Shared.Modules.Sde;
 using EveUtils.Shared.Modules.Sde.Dtos;
 
@@ -86,7 +87,7 @@ public sealed partial class EscalationDialogViewModel : ObservableObject
 
     public string? DestinationSecurityText =>
         DestinationResolvedSystem is { } system
-            ? $"{system.SecurityStatus.ToString("0.0", CultureInfo.InvariantCulture)} security"
+            ? $"{OpsecText.Mark(system.SecurityStatus.ToString("0.0", CultureInfo.InvariantCulture))} security"
             : null;
 
     /// <summary>Typed as-is from the Agency window — see the type docstring for why this never starts pre-filled.</summary>

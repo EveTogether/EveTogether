@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
+using EveUtils.Client.Opsec;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Enums;
 
@@ -31,16 +32,16 @@ public sealed partial class EscalationDetailSectionViewModel(RunDetailSectionSer
         ActivityDetailDto detail = input.Detail;
         RunParameterDto? escalation = detail.Parameters
             .FirstOrDefault(parameter => parameter.ParameterKey == RunParameterKey.Escalation);
-        EscalationText = escalation?.TypedValue;
+        EscalationText = OpsecText.Mark(escalation?.TypedValue);
         EscalationObservedText = escalation is null
             ? null
             : $"read from the Agency at {escalation.ObservedAtUtc.ToLocalTime():HH:mm} on " +
               $"{escalation.ObservedAtUtc.ToLocalTime():d MMM}";
         EscalationEmptyText = escalation is null ? "No escalation has been registered for this activity." : null;
-        HeaderSummary = escalation?.TypedValue ?? "none registered";
+        HeaderSummary = OpsecText.Mark(escalation?.TypedValue) ?? "none registered";
 
-        EscalationSystemText = detail.Parameters
-            .FirstOrDefault(parameter => parameter.ParameterKey == RunParameterKey.EscalationSystem)?.TypedValue;
+        EscalationSystemText = OpsecText.Mark(detail.Parameters
+            .FirstOrDefault(parameter => parameter.ParameterKey == RunParameterKey.EscalationSystem)?.TypedValue);
         EscalationExpiresAtText = detail.Parameters
                 .FirstOrDefault(parameter => parameter.ParameterKey == RunParameterKey.EscalationExpiresAtUtc)?.TypedValue
             is { } expiresAt && DateTime.TryParse(expiresAt, CultureInfo.InvariantCulture,
@@ -98,7 +99,7 @@ public sealed partial class EscalationDetailSectionViewModel(RunDetailSectionSer
         var route = await services.Esi.GetAsync<int[]>($"/route/{here.SolarSystemId}/{destinationSystemId}/",
             cancellationToken: cancellationToken, expectedNotFound: true);
         return route is { IsSuccess: true, Value.Length: > 0 }
-            ? ($"{route.Value.Length - 1} jumps from here", null)
+            ? ($"{OpsecText.Mark((route.Value.Length - 1).ToString(CultureInfo.InvariantCulture))} jumps from here", null)
             : (null, "Jump count not available: no stargate route to this system.");
     }
 }
