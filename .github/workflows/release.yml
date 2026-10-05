@@ -21,7 +21,7 @@ env:
   # Pinned to the Velopack package version in EveUtils.Client.csproj. The tool writes the feed the library
   # reads, so the two are one matched pair rather than two independent dependencies — bump them together or
   # not at all. Velopack's own compatibility guarantee runs between a reader and a writer of the same version.
-  VPK_VERSION: '1.2.0'
+  VPK_VERSION: '1.2.158'
 
   # vpk pack --channel writes releases.{channel}.json, and the installed app asks for exactly that file by the
   # name UpdateChannelName builds from its own platform, architecture and stream (EveUtils.Client/Updates/
