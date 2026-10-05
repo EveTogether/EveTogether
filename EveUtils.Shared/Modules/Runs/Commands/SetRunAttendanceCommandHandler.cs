@@ -12,7 +12,7 @@ namespace EveUtils.Shared.Modules.Runs.Commands;
 
 [ClientOnly]
 internal sealed class SetRunAttendanceCommandHandler(
-    IDbContextFactory<ClientDbContext> contextFactory, IEventBus eventBus, IDispatcher dispatcher)
+    IDbContextFactory<ClientDbContext> contextFactory, IEventBus eventBus, IDispatcher dispatcher, RunAttendanceWriteGate writeGate)
     : ICommandHandler<SetRunAttendanceCommand, Result<int>>
 {
     public async Task<Result<int>> Handle(SetRunAttendanceCommand command, CancellationToken cancellationToken = default)
@@ -25,15 +25,25 @@ internal sealed class SetRunAttendanceCommandHandler(
             return Result<int>.Failure(new ResultMessage(MessageSeverity.Error, MessageCodes.ValidationFailed,
                 "The number of pilots not on the roster cannot be negative.", "Runs"));
 
+        // Two windows on the same run write at the same instant; serialized, the StandingSetAtUtc check settles who wins
+        // instead of a "database is locked".
+        await writeGate.Gate.WaitAsync(cancellationToken);
         try
         {
-            return await _WriteAsync(command, byGroup, cancellationToken);
+            try
+            {
+                return await _WriteAsync(command, byGroup, cancellationToken);
+            }
+            catch (DbUpdateException) when (byGroup)
+            {
+                // A start filed one of the characters this list backfills between the read and the write (I7, ET-274): the
+                // index let that one through, and the list is written again over the runs as they now are.
+                return await _WriteAsync(command, byGroup, cancellationToken);
+            }
         }
-        catch (DbUpdateException) when (byGroup)
+        finally
         {
-            // A start filed one of the characters this list backfills between the read and the write (I7, ET-274): the
-            // index let that one through, and the list is written again over the runs as they now are.
-            return await _WriteAsync(command, byGroup, cancellationToken);
+            writeGate.Gate.Release();
         }
     }
 

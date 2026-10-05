@@ -71,6 +71,8 @@ entries under `[Unreleased]` below that were not there yet at the previous night
   server is never asked for its fleets there, so those fleets used to be missing without a word. The fleet list now
   shows one line per server, such as "Catbank is not connected to <server> — its fleets are not shown here", naming
   every character in that position. The line disappears as soon as they are all connected.
+- **Fixed: a HOMEFRONT outcome you pick by hand is no longer lost.** Choosing Failed (or any outcome) could quietly flip back to Completed when the game log or the run's own default caught up a moment later; your pick now always stands. Changing attendance, waves or pilots from two windows on the same run at once also no longer mixes up the result.
+- **Fixed: the "run is not shared" fleet notice no longer stays blank when you open a run window.** It could miss the first check and stay empty until a later one; it now shows straight away when it applies.
 - **Added: e-war, EHP, signature and speed data for abyssal deadspace enemies**, read from EVE's own data plus a
   small table for what it does not cover (faction, and the two Vigilant Tyrannos agents that have no game data id
   at all). Groundwork for an upcoming abyssal room and target overview — nothing changes in the app yet.
