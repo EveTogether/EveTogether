@@ -123,14 +123,29 @@ public sealed class SkillImpactViewModel : ViewModelBase, IRefreshableModule
     /// <summary>Re-runs the scan against the same snapshot this window was opened with (<see cref="IRefreshableModule"/>):
     /// re-opening SKILL IMPACT… for the same character re-selects this tab rather than building a second one, so
     /// without this it would keep showing whatever the first open computed, however stale.</summary>
-    public void RefreshModule() => _ = LoadAsync();
+    public void RefreshModule() => _ = _ObservedAsync(LoadAsync());
+
+    // RefreshModule and a chip toggle start their work without awaiting it, so any failure past the scan's and the
+    // targets' own catches has to land on screen too, never go unobserved.
+    private async Task _ObservedAsync(Task work)
+    {
+        try
+        {
+            await work;
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            IsLoading = false;
+            IsLoadingTargets = false;
+            TargetsErrorMessage = $"SKILL IMPACT could not be updated: {exception.Message}";
+        }
+    }
 
     public async Task LoadAsync(CancellationToken cancellationToken = default)
     {
         var version = ++_scanVersion;
         IsLoading = true;
         SkillImpactResult result;
-        // RefreshModule fires this without awaiting it, so a failed scan has to land on screen, never go unobserved.
         try
         {
             result = await Task.Run(() => _scanner.ScanAsync(_baseInput, _trainedLevels, cancellationToken), cancellationToken);
@@ -164,7 +179,7 @@ public sealed class SkillImpactViewModel : ViewModelBase, IRefreshableModule
     private void _OnStatSelectionChanged()
     {
         _Recompute();
-        _ = _RecomputeTargetsAsync(CancellationToken.None);
+        _ = _ObservedAsync(_RecomputeTargetsAsync(CancellationToken.None));
     }
 
     private async Task _RecomputeTargetsAsync(CancellationToken cancellationToken)
