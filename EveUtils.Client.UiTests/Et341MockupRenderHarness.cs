@@ -121,18 +121,22 @@ public sealed class Et341MockupRenderHarness
             if (comps.ReadinessEntries.LastOrDefault() is { } boosts)
             {
                 comps.SelectedReadinessEntry = boosts;
+                boosts.SelectByName("RaymondKrah");
             }
         }
         _Shoot(compsWindow, "b-doctrine");
-        compsWindow.Close();
-        if (comps.SelectedTab?.Compositions.FirstOrDefault() is { } editRow && await editRow.Client.GetAsync(editRow.Id) is { } detail)
+        if (comps.ReadinessEntries.FirstOrDefault() is { } ferox)
         {
-            var editor = CompositionEditorViewModel.ForExisting(services, editRow.Client, detail);
-            var editorWindow = new CompositionEditorWindow(editor) { Width = 1240, Height = 860 };
-            editorWindow.Show();
-            _Shoot(editorWindow, "b-doctrine-minimum");
-            editorWindow.Close();
+            await comps.EditMinimumCommand.ExecuteAsync(ferox);
+            if (comps.MinimumEditor?.Entry is { } feroxEntry)
+            {
+                feroxEntry.AddSkillMinimum(Id("Shield Management"), "Shield Management", 4);
+                feroxEntry.AddSkillMinimum(Id("Tactical Shield Manipulation"), "Tactical Shield Manipulation", 4);
+                feroxEntry.AddSkillMinimum(Id("Surgical Strike"), "Surgical Strike", 4);
+            }
         }
+        _Shoot(compsWindow, "b-doctrine-minimum");
+        compsWindow.Close();
 
         // From a fit: the SKILL IMPACT window for the Ferox, as PLANS → + FROM FIT opens it.
         var dogma = services.GetRequiredService<IDogmaDataAccessor>();
@@ -222,7 +226,7 @@ public sealed class Et341MockupRenderHarness
     {
         var repo = services.GetRequiredService<IFleetCompositionRepository>();
         var now = DateTimeOffset.UtcNow;
-        var compositionId = await repo.AddAsync(new FleetComposition { Name = "Ferox Fleet", OwnerCharacterId = Raymond, IsClientOnly = true, CreatedAt = now, UpdatedAt = now });
+        var compositionId = await repo.AddAsync(new FleetComposition { Name = "Ferox Fleet", Description = "Shield battlecruiser doctrine", OwnerCharacterId = Raymond, IsClientOnly = true, CreatedAt = now, UpdatedAt = now });
         int order = 0;
         foreach (var (role, min, fit, minimums) in new[]
         {

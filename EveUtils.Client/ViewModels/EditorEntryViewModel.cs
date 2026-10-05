@@ -33,6 +33,7 @@ public sealed partial class EditorEntryViewModel : ObservableObject
         _minText = CompositionMinValue.Format(entryMinCount);
         _images = images;
         _fitSkillLevels = fitSkillLevels ?? new Dictionary<int, int>();
+        FitRequiresText = FitRequirementsText.Format(_fitSkillLevels, skillName ?? (typeId => $"type {typeId}"));
         foreach (var minimum in skillMinimums ?? [])
         {
             AddSkillMinimum(minimum.SkillTypeId, skillName?.Invoke(minimum.SkillTypeId) ?? $"type {minimum.SkillTypeId}", minimum.Level);
@@ -43,6 +44,9 @@ public sealed partial class EditorEntryViewModel : ObservableObject
     public FitReferenceInfo Fit { get; }
     public string FitName => Fit.FitName;
     public string HullName { get; }
+
+    /// <summary>"19 skills, e.g. …": what the fit already requires, so a minimum at or below it reads as no effect.</summary>
+    public string FitRequiresText { get; }
 
     [ObservableProperty] private string _minText;
 

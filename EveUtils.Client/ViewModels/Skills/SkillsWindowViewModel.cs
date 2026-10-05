@@ -66,6 +66,7 @@ public sealed partial class SkillsWindowViewModel : ObservableObject, IRefreshab
     private IReadOnlyList<Character> _characters = [];
     private bool _suppressSelectionApply; // set while _SelectCharacterAsync syncs SelectedCharacterOption back onto itself
     private int _selectionVersion; // bumped on every _SelectCharacterAsync call; a stale call discards its result on completion
+    private (int CharacterId, int PlanId)? _pendingPlan; // COMP's ADD TO PLAN… / WHAT IF…: land on this plan once loaded
 
     [ObservableProperty] private int? _selectedCharacterId;
     [ObservableProperty] private string _selectedCharacterName = "";
@@ -215,6 +216,10 @@ public sealed partial class SkillsWindowViewModel : ObservableObject, IRefreshab
     /// the constructor's <c>startingCharacterId</c>, which only applies on a fresh open.</summary>
     public Task GoToCharacterAsync(int characterId) => _SelectCharacterAsync(characterId, CancellationToken.None);
 
+    /// <summary>Opens on <paramref name="characterId"/>'s PLANS tab with <paramref name="planId"/> selected, on the next
+    /// load of that character (a fresh open), or right away through <see cref="GoToCharacterAsync"/> when already open.</summary>
+    public void OpenOnPlan(int characterId, int planId) => _pendingPlan = (characterId, planId);
+
     partial void OnCharacterSearchTextChanged(string value)
     {
         FilteredCharacterOptions.Clear();
@@ -326,6 +331,10 @@ public sealed partial class SkillsWindowViewModel : ObservableObject, IRefreshab
             };
             var plans = new SkillsPlansViewModel(_services, snapshot, characterId, character.Name);
             await plans.LoadAsync(cancellationToken);
+            if (_pendingPlan is { } pending && pending.CharacterId == characterId)
+            {
+                plans.SelectedPlan = plans.Plans.FirstOrDefault(plan => plan.Id == pending.PlanId) ?? plans.SelectedPlan;
+            }
 
             if (version != _selectionVersion)
             {
@@ -352,6 +361,11 @@ public sealed partial class SkillsWindowViewModel : ObservableObject, IRefreshab
             Optimise = optimise;
             _ApplyTabCounts();
             StatusMessage = null;
+            if (_pendingPlan is { } landed && landed.CharacterId == characterId)
+            {
+                _pendingPlan = null;
+                SelectedTabIndex = PlansTabIndex;
+            }
 
             if (_settings is not null)
             {

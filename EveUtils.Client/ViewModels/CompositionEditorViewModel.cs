@@ -39,7 +39,7 @@ public sealed partial class CompositionEditorViewModel : ObservableObject, IDisp
     private readonly ISdeNameResolver _resolver;
     private readonly ITypeImageProvider? _images;
     private readonly IFitValidator? _validator;
-    private readonly Dictionary<string, int> _skillIdsByName = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, int> _skillIdsByName;
     private readonly long? _compositionId;
     private readonly Guid _newCompositionId = Guid.NewGuid();
     private readonly IDisposable? _changeSubscription;
@@ -62,7 +62,8 @@ public sealed partial class CompositionEditorViewModel : ObservableObject, IDisp
         _compositionId = snapshot?.Composition.Id;
         IsReadOnly = isReadOnly;
         _prefillSkillMinimums = prefillSkillMinimums;
-        SkillNames = _LoadSkillNames(services.GetService<ISdeAccessor>());
+        _skillIdsByName = SkillIdsByName(services.GetService<ISdeAccessor>());
+        SkillNames = [.. _skillIdsByName.Keys.Order(StringComparer.OrdinalIgnoreCase)];
 
         if (snapshot is not null)
             _Load(snapshot);
@@ -197,14 +198,14 @@ public sealed partial class CompositionEditorViewModel : ObservableObject, IDisp
     private EditorEntryViewModel _NewEntry(long? id, FitReferenceInfo fit, int? entryMinCount, IReadOnlyList<SkillMinimum> skillMinimums)
     {
         var entry = new EditorEntryViewModel(id, fit, _resolver.TypeName(fit.ShipTypeId), entryMinCount, _images,
-            skillMinimums, _FitSkillLevels(fit), _resolver.TypeName);
+            skillMinimums, FitSkillLevels(_validator, fit), _resolver.TypeName);
         _ = entry.LoadHullImageAsync();
         return entry;
     }
 
     /// <summary>The level the fit itself requires of each skill (its whole prerequisite closure), for the "fit needs"
     /// hint. Empty when there is no validator or the snapshot is not a readable fit.</summary>
-    private IReadOnlyDictionary<int, int> _FitSkillLevels(FitReferenceInfo fit)
+    internal static IReadOnlyDictionary<int, int> FitSkillLevels(IFitValidator? validator, FitReferenceInfo fit)
     {
         EsiFitting? fitting;
         try
@@ -216,31 +217,33 @@ public sealed partial class CompositionEditorViewModel : ObservableObject, IDisp
             fitting = null;
         }
 
-        if (_validator is null || fitting?.Items is null)
+        if (validator is null || fitting?.Items is null)
         {
             return new Dictionary<int, int>();
         }
 
-        return _validator.ValidateSkills(fitting, new Dictionary<int, int>())
+        return validator.ValidateSkills(fitting, new Dictionary<int, int>())
             .ToDictionary(gap => gap.SkillTypeId, gap => gap.RequiredLevel);
     }
 
-    private IReadOnlyList<string> _LoadSkillNames(ISdeAccessor? sde)
+    /// <summary>Every SDE skill (category 16) by name, for the "add a skill" pickers.</summary>
+    internal static Dictionary<string, int> SkillIdsByName(ISdeAccessor? sde)
     {
+        Dictionary<string, int> skillIds = new(StringComparer.OrdinalIgnoreCase);
         if (sde is not { IsAvailable: true })
         {
-            return [];
+            return skillIds;
         }
 
         foreach (var group in sde.GetGroupsByCategory(16))
         {
             foreach (var skill in sde.GetSkillsInGroup(group.GroupId))
             {
-                _skillIdsByName.TryAdd(skill.Name, skill.TypeId);
+                skillIds.TryAdd(skill.Name, skill.TypeId);
             }
         }
 
-        return [.. _skillIdsByName.Keys.Order(StringComparer.OrdinalIgnoreCase)];
+        return skillIds;
     }
 
     [RelayCommand]
