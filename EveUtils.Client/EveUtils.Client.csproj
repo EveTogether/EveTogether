@@ -54,7 +54,7 @@
          which became read-only in Microsoft.OpenApi 3.x (CS0200) — 3.9.0 and 3.10.2 break the build.
          AspNetCore.OpenApi 10.0.12 itself requires >= 2.12.0 and < 3.0.0, so 2.7.5 is a downgrade (NU1605). -->
     <PackageReference Include="Microsoft.OpenApi" Version="2.12.2" />
-    <PackageReference Include="Scalar.AspNetCore" Version="2.17.10" />
+    <PackageReference Include="Scalar.AspNetCore" Version="2.17.13" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.12" />
     <!-- Pin the native SQLite bundle to 3.0.0 to drop SQLitePCLRaw.lib.e_sqlite3 2.1.11,
          which carries the high-severity advisory GHSA-2m69-gcr7-jv3q (NU1903). -->
