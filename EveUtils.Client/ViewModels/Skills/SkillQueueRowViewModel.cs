@@ -14,6 +14,9 @@ public sealed partial class SkillQueueRowViewModel(
     public int SkillTypeId { get; } = skillTypeId;
     public string SkillText { get; } = $"{skillName} {RomanLevel.Text(finishedLevel)}";
     public string PipsText { get; } = SkillLevelPips.Text(currentLevel, isTraining ? finishedLevel : null);
+    public int CurrentLevel { get; } = currentLevel;
+    public int QueuedLevel { get; } = finishedLevel;
+    public int TrainingLevel { get; } = isTraining ? finishedLevel : 0;
     public string GroupName { get; } = groupName;
     public bool IsTraining { get; } = isTraining;
     public string ThisLevelText { get; } = thisLevelText;

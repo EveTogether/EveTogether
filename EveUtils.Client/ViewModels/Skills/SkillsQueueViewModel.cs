@@ -42,6 +42,18 @@ public sealed partial class SkillsQueueViewModel : ObservableObject
     /// own view-model once both are built (ET-354). Empty until then, which hides the line.</summary>
     [ObservableProperty] private string _remapLineText = "";
 
+    // Mockup v5's stat row: the training skill with its progress and end, the queue's length and end, the entry count
+    // and the SP still to train.
+    [ObservableProperty] private double _trainingProgress;
+    [ObservableProperty] private string _trainingEndsText = "";
+    [ObservableProperty] private string _queueLeftBigText = "—";
+    [ObservableProperty] private string _queueUntilText = "";
+    [ObservableProperty] private string _queuedCountText = "0";
+    [ObservableProperty] private string _spInQueueNumberText = "—";
+    [ObservableProperty] private string _timelineMidText = "";
+    [ObservableProperty] private string _timelineEndText = "";
+    [ObservableProperty] private IReadOnlyList<double> _timelineBoundaries = [];
+
     /// <summary>Jumps the SKILLS window to the OPTIMISE tab — wired by <see cref="SkillsWindowViewModel"/>, which
     /// owns <c>SelectedTabIndex</c>.</summary>
     public Action? GoToOptimise { get; set; }
@@ -72,6 +84,7 @@ public sealed partial class SkillsQueueViewModel : ObservableObject
 
         HasQueue = future.Count > 0;
         SkillCountText = $"{future.Count}/{QueueCap}";
+        QueuedCountText = future.Count.ToString(CultureInfo.InvariantCulture);
         DistinctSkillsText = $"{future.Select(e => e.SkillTypeId).Distinct().Count()} distinct skills";
 
         var standing = SkillQueueStanding.From(future, id => _skillsById.TryGetValue(id, out var s) ? s.Name : $"type {id}");
@@ -102,7 +115,7 @@ public sealed partial class SkillsQueueViewModel : ObservableObject
                 var thisLevel = _NotNegative(finish - previousEnd);
                 var fromNow = _NotNegative(finish - snapshot.Now);
                 thisLevelText = SkillQueueStanding.Until(thisLevel);
-                endsText = finish.ToLocalTime().ToString("ddd d MMM HH:mm", CultureInfo.InvariantCulture);
+                endsText = When(finish, snapshot.Now);
                 fromNowText = SkillQueueStanding.Until(fromNow);
                 previousEnd = finish;
             }
@@ -121,7 +134,72 @@ public sealed partial class SkillsQueueViewModel : ObservableObject
         }
 
         SpInQueueText = spTotal > 0 ? $"{(spTotal / 1_000_000.0).ToString("0.00", CultureInfo.InvariantCulture)}M" : "—";
+        SpInQueueNumberText = spTotal > 0 ? (spTotal / 1_000_000.0).ToString("0.00", CultureInfo.InvariantCulture) : "—";
+        _ApplyStatsAndTimeline(future);
+        SelectedRow = Rows.FirstOrDefault(); // the pane shows the training skill until the pilot picks another row
     }
+
+    private void _ApplyStatsAndTimeline(IReadOnlyList<SkillQueueEntry> future)
+    {
+        var now = _snapshot.Now;
+        var head = future.FirstOrDefault();
+        if (head is { FinishDate: { } headFinish })
+        {
+            var start = head.StartDate ?? now;
+            double span = (headFinish - start).TotalMinutes;
+            TrainingProgress = span > 0 ? Math.Clamp((now - start).TotalMinutes / span, 0, 1) : 0;
+            TrainingEndsText = $"ends {When(headFinish, now)} · in {SkillQueueStanding.Until(_NotNegative(headFinish - now))}";
+        }
+        else
+        {
+            TrainingProgress = 0;
+            TrainingEndsText = head is null ? "" : "paused · nothing trains until the queue resumes";
+        }
+
+        var ends = future.Select(e => e.FinishDate).OfType<DateTimeOffset>().ToList();
+        if (ends.Count > 0 && !IsPaused)
+        {
+            var end = ends.Max();
+            QueueLeftBigText = SkillQueueStanding.Until(_NotNegative(end - now));
+            QueueUntilText = $"until {When(end, now)}";
+            double total = (end - now).TotalMinutes;
+            TimelineBoundaries = total > 0 ? ends.Take(ends.Count - 1).Select(e => Math.Clamp((e - now).TotalMinutes / total, 0, 1)).ToList() : [];
+            TimelineMidText = When(now + (end - now) / 2, now);
+            TimelineEndText = When(end, now);
+        }
+        else
+        {
+            QueueLeftBigText = Rows.LastOrDefault()?.FromNowText ?? "—";
+            QueueUntilText = head is null ? "nothing queued" : "queue paused · no end date";
+            TimelineBoundaries = [];
+            TimelineMidText = "";
+            TimelineEndText = "";
+        }
+    }
+
+    /// <summary>"today 11:47", "tomorrow 09:05", "Sat 26 Sep 01:22", or with the year when it is not this year.</summary>
+    public static string When(DateTimeOffset at, DateTimeOffset now)
+    {
+        var local = at.ToLocalTime();
+        var today = now.ToLocalTime().Date;
+        string time = local.ToString("HH:mm", CultureInfo.InvariantCulture);
+        if (local.Date == today)
+        {
+            return $"today {time}";
+        }
+
+        if (local.Date == today.AddDays(1))
+        {
+            return $"tomorrow {time}";
+        }
+
+        return local.Year == today.Year
+            ? local.ToString("ddd d MMM HH:mm", CultureInfo.InvariantCulture)
+            : local.ToString("ddd d MMM yyyy HH:mm", CultureInfo.InvariantCulture);
+    }
+
+    /// <summary>Selects the first visible row for a skill — CATALOGUE's SHOW IN QUEUE lands here.</summary>
+    public void SelectSkill(int skillTypeId) => SelectedRow = Rows.FirstOrDefault(r => r.SkillTypeId == skillTypeId) ?? SelectedRow;
 
     /// <summary>The same detail pane shape as CATALOGUE, for whichever row is picked.</summary>
     partial void OnSelectedRowChanged(SkillQueueRowViewModel? value)
@@ -138,11 +216,7 @@ public sealed partial class SkillsQueueViewModel : ObservableObject
         }
 
         var groupName = _groupNameBySkill.GetValueOrDefault(value.SkillTypeId, "");
-        var description = _snapshot.Sde.GetType(skill.TypeId)?.Description;
-        var queueForSkill = _snapshot.Queue.Where(e => e.SkillTypeId == skill.TypeId).ToList();
-        var rate = _snapshot.SpPerMinute(skill.PrimaryAttributeId, skill.SecondaryAttributeId);
-        SelectedDetail = new SkillDetailViewModel(skill, groupName, description, _snapshot.LevelOf(skill.TypeId), rate,
-            queueForSkill, _snapshot.Now);
+        SelectedDetail = new SkillDetailViewModel(skill, groupName, _snapshot);
     }
 
     private static TimeSpan _NotNegative(TimeSpan span) => span < TimeSpan.Zero ? TimeSpan.Zero : span;

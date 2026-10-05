@@ -262,24 +262,9 @@ public sealed partial class SkillsOptimiseViewModel : ObservableObject
 
     private void _BuildImplantSlots(SkillsCharacterSnapshot snapshot, IDogmaDataAccessor dogma)
     {
-        var bySlot = new Dictionary<int, (int TypeId, double Bonus)>();
-        int hardwirings = 0;
-        foreach (var typeId in snapshot.ImplantTypeIds)
-        {
-            var attributes = dogma.GetBaseAttributes(typeId);
-            int slot = (int)(attributes.FirstOrDefault(a => a.AttributeId == DogmaAttributeIds.Implantness)?.Value ?? 0);
-            double bonus = attributes.Where(a => a.AttributeId is >= DogmaAttributeIds.CharismaBonus and <= DogmaAttributeIds.WillpowerBonus)
-                .Select(a => a.Value).DefaultIfEmpty(0).Max();
-            if (slot is >= 1 and <= 5)
-            {
-                bySlot[slot] = (typeId, bonus);
-            }
-            else if (slot > 5)
-            {
-                hardwirings++;
-            }
-        }
-
+        var reading = ImplantSlotReading.Read(snapshot.ImplantTypeIds, dogma);
+        var bySlot = reading.AttributeSlots;
+        int hardwirings = reading.Hardwirings;
         for (int slot = 1; slot <= 5; slot++)
         {
             string attribute = _Name(_SlotAttributeIds[slot - 1]);

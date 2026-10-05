@@ -1,91 +1,162 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vs="using:EveUtils.Client.ViewModels.Skills"
+             xmlns:sk="using:EveUtils.Client.Views.Skills"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             mc:Ignorable="d" d:DesignWidth="400" d:DesignHeight="600"
+             mc:Ignorable="d" d:DesignWidth="400" d:DesignHeight="700"
              x:Class="EveUtils.Client.Views.Skills.SkillDetailPane"
              x:DataType="vs:SkillDetailViewModel">
 
-    <!-- The 400 px pane beside CATALOGUE and TRAINING QUEUE alike (ET-16), styled the same as RunsActivityPane:
+    <!-- The 400 px skill pane of mockup v5, shared by CATALOGUE and TRAINING QUEUE: name, group · rank · attributes,
+         pips with level and SP, DESCRIPTION, LEVELS, TRAINING RATE with the five attributes, IN THE QUEUE. It carries
          its own styles, since it renders inside two different tab hosts. -->
     <UserControl.Styles>
-        <Style Selector="TextBlock.label">
-            <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
-            <Setter Property="FontSize" Value="10"/>
-            <Setter Property="LetterSpacing" Value="1.4"/>
-        </Style>
-        <Style Selector="TextBlock.pipsbig">
-            <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
-            <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
-            <Setter Property="FontSize" Value="14"/>
-            <Setter Property="LetterSpacing" Value="2"/>
-        </Style>
         <Style Selector="Border.dsec">
             <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}"/>
             <Setter Property="BorderThickness" Value="0,0,0,1"/>
-            <Setter Property="Padding" Value="0,10"/>
+            <Setter Property="Padding" Value="16,10,16,12"/>
         </Style>
-        <Style Selector="Grid.levelrow TextBlock">
-            <Setter Property="FontSize" Value="11"/>
+        <Style Selector="TextBlock.dl">
+            <Setter Property="Foreground" Value="{DynamicResource TextAccentBrush}"/>
+            <Setter Property="FontSize" Value="10"/>
+            <Setter Property="LetterSpacing" Value="1.8"/>
+            <Setter Property="Margin" Value="0,0,0,6"/>
+        </Style>
+        <Style Selector="TextBlock.th">
+            <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+            <Setter Property="FontSize" Value="9.5"/>
+            <Setter Property="LetterSpacing" Value="1"/>
+        </Style>
+        <Style Selector="Border.lvrow">
+            <Setter Property="Padding" Value="4,3"/>
+            <Setter Property="BorderThickness" Value="0,1,0,0"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}"/>
+        </Style>
+        <Style Selector="Border.lvrow.training">
+            <Setter Property="Background" Value="{DynamicResource BgRowSelectedBrush}"/>
+        </Style>
+        <Style Selector="Border.lvrow TextBlock">
+            <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+            <Setter Property="FontSize" Value="10.5"/>
+            <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
         </Style>
-        <Style Selector="TextBlock.trainedmark">
+        <Style Selector="Border.lvrow TextBlock.status">
+            <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+            <Setter Property="TextAlignment" Value="Right"/>
+        </Style>
+        <Style Selector="Border.lvrow TextBlock.status.queued">
             <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
-            <Setter Property="FontWeight" Value="Bold"/>
+        </Style>
+        <Style Selector="Border.lvrow TextBlock.status.trained">
+            <Setter Property="Foreground" Value="{StaticResource GreenBrush}"/>
+        </Style>
+        <Style Selector="Border.attrbox">
+            <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="6,3"/>
+            <Setter Property="Margin" Value="0,0,4,0"/>
+        </Style>
+        <Style Selector="Border.attrbox.used">
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+            <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
         </Style>
     </UserControl.Styles>
 
-    <Panel>
-        <!-- Nothing picked has no placeholder here: the host tab shows its own "pick a skill" text instead and
-             keeps this control out of the tree entirely (same rule RunsActivityPane's own doc comment states). -->
+    <DockPanel>
+        <Border DockPanel.Dock="Bottom" Padding="16,10" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource DividerBrush}">
+            <TextBlock FontSize="10.5" Foreground="{StaticResource TextDimBrush}" TextWrapping="Wrap"
+                       Text="Read-only. Tooltip on a skill row shows this description too."/>
+        </Border>
         <ScrollViewer HorizontalScrollBarVisibility="Disabled">
-            <StackPanel Margin="14,12">
-                <TextBlock Classes="label" Text="{Binding GroupName}"/>
-                <TextBlock FontSize="15" FontWeight="Medium" Margin="0,3,0,0"
-                           Foreground="{StaticResource TextBrightBrush}" Text="{Binding Name}"/>
-                <TextBlock Classes="hint" Margin="0,2,0,0" Text="{Binding AttributesText}"/>
-
-                <Border Classes="dsec" Margin="0,10,0,0">
-                    <StackPanel Spacing="4">
-                        <TextBlock Classes="pipsbig" Text="{Binding PipsText}"/>
-                        <TextBlock Classes="hint" Text="{Binding CurrentLevel, StringFormat='Level {0}'}"/>
+            <StackPanel>
+                <Border Padding="16,14,16,10" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource DividerBrush}">
+                    <StackPanel>
+                        <TextBlock FontSize="16" FontWeight="SemiBold" Foreground="{StaticResource TextBrightBrush}" Text="{Binding Name}"/>
+                        <StackPanel Orientation="Horizontal" Spacing="12" Margin="0,3,0,0">
+                            <TextBlock FontSize="11" Text="{Binding GroupName}"/>
+                            <TextBlock FontSize="11" Foreground="{StaticResource TextBrightBrush}" Text="{Binding RankText}"/>
+                            <TextBlock FontSize="11" Text="{Binding AttributesText}"/>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Spacing="12" Margin="0,10,0,0">
+                            <sk:SkillPipsView PipWidth="16" VerticalAlignment="Center" CurrentLevel="{Binding CurrentLevel}"
+                                              QueuedLevel="{Binding QueuedLevel}" TrainingLevel="{Binding TrainingLevel}"/>
+                            <TextBlock FontSize="11" VerticalAlignment="Center" FontFamily="{StaticResource MonoFont}" Text="{Binding LevelText}"/>
+                        </StackPanel>
                     </StackPanel>
                 </Border>
 
                 <Border Classes="dsec" IsVisible="{Binding HasDescription}">
-                    <StackPanel Spacing="4">
-                        <TextBlock Classes="label" Text="DESCRIPTION"/>
-                        <TextBlock TextWrapping="Wrap" FontSize="11.5" Foreground="{StaticResource TextBrush}"
-                                   Text="{Binding Description}"/>
+                    <StackPanel>
+                        <TextBlock Classes="dl" Text="DESCRIPTION"/>
+                        <TextBlock TextWrapping="Wrap" FontSize="12" LineHeight="18" Text="{Binding Description}"/>
                     </StackPanel>
                 </Border>
 
                 <Border Classes="dsec">
-                    <StackPanel Spacing="6">
-                        <TextBlock Classes="label" Text="LEVELS"/>
+                    <StackPanel>
+                        <TextBlock Classes="dl" Text="LEVELS"/>
+                        <Grid ColumnDefinitions="30,80,64,*" Margin="4,0,4,2">
+                            <TextBlock Grid.Column="0" Classes="th" Text="LVL"/>
+                            <TextBlock Grid.Column="1" Classes="th" HorizontalAlignment="Right" Text="TOTAL SP"/>
+                            <TextBlock Grid.Column="2" Classes="th" HorizontalAlignment="Right" Text="TIME"/>
+                        </Grid>
                         <ItemsControl ItemsSource="{Binding Levels}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate x:DataType="vs:SkillLevelRowViewModel">
-                                    <Grid Classes="levelrow" Margin="0,3" ColumnDefinitions="20,70,*">
-                                        <TextBlock Grid.Column="0" Classes.trainedmark="{Binding IsTrained}"
-                                                   Text="{Binding RomanLevel}"/>
-                                        <TextBlock Grid.Column="1" Foreground="{StaticResource TextDimBrush}"
-                                                   Text="{Binding TotalSp, StringFormat='{}{0:N0}'}"/>
-                                        <TextBlock Grid.Column="2" Text="{Binding StatusText}"
-                                                   Classes.trainedmark="{Binding IsTrained}"/>
-                                    </Grid>
+                                    <Border Classes="lvrow" Classes.training="{Binding IsTraining}">
+                                        <Grid ColumnDefinitions="30,80,64,*">
+                                            <TextBlock Grid.Column="0" Text="{Binding RomanLevel}"/>
+                                            <TextBlock Grid.Column="1" TextAlignment="Right" Text="{Binding TotalSp, StringFormat='{}{0:N0}'}"/>
+                                            <TextBlock Grid.Column="2" TextAlignment="Right" Text="{Binding TimeText}"/>
+                                            <TextBlock Grid.Column="3" Classes="status" Classes.queued="{Binding IsQueued}"
+                                                       Classes.trained="{Binding IsTrained}" Text="{Binding StatusText}"/>
+                                        </Grid>
+                                    </Border>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
                     </StackPanel>
                 </Border>
 
-                <StackPanel Spacing="4" Margin="0,10,0,0">
-                    <TextBlock Classes="label" Text="TRAINING RATE"/>
-                    <TextBlock FontSize="11.5" Foreground="{StaticResource TextBrush}" Text="{Binding TrainingRateText}"/>
-                </StackPanel>
+                <Border Classes="dsec">
+                    <StackPanel>
+                        <TextBlock Classes="dl" Text="TRAINING RATE"/>
+                        <TextBlock FontSize="11.5" FontFamily="{StaticResource MonoFont}" Foreground="{StaticResource TextBrightBrush}"
+                                   Text="{Binding TrainingRateText}"/>
+                        <ItemsControl ItemsSource="{Binding AttributeBoxes}" Margin="0,8,0,0">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <UniformGrid Columns="5"/>
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vs:AttributeBoxViewModel">
+                                    <Border Classes="attrbox" Classes.used="{Binding IsUsed}">
+                                        <StackPanel>
+                                            <TextBlock FontSize="9" Foreground="{StaticResource TextDimBrush}" Text="{Binding Label}"/>
+                                            <TextBlock FontSize="12" FontFamily="{StaticResource MonoFont}" Foreground="{StaticResource TextBrightBrush}"
+                                                       Text="{Binding Value}"/>
+                                        </StackPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <TextBlock FontSize="11" Margin="0,6,0,0" Foreground="{StaticResource TextDimBrush}" TextWrapping="Wrap"
+                                   Text="{Binding ImplantNote}"/>
+                    </StackPanel>
+                </Border>
+
+                <Border Classes="dsec">
+                    <StackPanel>
+                        <TextBlock Classes="dl" Text="IN THE QUEUE"/>
+                        <TextBlock FontSize="11.5" TextWrapping="Wrap" Text="{Binding InQueueText}"/>
+                        <Button Margin="0,8,0,0" Padding="10,3" FontSize="10.5" HorizontalAlignment="Left" Content="SHOW IN QUEUE"
+                                Command="{Binding ShowInQueueCommand}" IsVisible="{Binding CanShowInQueue}"/>
+                    </StackPanel>
+                </Border>
             </StackPanel>
         </ScrollViewer>
-    </Panel>
+    </DockPanel>
 </UserControl>

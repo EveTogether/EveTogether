@@ -42,6 +42,9 @@ public sealed partial class SkillsWindowViewModel : ObservableObject, IRefreshab
     /// <summary>The PLANS tab's index — OPTIMISE's WHAT IF… lands there, where the what-if lives (ET-358).</summary>
     public const int PlansTabIndex = 2;
 
+    /// <summary>The TRAINING QUEUE tab's index — CATALOGUE's SHOW IN QUEUE lands there.</summary>
+    public const int QueueTabIndex = 1;
+
     private readonly IServiceProvider _services;
     private readonly ICharacterRegistry _registry;
     private readonly ICharacterSkillRepository _skillRepository;
@@ -316,6 +319,11 @@ public sealed partial class SkillsWindowViewModel : ObservableObject, IRefreshab
                 (new SkillsCatalogueViewModel(snapshot), new SkillsQueueViewModel(snapshot),
                  new SkillsOptimiseViewModel(snapshot, _dogma, optimisePlans)), cancellationToken);
             _WireTabs(queue, optimise);
+            catalogue.ShowInQueue = skillTypeId =>
+            {
+                SelectedTabIndex = QueueTabIndex;
+                Queue?.SelectSkill(skillTypeId);
+            };
             var plans = new SkillsPlansViewModel(_services, snapshot, characterId, character.Name);
             await plans.LoadAsync(cancellationToken);
 
@@ -426,6 +434,7 @@ public sealed partial class SkillsWindowViewModel : ObservableObject, IRefreshab
         IReadOnlyList<int> implantTypeIds = _implantRepository is null
             ? []
             : await _implantRepository.GetTypeIdsAsync(characterId, cancellationToken);
-        return new SkillsCharacterSnapshot(_sde, levels, queue, attributes, DateTimeOffset.UtcNow, implantTypeIds);
+        string implantNote = _dogma is null ? "" : ImplantSlotReading.Read(implantTypeIds, _dogma).Note;
+        return new SkillsCharacterSnapshot(_sde, levels, queue, attributes, DateTimeOffset.UtcNow, implantTypeIds, implantNote);
     }
 }
