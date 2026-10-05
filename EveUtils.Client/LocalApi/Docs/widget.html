@@ -35,18 +35,34 @@
 
   const fmt = (n) => Math.round(n || 0).toLocaleString();
 
+  // Names and systems come from the game: always set as text, never as HTML.
+  function el(tag, className, text) {
+    const node = document.createElement(tag);
+    node.className = className;
+    if (text !== undefined) node.textContent = text;
+    return node;
+  }
+
+  function row(label, valueClass, value) {
+    const r = el("div", "row");
+    r.append(el("span", "label", label), el("span", valueClass, value));
+    return r;
+  }
+
   function render(metrics) {
     if (!metrics || metrics.length === 0) {
-      meters.innerHTML = '<div class="empty">No running character — start EVE and undock.</div>';
+      meters.replaceChildren(el("div", "empty", "No running character — start EVE and undock."));
       return;
     }
-    meters.innerHTML = metrics.map(m => `
-      <div class="card">
-        <div class="name">${m.characterName ?? ("Char " + m.characterId)}</div>
-        <div class="row"><span class="label">DPS out</span><span class="out">${fmt(m.dpsOut)}</span></div>
-        <div class="row"><span class="label">DPS in</span><span class="in">${fmt(m.dpsIn)}</span></div>
-        ${m.location ? `<div class="row"><span class="label">System</span><span class="muted">${m.location}</span></div>` : ""}
-      </div>`).join("");
+    meters.replaceChildren(...metrics.map(m => {
+      const card = el("div", "card");
+      card.append(
+        el("div", "name", m.characterName ?? ("Char " + m.characterId)),
+        row("DPS out", "out", fmt(m.dpsOut)),
+        row("DPS in", "in", fmt(m.dpsIn)));
+      if (m.location) card.append(row("System", "muted", m.location)); // only when "Include my location" is on
+      return card;
+    }));
   }
 
   function connect() {

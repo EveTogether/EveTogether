@@ -45,7 +45,8 @@
     <tr><td>Access</td><td>Read-only. There are no mutating endpoints; the API can never change your fits, fleets or settings.</td></tr>
     <tr><td>Secrets</td><td>Never exposes ESI tokens, granted scopes or credentials — only public game/fit/fleet data.</td></tr>
     <tr><td>Default</td><td>Off by default. Enable it and pick the port in <em>Settings &rarr; Local API server</em>.</td></tr>
-    <tr><td>Hardening</td><td>Host-header validation rejects DNS-rebinding; CORS is open by default for this read-only loopback data, or restricted to a configured origin allowlist (<code>localapi.allowedorigins</code>); an optional API key (<code>localapi.apikey</code>) gates <code>/api</code>, <code>/ws</code> and <code>/hub</code> when set.</td></tr>
+    <tr><td>Location</td><td>Where you are is left out by default: <code>location</code> in <code>metrics</code> is <code>null</code> and <code>fleet.metrics</code> sends no <code>Location</code> samples. Turn on <em>Include my location</em> in <em>Settings &rarr; Integrations</em> to send it. OPSEC mode leaves it out again while it is on.</td></tr>
+    <tr><td>Hardening</td><td>Host-header validation rejects DNS-rebinding. Only same-origin requests are allowed by default — pages served by this API itself, such as <code>/widget</code>; any other origin gets <code>403</code>, on the WebSocket too, unless it is on the allowlist (<code>localapi.allowedorigins</code>, comma-separated). An optional API key (<code>localapi.apikey</code>) gates <code>/api</code>, <code>/ws</code> and <code>/hub</code> when set.</td></tr>
   </table>
 
   <h2>Getting started</h2>
@@ -59,9 +60,9 @@ curl {{BASE_URL}}/api/v1/characters</code></pre>
   <pre><code>const res = await fetch("{{BASE_URL}}/api/v1/metrics");
 const metrics = await res.json();
 // [{ characterId, characterName, dpsOut, dpsIn, neutPerSecond, capPerSecond, ... }]</code></pre>
-  <div class="note">Browser widgets run from a different origin — CORS is open for this read-only loopback data, so a
-     <code>fetch</code> from any origin works. Optionally set <code>localapi.apikey</code> in Settings to gate access,
-     then send it as <code>?key=…</code> or the <code>X-Api-Key</code> header.</div>
+  <div class="note">Load your widget from this API (like <code>/widget</code>) and it is same-origin, so <code>fetch</code> and the
+     WebSocket just work. A page on any other origin is refused unless you add that origin to <code>localapi.allowedorigins</code>.
+     Optionally set <code>localapi.apikey</code> to gate access, then send it as <code>?key=…</code> or the <code>X-Api-Key</code> header.</div>
 
   <h2>REST endpoints <span class="pill">available</span></h2>
   <table>

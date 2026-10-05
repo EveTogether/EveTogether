@@ -125,7 +125,7 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
     }
 
     public SettingsWindow(string currentDirectory, string detectedDefault, bool shareLocation, bool shareBounty, bool shareCombat, bool loadTypeImages, Theming.FactionTheme currentFaction, string sdeVersionLabel, bool openFitDetailAfterImport = true, Notifications.ToastPosition toastPosition = Notifications.ToastPosition.TopRight, bool enableLocalApi = false, int localApiPort = LocalApi.LocalApiServer.DefaultPort, string localApiStatusLabel = "", ILocalApiServer? localApiServer = null, bool checkUpdatesOnStartup = true, ClipboardWatchService? clipboardWatch = null, Func<SettingsResult, Task>? onApply = null,
-        int initialCategory = 0, bool openFleetRunWindowImmediately = false, bool autoPublishFleetRuns = true, bool shareLoot = false, bool shareMining = false, bool autoStartMissions = true, bool autoStartSites = true, DayOfWeek weekStartsOn = DayOfWeek.Monday, bool includeNightlyBuilds = false, IUpdateService? updates = null, bool offerHomefrontRuns = true, Func<Task>? runSetupAgain = null) : this()
+        int initialCategory = 0, bool openFleetRunWindowImmediately = false, bool autoPublishFleetRuns = true, bool shareLoot = false, bool shareMining = false, bool autoStartMissions = true, bool autoStartSites = true, DayOfWeek weekStartsOn = DayOfWeek.Monday, bool includeNightlyBuilds = false, IUpdateService? updates = null, bool offerHomefrontRuns = true, Func<Task>? runSetupAgain = null, bool includeLocationInLocalApi = false) : this()
     {
         _runSetupAgain = runSetupAgain;
         _detectedDefault = detectedDefault;
@@ -157,6 +157,8 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
         _autoStartSitesBox = this.FindControl<CheckBox>("AutoStartSitesBox")!;
         OfferHomefrontRunsBox = this.FindControl<CheckBox>(nameof(OfferHomefrontRunsBox))
             ?? throw new InvalidOperationException("OfferHomefrontRunsBox is missing from SettingsWindow.axaml");
+        IncludeLocationInLocalApiBox = this.FindControl<CheckBox>(nameof(IncludeLocationInLocalApiBox))
+            ?? throw new InvalidOperationException("IncludeLocationInLocalApiBox is missing from SettingsWindow.axaml");
         _clipboardConsumersBlock = this.FindControl<TextBlock>("ClipboardConsumersBlock")!;
         _clipboardUnsupportedBlock = this.FindControl<TextBlock>("ClipboardUnsupportedBlock")!;
         _enableLocalApiBox = this.FindControl<CheckBox>("EnableLocalApiBox")!;
@@ -238,6 +240,7 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
         _autoStartMissionsBox.IsChecked = autoStartMissions;
         _autoStartSitesBox.IsChecked = autoStartSites;
         OfferHomefrontRunsBox.IsChecked = offerHomefrontRuns;
+        IncludeLocationInLocalApiBox.IsChecked = includeLocationInLocalApi;
         this.FindControl<TextBlock>("SdeVersionBlock")!.Text = sdeVersionLabel;
         this.FindControl<TextBlock>("DataFolderBlock")!.Text = Composition.ClientServices.DataDirectory();
         _toastPositionBox.SelectedIndex = (int)toastPosition;
@@ -804,6 +807,6 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
         var autoStartSites = _autoStartSitesBox.IsChecked ?? true;
         var weekStartsOn = _weekStartsOnBox.SelectedIndex == 1 ? DayOfWeek.Sunday : DayOfWeek.Monday;
         var includeNightlyBuilds = _channelNightlyButton?.IsChecked ?? false;
-        return new SettingsResult(dir, shareLocation, shareBounty, shareCombat, loadTypeImages, SelectedFaction(), reimportSde, openFitDetailAfterImport, toastPosition, enableLocalApi, localApiPort, checkUpdatesOnStartup, openFleetRunWindowImmediately, autoPublishFleetRuns, shareLoot, shareMining, autoStartMissions, autoStartSites, weekStartsOn, includeNightlyBuilds, _channelTouched, OfferHomefrontRunsBox.IsChecked ?? true);
+        return new SettingsResult(dir, shareLocation, shareBounty, shareCombat, loadTypeImages, SelectedFaction(), reimportSde, openFitDetailAfterImport, toastPosition, enableLocalApi, localApiPort, checkUpdatesOnStartup, openFleetRunWindowImmediately, autoPublishFleetRuns, shareLoot, shareMining, autoStartMissions, autoStartSites, weekStartsOn, includeNightlyBuilds, _channelTouched, OfferHomefrontRunsBox.IsChecked ?? true, IncludeLocationInLocalApiBox.IsChecked ?? false);
     }
 }
