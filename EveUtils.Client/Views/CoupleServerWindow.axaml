@@ -1,45 +1,35 @@
 <v:ChromedWindow xmlns="https://github.com/avaloniaui" xmlns:v="using:EveUtils.Client.Views"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:coupling="using:EveUtils.Client.ViewModels.Coupling"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        mc:Ignorable="d" d:DesignWidth="440" d:DesignHeight="290"
+        mc:Ignorable="d" d:DesignWidth="560" d:DesignHeight="560"
         x:Class="EveUtils.Client.Views.CoupleServerWindow"
-        x:Name="Root"
-        Width="440" Height="290"
+        x:DataType="coupling:ServerCoupleViewModel"
+        Width="560" Height="560" CanResize="False"
         WindowStartupLocation="CenterOwner"
         Title="Couple to server">
 
-    <DockPanel Margin="16">
-        <StackPanel DockPanel.Dock="Top" Spacing="4" Margin="0,0,0,14">
-            <TextBlock Text="Couple a character to a server" FontWeight="Bold" FontSize="15"
-                       Foreground="{StaticResource TextBrightBrush}"/>
-            <TextBlock x:Name="IntroBlock"
-                       Text="Enter the server address, then sign in as the character you want synced."
-                       FontSize="11" Foreground="{DynamicResource TextAccentBrush}" TextWrapping="Wrap"/>
-        </StackPanel>
+    <Window.Styles>
+        <StyleInclude Source="avares://EveUtils.Client/Views/SetupStyles.axaml"/>
+    </Window.Styles>
 
-        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right"
-                    Spacing="8" Margin="0,14,0,0">
-            <Button Content="Cancel" Click="OnCancel"/>
-            <Button Content="Couple →" Click="OnConfirm" Classes="accent"/>
-        </StackPanel>
+    <DockPanel Background="#FF0C100E">
+        <Border DockPanel.Dock="Bottom" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource DividerBrush}" Padding="18,12">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+                <Button Content="Cancel" Click="OnCancel" IsVisible="{Binding !IsCoupled}"/>
+                <Button Classes="accent" Content="{Binding CoupleButtonText}" Command="{Binding CoupleCommand}"
+                        IsVisible="{Binding ShowCoupleButton}"/>
+                <Button Classes="accent" Content="Close" Click="OnCancel" IsVisible="{Binding IsCoupled}"/>
+            </StackPanel>
+        </Border>
 
-        <StackPanel Spacing="10">
-            <StackPanel Spacing="3">
-                <TextBlock Text="SERVER ADDRESS" Classes="label" FontSize="9"/>
-                <TextBox x:Name="AddressBox" Text="https://localhost:7443"
-                         VerticalContentAlignment="Center"/>
-                <!-- Live server name (D-116): unauthenticated probe on open + on change; display-only. -->
-                <TextBlock x:Name="ServerNameBlock" FontSize="10" Margin="0,2,0,0"
-                           Foreground="{DynamicResource TextAccentBrush}"/>
+        <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+            <StackPanel Margin="22,18">
+                <TextBlock Classes="h2" Text="{Binding Title}"/>
+                <TextBlock Classes="intro" Text="A server is run by your corp or friends. Coupled, this character can form fleets with others, share fits and runs. Coupling is a second EVE login, through the server."/>
+                <v:ServerCoupleView/>
             </StackPanel>
-            <StackPanel Spacing="3">
-                <TextBlock Text="LABEL (OPTIONAL)" Classes="label" FontSize="9"/>
-                <TextBox x:Name="LabelBox" PlaceholderText="e.g. Corp HQ"
-                         VerticalContentAlignment="Center"/>
-                <TextBlock Text="Shown instead of the URL. Falls back to the server's own name, then the address."
-                           FontSize="10" Opacity="0.7" TextWrapping="Wrap"/>
-            </StackPanel>
-        </StackPanel>
+        </ScrollViewer>
     </DockPanel>
 </v:ChromedWindow>
