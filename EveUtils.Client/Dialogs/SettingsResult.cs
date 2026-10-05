@@ -30,4 +30,5 @@ public sealed record SettingsResult(
     DayOfWeek WeekStartsOn = DayOfWeek.Monday,
     bool IncludeNightlyBuilds = false,
     bool ChannelChoiceMade = false,
-    bool OfferHomefrontRuns = true);
+    bool OfferHomefrontRuns = true,
+    bool IncludeLocationInLocalApi = false);

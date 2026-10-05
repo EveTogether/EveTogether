@@ -116,6 +116,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
     private CancellationTokenSource? _feedCts;
     private CancellationTokenSource? _signInCts;
     private readonly DpsRenderDriver? _renderDriver;
+    private readonly CombatHistory? _combatHistory;
     private string _localCharacter = "Pilot-" + (Composition.ClientDataLocation.InstanceName() ?? "Local");
 
     // ── Ctrl+Shift+T: reopen last closed tab (ET-209) ────────────────────────────────────────────
@@ -572,6 +573,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         // Smooth, demo-parity DPS graphs: every tracker (own + fleet) renders through the one shared
         // ~30fps DpsRenderDriver, so the curve scrolls + decays continuously and all graphs share one render path.
         _renderDriver = services.GetRequiredService<DpsRenderDriver>();
+        _combatHistory = services.GetService<CombatHistory>();
 
         _startupTask = RunStartupResilientAsync();
     }
@@ -1380,6 +1382,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         bool autoStartMissions;
         bool autoStartSites;
         bool offerHomefrontRuns;
+        bool includeLocationInLocalApi;
         using (var scope = _services.CreateScope())
         {
             var settings = await scope.ServiceProvider.GetRequiredService<IDispatcher>().Query(new GetSettingsQuery());
@@ -1403,6 +1406,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
             autoStartMissions = settings.FirstOrDefault(s => s.Key == EveUtils.Client.Clipboard.ClipboardMissionOffer.AutoStartSettingKey)?.Value != "false"; // default on
             autoStartSites = settings.FirstOrDefault(s => s.Key == EveUtils.Client.Clipboard.ClipboardSignatureOffer.AutoStartSettingKey)?.Value != "false"; // default on
             offerHomefrontRuns = settings.FirstOrDefault(s => s.Key == EveUtils.Client.Runs.HomefrontDetector.OfferSettingKey)?.Value != "false"; // default on
+            includeLocationInLocalApi = settings.FirstOrDefault(s => s.Key == LocalApi.LocalApiServer.IncludeLocationSettingKey)?.Value == "true"; // default off
         }
 
         var localApi = _services.GetService<LocalApi.ILocalApiServer>();
@@ -1413,7 +1417,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
             loadImages, _theme?.Current ?? FactionTheme.Gallente, SdeVersionLabel(), ApplySettingsAsync, openDetailAfterImport, toastPosition,
             localApiEnabled, localApiPort, localApiStatusLabel, localApi, checkUpdatesOnStartup, _clipboardWatch, initialCategory, openFleetRunWindow,
             autoPublishFleetRuns, shares.IsShared(MetricKind.Loot), shares.IsShared(MetricKind.MiningYield), autoStartMissions, autoStartSites,
-            _weekStart?.FirstDay ?? Calendar.WeekStartService.SystemDefault(), includeNightlyBuilds, _services.GetService<IUpdateService>(), offerHomefrontRuns, RunSetupAgainAsync);
+            _weekStart?.FirstDay ?? Calendar.WeekStartService.SystemDefault(), includeNightlyBuilds, _services.GetService<IUpdateService>(), offerHomefrontRuns, RunSetupAgainAsync, includeLocationInLocalApi);
     }
 
     /// <summary>Opens the About dialog: app identity + version, creator credits with portraits,
@@ -1476,6 +1480,8 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
                 LocalApi.LocalApiServer.EnabledSettingKey, result.EnableLocalApi ? "true" : "false"));
             await dispatcher.Send(new SetSettingCommand(
                 LocalApi.LocalApiServer.PortSettingKey, result.LocalApiPort.ToString()));
+            await dispatcher.Send(new SetSettingCommand(
+                LocalApi.LocalApiServer.IncludeLocationSettingKey, result.IncludeLocationInLocalApi ? "true" : "false"));
             await dispatcher.Send(new SetSettingCommand(
                 CheckUpdatesOnStartupSettingKey, result.CheckUpdatesOnStartup ? "true" : "false"));
             // Only when the channel was actually touched (ET-339) — a Save triggered by an unrelated setting must
@@ -2284,7 +2290,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         if (!_trackersByCharacter.TryGetValue(character, out var tracker))
         {
             var isSelf = string.Equals(character, _localCharacter, StringComparison.OrdinalIgnoreCase);
-            tracker = new DpsViewModel(character, isSelf);
+            tracker = new DpsViewModel(character, isSelf, _combatHistory);
             _trackersByCharacter[character] = tracker;
             if (isSelf) DpsTrackers.Insert(0, tracker);
             else DpsTrackers.Add(tracker);

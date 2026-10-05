@@ -45,7 +45,8 @@
     <tr><td>Access</td><td>Read-only. There are no mutating endpoints; the API can never change your fits, fleets or settings.</td></tr>
     <tr><td>Secrets</td><td>Never exposes ESI tokens, granted scopes or credentials — only public game/fit/fleet data.</td></tr>
     <tr><td>Default</td><td>Off by default. Enable it and pick the port in <em>Settings &rarr; Local API server</em>.</td></tr>
-    <tr><td>Hardening</td><td>Host-header validation rejects DNS-rebinding; CORS is open by default for this read-only loopback data, or restricted to a configured origin allowlist (<code>localapi.allowedorigins</code>); an optional API key (<code>localapi.apikey</code>) gates <code>/api</code>, <code>/ws</code> and <code>/hub</code> when set.</td></tr>
+    <tr><td>Location</td><td>Where you are is left out by default: <code>location</code> in <code>metrics</code> is <code>null</code> and <code>fleet.metrics</code> sends no <code>Location</code> samples. Turn on <em>Include my location</em> in <em>Settings &rarr; Integrations</em> to send it. OPSEC mode leaves it out again while it is on.</td></tr>
+    <tr><td>Hardening</td><td>Host-header validation rejects DNS-rebinding. Only same-origin requests are allowed by default — pages served by this API itself, such as <code>/widget</code>; any other origin gets <code>403</code>, on the WebSocket too, unless it is on the allowlist (<code>localapi.allowedorigins</code>, comma-separated). An optional API key (<code>localapi.apikey</code>) gates <code>/api</code>, <code>/ws</code> and <code>/hub</code> when set.</td></tr>
   </table>
 
   <h2>Getting started</h2>
@@ -58,10 +59,10 @@ curl {{BASE_URL}}/api/v1/characters</code></pre>
   <p>From a browser widget (e.g. an OBS browser source):</p>
   <pre><code>const res = await fetch("{{BASE_URL}}/api/v1/metrics");
 const metrics = await res.json();
-// [{ characterId, characterName, dpsOut, dpsIn, neutPerSecond, capPerSecond, ... }]</code></pre>
-  <div class="note">Browser widgets run from a different origin — CORS is open for this read-only loopback data, so a
-     <code>fetch</code> from any origin works. Optionally set <code>localapi.apikey</code> in Settings to gate access,
-     then send it as <code>?key=…</code> or the <code>X-Api-Key</code> header.</div>
+// [{ characterId, characterName, dpsOut, dpsIn, repIn, repOut, neutIn, neutOut, capIn, capOut, application, ... }]</code></pre>
+  <div class="note">Load your widget from this API (like <code>/widget</code>) and it is same-origin, so <code>fetch</code> and the
+     WebSocket just work. A page on any other origin is refused unless you add that origin to <code>localapi.allowedorigins</code>.
+     Optionally set <code>localapi.apikey</code> to gate access, then send it as <code>?key=…</code> or the <code>X-Api-Key</code> header.</div>
 
   <h2>REST endpoints <span class="pill">available</span></h2>
   <table>
@@ -76,6 +77,7 @@ const metrics = await res.json();
     <tr><td><code>GET /api/v1/compositions</code></td><td>Your doctrine/composition library (local + each coupled server).</td></tr>
     <tr><td><code>GET /api/v1/compositions/{id}</code></td><td>One composition's roles + fit-entries. Add <code>?server=&lt;address&gt;</code> for a server composition (omit for the local library).</td></tr>
     <tr><td><code>GET /api/v1/types/{id}</code></td><td>Resolve a type id to its name, group and a public icon URL — so a widget can show ship/module names + icons without its own SDE.</td></tr>
+    <tr><td><code>GET /api/v1/killmails/latest</code></td><td>Your newest kills and losses, newest first. <code>?kind=all|kills|losses</code> (default all), <code>?limit=1-25</code> (default 1). Each row: kill/loss, ship, ISK, attacker count, time, linked run, final blow, and the ESI-resolved (cached) names of victim and corporation. The solar system is only filled in when "Include my location" is on.</td></tr>
     <tr><td><code>GET /api/v1/runs/current</code></td><td>The activities on the clock right now, one per group of runs flown together, newest first (empty when nothing runs): type, site, abyssal tier + weather, <code>startedAtUtc</code> (tick the clock from it yourself), bounty, loot and total ISK so far, and the crew. <code>signature</code> and <code>system</code> stay null unless "Include my location" is on.</td></tr>
     <tr><td><code>GET /api/v1/runs/summary</code></td><td>Run totals — runs, flown time, ISK, ISK/hour, average per run, best drop, per character — the same figures the app's home and runs overview show. <code>?period=session|today|week|month</code> (default <code>today</code>; <code>session</code> counts from the app's start or its last reset), <code>?kind=all|abyssal|combat|mission|mining</code> (default <code>all</code>). <code>kind=abyssal</code> adds a breakdown per tier and weather.</td></tr>
   </table>
@@ -87,17 +89,42 @@ const metrics = await res.json();
   <p>A raw WebSocket at <code>{{BASE_URL}}/ws</code> — the recommended route for browser/OBS widgets, no client
      library needed. On connect you receive a <code>snapshot</code>, then a JSON event stream of <code>{ type, data, ts }</code>
      (<code>ts</code> = unix ms):</p>
-  <pre><code>{ "type": "snapshot",      "data": { "metrics": [ /* your toon(s) */ ], "fleet": { /* active fleet or null */ } }, "ts": ... }
+  <pre><code>{ "type": "snapshot",      "data": { "metrics": [ /* your toon(s) */ ], "fleet": { /* active fleet or null */ },
+                                     "history": [ /* the last 5 minutes per toon, see below */ ] },               "ts": ... }
 { "type": "metrics",       "data": [ /* your running toon(s), every second — always, fleet or not */ ],            "ts": ... }
 { "type": "fleet.metrics", "data": { "characterId":…, "fleetId":…, "kind":"Dps", "value":…, "unixMs":… },           "ts": ... }
 { "type": "fleet.changed", "data": { "fleetId":…, "kind":"…", "serverAddress":… },                                  "ts": ... }
 { "type": "run.changed",   "data": [ /* same as GET /api/v1/runs/current */ ],                                         "ts": ... }
-{ "type": "runs.summary",  "data": [ /* one GET /api/v1/runs/summary result per period × kind */ ],                    "ts": ... }</code></pre>
+{ "type": "runs.summary",  "data": [ /* one GET /api/v1/runs/summary result per period × kind */ ],                    "ts": ... }
+{ "type": "killmail.added", "data": { /* one row of /killmails/latest */ },                                       "ts": ... }</code></pre>
+  <h3>Combat metrics</h3>
+  <p>Each row of <code>metrics</code> (and of <code>GET /api/v1/metrics</code>) carries, per second:</p>
+  <table>
+    <tr><th>Field</th><th>Meaning</th></tr>
+    <tr><td><code>dpsOut</code> / <code>dpsIn</code></td><td>Damage dealt / received, hp/s.</td></tr>
+    <tr><td><code>repIn</code> / <code>repOut</code></td><td>Remote repairs received / given, hp/s.</td></tr>
+    <tr><td><code>neutIn</code> / <code>neutOut</code></td><td>Energy neutralized on you / by you, GJ/s.</td></tr>
+    <tr><td><code>capIn</code> / <code>capOut</code></td><td>Remote capacitor received / given, GJ/s.</td></tr>
+    <tr><td><code>neutPerSecond</code> / <code>capPerSecond</code></td><td>The two directions added together (unchanged from before).</td></tr>
+    <tr><td><code>application</code></td><td>How well your main weapon lands: <code>{ verdict, percent, breakdown }</code>. <code>verdict</code> is
+        <code>idle</code>, <code>notEnoughShots</code>, <code>notMeasurable</code>, <code>adjust</code> (below 55 %), <code>ok</code>,
+        <code>sweetSpot</code> (from 80 %) or <code>learning</code>; <code>percent</code> (0–100) is only set for the three that measure;
+        <code>breakdown</code> names each weapon's own figure.</td></tr>
+  </table>
+  <h3>History on connect</h3>
+  <p>The <code>snapshot</code> also carries <code>history</code>: for each running character the last five minutes, so a graph
+     does not start empty when OBS restarts. One value per <code>intervalSeconds</code> (1), oldest first and the newest last, all arrays
+     the same length (shorter when the character has not been drawn that long). They are the smoothed values the DPS pop-out draws.</p>
+  <pre><code>{ "characterId":…, "characterName":"…", "intervalSeconds":1,
+  "dpsOut":[…], "dpsIn":[…], "repIn":[…], "repOut":[…], "neutIn":[…], "neutOut":[…], "capIn":[…], "capOut":[…] }</code></pre>
+  <div class="note">These are additions to v1: no existing field changed. Read them as optional so a widget keeps working against an older client.</div>
+
   <pre><code>const ws = new WebSocket("{{BASE_URL}}/ws".replace("http", "ws"));
 ws.onmessage = (e) => { const evt = JSON.parse(e.data); /* evt.type, evt.data — update your overlay */ };</code></pre>
   <div class="note"><code>metrics</code> streams your own running character(s) every second, fleet or not.
      <code>fleet.metrics</code> (one sample per member per tick) and <code>fleet.changed</code> only arrive while you
-     are in a fleet. <code>run.changed</code> and <code>runs.summary</code> arrive whenever a run changes (started, loot,
+     are in a fleet. <code>killmail.added</code> fires for a newly imported kill or loss only, never for a backfill of old mails.
+     <code>run.changed</code> and <code>runs.summary</code> arrive whenever a run changes (started, loot,
      bounty, saved, deleted), the session is reset or a pocket's tier or weather is picked — not on a timer, so read
      <code>/api/v1/runs/*</code> once on connect. There is no <code>fit.changed</code> event yet.</div>
 
@@ -107,7 +134,7 @@ ws.onmessage = (e) => { const evt = JSON.parse(e.data); /* evt.type, evt.data �
      named handler; you receive a <code>snapshot</code> on connect.</p>
   <pre><code>import * as signalR from "@microsoft/signalr";
 const conn = new signalR.HubConnectionBuilder().withUrl("{{BASE_URL}}/hub/fleet").withAutomaticReconnect().build();
-conn.on("snapshot",      (s)    => { /* { metrics:[…], fleet:… } on connect */ });
+conn.on("snapshot",      (s)    => { /* { metrics:[…], fleet:…, history:[…] } on connect */ });
 conn.on("metrics",       (rows) => { /* your toon(s), every second */ });
 conn.on("fleet.metrics", (s)    => { /* one sample per member, in a fleet */ });
 conn.on("fleet.changed", (c)    => { /* roster/state change, in a fleet */ });

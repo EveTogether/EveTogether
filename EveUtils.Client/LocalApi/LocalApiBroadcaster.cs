@@ -10,6 +10,9 @@ using EveUtils.Client.LocalApi.Dtos;
 using EveUtils.Client.Runs;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Fleet.Events;
+using EveUtils.Shared.Modules.Killmails.Enums;
+using EveUtils.Shared.Modules.Killmails.Events;
+using EveUtils.Shared.Modules.Fleet.Metrics;
 using EveUtils.Shared.Modules.Runs.Events;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.DependencyInjection;
@@ -24,7 +27,8 @@ namespace EveUtils.Client.LocalApi;
 /// <see cref="IEventBus"/> the fleet windows already publish on. Each client gets a <c>snapshot</c> on connect, then
 /// the live <c>{ type, data, ts }</c> stream. A runs change (<see cref="RunsChangedEvent"/>, a session reset, a pocket's
 /// tier or weather) pushes <c>run.changed</c> and <c>runs.summary</c>, read off the event, never inside it. Tied to the
-/// host lifecycle: started after the Kestrel host starts and stopped before it stops. (No <c>fit.changed</c> event exists yet, so that stream is intentionally absent.)
+/// host lifecycle: started after the Kestrel host starts and stopped before it stops. (No <c>fit.changed</c> event
+/// exists yet, so that stream is intentionally absent.)
 /// </summary>
 public sealed class LocalApiBroadcaster
 {
@@ -36,6 +40,7 @@ public sealed class LocalApiBroadcaster
 
     private readonly IServiceProvider _rootServices;
     private readonly LocalApiQueries _queries;
+    private readonly LocalApiPrivacy _privacy;
     private readonly LocalApiRuns _runs;
     private readonly Channel<bool> _runsChanged =
         Channel.CreateBounded<bool>(new BoundedChannelOptions(1) { FullMode = BoundedChannelFullMode.DropWrite });
@@ -50,10 +55,12 @@ public sealed class LocalApiBroadcaster
     private IHubContext<FleetHub>? _hub;
     private int _signalRCount;
 
-    public LocalApiBroadcaster(IServiceProvider rootServices, LocalApiRuns runs, ILogger logger)
+    public LocalApiBroadcaster(IServiceProvider rootServices, LocalApiQueries queries, LocalApiPrivacy privacy, LocalApiRuns runs,
+        ILogger logger)
     {
         _rootServices = rootServices;
-        _queries = new LocalApiQueries(rootServices);
+        _queries = queries;
+        _privacy = privacy;
         _runs = runs;
         _logger = logger;
     }
@@ -71,9 +78,12 @@ public sealed class LocalApiBroadcaster
         if (_rootServices.GetService<IEventBus>() is { } bus)
         {
             _subscriptions.Add(bus.Subscribe<FleetMetricEvent>((e, _) =>
-                _BroadcastAsync("fleet.metrics", FleetMetricSampleDto.FromSample(e.Data), e.Data.UnixMs)));
+                e.Data.Kind == MetricKind.Location && !_privacy.ExposesLocation
+                    ? Task.CompletedTask
+                    : _BroadcastAsync("fleet.metrics", FleetMetricSampleDto.FromSample(e.Data), e.Data.UnixMs)));
             _subscriptions.Add(bus.Subscribe<FleetChangedEvent>((e, _) =>
                 _BroadcastAsync("fleet.changed", FleetChangedDto.FromEvent(e), _NowMs())));
+            _subscriptions.Add(bus.Subscribe<KillmailsChangedEvent>((e, _) => _OnKillmailsChanged(e.Data)));
             _subscriptions.Add(bus.Subscribe<RunsChangedEvent>((_, _) =>
             {
                 _OnRunsChanged();
@@ -142,9 +152,11 @@ public sealed class LocalApiBroadcaster
 
     private async Task _SendSnapshotAsync(WebSocket socket, CancellationToken cancellationToken)
     {
+        var metrics = await _queries.GetMetricsAsync(cancellationToken);
         var snapshot = new WsSnapshotDto(
-            await _queries.GetMetricsAsync(cancellationToken),
-            await _queries.GetActiveFleetAsync(cancellationToken));
+            metrics,
+            await _queries.GetActiveFleetAsync(cancellationToken),
+            _queries.GetHistory(metrics));
         var json = _Envelope("snapshot", snapshot, _NowMs());
 
         await _sendGate.WaitAsync(cancellationToken);
@@ -190,6 +202,25 @@ public sealed class LocalApiBroadcaster
             }
             await Task.Delay(RunsPushInterval, cancellationToken);
         }
+    }
+
+    // Off the bus thread: resolving victim names can call ESI, and the bus awaits its subscribers inside the command.
+    private Task _OnKillmailsChanged(KillmailsChangedData change)
+    {
+        if (change.Kind != KillmailsChangeKind.Imported || change.AddedKillmailIds.Count == 0) return Task.CompletedTask;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                foreach (var killmail in await _queries.GetNewKillmailsAsync(change.CharacterId, change.AddedKillmailIds, _cts.Token))
+                    await _BroadcastAsync("killmail.added", killmail, _NowMs());
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger.LogDebug(ex, "Local API killmail.added push failed.");
+            }
+        });
+        return Task.CompletedTask;
     }
 
     private async Task _BroadcastAsync(string type, object data, long ts)

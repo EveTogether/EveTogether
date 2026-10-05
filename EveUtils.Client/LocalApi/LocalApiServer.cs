@@ -37,7 +37,8 @@ public sealed class LocalApiServer(
     public const string EnabledSettingKey = "localapi.enabled";
     public const string PortSettingKey = "localapi.port";
     public const string ApiKeySettingKey = "localapi.apikey";
-    public const string AllowedOriginsSettingKey = "localapi.allowedorigins"; // comma-separated; empty = allow any (default)
+    public const string AllowedOriginsSettingKey = "localapi.allowedorigins"; // comma-separated; empty = same-origin only (default)
+    public const string IncludeLocationSettingKey = "localapi.includelocation"; // default off: where you are stays out of the API
     public const int DefaultPort = 8001;
     public const string ApiVersion = "v1";
 
@@ -97,7 +98,9 @@ public sealed class LocalApiServer(
         var apiKey = all.FirstOrDefault(s => s.Key == ApiKeySettingKey)?.Value; // optional shared-secret gate
         var allowedOrigins = (all.FirstOrDefault(s => s.Key == AllowedOriginsSettingKey)?.Value ?? "")
             .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        var includeLocation = all.FirstOrDefault(s => s.Key == LocalApiRuns.IncludeLocationSettingKey)?.Value == "true"; // default off
+        var privacy = new LocalApiPrivacy(_rootServices, all.FirstOrDefault(s => s.Key == IncludeLocationSettingKey)?.Value == "true");
+        var queries = new LocalApiQueries(_rootServices, privacy);
+        var runs = new LocalApiRuns(_rootServices, privacy); // runs/current + runs/summary, and their pushes
 
         var builder = WebApplication.CreateSlimBuilder();
         builder.Logging.ClearProviders(); // the host stays quiet; this service logs its own lifecycle
@@ -105,19 +108,15 @@ public sealed class LocalApiServer(
         builder.Services.ConfigureHttpJsonOptions(options =>
             options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase);
         builder.Services.AddOpenApi(); // self-documenting: /openapi/v1.json + Scalar UI below
-        builder.Services.AddSingleton(new LocalApiQueries(_rootServices)); // reads the existing client services
-        var runs = new LocalApiRuns(_rootServices, includeLocation); // runs/current + runs/summary, and their pushes
+        builder.Services.AddSingleton(privacy);
+        builder.Services.AddSingleton(queries); // reads the existing client services
         builder.Services.AddSingleton(runs);
-        // Read-only loopback game data → CORS open by default for browser/OBS widgets; a configured allowlist
-        // (localapi.allowedorigins) locks it down for the cautious user.
+        // Widgets are served by this host itself, so same-origin is enough; any other site has to be allowlisted
+        // (localapi.allowedorigins), otherwise every page open in the browser could read the API.
         builder.Services.AddCors(options => options.AddDefaultPolicy(policy =>
-        {
-            policy.AllowAnyHeader().AllowAnyMethod();
-            if (allowedOrigins.Length > 0) policy.WithOrigins(allowedOrigins);
-            else policy.AllowAnyOrigin();
-        }));
+            policy.WithOrigins(allowedOrigins).AllowAnyHeader().AllowAnyMethod()));
 
-        var broadcaster = new LocalApiBroadcaster(_rootServices, runs, logger); // shared realtime fan-out (WS + SignalR)
+        var broadcaster = new LocalApiBroadcaster(_rootServices, queries, privacy, runs, logger); // shared realtime fan-out (WS + SignalR)
         builder.Services.AddSingleton(broadcaster);                       // so FleetHub can report connect/disconnect
         builder.Services.AddSignalR()
             .AddJsonProtocol(options => options.PayloadSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase);
@@ -125,8 +124,8 @@ public sealed class LocalApiServer(
         var app = builder.Build();
         app.UseWebSockets(); // enables the /ws realtime endpoint
         broadcaster.AttachHub(app.Services.GetRequiredService<IHubContext<FleetHub>>()); // hub fan-out
+        _UseSecurityGuards(app, apiKey, allowedOrigins); // host-header (anti-rebinding), origin + optional API key
         app.UseCors();
-        _UseSecurityGuards(app, apiKey); // host-header (anti-rebinding) + optional API key
 
         var baseUrl = $"http://127.0.0.1:{port}";
         app.MapGet("/", () => Results.Content(LocalApiDocs.Render(LocalApiDocs.IndexResource, baseUrl), "text/html"))
@@ -137,7 +136,14 @@ public sealed class LocalApiServer(
             .ExcludeFromDescription();
 
         app.MapGet("/api/v1/health", () => new HealthResponse("ok", _AppVersion(), ApiVersion));
-        app.MapGet("/api/v1/metrics", (LocalApiQueries queries, CancellationToken ct) => queries.GetMetricsAsync(ct));
+        app.MapGet("/api/v1/metrics", (LocalApiQueries queries, CancellationToken ct) => queries.GetMetricsAsync(ct))
+            .WithSummary("Live combat metrics for your running characters")
+            .WithDescription(
+                "Per second, from the gamelog. dpsOut/dpsIn are damage dealt/received in hp/s; repIn/repOut remote repairs " +
+                "received/given in hp/s; neutIn/neutOut energy neutralized on you/by you and capIn/capOut remote capacitor " +
+                "received/given, both in GJ/s. neutPerSecond and capPerSecond are the two directions added. application " +
+                "judges how well the main weapon lands: verdict is idle, notEnoughShots, notMeasurable, adjust, ok, " +
+                "sweetSpot or learning, percent (0-100) is only set for adjust, ok and sweetSpot.");
         app.MapGet("/api/v1/characters", (LocalApiQueries queries, CancellationToken ct) => queries.GetCharactersAsync(ct));
         app.MapGet("/api/v1/fits", (LocalApiQueries queries, CancellationToken ct) => queries.GetFitsAsync(ct));
         app.MapGet("/api/v1/fits/{id:int}", async (int id, bool? stats, string? server, LocalApiQueries queries, CancellationToken ct) =>
@@ -150,6 +156,10 @@ public sealed class LocalApiServer(
         app.MapGet("/api/v1/compositions/{id:long}", async (long id, string? server, LocalApiQueries queries, CancellationToken ct) =>
             await queries.GetCompositionAsync(id, server, ct) is { } composition ? Results.Ok(composition) : Results.NotFound());
         app.MapGet("/api/v1/types/{id:int}", (int id, LocalApiQueries queries) => queries.GetTypeInfo(id)); // name/icon resolver
+        app.MapGet("/api/v1/killmails/latest", (KillmailsLatestKind? kind, int? limit, LocalApiQueries queries, CancellationToken ct) =>
+                queries.GetLatestKillmailsAsync(kind ?? KillmailsLatestKind.All, limit ?? 1, ct))
+            .WithSummary("Your latest kills and losses")
+            .WithDescription("Newest first. kind = all | kills | losses (default all); limit 1-25 (default 1). Victim, corporation and final-blow names are ESI-resolved and cached. Solar system fields are null unless \"Include my location\" is on. Pushed live as killmail.added over /ws.");
         LocalApiRuns.Map(app);
 
         app.Map("/ws", async (HttpContext context) =>
@@ -231,8 +241,8 @@ public sealed class LocalApiServer(
         return (enabled, port);
     }
 
-    /// <summary>Anti-DNS-rebinding host-header guard, plus the optional shared-secret gate on /api, /ws and /hub.</summary>
-    private static void _UseSecurityGuards(WebApplication app, string? apiKey)
+    /// <summary>Anti-DNS-rebinding host-header guard, the origin guard, plus the optional shared-secret gate on /api, /ws and /hub.</summary>
+    private static void _UseSecurityGuards(WebApplication app, string? apiKey, string[] allowedOrigins)
     {
         app.Use(async (context, next) =>
         {
@@ -242,6 +252,19 @@ public sealed class LocalApiServer(
             if (host is not ("127.0.0.1" or "localhost" or "::1" or "[::1]"))
             {
                 context.Response.StatusCode = StatusCodes.Status421MisdirectedRequest;
+                return;
+            }
+            await next();
+        });
+
+        // CORS does not cover WebSockets (/ws, and the SignalR socket after negotiate), so a foreign page is turned
+        // away here on every path. Browsers always send Origin on a WebSocket; a non-browser client sends none.
+        app.Use(async (context, next) =>
+        {
+            var origin = context.Request.Headers.Origin.ToString();
+            if (origin.Length > 0 && !_IsAllowedOrigin(origin, context.Request, allowedOrigins))
+            {
+                context.Response.StatusCode = StatusCodes.Status403Forbidden;
                 return;
             }
             await next();
@@ -261,6 +284,10 @@ public sealed class LocalApiServer(
             await next();
         });
     }
+
+    private static bool _IsAllowedOrigin(string origin, HttpRequest request, string[] allowedOrigins) =>
+        string.Equals(origin, $"{request.Scheme}://{request.Host}", StringComparison.OrdinalIgnoreCase)
+        || allowedOrigins.Contains(origin, StringComparer.OrdinalIgnoreCase);
 
     private static bool _NeedsKey(PathString path) =>
         path.StartsWithSegments("/api") || path.StartsWithSegments("/ws") || path.StartsWithSegments("/hub");

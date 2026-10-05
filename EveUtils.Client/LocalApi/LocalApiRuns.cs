@@ -5,7 +5,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using EveUtils.Client.Calendar;
 using EveUtils.Client.LocalApi.Dtos;
-using EveUtils.Client.Opsec;
 using EveUtils.Client.Runs;
 using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Client.ViewModels.Runs;
@@ -28,11 +27,8 @@ namespace EveUtils.Client.LocalApi;
 /// are counted by <see cref="RunTotals"/> over the same facts the home and the runs overview build
 /// (<see cref="RunsActivityFacts"/>), so a widget and the screen show one figure.
 /// </summary>
-public sealed class LocalApiRuns(IServiceProvider rootServices, bool includeLocation)
+public sealed class LocalApiRuns(IServiceProvider rootServices, LocalApiPrivacy privacy)
 {
-    /// <summary>"Include my location" (ET-432): a signature id or a system only leaves the app with this on.</summary>
-    public const string IncludeLocationSettingKey = "localapi.includelocation";
-
     private readonly RunRowFacts _facts = new(rootServices.GetService<ISdeAccessor>());
 
     public static void Map(IEndpointRouteBuilder app)
@@ -63,7 +59,7 @@ public sealed class LocalApiRuns(IServiceProvider rootServices, bool includeLoca
         IReadOnlyDictionary<long, string> names = _Names(await _OwnCharactersAsync(cancellationToken));
         Dictionary<string, RunningActivityDto> activities = (earned.Value ?? []).ToDictionary(activity => activity.ActivityKey);
         RunningAbyssalPockets pockets = rootServices.GetRequiredService<RunningAbyssalPockets>();
-        bool exposesLocation = _ExposesLocation();
+        bool exposesLocation = privacy.ExposesLocation;
         return [.. (running.Value ?? [])
             .GroupBy(run => run.GroupCode ?? run.Id.ToString())
             .Select(activity => _Current([.. activity.OrderBy(run => run.StartedAtUtc)],
@@ -191,8 +187,6 @@ public sealed class LocalApiRuns(IServiceProvider rootServices, bool includeLoca
             exposesLocation ? first.Signature : null,
             exposesLocation ? _facts.SystemOf(earned?.SolarSystemId)?.Name : null);
     }
-
-    private bool _ExposesLocation() => includeLocation && rootServices.GetService<IOpsecService>()?.IsEnabled != true;
 
     private async Task<IReadOnlyList<Character>> _OwnCharactersAsync(CancellationToken cancellationToken) =>
         await rootServices.GetRequiredService<ICharacterRegistry>().GetAllAsync(cancellationToken);

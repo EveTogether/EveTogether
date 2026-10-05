@@ -6,6 +6,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using EveUtils.Client.Controls;
 using EveUtils.Client.Esi;
 using EveUtils.Client.Formatting;
+using EveUtils.Client.Gamelog;
 using EveUtils.Client.Opsec;
 using EveUtils.Shared.Modules.Esi.Http;
 using EveUtils.Shared.Modules.Fleet.Metrics;
@@ -33,10 +34,10 @@ namespace EveUtils.Client.ViewModels;
 /// </summary>
 public partial class DpsViewModel : ViewModelBase, IFleetMemberMenuHost
 {
-    private const int GraphCapacityValue = 9000;  // ~5min at 30fps — max retained history; the graph draws a fixed
-                                                   // pixels-per-second slice of it anchored right, so a wider graph
-                                                   // shows a longer timeline (covers fullscreen/ultrawide). Cheap: a
-                                                   // ring buffer, and render only walks the visible samples
+    private const int GraphCapacityValue = CombatHistory.Capacity;  // ~5min at 30fps — max retained history; the graph
+                                                   // draws a fixed pixels-per-second slice of it anchored right, so a
+                                                   // wider graph shows a longer timeline (covers fullscreen/ultrawide).
+                                                   // Cheap: a ring buffer, and render only walks the visible samples
     // ~1 s at the nominal 30fps render rate (ET-280): the drawn line trails a plain average over this many recent
     // frames instead of an EMA, so a cadence-held step draws as a straight ramp rather than a curved arc.
     private const int SmoothingWindowFrames = 30;
@@ -50,14 +51,7 @@ public partial class DpsViewModel : ViewModelBase, IFleetMemberMenuHost
     private const int ApplicationEveryFrames = 15;
 
     // Fixed inks (CombatInk), never the faction accent. Drawn in this order, so OUT ends up on top of its lane.
-    private readonly RateLine _repOutLine = new(MetricKind.RepOut, CombatInk.Rep, GraphLane.HitPoints, dashed: true);
-    private readonly RateLine _repInLine = new(MetricKind.RepIn, CombatInk.Rep, GraphLane.HitPoints);
-    private readonly RateLine _inLine = new(MetricKind.DpsIn, CombatInk.In, GraphLane.HitPoints);
-    private readonly RateLine _outLine = new(MetricKind.Dps, CombatInk.Out, GraphLane.HitPoints);
-    private readonly RateLine _capOutLine = new(MetricKind.CapOut, CombatInk.Cap, GraphLane.Capacitor, dashed: true);
-    private readonly RateLine _capInLine = new(MetricKind.CapIn, CombatInk.Cap, GraphLane.Capacitor);
-    private readonly RateLine _neutOutLine = new(MetricKind.NeutOut, CombatInk.Neut, GraphLane.Capacitor, dashed: true);
-    private readonly RateLine _neutInLine = new(MetricKind.NeutIn, CombatInk.Neut, GraphLane.Capacitor);
+    private readonly RateLine _repOutLine, _repInLine, _inLine, _outLine, _capOutLine, _capInLine, _neutOutLine, _neutInLine;
     private readonly IReadOnlyList<RateLine> _lines;
 
     private readonly List<GraphMarker> _markers = [];
@@ -341,16 +335,33 @@ public partial class DpsViewModel : ViewModelBase, IFleetMemberMenuHost
     internal static string CompactIsk(long isk) => IskFormat.Compact(isk) + " ISK";
 
     /// <summary>Design-time constructor (XAML previewer).</summary>
-    public DpsViewModel()
+    public DpsViewModel() : this(null, null)
     {
-        _lines = [_repOutLine, _repInLine, _inLine, _outLine, _capOutLine, _capInLine, _neutOutLine, _neutInLine];
-        Series = _lines.Select(line => line.Series).ToList();
     }
 
-    public DpsViewModel(string character, bool isSelf) : this()
+    /// <param name="history">Where this meter's samples are kept for others to read (the Local API); null keeps them
+    /// private to the graph.</param>
+    public DpsViewModel(string character, bool isSelf, CombatHistory? history = null) : this(history, character)
     {
         Character = character;
         IsSelf = isSelf;
+    }
+
+    private DpsViewModel(CombatHistory? history, string? character)
+    {
+        RateLine Line(MetricKind kind, IBrush ink, GraphLane lane, bool dashed = false) =>
+            new(kind, ink, lane, dashed, history is not null && character is not null ? history.RingFor(character, kind) : null);
+
+        _repOutLine = Line(MetricKind.RepOut, CombatInk.Rep, GraphLane.HitPoints, dashed: true);
+        _repInLine = Line(MetricKind.RepIn, CombatInk.Rep, GraphLane.HitPoints);
+        _inLine = Line(MetricKind.DpsIn, CombatInk.In, GraphLane.HitPoints);
+        _outLine = Line(MetricKind.Dps, CombatInk.Out, GraphLane.HitPoints);
+        _capOutLine = Line(MetricKind.CapOut, CombatInk.Cap, GraphLane.Capacitor, dashed: true);
+        _capInLine = Line(MetricKind.CapIn, CombatInk.Cap, GraphLane.Capacitor);
+        _neutOutLine = Line(MetricKind.NeutOut, CombatInk.Neut, GraphLane.Capacitor, dashed: true);
+        _neutInLine = Line(MetricKind.NeutIn, CombatInk.Neut, GraphLane.Capacitor);
+        _lines = [_repOutLine, _repInLine, _inLine, _outLine, _capOutLine, _capInLine, _neutOutLine, _neutInLine];
+        Series = _lines.Select(line => line.Series).ToList();
     }
 
     public IReadOnlyList<DpsSeries> Series { get; }
@@ -576,13 +587,13 @@ public partial class DpsViewModel : ViewModelBase, IFleetMemberMenuHost
 
     // One live quantity: its series + smoothing state, keyed by the metric kind it renders. Target is the measured
     // rate; Smoothed averages it into the line's newest value, which is also what the figures show (Shown).
-    private sealed class RateLine(MetricKind kind, IBrush ink, GraphLane lane, bool dashed = false)
+    private sealed class RateLine(MetricKind kind, IBrush ink, GraphLane lane, bool dashed, SampleRing? ring)
     {
         private readonly Queue<double> _recent = new();
         private double _recentSum;
 
         public MetricKind Kind { get; } = kind;
-        public DpsSeries Series { get; } = new(ink, GraphCapacityValue, lane, dashed);
+        public DpsSeries Series { get; } = ring is null ? new(ink, GraphCapacityValue, lane, dashed) : new(ink, ring, lane, dashed);
         public double Target;
 
         /// <summary>The line's newest value: what it ends at on screen.</summary>
