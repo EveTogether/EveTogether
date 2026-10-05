@@ -118,9 +118,11 @@ public sealed class LocalApiBroadcaster
 
     private async Task _SendSnapshotAsync(WebSocket socket, CancellationToken cancellationToken)
     {
+        var metrics = await _queries.GetMetricsAsync(cancellationToken);
         var snapshot = new WsSnapshotDto(
-            await _queries.GetMetricsAsync(cancellationToken),
-            await _queries.GetActiveFleetAsync(cancellationToken));
+            metrics,
+            await _queries.GetActiveFleetAsync(cancellationToken),
+            _queries.GetHistory(metrics));
         var json = _Envelope("snapshot", snapshot, _NowMs());
 
         await _sendGate.WaitAsync(cancellationToken);

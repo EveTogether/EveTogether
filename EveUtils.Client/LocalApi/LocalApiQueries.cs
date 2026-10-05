@@ -11,6 +11,7 @@ using EveUtils.Client.Platform;
 using EveUtils.Client.Transport;
 using EveUtils.Client.ViewModels.FitBrowser;
 using EveUtils.Shared.Identity;
+using EveUtils.Shared.Modules.Fleet.Metrics;
 using EveUtils.Shared.Modules.Fittings.Dtos;
 using EveUtils.Shared.Modules.Fittings.Entities;
 using EveUtils.Shared.Modules.Fittings.Repositories;
@@ -27,6 +28,9 @@ namespace EveUtils.Client.LocalApi;
 /// </summary>
 public sealed partial class LocalApiQueries(IServiceProvider rootServices, LocalApiPrivacy privacy)
 {
+    /// <summary>How far back the <c>snapshot</c> history reaches.</summary>
+    public const int HistorySeconds = 300;
+
     /// <summary>Live combat metrics for your own currently-running characters (gamelog-driven, fleet independent).</summary>
     public async Task<IReadOnlyList<CharacterMetricsDto>> GetMetricsAsync(CancellationToken cancellationToken = default)
     {
@@ -58,8 +62,31 @@ public sealed partial class LocalApiQueries(IServiceProvider rootServices, Local
                 // ET-96: whether the ESI location watch is active right now, and why it has nothing to say when it
                 // is not showing a system — the two facts this ticket's own investigation needed a debugger for.
                 LocationWatchActive: id is { } charId && (locationMonitor?.IsWatching(charId) ?? false),
-                LocationStatus: EsiLocationReasonText.Describe(snapshot.LocationUnavailableReason));
+                LocationStatus: EsiLocationReasonText.Describe(snapshot.LocationUnavailableReason),
+                RepIn: rates.RepIn,
+                RepOut: rates.RepOut,
+                NeutIn: rates.NeutIn,
+                NeutOut: rates.NeutOut,
+                CapIn: rates.CapIn,
+                CapOut: rates.CapOut,
+                Application: ApplicationDto.FromSummary(gamelog.SampleApplication(name)));
         }).ToList();
+    }
+
+    /// <summary>The last <see cref="HistorySeconds"/> of combat for each running character that has any, for the
+    /// <c>snapshot</c>. Empty when the history service is not there.</summary>
+    public IReadOnlyList<CharacterHistoryDto> GetHistory(IEnumerable<CharacterMetricsDto> running)
+    {
+        var history = rootServices.GetService<CombatHistory>();
+        if (history is null) return [];
+
+        double[] Of(string name, MetricKind kind) => history.PerSecond(name, kind, HistorySeconds);
+        return running.Select(c => new CharacterHistoryDto(
+            c.CharacterId, c.CharacterName, 1,
+            Of(c.CharacterName, MetricKind.Dps), Of(c.CharacterName, MetricKind.DpsIn),
+            Of(c.CharacterName, MetricKind.RepIn), Of(c.CharacterName, MetricKind.RepOut),
+            Of(c.CharacterName, MetricKind.NeutIn), Of(c.CharacterName, MetricKind.NeutOut),
+            Of(c.CharacterName, MetricKind.CapIn), Of(c.CharacterName, MetricKind.CapOut))).ToList();
     }
 
     /// <summary>Coupled characters with public identity (corp/alliance), a portrait URL and running state. No tokens.</summary>
