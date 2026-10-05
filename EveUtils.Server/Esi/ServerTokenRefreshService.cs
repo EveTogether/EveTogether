@@ -81,17 +81,26 @@ public sealed class ServerTokenRefreshService(
 
             var tokens = await authClient
                 .RefreshAsync(refreshToken, esiOptions.ClientId, esiOptions.ClientSecret, cancellationToken);
-
-            var identity = await jwtValidator
-                .ValidateAsync(tokens.AccessToken, esiOptions.ClientId, cancellationToken);
-
             var latestRefreshToken = tokens.RefreshToken ?? refreshToken;
-            var stored = await repository.UpdateSyncedTokenAsync(
-                character.EsiCharacterId,
-                character.CharacterName,
-                protector.Protect(latestRefreshToken),
-                identity.GrantedScopes,
-                cancellationToken);
+
+            // EVE SSO rotates refresh tokens: the one just sent is spent. Keep the new one before validation, which
+            // fetches the signing keys over the network — a hiccup there used to lose it, and the retry then offered
+            // the spent token and got invalid_grant, which ends the grant for good (ET-446, as ET-445 on the client).
+            var stored = latestRefreshToken == refreshToken
+                         || await repository.UpdateSyncedRefreshTokenAsync(
+                             character.EsiCharacterId, protector.Protect(latestRefreshToken), cancellationToken);
+            if (stored)
+            {
+                var identity = await jwtValidator
+                    .ValidateAsync(tokens.AccessToken, esiOptions.ClientId, cancellationToken);
+
+                stored = await repository.UpdateSyncedTokenAsync(
+                    character.EsiCharacterId,
+                    character.CharacterName,
+                    protector.Protect(latestRefreshToken),
+                    identity.GrantedScopes,
+                    cancellationToken);
+            }
 
             if (!stored)
             {
@@ -150,19 +159,23 @@ public sealed class ServerTokenRefreshService(
     private bool ShouldRefresh(SyncedCharacter character)
     {
         if (character.FailureCount == RevokedFailureCount) return false;
-        if (character.LastFailedAt is not null && time.GetUtcNow() - character.LastFailedAt.Value < FailureBackoff(character.FailureCount)) return false;
+        if (character.LastFailedAt is not null && time.GetUtcNow() - character.LastFailedAt.Value < FailureBackoff(character.EsiCharacterId, character.FailureCount)) return false;
         return character.LastRefreshedAt is null || time.GetUtcNow() - character.LastRefreshedAt.Value > RefreshAfter;
     }
 
-    private static TimeSpan FailureBackoff(int failureCount) => failureCount switch
+    /// <summary>5, 10, 20, 40 minutes, then hourly, with ±10% jitter so characters that failed together do not retry
+    /// in lockstep. The jitter is fixed per character and attempt: the 60 s loop asks again every pass, and a fresh
+    /// roll each time would only pull the retry towards the short end.</summary>
+    internal static TimeSpan FailureBackoff(int esiCharacterId, int failureCount)
     {
-        <= 1 => TimeSpan.FromMinutes(5),
-        2 => TimeSpan.FromMinutes(10),
-        3 => TimeSpan.FromMinutes(20),
-        _ => TimeSpan.FromHours(1)
-    };
+        var minutes = Math.Min(5 * Math.Pow(2, Math.Clamp(failureCount, 1, 8) - 1), 60);
+        var jitter = 0.9 + new Random(HashCode.Combine(esiCharacterId, failureCount)).NextDouble() * 0.2;
+        return TimeSpan.FromMinutes(minutes * jitter);
+    }
 
-    private static bool IsRevoked(Exception ex) =>
-        ex.Message.Contains("401", StringComparison.OrdinalIgnoreCase) ||
-        ex.Message.Contains("invalid_grant", StringComparison.OrdinalIgnoreCase);
+    // Only the SSO's own verdict on the grant. Matching "401" anywhere in the message took an HTML 401 from a proxy,
+    // or invalid_client, for a revoked grant and stopped refreshing until the player re-paired.
+    internal static bool IsRevoked(Exception ex) => ex is EsiTokenExchangeException exchange
+        ? exchange.IsDefinitiveRejection
+        : ex.Message.Contains("invalid_grant", StringComparison.OrdinalIgnoreCase);
 }

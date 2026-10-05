@@ -21,6 +21,12 @@ public interface IServerAuthRepository
     /// </summary>
     Task<bool> UpdateSyncedTokenAsync(int esiCharacterId, string characterName, EncryptedToken refreshToken, IReadOnlyList<string> grantedScopes, CancellationToken cancellationToken = default);
     /// <summary>
+    /// Stores only the refresh token EVE SSO just rotated, before the refresh is otherwise known to have worked: the
+    /// previous one is spent from that moment. Leaves the refresh bookkeeping alone; false as for
+    /// <see cref="UpdateSyncedTokenAsync"/>.
+    /// </summary>
+    Task<bool> UpdateSyncedRefreshTokenAsync(int esiCharacterId, EncryptedToken refreshToken, CancellationToken cancellationToken = default);
+    /// <summary>
     /// Deletes the character when it has no session left and returns the row as it was, so its token can be revoked at
     /// CCP. Null when it still has one (another machine is coupled) or is already gone. The check and the delete are one
     /// statement, so a session issued in between keeps the character.

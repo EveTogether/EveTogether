@@ -125,6 +125,18 @@ internal sealed class ServerAuthRepository(IDbContextFactory<SharedDbContext> co
         return updated > 0;
     }
 
+    public async Task<bool> UpdateSyncedRefreshTokenAsync(int esiCharacterId, EncryptedToken refreshToken, CancellationToken cancellationToken = default)
+    {
+        await using var db = await contextFactory.CreateDbContextAsync(cancellationToken);
+        var updated = await db.Set<SyncedCharacter>()
+            .Where(c => c.EsiCharacterId == esiCharacterId)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(c => c.RefreshTokenCipher, refreshToken.Cipher)
+                .SetProperty(c => c.RefreshTokenNonce, refreshToken.Nonce)
+                .SetProperty(c => c.RefreshTokenTag, refreshToken.Tag), cancellationToken);
+        return updated > 0;
+    }
+
     public async Task<SyncedCharacter?> DeleteSyncedIfWithoutSessionAsync(int syncedCharacterId, CancellationToken cancellationToken = default)
     {
         await using var db = await contextFactory.CreateDbContextAsync(cancellationToken);
