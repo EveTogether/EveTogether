@@ -5,6 +5,7 @@ using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EveUtils.Client.Calendar;
+using EveUtils.Client.Runs;
 
 namespace EveUtils.Client.ViewModels.Runs;
 

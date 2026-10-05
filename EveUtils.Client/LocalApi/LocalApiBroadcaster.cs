@@ -4,10 +4,13 @@ using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
+using System.Threading.Channels;
 using System.Threading.Tasks;
 using EveUtils.Client.LocalApi.Dtos;
+using EveUtils.Client.Runs;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Fleet.Events;
+using EveUtils.Shared.Modules.Runs.Events;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -19,16 +22,23 @@ namespace EveUtils.Client.LocalApi;
 /// anything itself. Own-character combat metrics are polled from the existing query bridge on a 1 Hz timer (the
 /// always-on baseline, fleet or not); fleet metric/roster changes are forwarded from the in-process
 /// <see cref="IEventBus"/> the fleet windows already publish on. Each client gets a <c>snapshot</c> on connect, then
-/// the live <c>{ type, data, ts }</c> stream. Tied to the host lifecycle: started after the Kestrel host starts and
-/// stopped before it stops. (No <c>fit.changed</c> event exists yet, so that stream is intentionally absent.)
+/// the live <c>{ type, data, ts }</c> stream. A runs change (<see cref="RunsChangedEvent"/>, a session reset, a pocket's
+/// tier or weather) pushes <c>run.changed</c> and <c>runs.summary</c>, read off the event, never inside it. Tied to the
+/// host lifecycle: started after the Kestrel host starts and stopped before it stops. (No <c>fit.changed</c> event exists yet, so that stream is intentionally absent.)
 /// </summary>
 public sealed class LocalApiBroadcaster
 {
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
     private static readonly TimeSpan MetricsInterval = TimeSpan.FromSeconds(1);
 
+    // A burst of run writes (bounty after bounty) is one re-read a second at most, never one per write.
+    private static readonly TimeSpan RunsPushInterval = TimeSpan.FromSeconds(1);
+
     private readonly IServiceProvider _rootServices;
     private readonly LocalApiQueries _queries;
+    private readonly LocalApiRuns _runs;
+    private readonly Channel<bool> _runsChanged =
+        Channel.CreateBounded<bool>(new BoundedChannelOptions(1) { FullMode = BoundedChannelFullMode.DropWrite });
     private readonly ILogger _logger;
     private readonly Dictionary<Guid, WebSocket> _clients = [];
     private readonly object _clientsGate = new();
@@ -36,13 +46,15 @@ public sealed class LocalApiBroadcaster
     private readonly CancellationTokenSource _cts = new();
     private readonly List<IDisposable> _subscriptions = [];
     private Task? _metricsLoop;
+    private Task? _runsLoop;
     private IHubContext<FleetHub>? _hub;
     private int _signalRCount;
 
-    public LocalApiBroadcaster(IServiceProvider rootServices, ILogger logger)
+    public LocalApiBroadcaster(IServiceProvider rootServices, LocalApiRuns runs, ILogger logger)
     {
         _rootServices = rootServices;
         _queries = new LocalApiQueries(rootServices);
+        _runs = runs;
         _logger = logger;
     }
 
@@ -62,8 +74,24 @@ public sealed class LocalApiBroadcaster
                 _BroadcastAsync("fleet.metrics", FleetMetricSampleDto.FromSample(e.Data), e.Data.UnixMs)));
             _subscriptions.Add(bus.Subscribe<FleetChangedEvent>((e, _) =>
                 _BroadcastAsync("fleet.changed", FleetChangedDto.FromEvent(e), _NowMs())));
+            _subscriptions.Add(bus.Subscribe<RunsChangedEvent>((_, _) =>
+            {
+                _OnRunsChanged();
+                return Task.CompletedTask;
+            }));
+        }
+        if (_rootServices.GetService<RunsSession>() is { } session)
+        {
+            session.WasReset += _OnRunsChanged;
+            _subscriptions.Add(new Unsubscriber(() => session.WasReset -= _OnRunsChanged));
+        }
+        if (_rootServices.GetService<RunningAbyssalPockets>() is { } pockets)
+        {
+            pockets.Changed += _OnRunsChanged;
+            _subscriptions.Add(new Unsubscriber(() => pockets.Changed -= _OnRunsChanged));
         }
         _metricsLoop = Task.Run(() => _MetricsLoopAsync(_cts.Token));
+        _runsLoop = Task.Run(() => _RunsLoopAsync(_cts.Token));
     }
 
     public async Task StopAsync()
@@ -75,6 +103,10 @@ public sealed class LocalApiBroadcaster
         if (_metricsLoop is not null)
         {
             try { await _metricsLoop; } catch { /* loop cancelled */ }
+        }
+        if (_runsLoop is not null)
+        {
+            try { await _runsLoop; } catch { /* loop cancelled */ }
         }
 
         foreach (var socket in _Snapshot())
@@ -135,6 +167,28 @@ public sealed class LocalApiBroadcaster
             {
                 _logger.LogDebug(ex, "Local API metrics tick failed.");
             }
+        }
+    }
+
+    private void _OnRunsChanged() => _runsChanged.Writer.TryWrite(true);
+
+    private async Task _RunsLoopAsync(CancellationToken cancellationToken)
+    {
+        await foreach (bool _ in _runsChanged.Reader.ReadAllAsync(cancellationToken))
+        {
+            if (_HasNoListeners()) continue; // nobody listens → a widget reads runs/* itself on connect
+            try
+            {
+                if (await _runs.GetCurrentAsync(cancellationToken) is { } current)
+                    await _BroadcastAsync("run.changed", current, _NowMs());
+                if (await _runs.GetSummariesAsync(cancellationToken) is { } summaries)
+                    await _BroadcastAsync("runs.summary", summaries, _NowMs());
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger.LogDebug(ex, "Local API runs push failed.");
+            }
+            await Task.Delay(RunsPushInterval, cancellationToken);
         }
     }
 
@@ -208,5 +262,10 @@ public sealed class LocalApiBroadcaster
             foreach (var (id, socket) in _clients) list.Add((id, socket));
             return list;
         }
+    }
+
+    private sealed class Unsubscriber(Action unsubscribe) : IDisposable
+    {
+        public void Dispose() => unsubscribe();
     }
 }

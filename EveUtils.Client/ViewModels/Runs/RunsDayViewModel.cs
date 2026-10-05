@@ -5,6 +5,7 @@ using System.Globalization;
 using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using EveUtils.Client.Runs;
 using EveUtils.Shared.Modules.Runs.Isk;
 
 namespace EveUtils.Client.ViewModels.Runs;
@@ -96,7 +97,7 @@ public sealed partial class RunsDayViewModel : ObservableObject
         NetText = RunsActivitySummaryText.NetFor(rows);
         CountAndFlownText = $"{CountText} · {FlownText}";
         SummaryText = $"{CountAndFlownText} · {NetText}";
-        Isk = RunsActivitySummaryText.SourcesFor(rows);
+        Isk = RunTotals.Sources(rows);
 
         LocalCount = rows.Count(row => row.IsLocal);
         ShowPublishLocal = canPublish && LocalCount > 0;

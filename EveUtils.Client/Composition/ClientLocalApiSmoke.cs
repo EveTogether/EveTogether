@@ -1,10 +1,13 @@
 using System;
+using System.Collections.Generic;
 using System.Net.Http;
 using System.Net.WebSockets;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using EveUtils.Client.LocalApi;
+using EveUtils.Shared.Messaging;
+using EveUtils.Shared.Modules.Runs.Events;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace EveUtils.Client.Composition;
@@ -28,7 +31,9 @@ public static class ClientLocalApiSmoke
                  {
                      "/", "/docs", "/widget", "/api/v1/health", "/api/v1/metrics", "/api/v1/characters",
                      "/api/v1/fits", "/api/v1/fleets", "/api/v1/fleet", "/api/v1/compositions",
-                     "/api/v1/types/587", "/openapi/v1.json", "/scalar/"
+                     "/api/v1/types/587", "/api/v1/runs/current", "/api/v1/runs/summary",
+                     "/api/v1/runs/summary?period=session&kind=abyssal", "/api/v1/runs/summary?period=1",
+                     "/openapi/v1.json", "/scalar/"
                  })
         {
             try
@@ -121,6 +126,17 @@ public static class ClientLocalApiSmoke
             using var tickCts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
             var tick = await ReceiveTextAsync(ws, tickCts.Token);
             Console.WriteLine($"  ws: next event={EventType(tick)} ({tick.Length} bytes)");
+
+            // A runs change pushes run.changed then runs.summary, off the event rather than inside it (ET-436).
+            await services.GetRequiredService<IEventBus>().PublishAsync(new RunsChangedEvent(null), EventTarget.Local);
+            using var runsCts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            var pushed = new HashSet<string>();
+            while (!(pushed.Contains("run.changed") && pushed.Contains("runs.summary")))
+            {
+                var message = await ReceiveTextAsync(ws, runsCts.Token);
+                if (EventType(message) is "run.changed" or "runs.summary" && pushed.Add(EventType(message)))
+                    Console.WriteLine($"  ws: on runs.changed -> {EventType(message)} ({message.Length} bytes)");
+            }
             await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, null, CancellationToken.None);
         }
         catch (Exception ex)

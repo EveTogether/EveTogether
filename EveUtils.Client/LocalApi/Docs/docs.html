@@ -76,6 +76,8 @@ const metrics = await res.json();
     <tr><td><code>GET /api/v1/compositions</code></td><td>Your doctrine/composition library (local + each coupled server).</td></tr>
     <tr><td><code>GET /api/v1/compositions/{id}</code></td><td>One composition's roles + fit-entries. Add <code>?server=&lt;address&gt;</code> for a server composition (omit for the local library).</td></tr>
     <tr><td><code>GET /api/v1/types/{id}</code></td><td>Resolve a type id to its name, group and a public icon URL — so a widget can show ship/module names + icons without its own SDE.</td></tr>
+    <tr><td><code>GET /api/v1/runs/current</code></td><td>The activities on the clock right now, one per group of runs flown together, newest first (empty when nothing runs): type, site, abyssal tier + weather, <code>startedAtUtc</code> (tick the clock from it yourself), bounty, loot and total ISK so far, and the crew. <code>signature</code> and <code>system</code> stay null unless "Include my location" is on.</td></tr>
+    <tr><td><code>GET /api/v1/runs/summary</code></td><td>Run totals — runs, flown time, ISK, ISK/hour, average per run, best drop, per character — the same figures the app's home and runs overview show. <code>?period=session|today|week|month</code> (default <code>today</code>; <code>session</code> counts from the app's start or its last reset), <code>?kind=all|abyssal|combat|mission|mining</code> (default <code>all</code>). <code>kind=abyssal</code> adds a breakdown per tier and weather.</td></tr>
   </table>
   <div class="note">Live per-member fleet <em>metrics</em> are a streamed signal, not a readable snapshot — they arrive over the WebSocket stream (M3), not as a REST endpoint.</div>
   <p>The full, interactive reference — request/response schemas and a live "try it" — is the
@@ -88,12 +90,16 @@ const metrics = await res.json();
   <pre><code>{ "type": "snapshot",      "data": { "metrics": [ /* your toon(s) */ ], "fleet": { /* active fleet or null */ } }, "ts": ... }
 { "type": "metrics",       "data": [ /* your running toon(s), every second — always, fleet or not */ ],            "ts": ... }
 { "type": "fleet.metrics", "data": { "characterId":…, "fleetId":…, "kind":"Dps", "value":…, "unixMs":… },           "ts": ... }
-{ "type": "fleet.changed", "data": { "fleetId":…, "kind":"…", "serverAddress":… },                                  "ts": ... }</code></pre>
+{ "type": "fleet.changed", "data": { "fleetId":…, "kind":"…", "serverAddress":… },                                  "ts": ... }
+{ "type": "run.changed",   "data": [ /* same as GET /api/v1/runs/current */ ],                                         "ts": ... }
+{ "type": "runs.summary",  "data": [ /* one GET /api/v1/runs/summary result per period × kind */ ],                    "ts": ... }</code></pre>
   <pre><code>const ws = new WebSocket("{{BASE_URL}}/ws".replace("http", "ws"));
 ws.onmessage = (e) => { const evt = JSON.parse(e.data); /* evt.type, evt.data — update your overlay */ };</code></pre>
   <div class="note"><code>metrics</code> streams your own running character(s) every second, fleet or not.
      <code>fleet.metrics</code> (one sample per member per tick) and <code>fleet.changed</code> only arrive while you
-     are in a fleet. There is no <code>fit.changed</code> event yet.</div>
+     are in a fleet. <code>run.changed</code> and <code>runs.summary</code> arrive whenever a run changes (started, loot,
+     bounty, saved, deleted), the session is reset or a pocket's tier or weather is picked — not on a timer, so read
+     <code>/api/v1/runs/*</code> once on connect. There is no <code>fit.changed</code> event yet.</div>
 
   <h2>Realtime: SignalR <span class="pill">available</span></h2>
   <p>A SignalR hub at <code>{{BASE_URL}}/hub/fleet</code> for richer .NET/JS clients
@@ -105,6 +111,8 @@ conn.on("snapshot",      (s)    => { /* { metrics:[…], fleet:… } on connect 
 conn.on("metrics",       (rows) => { /* your toon(s), every second */ });
 conn.on("fleet.metrics", (s)    => { /* one sample per member, in a fleet */ });
 conn.on("fleet.changed", (c)    => { /* roster/state change, in a fleet */ });
+conn.on("run.changed",   (runs) => { /* the activities on the clock, on every run change */ });
+conn.on("runs.summary",  (all)  => { /* run totals per period × kind, on every run change */ });
 await conn.start();</code></pre>
   <div class="note">WebSocket (the section above) covers the browser/OBS case on its own with no dependency; SignalR is for
      richer .NET/JS clients that want auto-reconnect and a typed client library.</div>

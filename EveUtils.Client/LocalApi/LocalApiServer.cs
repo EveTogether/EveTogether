@@ -97,6 +97,7 @@ public sealed class LocalApiServer(
         var apiKey = all.FirstOrDefault(s => s.Key == ApiKeySettingKey)?.Value; // optional shared-secret gate
         var allowedOrigins = (all.FirstOrDefault(s => s.Key == AllowedOriginsSettingKey)?.Value ?? "")
             .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var includeLocation = all.FirstOrDefault(s => s.Key == LocalApiRuns.IncludeLocationSettingKey)?.Value == "true"; // default off
 
         var builder = WebApplication.CreateSlimBuilder();
         builder.Logging.ClearProviders(); // the host stays quiet; this service logs its own lifecycle
@@ -105,6 +106,8 @@ public sealed class LocalApiServer(
             options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase);
         builder.Services.AddOpenApi(); // self-documenting: /openapi/v1.json + Scalar UI below
         builder.Services.AddSingleton(new LocalApiQueries(_rootServices)); // reads the existing client services
+        var runs = new LocalApiRuns(_rootServices, includeLocation); // runs/current + runs/summary, and their pushes
+        builder.Services.AddSingleton(runs);
         // Read-only loopback game data → CORS open by default for browser/OBS widgets; a configured allowlist
         // (localapi.allowedorigins) locks it down for the cautious user.
         builder.Services.AddCors(options => options.AddDefaultPolicy(policy =>
@@ -114,7 +117,7 @@ public sealed class LocalApiServer(
             else policy.AllowAnyOrigin();
         }));
 
-        var broadcaster = new LocalApiBroadcaster(_rootServices, logger); // shared realtime fan-out (WS + SignalR)
+        var broadcaster = new LocalApiBroadcaster(_rootServices, runs, logger); // shared realtime fan-out (WS + SignalR)
         builder.Services.AddSingleton(broadcaster);                       // so FleetHub can report connect/disconnect
         builder.Services.AddSignalR()
             .AddJsonProtocol(options => options.PayloadSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase);
@@ -147,6 +150,7 @@ public sealed class LocalApiServer(
         app.MapGet("/api/v1/compositions/{id:long}", async (long id, string? server, LocalApiQueries queries, CancellationToken ct) =>
             await queries.GetCompositionAsync(id, server, ct) is { } composition ? Results.Ok(composition) : Results.NotFound());
         app.MapGet("/api/v1/types/{id:int}", (int id, LocalApiQueries queries) => queries.GetTypeInfo(id)); // name/icon resolver
+        LocalApiRuns.Map(app);
 
         app.Map("/ws", async (HttpContext context) =>
         {
