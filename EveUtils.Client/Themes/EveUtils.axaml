@@ -354,6 +354,20 @@
         <Setter Property="BorderBrush" Value="{StaticResource GreenBrush}"/>
         <Setter Property="TextElement.Foreground" Value="{StaticResource GreenBrush}"/>
     </Style>
+    <!-- A chip that can be clicked: no button chrome, just the chip inside; the hand cursor only where a click does
+         something. -->
+    <Style Selector="Button.chipaction">
+        <Setter Property="Padding" Value="0"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+        <Setter Property="Template">
+            <ControlTemplate>
+                <ContentPresenter Content="{TemplateBinding Content}" Background="Transparent"/>
+            </ControlTemplate>
+        </Setter>
+    </Style>
+    <Style Selector="Button.chipaction.actionable">
+        <Setter Property="Cursor" Value="Hand"/>
+    </Style>
     <Style Selector="Border.chip.dim">
         <Setter Property="TextElement.Foreground" Value="{StaticResource TextDimBrush}"/>
     </Style>

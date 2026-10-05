@@ -95,8 +95,11 @@ public sealed class RecordingDialogService : IDialogService
         return OnPickCharacters(prompt, options);
     }
 
+    /// <summary>Answers the scope picker a sign-in opens with; unset, a test that reaches it fails.</summary>
+    public Func<IReadOnlyCollection<string>?, Task<IReadOnlyList<string>?>>? OnSelectScopes { get; set; }
+
     public Task<IReadOnlyList<string>?> SelectScopesAsync(IReadOnlyList<EsiScopeRequirement> available,
-        IReadOnlyCollection<string>? preselected = null) => throw NotUsed();
+        IReadOnlyCollection<string>? preselected = null) => OnSelectScopes?.Invoke(preselected) ?? throw NotUsed();
     /// <summary>Answers the ESI fit-import dialog with the ticked fitting ids (or null to cancel). Default: cancel.</summary>
     public Func<IReadOnlyList<EsiFitting>, Task<IReadOnlyList<int>?>> OnSelectFittings { get; set; } =
         _ => Task.FromResult<IReadOnlyList<int>?>(null);

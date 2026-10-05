@@ -83,7 +83,7 @@ public class EsiPerAccountStatusTests
     }
 
     [AvaloniaFact]
-    public async Task Startup_RendersAnAmberChipForExactlyTheExpiredAccounts()
+    public async Task Startup_RendersARedChipForExactlyTheExpiredAccounts()
     {
         var (instance, dialogs, _) = await StartupScenarioAsync();
         using (instance)
@@ -105,19 +105,75 @@ public class EsiPerAccountStatusTests
             var chips = EsiChips(window);
             Assert.Equal(Roster.Length, chips.Count); // one ESI chip per character row, no more
 
-            var warned = chips.Where(c => c.Border.Classes.Contains("warn")).Select(c => c.Row.CharacterId).ToList();
-            Assert.Equal([HotSprockets, LyraCustos], warned.Order().ToList());
+            var expiredChips = chips.Where(c => c.Border.Classes.Contains("danger")).Select(c => c.Row.CharacterId).ToList();
+            Assert.Equal([HotSprockets, LyraCustos], expiredChips.Order().ToList());
 
             foreach (var chip in chips)
             {
                 var expired = chip.Row.CharacterId is HotSprockets or LyraCustos;
                 Assert.Equal(expired ? MaterialIconKind.AlertOutline : MaterialIconKind.Check, chip.Icon);
-                Assert.Equal(expired, chip.Border.Classes.Contains("warn"));
-                Assert.Equal(!expired, chip.Border.Classes.Contains("ok")); // and never both at once
+                Assert.Equal(expired, chip.Border.Classes.Contains("danger"));
+                Assert.Equal(!expired, chip.Border.Classes.Contains("good")); // and never both at once
             }
 
             window.Close();
         }
+    }
+
+    /// <summary>
+    /// ET-445: the chip has three states and says which. A refused sign-in used to end as a dim "ESI –" once its dead
+    /// token was removed — read as "no data" — and an unreachable SSO as a plain chip; only the refused one is red, and
+    /// only the red one opens the sign-in when clicked.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task EsiChip_IsGreenAmberOrRed_AndOnlyTheRedOneSignsInAgain()
+    {
+        var (instance, dialogs, _) = await StartupScenarioAsync();
+        using (instance)
+        {
+            var vm = new MainWindowViewModel(instance.Services);
+            await WaitForStartupCheckAsync(dialogs);
+            // The next 60 s pass finds no token for the refused characters (ET-54 removed it) and records NoToken.
+            await Tracker(instance).RecordAsync(LyraCustos, TokenStatus.NoToken);
+            await Tracker(instance).RecordAsync(Noahmarr, TokenStatus.Reconnecting);
+            await vm.RefreshCharactersAsync();
+            await SettleAsync();
+
+            var window = new MainWindow { DataContext = vm, Width = 1100, Height = 900 };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+            window.CaptureRenderedFrame()?.Save(Path.Combine(Path.GetTempPath(), "eveutils-esi-chip-three-states.png"),
+                new PngBitmapEncoderOptions());
+
+            var chips = EsiChips(window).ToDictionary(c => c.Row.CharacterId);
+            Assert.Contains("good", chips[Jithran].Border.Classes);
+            Assert.Contains("warn", chips[Noahmarr].Border.Classes);
+            Assert.Contains("reconnecting", chips[Noahmarr].Row.EsiStatus);
+            Assert.Contains("danger", chips[HotSprockets].Border.Classes);
+            Assert.Contains("danger", chips[LyraCustos].Border.Classes); // not the dim dash
+            Assert.Equal(MaterialIconKind.AlertOutline, chips[LyraCustos].Icon);
+
+            var opened = 0;
+            dialogs.OnSelectScopes = _ =>
+            {
+                opened++;
+                return Task.FromResult<IReadOnlyList<string>?>(null); // the pilot cancels the picker
+            };
+            await ClickAsync(chips[Noahmarr].Border);
+            Assert.Equal(0, opened); // amber fixes itself — a click there must not start a sign-in
+            await ClickAsync(chips[LyraCustos].Border);
+            Assert.Equal(1, opened);
+
+            window.Close();
+        }
+    }
+
+    private static async Task ClickAsync(Border chip)
+    {
+        var button = chip.FindAncestorOfType<Button>() ?? throw new InvalidOperationException("the ESI chip is not clickable");
+        Assert.True(button.Command?.CanExecute(button.CommandParameter));
+        button.Command?.Execute(button.CommandParameter);
+        await SettleAsync();
     }
 
     // ── The rebuild seam itself ──────────────────────────────────────────────────────────────────────
@@ -390,7 +446,7 @@ public class EsiPerAccountStatusTests
     /// <summary>Asserts that exactly these characters warn and every other row reads as a working session.</summary>
     private static void AssertWarning(MainWindowViewModel vm, params int[] expectedWarning)
     {
-        var warning = vm.Characters.Where(c => c.EsiWarn).Select(c => c.CharacterId).Order().ToList();
+        var warning = vm.Characters.Where(c => c.EsiNeedsSignIn).Select(c => c.CharacterId).Order().ToList();
         Assert.Equal(expectedWarning.Order().ToList(), warning);
         foreach (var row in vm.Characters.Where(c => !expectedWarning.Contains(c.CharacterId)))
             Assert.True(row.EsiOk, $"{row.Name} should still read as connected but is '{row.EsiChipIcon}'.");

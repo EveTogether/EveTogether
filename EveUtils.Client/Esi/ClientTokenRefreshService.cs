@@ -29,10 +29,11 @@ public sealed class ClientTokenRefreshService(
     // After a refresh yields an unusable token (validation fails — almost always clock skew), wait this long before
     // trying again. Without it every 5s ESI consumer would re-refresh against EVE SSO and re-log on every tick.
     private static readonly TimeSpan UnusableBackoff = TimeSpan.FromSeconds(60);
-    // After a refresh that never reached EVE SSO (no network, DNS, SSO 5xx). Short, because nothing was sent that
-    // could be spammed and the character sits on "reconnecting" meanwhile; the loop also runs on this cadence while
-    // any character is here, and RetryNow cuts it short when the machine or the network comes back (ET-308).
+    // After a refresh that never reached EVE SSO (no network, DNS, SSO 5xx). Starts short, because the character sits
+    // on "reconnecting" meanwhile, and doubles per failed attempt up to the cap so an SSO that stays down is not hit
+    // every ten seconds for hours; RetryNow cuts it short when the machine or the network comes back (ET-308, ET-445).
     internal static readonly TimeSpan UnreachableBackoff = TimeSpan.FromSeconds(10);
+    internal static readonly TimeSpan MaxUnreachableBackoff = TimeSpan.FromMinutes(5);
     // Concurrent: EnsureValidAsync is reached from the 60 s loop and from every ESI call, on any thread. The status is
     // the one the back-off answers with, so a skew window and an unreachable SSO keep reading as what they are.
     private readonly ConcurrentDictionary<int, Backoff> _backoffs = new();
@@ -220,8 +221,15 @@ public sealed class ClientTokenRefreshService(
 
         try
         {
-            var refreshed = await authClient
+            var answer = await authClient
                 .RefreshAsync(tokens.RefreshToken, options.ClientId, options.ClientSecret, cancellationToken);
+            // EVE SSO rotates refresh tokens: from here on the one just sent is spent. The new one is stored before
+            // anything else can fail — validation fetches the signing keys over the network — or a hiccup there would
+            // drop it, and the retry would offer the spent token and get invalid_grant: a real sign-out (ET-445).
+            // An answer without a refresh token leaves the current one in force (RFC 6749 §6).
+            var refreshed = answer with { RefreshToken = answer.RefreshToken ?? tokens.RefreshToken };
+            if (refreshed.RefreshToken != tokens.RefreshToken)
+                await tokenStore.SaveAsync(charId, tokens with { RefreshToken = refreshed.RefreshToken }, cancellationToken);
 
             var identity = await jwtValidator
                 .ValidateAsync(refreshed.AccessToken, options.ClientId, cancellationToken);
@@ -266,10 +274,10 @@ public sealed class ClientTokenRefreshService(
                 _refused[charId] = true;
                 _forcedRefreshAfter.TryRemove(charId, out _);
             }
-            if (EnterBackoff(charId, TokenStatus.Reconnecting, UnreachableBackoff))
+            if (EnterBackoff(charId, TokenStatus.Reconnecting, UnreachableDelay))
                 logger.LogWarning("Could not reach EVE SSO to renew the ESI token for character {CharacterId}: {Reason}. " +
-                    "The sign-in is kept; retrying in {Backoff}, or as soon as the network comes back.",
-                    charId, Describe(ex), UnreachableBackoff);
+                    "The sign-in is kept; retrying with a growing back-off, or as soon as the network comes back.",
+                    charId, Describe(ex));
             else
                 logger.LogDebug("EVE SSO still unreachable for character {CharacterId}: {Reason}.", charId, Describe(ex));
             return TokenStatus.Reconnecting;
@@ -280,7 +288,7 @@ public sealed class ClientTokenRefreshService(
             // local clock skew vs EVE's token lifetime). Re-auth won't fix it and retrying every cycle would spam SSO
             // and the log, so back off and surface it as transient. Log it once per outage at Warning (the first
             // failure of a run), then quietly at Debug until a good refresh clears the back-off.
-            if (EnterBackoff(charId, TokenStatus.TemporarilyUnavailable, UnusableBackoff))
+            if (EnterBackoff(charId, TokenStatus.TemporarilyUnavailable, _ => UnusableBackoff))
                 logger.LogWarning(ex, "ESI token for character {CharacterId} was refreshed but failed validation — " +
                     "treating it as temporarily unavailable (often a local clock skew vs the token lifetime). " +
                     "Backing off for {Backoff} before retrying.", charId, UnusableBackoff);
@@ -292,17 +300,27 @@ public sealed class ClientTokenRefreshService(
 
     /// <summary>Starts or extends the character's back-off; true when this opens a new run of this kind (log it
     /// once at Warning, the repeats at Debug).</summary>
-    private bool EnterBackoff(int charId, TokenStatus status, TimeSpan duration)
+    private bool EnterBackoff(int charId, TokenStatus status, Func<int, TimeSpan> delayForAttempt)
     {
         var firstOfRun = !_backoffs.TryGetValue(charId, out var previous) || previous.Status != status;
-        _backoffs[charId] = new Backoff(DateTimeOffset.UtcNow + duration, status);
+        var attempt = firstOfRun ? 1 : previous.Attempt + 1;
+        _backoffs[charId] = new Backoff(DateTimeOffset.UtcNow + delayForAttempt(attempt), status, attempt);
         return firstOfRun;
+    }
+
+    /// <summary>10 s, 20 s, 40 s … up to <see cref="MaxUnreachableBackoff"/>, with ±10% jitter so characters that
+    /// failed together do not retry in lockstep.</summary>
+    internal static TimeSpan UnreachableDelay(int attempt)
+    {
+        var doubled = UnreachableBackoff.TotalSeconds * Math.Pow(2, Math.Min(attempt - 1, 16));
+        var capped = Math.Min(doubled, MaxUnreachableBackoff.TotalSeconds);
+        return TimeSpan.FromSeconds(capped * (0.9 + Random.Shared.NextDouble() * 0.2));
     }
 
     /// <summary>
     /// Whether the refresh failed for want of a connection rather than on an answer: a transport error anywhere in
     /// the chain (the JWKS fetch inside validation included), a timeout, or an SSO answer that is no verdict (5xx,
-    /// 429, an empty 4xx).
+    /// 429, a 4xx that is not invalid_grant).
     /// </summary>
     internal static bool IsUnreachable(Exception? ex) => ex switch
     {
@@ -320,7 +338,7 @@ public sealed class ClientTokenRefreshService(
         return ex.Message;
     }
 
-    private readonly record struct Backoff(DateTimeOffset RetryAfter, TokenStatus Status);
+    private readonly record struct Backoff(DateTimeOffset RetryAfter, TokenStatus Status, int Attempt);
 
     // Grant comparison is set-like: EVE returns the granted scopes in no guaranteed order, so an order
     // difference is not a change. Ordinal (invariant) — scope names are protocol identifiers, not text.

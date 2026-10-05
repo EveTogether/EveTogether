@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 namespace EveUtils.Shared.Modules.Esi;
 
 /// <summary>
@@ -15,10 +17,27 @@ public sealed class EsiTokenExchangeException(int statusCode, string body)
     public string Body { get; } = body;
 
     /// <summary>
-    /// The SSO itself refused the grant: a 400/401 with a real body (<c>invalid_grant</c> and friends). Only this
-    /// means "sign in again" — a 5xx, a 429 or an empty answer from something in between says nothing about the
-    /// refresh token.
+    /// The SSO itself refused the grant: a 400/401 whose OAuth error is <c>invalid_grant</c>. Only this means "sign in
+    /// again". A 5xx, a 429, an empty or HTML answer from something in between, or another OAuth error
+    /// (<c>invalid_client</c>, <c>invalid_request</c> — a fault of the app, not of this sign-in) says nothing about the
+    /// refresh token, and signing in again would not fix it (ET-445).
     /// </summary>
-    public bool IsDefinitiveRejection =>
-        StatusCode is 400 or 401 && !string.IsNullOrWhiteSpace(Body);
+    public bool IsDefinitiveRejection => StatusCode is 400 or 401 && OAuthError() == "invalid_grant";
+
+    private string? OAuthError()
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(Body);
+            return document.RootElement.ValueKind == JsonValueKind.Object
+                   && document.RootElement.TryGetProperty("error", out var error)
+                   && error.ValueKind == JsonValueKind.String
+                ? error.GetString()
+                : null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
 }

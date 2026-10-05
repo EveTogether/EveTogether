@@ -446,13 +446,19 @@
                                                          state symbol used to be a character inside its label — two of
                                                          them emoji, drawn in colour out of a different font (ET-74). -->
                                                     <StackPanel Orientation="Horizontal" Spacing="5" Margin="0,4,0,0">
-                                                        <Border Classes="chip" Classes.ok="{Binding EsiOk}" Classes.warn="{Binding EsiWarn}"
-                                                                Classes.dim="{Binding EsiDim}" ToolTip.Tip="{Binding EsiStatus}">
-                                                            <StackPanel Orientation="Horizontal" Spacing="4">
-                                                                <TextBlock Text="{Binding EsiChipText}" VerticalAlignment="Center"/>
-                                                                <mi:MaterialIcon Kind="{Binding EsiChipIcon}"/>
-                                                            </StackPanel>
-                                                        </Border>
+                                                        <!-- Red is the one state the pilot has to act on, so that chip is the
+                                                             way to act on it (ET-445); the others only explain on hover. -->
+                                                        <Button Classes="chipaction" Classes.actionable="{Binding EsiNeedsSignIn}"
+                                                                Command="{Binding #RootWindow.((vm:MainWindowViewModel)DataContext).SignInAgainCommand}"
+                                                                CommandParameter="{Binding}" ToolTip.Tip="{Binding EsiStatus}">
+                                                            <Border Classes="chip" Classes.good="{Binding EsiOk}" Classes.warn="{Binding EsiWarn}"
+                                                                    Classes.danger="{Binding EsiNeedsSignIn}">
+                                                                <StackPanel Orientation="Horizontal" Spacing="4">
+                                                                    <TextBlock Text="{Binding EsiChipText}" VerticalAlignment="Center"/>
+                                                                    <mi:MaterialIcon Kind="{Binding EsiChipIcon}"/>
+                                                                </StackPanel>
+                                                            </Border>
+                                                        </Button>
                                                         <ItemsControl ItemsSource="{Binding ServerLinks}">
                                                             <ItemsControl.ItemsPanel>
                                                                 <ItemsPanelTemplate>

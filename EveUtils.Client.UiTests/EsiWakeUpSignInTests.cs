@@ -167,7 +167,10 @@ public class EsiWakeUpSignInTests
         { "SSO 503", new EsiTokenExchangeException(503, "<html>Service Unavailable</html>"), true, false },
         { "empty 400 from a proxy", new EsiTokenExchangeException(400, ""), true, false },
         { "invalid_grant", new EsiTokenExchangeException(400, """{"error":"invalid_grant","error_description":"Invalid refresh token."}"""), false, true },
-        { "401 with a body", new EsiTokenExchangeException(401, """{"error":"invalid_client"}"""), false, true },
+        { "invalid_grant on a 401", new EsiTokenExchangeException(401, """{"error":"invalid_grant"}"""), false, true },
+        { "invalid_client is the app's fault, not the sign-in's", new EsiTokenExchangeException(401, """{"error":"invalid_client"}"""), true, false },
+        { "HTML 401 from a proxy", new EsiTokenExchangeException(401, "<html>Unauthorized</html>"), true, false },
+        { "400 with a non-OAuth body", new EsiTokenExchangeException(400, "Bad Request"), true, false },
         { "clock skew", new InvalidOperationException("ESI access token failed validation."), false, false },
     };
 

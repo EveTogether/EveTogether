@@ -85,7 +85,8 @@ public partial class CharacterViewModel : ObservableObject
     public string EsiStatus => EsiTokenStatus switch
     {
         TokenStatus.Valid or TokenStatus.Refreshed => "ESI: connected",
-        TokenStatus.NeedsReauth                    => "ESI: re-auth needed",
+        TokenStatus.NeedsReauth                    => "ESI: sign-in expired — EVE no longer accepts this character's "
+                                                      + "sign-in. Click to sign in again",
         TokenStatus.TemporarilyUnavailable         => "ESI: temporarily unavailable — the token cannot be used "
                                                       + "right now (usually a clock difference with EVE); signing in "
                                                       + "again will not help",
@@ -94,7 +95,7 @@ public partial class CharacterViewModel : ObservableObject
         TokenStatus.Reconnecting                   => "ESI: reconnecting… — EVE's sign-in server cannot be reached "
                                                       + "right now (network not back yet?); retrying automatically, "
                                                       + "signing in again is not needed",
-        _                                          => "ESI: not signed in",
+        _                                          => "ESI: not signed in on this PC. Click to sign in",
     };
 
     // --- The mockup-style ESI status chip for the character list (module-shell mockup "ESI" chip):
@@ -107,27 +108,28 @@ public partial class CharacterViewModel : ObservableObject
     public MaterialIconKind EsiChipIcon => EsiTokenStatus switch
     {
         TokenStatus.Valid or TokenStatus.Refreshed => MaterialIconKind.Check,
-        TokenStatus.NeedsReauth                    => MaterialIconKind.AlertOutline,
+        TokenStatus.NeedsReauth or TokenStatus.NoToken => MaterialIconKind.AlertOutline,
         TokenStatus.TemporarilyUnavailable         => MaterialIconKind.ClockOutline,
         TokenStatus.Rejected                       => MaterialIconKind.LockAlertOutline,
         TokenStatus.Reconnecting                   => MaterialIconKind.Sync,
-        _                                          => MaterialIconKind.Minus,
+        _                                          => MaterialIconKind.HelpCircleOutline,
     };
 
-    /// <summary>Healthy accent chip: this character's ESI session actually works.</summary>
+    // Three states and nothing else (ET-445): the chip either works, is fixing itself, or needs the pilot. The dim
+    // "ESI –" it used to fall back to read as "no data" for a character whose sign-in EVE had refused.
+
+    /// <summary>Green: this character's ESI session actually works.</summary>
     public bool EsiOk => EsiTokenStatus is TokenStatus.Valid or TokenStatus.Refreshed;
 
-    /// <summary>Amber chip: there is a token but it does not work — re-auth needed, unusable for now, or refused by
-    /// ESI itself. TemporarilyUnavailable used to read as green while nothing worked; so did a token ESI was
-    /// answering 401 to, right up until the pilot noticed their location had stopped updating (ET-121).</summary>
+    /// <summary>Amber: not working right now, but it is fixing itself — unreachable SSO, clock skew, a token ESI
+    /// refused that is being renewed. The tooltip says which; signing in again would not help.</summary>
     public bool EsiWarn => EsiTokenStatus
-        is TokenStatus.NeedsReauth or TokenStatus.TemporarilyUnavailable or TokenStatus.Rejected;
+        is TokenStatus.TemporarilyUnavailable or TokenStatus.Rejected or TokenStatus.Reconnecting;
 
-    // Reconnecting deliberately carries none of the three variants: the plain chip with a sync icon. Neither green
-    // (nothing works yet) nor amber — it was the amber-and-alarm at every wake-up that made people panic (ET-308).
-
-    /// <summary>Inert chip: not signed in at all (mutually exclusive with ok/warn, so the variants never stack).</summary>
-    public bool EsiDim => EsiTokenStatus is TokenStatus.NoToken;
+    /// <summary>Red and clickable: only the pilot can fix this. EVE refused the refresh token, or there is no token on
+    /// this PC for a character that is in the list — which is also where a refused one ends up once its dead token is
+    /// removed (ET-54), so the two must look the same.</summary>
+    public bool EsiNeedsSignIn => EsiTokenStatus is TokenStatus.NeedsReauth or TokenStatus.NoToken;
 
     /// <summary>The names of the implants this character has plugged in, shown as a badge + tooltip in the
     /// overview so it is clear at a glance which implants a character carries.</summary>
@@ -170,6 +172,6 @@ public partial class CharacterViewModel : ObservableObject
         OnPropertyChanged(nameof(EsiChipIcon));
         OnPropertyChanged(nameof(EsiOk));
         OnPropertyChanged(nameof(EsiWarn));
-        OnPropertyChanged(nameof(EsiDim));
+        OnPropertyChanged(nameof(EsiNeedsSignIn));
     }
 }
