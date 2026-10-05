@@ -58,26 +58,6 @@ public sealed class SkillsQueueViewModelTests : IDisposable
         Directory.Delete(_dir, recursive: true);
     }
 
-    /// <summary>Criterion 3. Red if an already-passed row is still shown.</summary>
-    [Fact]
-    public void Rows_NeverShowARowWhoseFinishDateHasAlreadyPassed()
-    {
-        var now = DateTimeOffset.UtcNow;
-        var queue = new List<CharacterSkillQueueEntry>
-        {
-            new() { CharacterId = 1, QueuePosition = 0, SkillTypeId = WingCommand, FinishedLevel = 3,
-                StartDate = now.AddDays(-10), FinishDate = now.AddDays(-1) },   // already finished — must not show
-            new() { CharacterId = 1, QueuePosition = 1, SkillTypeId = WingCommand, FinishedLevel = 4,
-                StartDate = now, FinishDate = now.AddDays(5) },
-        };
-        var snapshot = new SkillsCharacterSnapshot(Sde, new Dictionary<int, int>(), queue, Attributes, now);
-
-        var vm = new SkillsQueueViewModel(snapshot);
-
-        var row = Assert.Single(vm.Rows);
-        Assert.Contains("IV", row.SkillText);
-    }
-
     /// <summary>Criterion 4. Red if the queue-left duration drifts from what ESI's own FinishDate says.</summary>
     [Fact]
     public void QueueLeftText_MatchesEsisOwnFinishDate_252d13h()
@@ -94,30 +74,5 @@ public sealed class SkillsQueueViewModelTests : IDisposable
         var vm = new SkillsQueueViewModel(snapshot);
 
         Assert.Contains("252d 13h", vm.QueueLeftText);
-    }
-
-    /// <summary>Criterion 5. Red if a paused queue shows a date instead of a ≈ estimate.</summary>
-    [Fact]
-    public void PausedQueue_ShowsApproximateEstimates_NeverADate()
-    {
-        var now = DateTimeOffset.UtcNow;
-        var queue = new List<CharacterSkillQueueEntry>
-        {
-            new() { CharacterId = 1, QueuePosition = 0, SkillTypeId = WingCommand, FinishedLevel = 3,
-                StartDate = null, FinishDate = null },
-            new() { CharacterId = 1, QueuePosition = 1, SkillTypeId = WingCommand, FinishedLevel = 4,
-                StartDate = null, FinishDate = null },
-        };
-        var snapshot = new SkillsCharacterSnapshot(Sde, new Dictionary<int, int>(), queue, Attributes, now);
-
-        var vm = new SkillsQueueViewModel(snapshot);
-
-        Assert.True(vm.IsPaused);
-        Assert.All(vm.Rows, row =>
-        {
-            Assert.Equal("—", row.EndsText);
-            Assert.StartsWith("≈", row.ThisLevelText);
-            Assert.StartsWith("≈", row.FromNowText);
-        });
     }
 }

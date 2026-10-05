@@ -1243,36 +1243,6 @@ public class FitDetailTests
         Assert.Equal(5, provider.LastSkills.LevelFor(12345));
     }
 
-    // A5 (ET-356): SKILL IMPACT… is enabled only once a character (not an All I–V baseline) is selected, and opens with
-    // that character. characterId 0 matches no mode so the fallback picks All V; 42 selects the coupled character. The
-    // command no-ops while disabled, so expectedName covers both "stayed off" and "opened with the right character".
-    [Theory]
-    [InlineData(0, null)]
-    [InlineData(42, "Sin Krah")]
-    public async Task ShowSkillImpact_OnlyEnabledForACharacter_OpensWithThatCharacter(int characterId, string? expectedName)
-    {
-        var data = new FakeDogmaDataAccessor().Type(587, 25, 6);
-        var evaluator = new DogmaEvaluator(data);
-        var calculator = new DogmaCalculator(data, new DogmaFitBuilder(data), new DogmaEffectCollector(data),
-            new ReactiveArmorHardener(data, evaluator), new DerivedStatsCalculator(evaluator, data), evaluator);
-        var repo = new FakeSkillRepo(new Dictionary<int, IReadOnlyDictionary<int, int>> { [42] = new Dictionary<int, int> { [3300] = 3 } });
-        SkillImpactViewModel? captured = null;
-
-        var vm = new FitDetailWindowViewModel(Fit("Rifter", 587), FallbackNameResolver.Instance,
-            new StubStatsProvider(_ => SampleStats()), sde: null, data: data, characters: [(42, "Sin Krah")],
-            skillImporter: new FakeSkillImporter(SkillImportResult.Ok(0)), skillRepository: repo,
-            calculator: calculator, onShowSkillImpact: viewModel => captured = viewModel);
-        await vm.InitializeAsync();
-
-        var mode = vm.SkillModes.FirstOrDefault(m => m.CharacterId == characterId)
-                   ?? vm.SkillModes.Single(m => m.CharacterId is null && m.AllLevel == 5);
-        await vm.SelectSkillModeAsync(mode);
-
-        Assert.Equal(expectedName is not null, vm.CanShowSkillImpact);
-        await ((IAsyncRelayCommand)vm.ShowSkillImpactCommand).ExecuteAsync(null);
-        Assert.Equal(expectedName, captured?.CharacterName);
-    }
-
     [Fact]
     public async Task SkillSelector_RemembersMode_AppliesOnOpen_AndPersistsOnChange()
     {

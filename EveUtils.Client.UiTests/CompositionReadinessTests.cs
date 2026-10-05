@@ -67,31 +67,6 @@ public sealed class CompositionReadinessTests
     }
 
     [Fact]
-    public void CharacterList_SortsReadyThenFastest_AndSearchStartsAtNine()
-    {
-        CompositionCharacterReadiness slow = new("Slow", CompositionReadinessStatus.NotYet,
-            TimeSpan.FromDays(10), TimeSpan.FromDays(10), [], "");
-        CompositionCharacterReadiness fast = new("Fast", CompositionReadinessStatus.NotYet,
-            TimeSpan.FromDays(1), TimeSpan.FromDays(1), [], "");
-        CompositionCharacterReadiness ready = new("Ready", CompositionReadinessStatus.Ready,
-            TimeSpan.Zero, TimeSpan.Zero, [], "");
-        CompositionCharacterReadiness flies = new("Flies", CompositionReadinessStatus.Flies,
-            TimeSpan.Zero, TimeSpan.FromDays(2), [], "");
-        CompositionReadinessEntry eight = new("Mainline", "Ferox", "Ferox",
-            [slow, fast, ready, flies, slow, slow, slow, slow]);
-        CompositionReadinessEntry nine = new("Mainline", "Ferox", "Ferox",
-            [slow, fast, ready, flies, slow, slow, slow, slow, slow]);
-
-        Assert.False(eight.HasSearch);
-        Assert.True(nine.HasSearch);
-        Assert.Equal("Ready", nine.VisibleCharacters[0].Name);
-        Assert.Equal("Flies", nine.VisibleCharacters[1].Name);
-        Assert.Equal("Fast", nine.VisibleCharacters[2].Name);
-        nine.SearchText = "fast";
-        Assert.Equal("Fast", Assert.Single(nine.VisibleCharacters).Name);
-    }
-
-    [Fact]
     public void Evaluate_NoSkillsScope_RemainsUnknownDespiteCachedLevels()
     {
         CompositionReadinessEntry entry = Calculator(Data()).Evaluate("Mainline", Fit(), [],

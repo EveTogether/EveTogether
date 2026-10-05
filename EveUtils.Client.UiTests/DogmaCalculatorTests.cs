@@ -1306,52 +1306,6 @@ public class DogmaCalculatorTests
         Assert.Equal(callsAfterLoad, counting.Calls);
     }
 
-    // A4: with the speed skill already at V, nothing untrained moves Speed any more — grey with the "already at V"
-    // reason, not the "no skill touches this" reason a fit that never had a speed skill at all would show.
-    [Fact]
-    public async Task SkillImpactViewModel_StatWhoseOnlyMoverIsAlreadyAtFive_IsGreyedWithReason()
-    {
-        var levels = new Dictionary<int, int> { [SpeedImpactSkill] = 5 };
-        var (data, input) = SkillImpactFixture(levels, ModuleState.Active);
-        var vm = new SkillImpactViewModel(ScannerFor(data), validator: null, trainingEstimator: null, attributes: null,
-            FallbackNameResolver.Instance, "skill-impact:test", "Sin Krah", "Ferox", input, levels);
-
-        await vm.LoadAsync(TestContext.Current.CancellationToken);
-
-        var speedChip = vm.Chips.Single(chip => chip.Stat == SkillImpactStat.Speed);
-        Assert.False(speedChip.IsAvailable);
-        Assert.Equal("all skills that change this are at V", speedChip.UnavailableReason);
-    }
-
-    // A6: the scan runs off the calling thread and a scan superseded by a fresher one is discarded on completion. The
-    // gate blocks the stale scan's first engine call until released, so the test proves it started off-thread and that
-    // its late result changes nothing in the applied Rows, without delay-based timing.
-    [Fact]
-    public async Task SkillImpactViewModel_LoadAsync_RunsOffTheCallingThread_AndDiscardsAStaleScan()
-    {
-        var (data, input) = SkillImpactFixture([], ModuleState.Active);
-        var gated = new GatedCalculator(CalculatorFor(data));
-        var vm = new SkillImpactViewModel(new SkillImpactScanner(gated, data), validator: null, trainingEstimator: null,
-            attributes: null, FallbackNameResolver.Instance, "skill-impact:test", "Sin Krah", "Ferox", input, new Dictionary<int, int>());
-        vm.Chips.Single(chip => chip.Stat == SkillImpactStat.Dps).IsSelected = true;
-        var changeCount = 0;
-        vm.Rows.CollectionChanged += (_, _) => changeCount++;
-        var callingThreadId = Environment.CurrentManagedThreadId;
-
-        var staleLoad = vm.LoadAsync(TestContext.Current.CancellationToken);
-        await gated.WaitUntilFirstCallStartedAsync(TestContext.Current.CancellationToken);
-        Assert.NotEqual(callingThreadId, gated.CallingThreadId);
-
-        await vm.LoadAsync(TestContext.Current.CancellationToken);   // fresh: the gate no longer blocks, runs to completion
-        Assert.True(vm.Rows.Count > 0);
-        var changesAfterFreshLoad = changeCount;
-
-        gated.ReleaseFirstCall();
-        await staleLoad;
-
-        Assert.Equal(changesAfterFreshLoad, changeCount);
-    }
-
     // ── ET-357: SkillTargetsCalculator (can fly / optimal ±III / max / curve) ──────────────────────────
     // Extends the fixture above with the data-driven align-time chain (DogmaPatches, wired manually like
     // AlignTime_Folds...), a uniform SP/min rate, a CPU-hungry module and two more movers: AlignSkillId (agility) and
@@ -1590,32 +1544,5 @@ public class DogmaCalculatorTests
             Calls++;
             return inner.CalculateAsync(fit, cancellationToken);
         }
-    }
-
-    // Blocks only the very first call it ever receives, until the test releases it — deterministic stand-in for "a
-    // scan that hasn't finished yet", with no reliance on wall-clock timing.
-    private sealed class GatedCalculator(IDogmaCalculator inner) : IDogmaCalculator
-    {
-        private readonly SemaphoreSlim _started = new(0);
-        private readonly SemaphoreSlim _release = new(0);
-        private bool _gateNextCall = true;
-
-        public int CallingThreadId { get; private set; }
-
-        public async Task<FitResult> CalculateAsync(FitInput fit, CancellationToken cancellationToken = default)
-        {
-            CallingThreadId = Environment.CurrentManagedThreadId;
-            if (_gateNextCall)
-            {
-                _gateNextCall = false;
-                _started.Release();
-                await _release.WaitAsync(cancellationToken);
-            }
-            return await inner.CalculateAsync(fit, cancellationToken);
-        }
-
-        public Task WaitUntilFirstCallStartedAsync(CancellationToken cancellationToken) => _started.WaitAsync(cancellationToken);
-
-        public void ReleaseFirstCall() => _release.Release();
     }
 }

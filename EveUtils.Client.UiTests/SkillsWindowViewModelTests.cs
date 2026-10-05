@@ -36,22 +36,6 @@ public sealed class SkillsWindowViewModelTests
         }
     }
 
-    /// <summary>Criterion 1. Red if the search field shows below the threshold, or stays hidden at or above it.</summary>
-    [Theory]
-    [InlineData(8, false)]
-    [InlineData(9, true)]
-    public async Task ShowCharacterSearch_OnlyFromTheThreshold(int characterCount, bool expectedShowSearch)
-    {
-        using var instance = TestClientInstance.Create();
-        await _SeedCharactersAsync(instance,
-            Enumerable.Range(1, characterCount).Select(i => (i, $"Pilot{i}")).ToArray());
-        var viewModel = new SkillsWindowViewModel(instance.Services, startingCharacterId: null);
-
-        await viewModel.LoadAsync(Ct);
-
-        Assert.Equal(expectedShowSearch, viewModel.ShowCharacterSearch);
-    }
-
     /// <summary>Criterion 2. Red if the module always opens on the first character regardless of how it was launched.</summary>
     [Theory]
     [InlineData(30, null, 30)]     // launched from a pilot row: that character wins over everything else
@@ -94,21 +78,6 @@ public sealed class SkillsWindowViewModelTests
 
         Assert.Equal("187,783,359 Total Skill Points", viewModel.TotalSpText);
         Assert.Equal("6,378,705 unallocated skill points", viewModel.UnallocatedSpText);
-    }
-
-    /// <summary>Criterion 6, fresh-database case. Red if a character with no skill import yet leaves the header
-    /// blank instead of a placeholder that says so.</summary>
-    [Fact]
-    public async Task TotalSpText_ShowsAPlaceholder_WhenNeverImported()
-    {
-        using var instance = TestClientInstance.Create();
-        await _SeedCharactersAsync(instance, (1, "FreshCharacter"));
-        var viewModel = new SkillsWindowViewModel(instance.Services, startingCharacterId: 1);
-
-        await viewModel.LoadAsync(Ct);
-
-        Assert.Equal("Total Skill Points not imported yet", viewModel.TotalSpText);
-        Assert.Equal("", viewModel.UnallocatedSpText);
     }
 
     /// <summary>

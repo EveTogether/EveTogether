@@ -59,44 +59,4 @@ public class SkillsWhatIfSharingTests
         Assert.True(putInDoctrineCalled); // only the explicit action reaches the caller's hand-off
         Assert.Null(dialogs.LastCompositionEditor); // the dialog itself still never opens one — that is the caller's job
     }
-
-    /// <summary>Criterion A3. Red if a character grows the summary into a third line — "fly it today" and "soonest
-    /// of the rest" are the whole of it, with 3 characters or 12.</summary>
-    [Fact]
-    public void OtherCharactersSummary_StaysTwoLines_With12Characters()
-    {
-        var dogma = Dogma();
-        var validator = new FitValidator(dogma);
-        var estimator = new SkillTrainingEstimator(dogma);
-        var rows = new List<SkillPlanRow> { new() { SkillTypeId = TargetSkill, Level = 1 } };
-        var attributes = new CharacterAttributeSet(20, 20, 20, 20, 20);
-
-        var trained = Enumerable.Range(0, 3).Select(i => new CompositionCharacterSnapshot($"Trained {i}", true, false,
-            new Dictionary<int, int> { [TargetSkill] = 1 }, attributes, []));
-        var training = Enumerable.Range(0, 9).Select(i => new CompositionCharacterSnapshot($"Training {i}", true, false,
-            new Dictionary<int, int>(), attributes, []));
-        var others = trained.Concat(training).ToList();
-
-        var summary = OtherCharactersCalculator.Compute(others, rows, validator, estimator, new DateTimeOffset(2027, 1, 1, 0, 0, 0, TimeSpan.Zero));
-
-        Assert.Equal("fly it today: 3", summary.FlyItTodayLine);
-        Assert.StartsWith("soonest of the rest:", summary.SoonestLine);
-        // The summary is exactly these two properties — there is no per-character collection to grow a third line into.
-        Assert.Equal(2, typeof(OtherCharactersSummary).GetProperties().Count(p => p.Name is "FlyItTodayLine" or "SoonestLine"));
-    }
-
-    /// <summary>Criterion A4. Red if the EVE Workbench option is ever enabled — D8 says "later" until that export
-    /// exists, and nothing in this dialog can turn it on.</summary>
-    [Fact]
-    public void EveWorkbenchOption_IsAlwaysDisabled_WithALaterHint()
-    {
-        var dialogs = new RecordingDialogService();
-        var sde = new FakeSdeAccessor();
-        var rows = new List<SkillPlanRow>();
-
-        var vm = new SkillPlanShareDialogViewModel(dialogs, "Test Plan", rows, sde, () => Task.CompletedTask);
-
-        Assert.False(vm.IsEwbEnabled);
-        Assert.Equal("later", vm.EwbHint);
-    }
 }

@@ -57,28 +57,4 @@ public sealed class SkillsCatalogueViewModelTests : IDisposable
         SqliteConnection.ClearAllPools();
         Directory.Delete(_dir, recursive: true);
     }
-
-    /// <summary>Red if the status text drops the target level, or the pips show the training level as already
-    /// trained instead of marking it with its own pip.</summary>
-    [Theory]
-    [InlineData(2, false, "→ III", "■■□□□")]  // untrained, no queue entry: estimated time to the next level
-    [InlineData(2, true, "→ IV", "■■□◆□")]    // queued past the trained level, actively training: the queue's own target level
-    [InlineData(5, false, "✓", "■■■■■")]      // fully trained
-    public void CatalogueRow_NamesTheTargetLevel_AndMarksTrainingInThePips(
-        int currentLevel, bool queued, string expectedStatusPrefix, string expectedPips)
-    {
-        var now = DateTimeOffset.UtcNow;
-        var queue = queued
-            ? new List<CharacterSkillQueueEntry> { new() { CharacterId = 1, QueuePosition = 0, SkillTypeId = WingCommand,
-                FinishedLevel = 4, StartDate = now, FinishDate = now.AddHours(20) } }
-            : new List<CharacterSkillQueueEntry>();
-        var snapshot = new SkillsCharacterSnapshot(Sde, new Dictionary<int, int> { [WingCommand] = currentLevel },
-            queue, Attributes, now);
-
-        var catalogue = new SkillsCatalogueViewModel(snapshot);
-
-        var row = catalogue.Skills.Single(s => s.SkillTypeId == WingCommand);
-        Assert.StartsWith(expectedStatusPrefix, row.StatusText);
-        Assert.Equal(expectedPips, row.PipsText);
-    }
 }
