@@ -27,6 +27,7 @@ public sealed partial class FleetWindowSectionViewModel(IRunWindowContext contex
     : RunWindowSection(context, RunSectionId.Fleet, "FLEET")
 {
     private IReadOnlySet<long> _own = new HashSet<long>();
+    private readonly Dictionary<int, string?> _names = [];
     private bool _isOwnLoaded;
     private bool _isLoadingOwn;
 
@@ -91,21 +92,38 @@ public sealed partial class FleetWindowSectionViewModel(IRunWindowContext contex
             rows.Add(row);
         }
 
-        // Whoever the fleet stream has heard from without a run here: a fleet mate on their own client, with the
-        // figures they share — or an own character in the fleet that is not on this run.
-        foreach (ActivityFleetMemberViewModel member in Context.FleetMembers.Where(member => rows.All(row => row.CharacterId != member.CharacterId)))
+        // Every other member of the fleet (ET-440): whoever the stream has heard from, and the roster's members who
+        // sent nothing at all — each with the reason they read the way they do, instead of only those with a system.
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        IReadOnlyList<FleetMateStatus> standings = Context.FleetId is { } fleetId
+            && Context.Services.GetService<FleetMemberBoard>() is { } board
+                ? board.Read(fleetId, now)
+                : [];
+        IEnumerable<int> mates = Context.FleetMembers.Select(member => member.CharacterId)
+            .Concat(standings.Select(standing => standing.CharacterId))
+            .Distinct()
+            .Where(characterId => rows.All(row => row.CharacterId != characterId));
+        foreach (int characterId in mates)
         {
-            RunShareUpdate? share = Context.GroupCode is { } groupCode ? shares?.Of(groupCode, member.CharacterId) : null;
-            FleetCharacterRowViewModel row = _RowFor(member.CharacterId);
-            row.Name = member.Name;
-            row.IsLocal = _own.Contains(member.CharacterId);
-            row.SubText = member.LocationText;
+            ActivityFleetMemberViewModel? member = Context.FleetMembers.FirstOrDefault(entry => entry.CharacterId == characterId);
+            FleetMateStatus? standing = standings.FirstOrDefault(entry => entry.CharacterId == characterId);
+            RunShareUpdate? share = Context.GroupCode is { } groupCode ? shares?.Of(groupCode, characterId) : null;
+            FleetCharacterRowViewModel row = _RowFor(characterId);
+            row.Name = member?.Name ?? _NameOf(characterId);
+            row.IsLocal = _own.Contains(characterId);
+            row.SubText = standing is null || row.IsLocal
+                ? member?.LocationText
+                : FleetMemberStatusText.Line(standing, member?.LocationText, now);
+            row.StatusChips = standing is null || row.IsLocal
+                ? []
+                : FleetMemberStatusText.Chips(standing, Context.GroupCode is null ? null : share is not null, now);
             // An own character with no run here made nothing in it, whatever the fleet stream last said about it
             // (ET-309) — this client knows every run of its own, so it takes its own word over the stream's.
             _ShowFigures(row, row.IsLocal
                 ? [new FleetFigure("not in this run", string.Empty, IsQuiet: true)]
-                : FleetCharacterRowViewModel.FiguresOf(member.BountyIsk, member.LootIsk,
-                    isBountyWithheld: share is { SharesBounty: false }, isLootWithheld: share is { SharesLoot: false }));
+                : FleetCharacterRowViewModel.FiguresOf(member?.BountyIsk, member?.LootIsk,
+                    isBountyWithheld: share is { SharesBounty: false }, isLootWithheld: share is { SharesLoot: false },
+                    ore: Context.FleetMateOreIsk(characterId)));
             row.IsSharing = true;
             row.CanToggleShare = false;
             rows.Add(row);
@@ -139,6 +157,34 @@ public sealed partial class FleetWindowSectionViewModel(IRunWindowContext contex
         return rows.Any(row => !row.IsLocal && Context.Participants.All(participant => participant.CharacterId != row.CharacterId))
             ? "Fleet mates' figures are their own — not in this total."
             : null;
+    }
+
+    /// <summary>A roster member who never sent a sample has no name from the stream: asked once, best-effort, the way
+    /// the window names the members it hears from.</summary>
+    private string _NameOf(int characterId)
+    {
+        if (_names.TryGetValue(characterId, out string? known))
+            return known ?? $"Char {characterId}";
+
+        _names[characterId] = null;
+        _ = _ResolveNameAsync(characterId);
+        return $"Char {characterId}";
+    }
+
+    private async Task _ResolveNameAsync(int characterId)
+    {
+        if (Context.Services.GetService<IExternalCharacterLookup>() is not { } lookup)
+            return;
+
+        ExternalCharacterInfo info = await lookup.LookupAsync(characterId);
+        if (!info.Exists)
+            return;
+
+        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            _names[characterId] = info.Name;
+            _Rebuild();
+        });
     }
 
     private FleetCharacterRowViewModel _RowFor(long characterId) =>

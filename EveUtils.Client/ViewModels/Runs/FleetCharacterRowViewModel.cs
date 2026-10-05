@@ -10,6 +10,13 @@ using EveUtils.Shared.Modules.Runs.Isk;
 
 namespace EveUtils.Client.ViewModels.Runs;
 
+/// <summary>One chip on a fleet mate's status line (ET-440). <see cref="IsOk"/> reads green, <see cref="IsWarn"/> amber,
+/// anything else dim.</summary>
+public sealed record FleetStatusChip(string Text, bool IsOk = false, bool IsWarn = false)
+{
+    public bool IsPlain => !IsOk && !IsWarn;
+}
+
 /// <summary>One figure on a FLEET row — "bounty" and "270,000" — or a quiet word where there is no figure to give.</summary>
 public sealed record FleetFigure(string Label, string Value, bool IsQuiet = false);
 
@@ -38,6 +45,10 @@ public sealed partial class FleetCharacterRowViewModel(long characterId, Func<Fl
     [ObservableProperty] private string? _subText;
 
     [ObservableProperty] private IReadOnlyList<FleetFigure> _figures = [];
+
+    /// <summary>A fleet mate's standing in small chips beside the reason under their name (ET-440): connected, in this
+    /// run, what they share, when last heard. Empty for a Local character.</summary>
+    [ObservableProperty] private IReadOnlyList<FleetStatusChip> _statusChips = [];
 
     /// <summary>Whether this character takes a part of the loot split (ET-105) — true for everyone until somebody
     /// takes them out.</summary>
@@ -84,9 +95,12 @@ public sealed partial class FleetCharacterRowViewModel(long characterId, Func<Fl
 
     /// <summary>A fleet mate's figures as their own client shares them over the fleet stream (ET-242) — "not shared"
     /// only for a figure their client said it withholds.</summary>
-    public static IReadOnlyList<FleetFigure> FiguresOf(decimal? bounty, decimal? loot, bool isBountyWithheld, bool isLootWithheld)
+    public static IReadOnlyList<FleetFigure> FiguresOf(decimal? bounty, decimal? loot, bool isBountyWithheld, bool isLootWithheld,
+        decimal? ore = null)
     {
         List<FleetFigure> figures = [];
+        if (ore is { } mined && mined != 0)
+            figures.Add(new FleetFigure("ore", IskFormat.Number(mined)));
         if (bounty is { } shared && shared != 0)
             figures.Add(new FleetFigure("bounty", IskFormat.Number(shared)));
         else if (isBountyWithheld)

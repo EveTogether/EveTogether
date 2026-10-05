@@ -137,6 +137,10 @@ public interface IRunWindowContext : INotifyPropertyChanged
 
     bool HasGroupTotalIsk { get; }
 
+    /// <summary>What a fleet mate's shared ore is worth, priced here the way MINING prices this window's own (ET-440);
+    /// null while they share no ore or none of it is priced yet.</summary>
+    decimal? FleetMateOreIsk(int characterId);
+
     /// <summary>Work the whole window out again, for a section that changed something the window shows.</summary>
     void Refresh(DateTime nowUtc);
 }
