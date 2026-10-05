@@ -40,7 +40,7 @@ namespace EveUtils.Client.ViewModels.Home;
 /// async API is synchronous — and only the results are applied here. One runs read at a time; a change landing while
 /// one is out is owed and read straight after, never dropped (ET-287).</para>
 /// </summary>
-public sealed partial class HomeDashboardViewModel : ObservableObject, IDisposable
+public sealed partial class HomeDashboardViewModel : ObservableObject, IRefreshableModule, IDisposable
 {
     private readonly CqrsDispatcher? _dispatcher;
     private readonly ICharacterRegistry? _registry;
@@ -61,6 +61,8 @@ public sealed partial class HomeDashboardViewModel : ObservableObject, IDisposab
     private bool _isReadingRuns;
     private bool _isRunsReadOwed;
     private bool _isOwedReadFull;
+    private bool _isReloading;
+    private bool _isReloadOwed;
     private DateTime _minuteShown;
     private (string Site, DateTime EndedUtc)? _lastRun;
 
@@ -121,7 +123,10 @@ public sealed partial class HomeDashboardViewModel : ObservableObject, IDisposab
         if (_serverStatus is not null)
             _serverStatus.Changed += _OnServerStatusChanged;
         if (_busConnector is not null)
+        {
             _busConnector.StateChanged += _OnBusStateChanged;
+            _busConnector.CouplingChanged += _OnCouplingChanged;
+        }
 
         _ShowTranquility();
         _ShowServer();
@@ -356,14 +361,40 @@ public sealed partial class HomeDashboardViewModel : ObservableObject, IDisposab
 
     private void _OnServerStatusChanged(EveServerStatusSnapshot snapshot) => Dispatcher.UIThread.Post(_ShowTranquility);
 
-    private void _OnBusStateChanged(string address, ServerConnectionState state) => Dispatcher.UIThread.Post(() =>
+    private void _OnBusStateChanged(string address, ServerConnectionState state) => Dispatcher.UIThread.Post(_ShowServer);
+
+    // Everything on show was read from the servers coupled at the time — their fits, fleets, publish targets. Every read
+    // takes its servers from the coupled ones only, so reading again is what brings a server in or drops it (ET-427).
+    private void _OnCouplingChanged(string address) => Dispatcher.UIThread.Post(() => _ = _ReloadAsync());
+
+    /// <summary>One reload at a time; a change landing meanwhile is owed and read straight after — coming back up, every
+    /// character's connection reports in at once.</summary>
+    private async Task _ReloadAsync()
     {
-        _ShowServer();
-        // Everything on show was read while the server was still coupled — its fits, fleets, publish targets. Every
-        // read takes its servers from the coupled ones only, so reading again is what drops it (ET-427).
-        if (state is ServerConnectionState.NotCoupled)
-            _ = LoadAsync();
-    });
+        if (_isReloading)
+        {
+            _isReloadOwed = true;
+            return;
+        }
+
+        _isReloading = true;
+        try
+        {
+            do
+            {
+                _isReloadOwed = false;
+                await LoadAsync();
+            }
+            while (_isReloadOwed);
+        }
+        finally
+        {
+            _isReloading = false;
+        }
+    }
+
+    /// <summary>The refresh shortcut on Home: every block again.</summary>
+    public void RefreshModule() => _ = _ReloadAsync();
 
     private void _ShowTranquility()
     {
@@ -422,7 +453,10 @@ public sealed partial class HomeDashboardViewModel : ObservableObject, IDisposab
         if (_serverStatus is not null)
             _serverStatus.Changed -= _OnServerStatusChanged;
         if (_busConnector is not null)
+        {
             _busConnector.StateChanged -= _OnBusStateChanged;
+            _busConnector.CouplingChanged -= _OnCouplingChanged;
+        }
         if (_clock is null)
             return;
 

@@ -32,6 +32,7 @@ public sealed class RemoteBusConnectionManager(
 
     public event Action<string, ServerConnectionState> StateChanged = (_, _) => { };
     public event Action<string, int, ServerConnectionState> CharacterStateChanged = (_, _, _) => { };
+    public event Action<string> CouplingChanged = _ => { };
 
     public IReadOnlyDictionary<string, ServerConnectionState> States
     {
@@ -96,7 +97,10 @@ public sealed class RemoteBusConnectionManager(
             StartConnection(serverAddress, characterId);
 
         if (coupled.Count == 0)
+        {
             StateChanged(serverAddress, ServerConnectionState.NotCoupled);
+            CouplingChanged(serverAddress);
+        }
     }
 
     private void StartConnection(string serverAddress, int characterId)
@@ -116,6 +120,8 @@ public sealed class RemoteBusConnectionManager(
             {
                 CharacterStateChanged(serverAddress, characterId, state);
                 StateChanged(serverAddress, StateFor(serverAddress));
+                if (state is ServerConnectionState.Connected)
+                    CouplingChanged(serverAddress);
             };
             _connections[key] = connection;
         }
@@ -162,6 +168,7 @@ public sealed class RemoteBusConnectionManager(
         foreach (var characterId in detached)
             CharacterStateChanged(serverAddress, characterId, ServerConnectionState.NotCoupled);
         StateChanged(serverAddress, ServerConnectionState.NotCoupled);
+        CouplingChanged(serverAddress);
         return Task.CompletedTask;
     }
 

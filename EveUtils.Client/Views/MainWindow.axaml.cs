@@ -455,7 +455,11 @@ public partial class MainWindow : Window
                 vm.ReopenLastClosedTabCommand.Execute(null);
                 break;
             case ShortcutAction.RefreshModule:
-                ShortcutDispatch.RefreshModule(vm.SelectedHostTab?.Content);
+                // Home is not a tab, so it is not the selected tab's content either (ET-427).
+                if (vm.IsHomeShown)
+                    vm.Home.RefreshModule();
+                else
+                    ShortcutDispatch.RefreshModule(vm.SelectedHostTab?.Content);
                 break;
             case ShortcutAction.FocusSearch:
                 ShortcutDispatch.FocusSearch(vm.SelectedHostTab?.Content);

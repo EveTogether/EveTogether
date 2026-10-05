@@ -44,6 +44,14 @@ public interface IRemoteBusConnector
     /// raises <see cref="ServerConnectionState.NotCoupled"/>, the cue to drop that server from whatever is shown.</summary>
     event Action<string, ServerConnectionState> StateChanged;
 
+    /// <summary>
+    /// Raised with the server's address whenever what can be read from the coupled servers changes (ET-427): a
+    /// character's connection to it comes up — a fresh coupling, or one that is back after the server was away — or the
+    /// last character is decoupled from it (<see cref="ServerConnectionState.NotCoupled"/>). The one cue for every screen
+    /// that shows server data to read it again; the screens do not each work it out from the states.
+    /// </summary>
+    event Action<string> CouplingChanged;
+
     /// <summary>Raised whenever ONE character's connection changes: (serverAddress, characterId, newState). What the
     /// per-character link indicators follow, so one character's trouble is neither hidden by its neighbours nor
     /// smeared across them.</summary>

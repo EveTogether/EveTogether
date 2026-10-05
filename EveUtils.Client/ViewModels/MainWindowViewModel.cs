@@ -507,13 +507,11 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
             _busConnector.CharacterStateChanged += (address, characterId, state) =>
                 Avalonia.Threading.Dispatcher.UIThread.Post(() => ApplyServerConnectionState(address, characterId, state));
 
-            // A server nobody is coupled to any more loses its fits tab and its link chips, whichever screen decoupled
-            // it — the Fleets window's "decouple server" refreshes only itself (ET-427).
-            _busConnector.StateChanged += (address, state) =>
-            {
-                if (state is ServerConnectionState.NotCoupled)
-                    Avalonia.Threading.Dispatcher.UIThread.Post(() => _ = _RefreshAfterDecoupleAsync());
-            };
+            // A server coming up gains its fits tab, one nobody is coupled to any more loses it, along with its link
+            // chips — whichever screen coupled or decoupled it; the Fleets window's "decouple server" refreshes only
+            // itself (ET-427).
+            _busConnector.CouplingChanged += address =>
+                Avalonia.Threading.Dispatcher.UIThread.Post(() => _ = _RefreshAfterCouplingChangeAsync());
         }
 
         // Live Tranquility status → the bottom-bar indicator. Seed from the current snapshot (the poller may have
@@ -1821,7 +1819,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         await RefreshFittingsTabsAsync();
     }
 
-    private async Task _RefreshAfterDecoupleAsync()
+    private async Task _RefreshAfterCouplingChangeAsync()
     {
         await RefreshCharactersAsync();
         await RefreshFittingsTabsAsync();
