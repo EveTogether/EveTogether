@@ -1315,6 +1315,8 @@ public class DogmaCalculatorTests
     private const int CpuManagementSkillId = 90012;
     private const int AlignBonusAttribute = 90020;
     private const int CpuBonusAttribute = 90021;
+    private const int PgManagementSkillId = 90013;
+    private const int PgBonusAttribute = 90023;
     private const int Agility = 70;
     private const int AlignTimeMillion = 90022;
     private const double AlignTimeConstant = 1.3862943611198906;   // -ln(0.25)
@@ -1331,7 +1333,7 @@ public class DogmaCalculatorTests
 
     private static (FakeDogmaDataAccessor Data, FitInput Input) SkillTargetsFixture(Dictionary<int, int> trained,
         double shipCpuOutput, double shipPowerOutput, double moduleCpu, double modulePower,
-        bool requireAlignSkill = false, double antimatterDamage = 10)
+        bool requireAlignSkill = false, double antimatterDamage = 10, bool withPgSkill = false)
     {
         ModifierInfo Self(int op, int modified, int modifying) =>
             new(ModifierFunc.ItemModifier, ModifierDomain.ItemId, op, modified, modifying, null, null);
@@ -1378,6 +1380,14 @@ public class DogmaCalculatorTests
         if (input.Modules[0].ChargeTypeId is { } antimatterId && Math.Abs(antimatterDamage - 10) > 1e-9)
         {
             data.Type(antimatterId, 85, 8, new SdeDogmaAttribute(114, antimatterDamage));
+        }
+
+        if (withPgSkill)
+        {
+            data.Type(PgManagementSkillId, 9000, 16, [.. UniformSpRate, new SdeDogmaAttribute(PgBonusAttribute, 10)])
+                .TypeEffect(PgManagementSkillId, 950).TypeEffect(PgManagementSkillId, 951)
+                .Effect(950, 0, new ModifierInfo(ModifierFunc.ItemModifier, ModifierDomain.ItemId, 0, PgBonusAttribute, DogmaAttributeIds.SkillLevel, null, null))
+                .Effect(951, 0, new ModifierInfo(ModifierFunc.ItemModifier, ModifierDomain.ShipId, 6, DogmaAttributeIds.PowerOutput, PgBonusAttribute, null, null));
         }
 
         var withCpuModule = input with { Modules = [.. input.Modules, new ModuleInput(CpuHeavyModule, ModuleState.Online)] };
@@ -1438,6 +1448,24 @@ public class DogmaCalculatorTests
         var short_ = await CalculateTargetsAsync(shortData, shortInput, trained, [SkillImpactStat.Dps]);
         Assert.False(short_.CanFly.Fits);
         Assert.Contains(short_.CanFly.Shortfalls, shortfall => shortfall.Resource == SkillImpactStat.FreePg && shortfall.Shortfall > 0);
+    }
+
+    // ET-341 mockup v5 (README round 5): can fly trains only what makes the fit fit. A PG skill that shrinks a shortfall
+    // it can never close (5 MW +50% at V against 50 MW) stays out of can fly, and the shortfall is reported instead.
+    // Counter-proof: scoring the unfixable PG shortfall again trains PgManagementSkillId to V inside can fly.
+    [Fact]
+    public async Task SkillTargets_CanFly_LeavesOutFittingSkillsForAShortfallNoLevelCanClose()
+    {
+        var trained = new Dictionary<int, int>();
+        var (data, input) = SkillTargetsFixture(trained, shipCpuOutput: 20, shipPowerOutput: 5, moduleCpu: 25, modulePower: 50,
+            withPgSkill: true);
+
+        var result = await CalculateTargetsAsync(data, input, trained, [SkillImpactStat.Dps]);
+
+        Assert.Contains(result.CanFly.Levels, level => level.SkillTypeId == CpuManagementSkillId);
+        Assert.DoesNotContain(result.CanFly.Levels, level => level.SkillTypeId == PgManagementSkillId);
+        Assert.Contains(result.CanFly.Shortfalls, shortfall => shortfall.Resource == SkillImpactStat.FreePg);
+        Assert.DoesNotContain(result.CanFly.Shortfalls, shortfall => shortfall.Resource == SkillImpactStat.FreeCpu);
     }
 
     // A3, with its counter-proof: can fly is byte-for-byte the same whether the pilot picked one stat or three —

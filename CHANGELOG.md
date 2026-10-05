@@ -17,6 +17,39 @@ entries under `[Unreleased]` below that were not there yet at the previous night
 
 ## [Unreleased]
 
+- **Changed: every SKILLS screen now looks like the approved mockup, and says what each number means.** The SKILLS
+  window, the doctrine readiness in COMP and SKILL IMPACT were rebuilt to match mockup v5, screen by screen:
+  - **OPTIMISE** lets you pick the training queue or one of your plans. For each, a CHA/INT/MEM/PER/WIL table shows
+    your attributes now against the remap, with the training time and end date before and after, what it saves (also
+    as a percentage) and one sentence on why. The implants show per slot with what a +4 or +5 set would do, and a
+    sorted bar per attribute pair shows where the time goes. A side pane explains how it is all computed; ET never
+    remaps for you.
+  - **TRAINING QUEUE** shows the skill in training with a progress bar and its end, the time the queue has left with
+    its end date, a timeline, and labelled columns.
+  - **CATALOGUE** has a filter and a search over all skills, every group at once with a bar for how much of it is
+    trained, the skills in two columns, and "QUEUE → IV" on a skill already queued.
+  - **The skill pane** shows the rank, the time per level at your attributes, your five attributes and implants, and
+    where the skill sits in the queue, with SHOW IN QUEUE.
+  - **PLANS** has labelled summary blocks, column heads with group, rank and attributes, the queue position of a level
+    already queued, dated milestones, a third order "by attribute", "Add from an item" with its requirements before
+    you add it, IN THIS PLAN with the levels each source brought in, and what was dropped because it was already
+    trained. PUT PLAN FIRST IN QUEUE… copies the plan in order for the in-game queue. WHAT IF numbers its five
+    scenarios and says what each assumes, and SHARE explains each option and previews the text.
+  - **COMP** shows per doctrine fit the skills it requires, its skill minimums and how many of your characters are
+    ready, fly below the minimum or not yet. The pane lists them in columns with how long each needs, what is missing
+    and buttons to add it to a plan, open the fit or see the what-if. EDIT on an entry opens the skill-minimum editor
+    in the same pane, with its effect on your characters and FROM A PLAN….
+  - **SKILL IMPACT** lets you switch the fit and picks stats from a grouped menu. Its three target cards show each
+    stat's value and share with a fit check, there is a warning when the fit cannot fit at any level, a chart of the
+    gain against training time, and a side list of the skills that move the chosen stats.
+  - The header shows when the skills were last refreshed. Every duration is written one way ("252d 13h", "1h 13m",
+    "53m"), and dates read "today 11:47" or "Sat 26 Sep 01:22".
+- **Fixed: what-if savings showed raw numbers like "242.03:29:44.4587905".**
+- **Fixed: TO FLY and TO MIN ran into each other in the COMP readiness list.**
+- **Changed: can fly no longer trains fitting skills for a shortfall no level can close.** When a fit cannot fit at
+  any skill level, can fly now fixes only what skills can fix and reports the rest, instead of training every
+  fitting skill to V.
+
 - **Fixed: the destroyed/dropped bar on a killmail now shows the split.** The bar under the value figures in a killmail's detail window was a single solid colour. It now shows how the ISK value divides: red for what was destroyed (the ship included) and green for what dropped, with the two parts adding up to the total. Items without a price are left out of the bar.
 - **Added: three skill-training targets in SKILL IMPACT… — can fly, optimal ±III and max.** With at least one
   OPTIMISE FOR stat picked, three cards show the levels, training time and skill points to fly the fit at all
