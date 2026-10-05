@@ -21,6 +21,11 @@ updates:
       # See the PackageReference comment in EveUtils.Client.csproj.
       - dependency-name: "Microsoft.OpenApi"
         update-types: ["version-update:semver-major"]
+      # Avalonia.Headless.XUnit 12.x is built against xunit.v3 3.x; see AvaloniaUI/Avalonia#22072.
+      - dependency-name: "xunit.v3"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "xunit.runner.visualstudio"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
