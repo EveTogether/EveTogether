@@ -128,7 +128,7 @@
                                Text="{Binding RuleText}"/>
                     <TextBlock Classes="mono" FontSize="22" FontWeight="SemiBold" Foreground="{DynamicResource AccentBrightBrush}"
                                Text="{Binding TimeText}"/>
-                    <TextBlock FontSize="11" Foreground="{StaticResource TextBrush}" TextWrapping="Wrap">
+                    <TextBlock FontSize="10.5" Foreground="{StaticResource TextBrush}" TextWrapping="Wrap">
                         <Run Text="{Binding DonePrefix}"/><Run Foreground="{StaticResource TextBrightBrush}" Text="{Binding DateText}"/><Run Text="{Binding DetailText}"/>
                     </TextBlock>
                     <TextBlock FontSize="11" Foreground="{StaticResource TextDimBrush}" Text="{Binding AfterCanFlyText}"
