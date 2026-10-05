@@ -37,19 +37,24 @@ public static class WidgetPresets
 
     public static bool IsBuiltIn(string id) => Find(id) is not null;
 
-    /// <summary>Width × height in pixels at 100 % scale — what OBS's browser source needs.</summary>
+    /// <summary>Width × height in pixels at 100 % scale — what OBS's browser source needs. Measured on the widget page
+    /// with every field on, so OBS never crops one; the page draws at this width.</summary>
     public static (int Width, int Height) BaseSize(WidgetPreset preset) => preset switch
     {
-        WidgetPreset.LiveDps => (320, 120),
-        WidgetPreset.DpsGraph => (480, 200),
-        WidgetPreset.CurrentRun => (360, 180),
-        WidgetPreset.RunTotals => (360, 160),
-        WidgetPreset.AbyssalTotals => (360, 200),
+        WidgetPreset.LiveDps => (320, 200),
+        WidgetPreset.DpsGraph => (480, 210),
+        WidgetPreset.CurrentRun => (360, 210),
+        WidgetPreset.RunTotals => (360, 230),
+        WidgetPreset.AbyssalTotals => (360, 230),
         WidgetPreset.LastKillmail => (360, 140),
-        WidgetPreset.KillAlert => (480, 140),
+        WidgetPreset.KillAlert => (480, 120),
         WidgetPreset.FleetDps => (360, 240),
         _ => throw new ArgumentOutOfRangeException(nameof(preset), preset, null)
     };
+
+    /// <summary>The widget's width × height at 100 % scale: its preset's size, or the bottom bar for the ticker theme.</summary>
+    public static (int Width, int Height) Size(WidgetConfig config) =>
+        config.Theme == WidgetTheme.Ticker ? (900, 40) : BaseSize(config.Preset);
 
     private static WidgetConfig _Preset(WidgetPreset preset, string name, string[] fields,
         Dictionary<string, string>? options = null) => new()

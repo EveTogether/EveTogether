@@ -12,7 +12,7 @@ public sealed record WidgetDto(WidgetConfig Config, bool IsBuiltIn, string Url, 
 {
     public static WidgetDto FromConfig(WidgetConfig config, string baseUrl, string? apiKey)
     {
-        var (width, height) = WidgetPresets.BaseSize(config.Preset);
+        var (width, height) = WidgetPresets.Size(config);
         var url = $"{baseUrl}/w/{config.Id}";
         if (!string.IsNullOrEmpty(apiKey)) url += $"?key={Uri.EscapeDataString(apiKey)}";
         return new WidgetDto(config, WidgetPresets.IsBuiltIn(config.Id), url,

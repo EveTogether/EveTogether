@@ -87,6 +87,22 @@ const metrics = await res.json();
   <div class="note">Every widget has its own page at <code>{{BASE_URL}}/w/&lt;id&gt;</code>: transparent, pinned top-left, made
      for an OBS browser source. OBS cannot send headers, so with an API key set the URL carries it as <code>?key=…</code> —
      keep that URL off stream.</div>
+  <p>The keys a widget's <code>fields</code> and <code>options</code> understand, per preset (the preset's own defaults
+     first). Every preset also takes <code>theme</code> (together, minimal, ticker), <code>accent</code>,
+     <code>background</code> + <code>panelOpacity</code>, <code>scale</code> and <code>characterIds</code> (empty = every
+     own character). <code>showLocation</code> adds the system (and the signature on a run), but only while the API
+     itself hands out your location. Add <code>?preview</code> to the URL to keep the kill alert up with your last kill.</p>
+  <table>
+    <tr><th>Preset</th><th>Fields</th><th>Options</th></tr>
+    <tr><td><code>live-dps</code></td><td>name, dpsOut, dpsIn, peak; reps, bounty, application</td><td>—</td></tr>
+    <tr><td><code>dps-graph</code></td><td>name, dpsOut, dpsIn, reps, numbers; neut, cap</td><td><code>span</code>: 60 | 120 | 300 (seconds)</td></tr>
+    <tr><td><code>current-run</code></td><td>type, site, tier, clock, loot, bounty, total, kills; crew</td><td>—</td></tr>
+    <tr><td><code>run-totals</code></td><td>runs, isk, iskPerHour, flownTime, bestDrop; average, byCharacter</td><td><code>period</code>: session | today | week | month · <code>kind</code>: all | abyssal | combat | mission | mining</td></tr>
+    <tr><td><code>abyssal-totals</code></td><td>runs, isk, iskPerHour, averageClear, byTier; shipsLost</td><td><code>period</code></td></tr>
+    <tr><td><code>last-killmail</code></td><td>badge, ship, isk, attackers, ago, run, victim; corp, finalBlow</td><td><code>show</code>: both | kills | losses</td></tr>
+    <tr><td><code>kill-alert</code></td><td>ship, victim, isk</td><td><code>holdSeconds</code>: 5 | 8 | 15 · <code>minIsk</code> (0 = every kill) · <code>show</code></td></tr>
+    <tr><td><code>fleet-dps</code></td><td>names, dpsOut, dpsIn, total</td><td>—</td></tr>
+  </table>
   <div class="note">Live per-member fleet <em>metrics</em> are a streamed signal, not a readable snapshot — they arrive over the WebSocket stream (M3), not as a REST endpoint.</div>
   <p>The full, interactive reference — request/response schemas and a live "try it" — is the
      <a href="/scalar">Scalar API reference</a>, generated from <a href="/openapi/v1.json">/openapi/v1.json</a>.</p>
