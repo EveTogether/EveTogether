@@ -8,6 +8,8 @@ using System.Threading.Tasks;
 using EveUtils.Client.LocalApi.Dtos;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Fleet.Events;
+using EveUtils.Shared.Modules.Killmails.Enums;
+using EveUtils.Shared.Modules.Killmails.Events;
 using EveUtils.Shared.Modules.Fleet.Metrics;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.DependencyInjection;
@@ -67,6 +69,7 @@ public sealed class LocalApiBroadcaster
                     : _BroadcastAsync("fleet.metrics", FleetMetricSampleDto.FromSample(e.Data), e.Data.UnixMs)));
             _subscriptions.Add(bus.Subscribe<FleetChangedEvent>((e, _) =>
                 _BroadcastAsync("fleet.changed", FleetChangedDto.FromEvent(e), _NowMs())));
+            _subscriptions.Add(bus.Subscribe<KillmailsChangedEvent>((e, _) => _OnKillmailsChanged(e.Data)));
         }
         _metricsLoop = Task.Run(() => _MetricsLoopAsync(_cts.Token));
     }
@@ -141,6 +144,25 @@ public sealed class LocalApiBroadcaster
                 _logger.LogDebug(ex, "Local API metrics tick failed.");
             }
         }
+    }
+
+    // Off the bus thread: resolving victim names can call ESI, and the bus awaits its subscribers inside the command.
+    private Task _OnKillmailsChanged(KillmailsChangedData change)
+    {
+        if (change.Kind != KillmailsChangeKind.Imported || change.AddedKillmailIds.Count == 0) return Task.CompletedTask;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                foreach (var killmail in await _queries.GetNewKillmailsAsync(change.CharacterId, change.AddedKillmailIds, _cts.Token))
+                    await _BroadcastAsync("killmail.added", killmail, _NowMs());
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger.LogDebug(ex, "Local API killmail.added push failed.");
+            }
+        });
+        return Task.CompletedTask;
     }
 
     private async Task _BroadcastAsync(string type, object data, long ts)

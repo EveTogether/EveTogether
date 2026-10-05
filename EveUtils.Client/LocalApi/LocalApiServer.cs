@@ -147,6 +147,10 @@ public sealed class LocalApiServer(
         app.MapGet("/api/v1/compositions/{id:long}", async (long id, string? server, LocalApiQueries queries, CancellationToken ct) =>
             await queries.GetCompositionAsync(id, server, ct) is { } composition ? Results.Ok(composition) : Results.NotFound());
         app.MapGet("/api/v1/types/{id:int}", (int id, LocalApiQueries queries) => queries.GetTypeInfo(id)); // name/icon resolver
+        app.MapGet("/api/v1/killmails/latest", (KillmailsLatestKind? kind, int? limit, LocalApiQueries queries, CancellationToken ct) =>
+                queries.GetLatestKillmailsAsync(kind ?? KillmailsLatestKind.All, limit ?? 1, ct))
+            .WithSummary("Your latest kills and losses")
+            .WithDescription("Newest first. kind = all | kills | losses (default all); limit 1-25 (default 1). Victim, corporation and final-blow names are ESI-resolved and cached. Solar system fields are null unless \"Include my location\" is on. Pushed live as killmail.added over /ws.");
 
         app.Map("/ws", async (HttpContext context) =>
         {
