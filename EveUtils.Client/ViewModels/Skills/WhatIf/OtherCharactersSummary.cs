@@ -11,6 +11,12 @@ public sealed record OtherCharactersSummary(int FlyItTodayCount, TimeSpan? Soone
 {
     public string FlyItTodayLine => $"fly it today: {FlyItTodayCount}";
 
+    /// <summary>Who of the rest gets there first, for the pane's "soonest of the rest" value.</summary>
+    public string? SoonestName { get; init; }
+
+    /// <summary>How many other characters were looked at — the "YOUR OTHER n CHARACTERS" heading.</summary>
+    public int OtherCount { get; init; }
+
     public string SoonestLine => SoonestDate is null
         ? "soonest of the rest: —"
         : $"soonest of the rest: {Home.SkillQueueStanding.Until(SoonestTimeLeft ?? TimeSpan.Zero)} · {SoonestDate:ddd d MMM}";

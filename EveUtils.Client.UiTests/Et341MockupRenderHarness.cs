@@ -92,7 +92,15 @@ public sealed class Et341MockupRenderHarness
         _Shoot(skillsWindow, "a-queue");
         skills.SelectedTabIndex = 2;
         await _WaitAsync(() => skills.Plans?.WhatIf is not null);
-        _Shoot(skillsWindow, "c-plan");
+        if (skills.Plans is { } plansVm)
+        {
+            plansVm.IsItemPaneOpen = true;
+            plansVm.ItemSearchText = "Large Micro Jump Drive";
+            await plansVm.AddItemCommand.ExecuteAsync(null);
+            await _WaitAsync(() => plansVm.InThisPlan.Count >= 3);
+            _Shoot(skillsWindow, "c-plan");
+            plansVm.IsItemPaneOpen = false;
+        }
         _Shoot(skillsWindow, "e-whatif");
         skills.SelectedTabIndex = SkillsWindowViewModel.OptimiseTabIndex;
         _Shoot(skillsWindow, "d-optimise");
@@ -267,7 +275,10 @@ public sealed class Et341MockupRenderHarness
         var built = SkillPlanRowFactory.FromFit(validator, seeds, levels, claymore.FitName);
         var plan = await dispatcher.Send(new CreateSkillPlanCommand(Raymond, "Claymore links"));
         await dispatcher.Send(new AddSkillPlanRowsCommand(Raymond, plan.Value, SkillPlanRowSource.Fit, claymore.ContentHash, built.Rows));
-        await dispatcher.Send(new AddSkillPlanRowsCommand(Raymond, plan.Value, SkillPlanRowSource.Skill, null,
-            [new SkillPlanRowDraft(id("Command Ships"), 2, "Ferox Fleet · Boosts"), new SkillPlanRowDraft(id("Command Ships"), 3, "Ferox Fleet · Boosts")]));
+        await dispatcher.Send(new AddSkillPlanRowsCommand(Raymond, plan.Value, SkillPlanRowSource.Fit, claymore.ContentHash, [],
+            claymore.FitName));
+        await dispatcher.Send(new AddSkillPlanRowsCommand(Raymond, plan.Value, SkillPlanRowSource.Doctrine, "1",
+            [new SkillPlanRowDraft(id("Command Ships"), 2, "Ferox Fleet · Boosts"), new SkillPlanRowDraft(id("Command Ships"), 3, "Ferox Fleet · Boosts")],
+            "Ferox Fleet · Boosts", [new SkillPlanRowDraft(id("Leadership"), 5, "Ferox Fleet · Boosts")]));
     }
 }

@@ -35,6 +35,28 @@ public sealed partial class SkillPlanShareDialogViewModel : ObservableObject
 
     public string PlanName { get; }
 
+    public string Title => $"SHARE PLAN · {PlanName}";
+
+    /// <summary>The text COPY puts on the clipboard, as the dialog previews it (mockup v5).</summary>
+    public string PreviewText => SkillPlanTextCodec.ToText(_rows.Select(row => (row.SkillTypeId, row.Level)).ToList(), _sde);
+
+    /// <summary>Which of the two working options the primary button runs: copy as text (default) or the doctrine.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsDoctrineChosen), nameof(PrimaryText))]
+    private bool _isCopyChosen = true;
+
+    public bool IsDoctrineChosen => !IsCopyChosen;
+    public string PrimaryText => IsCopyChosen ? "COPY" : "OPEN IN THE DOCTRINE EDITOR";
+
+    [RelayCommand]
+    private void ChooseCopy() => IsCopyChosen = true;
+
+    [RelayCommand]
+    private void ChooseDoctrine() => IsCopyChosen = false;
+
+    [RelayCommand]
+    private Task Run() => IsCopyChosen ? CopyAsText() : PutInDoctrine();
+
     /// <summary>D8: EVE Workbench sharing does not exist yet. Always false — there is no toggle that flips this.</summary>
     public bool IsEwbEnabled => false;
     public string EwbHint => "later";

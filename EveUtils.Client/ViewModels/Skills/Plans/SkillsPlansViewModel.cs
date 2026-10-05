@@ -57,6 +57,33 @@ public sealed partial class SkillsPlansViewModel : ObservableObject
     [ObservableProperty] private string _flyableAfterText = "";
     [ObservableProperty] private string? _statusMessage;
 
+    // Mockup v5 screen c: the summary blocks, the plan count, what was dropped, and the right pane's two states.
+    [ObservableProperty] private string _totalDoneText = "";
+    [ObservableProperty] private string _levelsQueuedText = "";
+    [ObservableProperty] private string _flyableAfterSubText = "";
+    [ObservableProperty] private string _plansCountText = "";
+    [ObservableProperty] private string _droppedText = "";
+    [ObservableProperty] private bool _isItemPaneOpen;
+    [ObservableProperty] private string _itemSearchText = "";
+    [ObservableProperty] private string _itemHint = "";
+    [ObservableProperty] private bool _canAddItem;
+    private int? _itemTypeId;
+
+    public ObservableCollection<PlanSourceRow> InThisPlan { get; } = [];
+    public ObservableCollection<PlanItemRequirementRow> ItemRequirements { get; } = [];
+    public bool IsFlyFirst => OrderMode == SkillPlanOrderMode.FlyFirst;
+    public bool IsShortestFirst => OrderMode == SkillPlanOrderMode.ShortestFirst;
+    public bool IsByAttribute => OrderMode == SkillPlanOrderMode.ByAttribute;
+    public bool HasDropped => DroppedText.Length > 0;
+    public string CharacterName => _characterName;
+
+    public string OrderHint => OrderMode switch
+    {
+        SkillPlanOrderMode.ShortestFirst => "quick levels first, prerequisites kept",
+        SkillPlanOrderMode.ByAttribute => "one attribute pair after the other, for a remap",
+        _ => "milestones as early as possible",
+    };
+
     /// <summary>The WHAT IF panel for <see cref="SelectedPlan"/> (ET-358) — null without a plan, a validator or
     /// dogma access (design-time preview, or a character whose SDE dependencies never loaded).</summary>
     [ObservableProperty] private SkillsWhatIfViewModel? _whatIf;
@@ -90,12 +117,100 @@ public sealed partial class SkillsPlansViewModel : ObservableObject
         }
 
         SelectedPlan = Plans.FirstOrDefault(p => p.Id == SelectedPlan?.Id) ?? Plans.FirstOrDefault();
+        PlansCountText = $"{Plans.Count} plan{(Plans.Count == 1 ? "" : "s")} for {_characterName}";
         await _LoadRowsAsync(cancellationToken);
     }
 
     partial void OnSelectedPlanChanged(SkillPlan? value) => _ = _LoadRowsObservedAsync();
 
-    partial void OnOrderModeChanged(SkillPlanOrderMode value) => _ = _LoadRowsObservedAsync();
+    partial void OnOrderModeChanged(SkillPlanOrderMode value)
+    {
+        OnPropertyChanged(nameof(IsFlyFirst));
+        OnPropertyChanged(nameof(IsShortestFirst));
+        OnPropertyChanged(nameof(IsByAttribute));
+        OnPropertyChanged(nameof(OrderHint));
+        _ = _LoadRowsObservedAsync();
+    }
+
+    partial void OnDroppedTextChanged(string value) => OnPropertyChanged(nameof(HasDropped));
+
+    // "Add from an item" (mockup v5): the item's requirements show as the name is typed, before anything is added.
+    partial void OnItemSearchTextChanged(string value)
+    {
+        ItemRequirements.Clear();
+        _itemTypeId = null;
+        CanAddItem = false;
+        string name = value.Trim();
+        if (name.Length == 0 || _validator is null)
+        {
+            ItemHint = "";
+            return;
+        }
+
+        if (!_snapshot.Sde.TryGetTypeId(name, out int typeId))
+        {
+            ItemHint = name.Length > 2 ? $"No published item named \"{name}\"." : "";
+            return;
+        }
+
+        _itemTypeId = typeId;
+        var requirements = _validator.SkillRequirements([typeId], extra: null, new Dictionary<int, int>());
+        int missing = 0;
+        foreach (var requirement in requirements)
+        {
+            int trained = _snapshot.LevelOf(requirement.SkillTypeId);
+            string skill = _snapshot.Sde.TryGetTypeName(requirement.SkillTypeId, out var skillName) ? skillName : $"Type {requirement.SkillTypeId}";
+            bool ok = trained >= requirement.RequiredLevel;
+            missing += ok ? 0 : requirement.RequiredLevel - trained;
+            ItemRequirements.Add(new PlanItemRequirementRow($"{skill} {RomanLevel.Text(requirement.RequiredLevel)}",
+                ok ? $"✓ trained ({RomanLevel.Text(trained)})" : trained == 0 ? "not injected" : $"trained {RomanLevel.Text(trained)}", ok));
+        }
+
+        CanAddItem = SelectedPlan is not null;
+        ItemHint = requirements.Count == 0 ? "This item needs no skills."
+            : missing == 0 ? $"Nothing to add: {_characterName} can already use it."
+            : $"{missing} level{(missing == 1 ? "" : "s")} to add, prerequisites included.";
+    }
+
+    [RelayCommand]
+    private void ToggleItemPane() => IsItemPaneOpen = !IsItemPaneOpen;
+
+    [RelayCommand]
+    private async Task AddItem()
+    {
+        if (_validator is null || _itemTypeId is not { } typeId)
+        {
+            return;
+        }
+
+        string itemName = ItemSearchText.Trim();
+        var result = SkillPlanRowFactory.FromItem(_validator, typeId, _snapshot.Levels, itemName);
+        await _AddRowsAsync(SkillPlanRowSource.Item, typeId.ToString(CultureInfo.InvariantCulture), result);
+        if (result.Rows.Count == 0)
+        {
+            StatusMessage = null; // the pane already says "Nothing to add"; IN THIS PLAN now lists the item with 0 levels
+        }
+
+        OnItemSearchTextChanged(ItemSearchText);
+    }
+
+    // PUT PLAN FIRST IN QUEUE…: ET cannot write the queue (no ESI endpoint), so it copies the plan in order as text
+    // for the in-game queue, and says so.
+    [RelayCommand]
+    private async Task PutPlanFirst()
+    {
+        await CopyAsText();
+        StatusMessage = "Copied the plan in this order as text. Paste it into the in-game skill queue, in front of what is there.";
+    }
+
+    [RelayCommand]
+    private async Task Share()
+    {
+        if (WhatIf is { } whatIf)
+        {
+            await whatIf.ShareCommand.ExecuteAsync(null);
+        }
+    }
 
     // The two property hooks above cannot await, so a failed read has to land in StatusMessage, never go unobserved.
     private async Task _LoadRowsObservedAsync()
@@ -191,30 +306,6 @@ public sealed partial class SkillsPlansViewModel : ObservableObject
         await _AddRowsAsync(SkillPlanRowSource.Skill, null, result);
     }
 
-    [RelayCommand]
-    private async Task AddFromItem()
-    {
-        if (_validator is null)
-        {
-            return;
-        }
-
-        var text = await _dialogs.PromptTextAsync("Add from an item", "Any published type from the SDE");
-        if (string.IsNullOrWhiteSpace(text))
-        {
-            return;
-        }
-
-        string itemName = text.Trim();
-        if (!_snapshot.Sde.TryGetTypeId(itemName, out int typeId))
-        {
-            StatusMessage = $"No published item named \"{itemName}\".";
-            return;
-        }
-
-        var result = SkillPlanRowFactory.FromItem(_validator, typeId, _snapshot.Levels, itemName);
-        await _AddRowsAsync(SkillPlanRowSource.Item, typeId.ToString(CultureInfo.InvariantCulture), result);
-    }
 
     // ET-357 D1: + FROM FIT opens a fit picker, then the fit's own SKILL IMPACT window — can fly / optimal ±III / max,
     // with a curve — instead of adding the raw prerequisite closure straight to the plan. ADD TO PLAN there (and the
@@ -271,7 +362,7 @@ public sealed partial class SkillsPlansViewModel : ObservableObject
             return;
         }
 
-        await _AddRowsAsync(source, sourceRef, new SkillPlanBuildResult(rows, null));
+        await _AddRowsAsync(source, sourceRef, new SkillPlanBuildResult(rows, null, sourceLabel));
     }
 
     [RelayCommand]
@@ -402,15 +493,92 @@ public sealed partial class SkillsPlansViewModel : ObservableObject
             return;
         }
 
-        if (built.Message is not null)
+        // Recorded even when nothing is added, so IN THIS PLAN and "Dropped on purpose" can say so.
+        var added = await _dispatcher.Send(new AddSkillPlanRowsCommand(_characterId, plan.Id, source, sourceRef, built.Rows,
+            built.Label.Length > 0 ? built.Label : null, built.Dropped), CancellationToken.None);
+        StatusMessage = built.Message
+            ?? (added.IsSuccess && added.Value > 0 ? null : "Nothing new to add — those levels are already in the plan.");
+        await _LoadRowsAsync(CancellationToken.None);
+    }
+
+    // IN THIS PLAN and "Dropped on purpose": every recorded source with the levels it brought in; rows added before
+    // sources were recorded still show, from their own FROM fields.
+    private async Task _LoadSourcesAsync(int planId, IReadOnlyList<SkillPlanRow> stored, CancellationToken cancellationToken)
+    {
+        var sources = (await _reader.GetSourcesAsync(planId, cancellationToken)).ToList();
+        foreach (var legacy in stored.Select(r => (r.Source, r.SourceRef, Label: r.SourceLabel ?? "")).Distinct())
         {
-            StatusMessage = built.Message;
-            return;
+            if (!sources.Any(s => _Matches(s.Source, s.SourceRef, s.Label, legacy.Source, legacy.SourceRef, legacy.Label)))
+            {
+                sources.Add(new SkillPlanSource { Source = legacy.Source, SourceRef = legacy.SourceRef, Label = legacy.Label });
+            }
         }
 
-        var added = await _dispatcher.Send(new AddSkillPlanRowsCommand(_characterId, plan.Id, source, sourceRef, built.Rows), CancellationToken.None);
-        StatusMessage = added.IsSuccess && added.Value > 0 ? null : "Nothing new to add — those levels are already in the plan.";
-        await _LoadRowsAsync(CancellationToken.None);
+        InThisPlan.Clear();
+        var dropped = new List<string>();
+        foreach (var source in sources)
+        {
+            int levels = stored.Count(r => _Matches(source.Source, source.SourceRef, source.Label, r.Source, r.SourceRef, r.SourceLabel ?? ""));
+            string label = source.Label.Length > 0 ? source.Label : "imported text";
+            InThisPlan.Add(new PlanSourceRow(_Kind(source.Source), label, $"{levels} level{(levels == 1 ? "" : "s")}"));
+
+            var named = source.DroppedLevels.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                .Select(pair => pair.Split(':'))
+                .Where(parts => parts.Length == 2 && int.TryParse(parts[0], out _) && int.TryParse(parts[1], out _))
+                .Select(parts => (_snapshot.Sde.TryGetTypeName(int.Parse(parts[0], CultureInfo.InvariantCulture), out var n) ? n : parts[0])
+                    + " " + RomanLevel.Text(int.Parse(parts[1], CultureInfo.InvariantCulture)))
+                .ToList();
+            if (levels == 0)
+            {
+                dropped.Add($"everything of the {label} (already trained)");
+            }
+            else if (named.Count > 0)
+            {
+                string why = source.Source == SkillPlanRowSource.Doctrine ? "doctrine minimum, already trained" : "already trained";
+                dropped.Add($"{_JoinAnd(named)} ({why})");
+            }
+        }
+
+        DroppedText = dropped.Count == 0 ? "" : $"Dropped on purpose: {_JoinAnd(dropped)}.";
+    }
+
+    private static bool _Matches(SkillPlanRowSource a, string? aRef, string aLabel, SkillPlanRowSource b, string? bRef, string bLabel) =>
+        a == b && (aRef is not null ? aRef == bRef : bRef is null && aLabel == bLabel);
+
+    private static string _Kind(SkillPlanRowSource source) => source switch
+    {
+        SkillPlanRowSource.Fit => "FIT",
+        SkillPlanRowSource.Item => "ITEM",
+        SkillPlanRowSource.Text => "TEXT",
+        SkillPlanRowSource.Doctrine => "MIN",
+        _ => "SKILL",
+    };
+
+    private static string _JoinAnd(IReadOnlyList<string> parts) =>
+        parts.Count <= 1 ? string.Concat(parts) : $"{string.Join(", ", parts.Take(parts.Count - 1))} and {parts[^1]}";
+
+    private static string _Short(int attributeId) => attributeId switch
+    {
+        DogmaAttributeIds.Charisma => "CHA",
+        DogmaAttributeIds.Intelligence => "INT",
+        DogmaAttributeIds.Memory => "MEM",
+        DogmaAttributeIds.Perception => "PER",
+        DogmaAttributeIds.Willpower => "WIL",
+        _ => "?",
+    };
+
+    private Dictionary<int, string> _GroupNames()
+    {
+        var names = new Dictionary<int, string>();
+        foreach (var group in _snapshot.Sde.GetGroupsByCategory(16))
+        {
+            foreach (var skill in _snapshot.Sde.GetSkillsInGroup(group.GroupId))
+            {
+                names[skill.TypeId] = group.Name;
+            }
+        }
+
+        return names;
     }
 
     private async Task _LoadRowsAsync(CancellationToken cancellationToken)
@@ -421,6 +589,11 @@ public sealed partial class SkillsPlansViewModel : ObservableObject
             TotalTimeText = "";
             LevelsText = "";
             FlyableAfterText = "";
+            TotalDoneText = "";
+            LevelsQueuedText = "";
+            FlyableAfterSubText = "";
+            DroppedText = "";
+            InThisPlan.Clear();
             WhatIf = null;
             return;
         }
@@ -470,13 +643,20 @@ public sealed partial class SkillsPlansViewModel : ObservableObject
         var estimator = new SkillTrainingEstimator(_dogma);
         var cumulative = TimeSpan.Zero;
         string? flyableAfterText = null;
+        var visibleQueue = _snapshot.Queue.Where(e => e.FinishDate is null || e.FinishDate > _snapshot.Now)
+            .OrderBy(e => e.QueuePosition).ToList();
+        var groupNames = _GroupNames();
+        int queuedCount = 0;
         for (int i = 0; i < ordered.Count; i++)
         {
             var row = ordered[i];
             var time = SkillPlanTiming.RowTime(estimator, row, _attributes);
             cumulative += time;
-            bool queuedNow = _snapshot.Queue.Any(entry => entry.SkillTypeId == row.SkillTypeId && entry.FinishedLevel == row.Level);
+            int queuePosition = visibleQueue.FindIndex(entry => entry.SkillTypeId == row.SkillTypeId && entry.FinishedLevel == row.Level) + 1;
+            bool queuedNow = queuePosition > 0;
+            queuedCount += queuedNow ? 1 : 0;
             string skillName = _snapshot.Sde.TryGetTypeName(row.SkillTypeId, out var name) ? name : $"Type {row.SkillTypeId}";
+            var (rank, primary, secondary) = estimator.AttributesOf(row.SkillTypeId);
             string fromText = row.Source switch
             {
                 SkillPlanRowSource.Fit => "FIT",
@@ -486,28 +666,41 @@ public sealed partial class SkillsPlansViewModel : ObservableObject
                 _ => "SKILL"
             };
             Rows.Add(SkillPlanDisplayRow.ForRow(row, skillName, RomanLevel.Text(row.Level),
-                SkillQueueStanding.Until(time), SkillQueueStanding.Until(cumulative), fromText, queuedNow));
+                SkillQueueStanding.Until(time), SkillQueueStanding.Until(cumulative), fromText, queuedNow) with
+            {
+                Number = i + 1,
+                CurrentLevel = _snapshot.LevelOf(row.SkillTypeId),
+                GroupName = groupNames.GetValueOrDefault(row.SkillTypeId, ""),
+                RankAttributesText = $"×{rank} · {_Short(primary)}/{_Short(secondary)}",
+                QueueChipText = queuedNow ? $"QUEUE #{queuePosition}" : "",
+            });
 
+            string when = $"after {SkillQueueStanding.Until(cumulative)} · {SkillsQueueViewModel.When(_snapshot.Now + cumulative, _snapshot.Now)}";
             if (milestoneAfter.TryGetValue(i, out var label))
             {
-                flyableAfterText = SkillQueueStanding.Until(cumulative);
-                Rows.Add(SkillPlanDisplayRow.ForMilestone($"✈ {label} flyable after {flyableAfterText}"));
+                flyableAfterText ??= SkillQueueStanding.Until(cumulative);
+                Rows.Add(SkillPlanDisplayRow.ForMilestone($"✈  {label} flyable", when));
             }
 
             if (doctrineFlyableMilestoneAfter.TryGetValue(i, out var doctrineFitLabel))
             {
-                Rows.Add(SkillPlanDisplayRow.ForMilestone($"✈ {doctrineFitLabel} flyable after {SkillQueueStanding.Until(cumulative)}"));
+                flyableAfterText ??= SkillQueueStanding.Until(cumulative);
+                Rows.Add(SkillPlanDisplayRow.ForMilestone($"✈  {doctrineFitLabel} flyable", when));
             }
 
             if (doctrineMinimumMilestoneAfter.TryGetValue(i, out var doctrineMinLabel))
             {
-                Rows.Add(SkillPlanDisplayRow.ForMilestone($"◆ {doctrineMinLabel} doctrine minimum met after {SkillQueueStanding.Until(cumulative)}"));
+                Rows.Add(SkillPlanDisplayRow.ForMilestone($"◆  {doctrineMinLabel} minimum met", when));
             }
         }
 
-        TotalTimeText = ordered.Count == 0 ? "Nothing to train" : $"{SkillQueueStanding.Until(cumulative)} · done {_snapshot.Now.Add(cumulative):ddd d MMM HH:mm}";
-        LevelsText = $"{ordered.Count} level{(ordered.Count == 1 ? "" : "s")}";
+        TotalTimeText = ordered.Count == 0 ? "—" : SkillQueueStanding.Until(cumulative);
+        TotalDoneText = ordered.Count == 0 ? "nothing to train" : $"done {SkillsQueueViewModel.When(_snapshot.Now + cumulative, _snapshot.Now)}";
+        LevelsText = ordered.Count.ToString(CultureInfo.InvariantCulture);
+        LevelsQueuedText = $"{queuedCount} already in the queue";
         FlyableAfterText = flyableAfterText ?? "—";
+        FlyableAfterSubText = flyableAfterText is null ? "no fit in this plan" : "the fit's own requirements";
+        await _LoadSourcesAsync(plan.Id, stored, cancellationToken);
 
         WhatIf = ordered.Count == 0 ? null : new SkillsWhatIfViewModel(_services, _dialogs, _snapshot, _characterId, plan.Name, ordered, _dogma);
         if (WhatIf is not null && _validator is not null)

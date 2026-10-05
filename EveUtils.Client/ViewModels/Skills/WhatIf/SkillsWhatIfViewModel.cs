@@ -35,6 +35,16 @@ public sealed partial class SkillsWhatIfViewModel : ObservableObject
 
     public IReadOnlyList<WhatIfScenario> Scenarios { get; }
 
+    /// <summary>The scenarios as the pane shows them (mockup v5 screen e): numbered, with what each one assumes and
+    /// its date; "plan first + remap" is marked, the step that needs no ISK.</summary>
+    public IReadOnlyList<WhatIfScenarioRow> ScenarioRows { get; }
+
+    public string Title => $"What if · {_planName}";
+
+    [ObservableProperty] private string _otherCharactersHeading = "YOUR OTHER CHARACTERS";
+    [ObservableProperty] private string _flyItTodayCountText = "—";
+    [ObservableProperty] private string _soonestText = "—";
+
     [ObservableProperty] private string _otherCharactersFlyTodayLine = "";
     [ObservableProperty] private string _otherCharactersSoonestLine = "";
 
@@ -62,6 +72,19 @@ public sealed partial class SkillsWhatIfViewModel : ObservableObject
         var implantBonus = effective - baseAttributes;
 
         Scenarios = WhatIfCalculator.Compute(orderedRows, snapshot.Queue, dogma, effective, implantBonus, now);
+        string[] details =
+        [
+            "queued levels on their ESI dates, the rest after the queue",
+            "the plan before the queue",
+            "",
+            "five Standard implants in slots 1–5",
+            "five Improved implants",
+        ];
+        ScenarioRows = Scenarios.Select((scenario, index) => new WhatIfScenarioRow(index + 1, scenario.Name,
+            index == 2 && scenario.RemapSplit is { } split ? _RaisedAttributes(split) : details[Math.Min(index, details.Length - 1)],
+            SkillsQueueViewModel.When(scenario.Date, now),
+            scenario.TimeSaved > TimeSpan.Zero ? $"saves {Home.SkillQueueStanding.Until(scenario.TimeSaved)}" : "",
+            index == 2)).ToList();
     }
 
     /// <summary>Fills in AC3's "your other characters" summary — a separate step from the constructor's pure
@@ -95,6 +118,23 @@ public sealed partial class SkillsWhatIfViewModel : ObservableObject
         var summary = OtherCharactersCalculator.Compute(others, _rows, validator, new SkillTrainingEstimator(dogma), _snapshot.Now);
         OtherCharactersFlyTodayLine = summary.FlyItTodayLine;
         OtherCharactersSoonestLine = summary.SoonestLine;
+        OtherCharactersHeading = summary.OtherCount == 1 ? "YOUR OTHER CHARACTER" : $"YOUR OTHER {summary.OtherCount} CHARACTERS";
+        FlyItTodayCountText = summary.FlyItTodayCount.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        SoonestText = summary.SoonestDate is { } date
+            ? $"{summary.SoonestName} · {SkillsQueueViewModel.When(date, _snapshot.Now)}"
+            : "—";
+    }
+
+    // "Charisma 27 · Willpower 21": the attributes the remap puts above the 17 minimum.
+    private static string _RaisedAttributes(CharacterAttributeSet split)
+    {
+        var named = new (string Name, double Value)[]
+        {
+            ("Charisma", split.Charisma), ("Intelligence", split.Intelligence), ("Memory", split.Memory),
+            ("Perception", split.Perception), ("Willpower", split.Willpower),
+        };
+        return string.Join(" · ", named.Where(a => a.Value > AttributeRemapOptimizer.MinAttribute)
+            .Select(a => $"{a.Name} {a.Value:0}"));
     }
 
     [RelayCommand]
