@@ -25,7 +25,7 @@ env:
   APP_NAME: EveTogether
   ICON_PNG: EveUtils.Client/Assets/eve-together-badge.png
   ICON_ICO: EveUtils.Client/Assets/eve-together.ico
-  VPK_VERSION: '1.2.158'
+  VPK_VERSION: '1.2.161'
 
 jobs:
   # Nothing new on main since the last nightly means there is nothing to build. A manual run always builds:

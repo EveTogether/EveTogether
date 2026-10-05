@@ -33,12 +33,9 @@ using EveUtils.Shared.DependencyInjection;
 namespace EveUtils.Client.Gamelog;
 
 /// <summary>
-/// Client-side bridge between combat events and the rest of the system. Owns one DPS tracker <b>per
-/// character</b> (keyed by the gamelog <c>Listener:</c> name, which every parsed line carries), persists each
-/// hit (RecordCombatCommand, owner-stamped, through the gated dispatcher) and publishes a live
-/// <see cref="CombatLoggedEvent"/> per character with <see cref="EventTarget.Both"/> so the local UI and —
-/// once paired — the server both see the same stream. Both the real gamelog watcher and the synthetic
-/// feeder drive <c>AddHitAsync</c>.
+/// Client-side bridge between combat events and the rest of the system: one DPS tracker <b>per character</b>, each
+/// hit persisted and delivered to <see cref="EventTarget.Local"/>. A separate sampler streams DPS to
+/// <see cref="EventTarget.Remote"/> only for an active server-fleet participant, so solo play never reaches the server.
 ///
 /// As the owner of the live DPS trackers it is also the fleet DPS <see cref="IFleetMetricSource"/>: the
 /// <see cref="Fleet.FleetMetricPublisher"/> samples it ~1 Hz, addressing the <b>participating character by id</b>.
@@ -441,17 +438,7 @@ public sealed class GamelogClientService : IFleetMetricSource, ISingletonService
         {
             try
             {
-                foreach (var name in _trackers.Keys)
-                {
-                    var sample = Tracker(name).Sample(DateTime.UtcNow);
-                    if (sample.Dealt <= 0 && sample.Received <= 0)
-                        continue;
-
-                    Metrics(name).ObservePeakDps(sample.Dealt);
-                    var id = _idByName.TryGetValue(name, out var cid) ? cid : (int?)null;
-                    var dto = new DpsSampleDto(id, name, (long)sample.Dealt, (long)sample.Received, DateTimeOffset.UtcNow);
-                    await _eventBus.PublishAsync(new CombatLoggedEvent(dto, id), EventTarget.Remote, cancellationToken);
-                }
+                await PublishRemoteTickAsync(cancellationToken);
             }
             catch (OperationCanceledException)
             {
@@ -471,6 +458,37 @@ public sealed class GamelogClientService : IFleetMetricSource, ISingletonService
             catch (OperationCanceledException) { break; }
         }
     }
+
+    /// <summary>One tick of the remote sampler, separate so a test can drive it like
+    /// <see cref="Fleet.FleetMetricPublisher.PublishTickAsync"/>. Publishes only for a character with a known id that
+    /// is an active server-fleet participant, the same gate <see cref="Fleet.FleetMetricPublisher"/> applies.</summary>
+    internal async Task PublishRemoteTickAsync(CancellationToken cancellationToken)
+    {
+        var participation = _services.GetService<IFleetParticipation>()?.Current ?? [];
+        foreach (var name in _trackers.Keys)
+        {
+            var sample = Tracker(name).Sample(DateTime.UtcNow);
+            if (sample.Dealt <= 0 && sample.Received <= 0)
+            {
+                continue;
+            }
+
+            Metrics(name).ObservePeakDps(sample.Dealt);
+            var id = _idByName.TryGetValue(name, out var cid) ? cid : (int?)null;
+            if (id is not { } characterId || !IsActiveServerParticipant(participation, characterId))
+            {
+                continue;
+            }
+
+            var dto = new DpsSampleDto(id, name, (long)sample.Dealt, (long)sample.Received, DateTimeOffset.UtcNow);
+            await _eventBus.PublishAsync(new CombatLoggedEvent(dto, id), EventTarget.Remote, cancellationToken);
+        }
+    }
+
+    // Same rule FleetMetricPublisher applies: a client-only fleet's samples never leave this machine, and a
+    // character absent from participation altogether (no fleet at all) is the same case — nothing to route to.
+    private static bool IsActiveServerParticipant(IReadOnlyList<FleetParticipant> participation, int characterId) =>
+        participation.Any(p => p.CharacterId == characterId && !p.ClientOnly);
 
     /// <summary>Samples + publishes the local default character — kept for timer-driven decay callers.</summary>
     public Task PublishSampleAsync(CancellationToken cancellationToken = default) =>
