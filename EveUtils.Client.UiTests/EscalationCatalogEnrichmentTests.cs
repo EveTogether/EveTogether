@@ -46,22 +46,36 @@ public sealed class EscalationCatalogEnrichmentTests
         Assert.DoesNotContain("Escalation", dialog.CatalogEnrichmentText);
     }
 
-    /// <summary>AC-3: a name the catalogue does not carry is not an error — no enrichment text, and the escalation
-    /// still registers on the typed name alone, with no dungeonId to show for it.</summary>
-    [Fact]
-    public void NameNotInTheCatalogue_RegistersPlainly_WithNoEnrichmentAndNoError()
+    /// <summary>ET-451: Register carries an escalation site, never free text — a name the catalogue does not carry,
+    /// or one naming only a site of another archetype, cannot be registered. Replaces ET-126 AC-3 (a typed name
+    /// registered plainly), on Jithran's decision of 2026-10-05.</summary>
+    [Theory]
+    [InlineData("A Site Nobody Has Scanned Yet")]
+    [InlineData("Angel Hideaway")]
+    public void NameOfNoEscalationSite_CannotBeRegistered(string typed)
     {
-        var dialog = new EscalationDialogViewModel(new FakeSdeAccessor())
-        {
-            SiteQuery = "A Site Nobody Has Scanned Yet", RemainingTimeText = "1:00:00"
-        };
+        var sde = new FakeSdeAccessor()
+            .AddSite(new SdeSite(3000, "Angel Hideaway", null, "Combat Site", null, "Angel Cartel", null, 2, false, []));
+        var dialog = new EscalationDialogViewModel(sde) { SiteQuery = typed, RemainingTimeText = "1:00:00" };
 
-        Assert.Null(dialog.CatalogEnrichmentText);
+        Assert.Empty(dialog.SiteResults);
+        Assert.False(dialog.RegisterCommand.CanExecute(null));
+    }
 
-        dialog.RegisterCommand.Execute(null);
+    /// <summary>ET-451: before anything is typed the picker already lists every escalation site and nothing else —
+    /// what this store registered before from the same source site first, then the source site's own faction, then
+    /// the rest by name. The SDE carries no source→escalation mapping, so these two are all there is to rank by.</summary>
+    [Fact]
+    public void EmptyQuery_ListsOnlyEscalationSites_HistoryThenFactionFirst()
+    {
+        var refuge = new SdeSite(1000, "Sansha Refuge", null, "Combat Sites", 500019, "Sansha's Nation", null, 2, false, []);
+        var sde = new FakeSdeAccessor()
+            .AddSite(refuge)
+            .AddSite(new SdeSite(2001, "Angel Naval Shipyard", null, "Escalation", 500011, "Angel Cartel", null, 4, false, []))
+            .AddSite(new SdeSite(2002, "Sansha War Supply Complex", null, "Escalation", 500019, "Sansha's Nation", null, 3, false, []))
+            .AddSite(new SdeSite(2003, "Blood Raider Shipyard", null, "Escalation", 500012, "Blood Raider Covenant", null, 4, false, []));
+        var dialog = new EscalationDialogViewModel(sde, sourceSites: [refuge], previouslyRegistered: [2003]);
 
-        Assert.NotNull(dialog.Result);
-        Assert.Equal("A Site Nobody Has Scanned Yet", dialog.Result!.SiteName);
-        Assert.Null(dialog.Result.DungeonId);
+        Assert.Equal([2003, 2002, 2001], dialog.SiteResults.Select(option => option.Site.DungeonId));
     }
 }

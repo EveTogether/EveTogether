@@ -1310,6 +1310,9 @@ namespace EveUtils.Migrations.Client.Sqlite.Migrations
                     b.Property<int?>("BonusWindowSeconds")
                         .HasColumnType("INTEGER");
 
+                    b.Property<Guid?>("EntryId")
+                        .HasColumnType("TEXT");
+
                     b.Property<int?>("ItemTypeId")
                         .HasColumnType("INTEGER");
 

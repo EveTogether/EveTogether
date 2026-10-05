@@ -65,5 +65,20 @@ public enum RunParameterKey
     /// <summary>How many filaments CONSUMABLES charges the run for (ET-249) — a proposal from the fit's hull class,
     /// left for the pilot to change, and never a reward. Absent when nothing was ever confirmed (no fit known, no
     /// hull-class rule for it), so a run with no known count is silent rather than costed at zero.</summary>
-    AbyssalFilamentCount
+    AbyssalFilamentCount,
+
+    /// <summary>On an escalation run: the run whose escalation it flies (ET-451), as a run id. Its
+    /// <see cref="Entities.RunParameter.EntryId"/> names which of that run's escalations, null for one registered
+    /// before escalations carried an entry id.</summary>
+    EscalationSourceRunId,
+
+    /// <summary>On the source run: how one of its escalations ended (ET-451), an <see cref="EscalationOutcome"/>
+    /// stored as its number, sharing the escalation's <see cref="Entities.RunParameter.EntryId"/>. Absent while the
+    /// escalation is open.</summary>
+    EscalationOutcome,
+
+    /// <summary>On the source run: the run that flew one of its escalations (ET-451), beside a completed
+    /// <see cref="EscalationOutcome"/> and sharing its <see cref="Entities.RunParameter.EntryId"/>. Absent on an
+    /// escalation ticked off by hand.</summary>
+    EscalationCompletedByRunId
 }

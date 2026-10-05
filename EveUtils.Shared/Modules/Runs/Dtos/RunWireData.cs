@@ -159,6 +159,7 @@ public sealed class RunWireData
             Amount = parameter.Amount,
             ItemTypeId = parameter.ItemTypeId,
             BonusWindowSeconds = parameter.BonusWindowSeconds,
+            EntryId = parameter.EntryId,
             ObservedAtUtc = parameter.ObservedAtUtc
         }).ToList(),
         MiningEntries = run.MiningEntries.Select(entry => new RunMiningEntryInput
@@ -266,6 +267,7 @@ public sealed class RunWireData
                 Amount = parameter.Amount,
                 ItemTypeId = parameter.ItemTypeId,
                 BonusWindowSeconds = parameter.BonusWindowSeconds,
+                EntryId = parameter.EntryId,
                 ObservedAtUtc = parameter.ObservedAtUtc
             });
         foreach (RunMiningEntryInput entry in MiningEntries)

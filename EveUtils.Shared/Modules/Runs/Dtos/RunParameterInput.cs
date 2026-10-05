@@ -9,5 +9,6 @@ public sealed class RunParameterInput
     public decimal? Amount { get; init; }
     public int? ItemTypeId { get; init; }
     public int? BonusWindowSeconds { get; init; }
+    public Guid? EntryId { get; init; }
     public required DateTime ObservedAtUtc { get; init; }
 }

@@ -16,6 +16,7 @@ using EveUtils.Shared.Modules.Fleet.Events;
 using EveUtils.Shared.Modules.Runs.Commands;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Enums;
+using EveUtils.Shared.Modules.Runs.Queries;
 using EveUtils.Shared.Modules.Sde;
 using EveUtils.Shared.Modules.Sde.Dtos;
 using EveUtils.Shared.Modules.Settings.Commands;
@@ -48,7 +49,7 @@ public sealed partial class ActivityWindowSectionViewModel : RunWindowSection
 
     // What RegisterEscalationAsync collected, carried to SAVE rather than written the moment it is entered: unlike
     // the mission rewards, an escalation is entered mid-run, long before there is a stop time to save against
-    // (ET-125). Cleared and rebuilt on every registration — one escalation per run, the last one entered wins.
+    // (ET-125). A site can lead to more than one escalation, so each registration adds its own entry (ET-451).
     private readonly List<RunParameterInput> _escalationParameters = [];
 
     public ActivityWindowSectionViewModel(IRunWindowContext context)
@@ -222,14 +223,17 @@ public sealed partial class ActivityWindowSectionViewModel : RunWindowSection
     /// <summary>Only a type that escalates (ET-124 measured this; an abyssal pocket and a mission do not).</summary>
     public bool IsEscalationRegistrationShown => Context.RunType.Escalates;
 
-    /// <summary>What was last registered this session, or null before the pilot has registered one — shown beside
+    // What each registration showed, in the order registered — one line per escalation.
+    private readonly List<string> _registeredEscalations = [];
+
+    /// <summary>Every escalation registered this session, or null before the pilot has registered one — shown beside
     /// the button so pressing it again does not read as the only way to tell whether it worked.</summary>
     [ObservableProperty] private string? _escalationRegisteredText;
 
     /// <summary>
-    /// Opens the register-escalation dialog (ET-125) and, on Register, holds the result for SAVE to write. Nothing
-    /// here ever supplies a duration on the pilot's behalf — see <see cref="EscalationDialogViewModel"/>'s own
-    /// docstring for why (AC-3).
+    /// Opens the register-escalation dialog (ET-125) and, on Register, holds the result for SAVE to write — as its own
+    /// entry beside any registered before (ET-451). Nothing here ever supplies a duration on the pilot's behalf — see
+    /// <see cref="EscalationDialogViewModel"/>'s own docstring for why (AC-3).
     /// </summary>
     [RelayCommand]
     private async Task RegisterEscalationAsync()
@@ -238,41 +242,41 @@ public sealed partial class ActivityWindowSectionViewModel : RunWindowSection
             || Context.Services.GetService<ISdeAccessor>() is not { } sde)
             return;
 
-        var dialog = new EscalationDialogViewModel(sde);
+        var dialog = new EscalationDialogViewModel(sde, Context.MatchedSites, await _EscalationHistoryAsync());
         if (!await dialogs.ShowEscalationDialogAsync(dialog) || dialog.Result is not { } result)
             return;
 
         DateTime nowUtc = DateTime.UtcNow;
-        _escalationParameters.Clear();
-        _escalationParameters.Add(new RunParameterInput
-        {
-            ParameterKey = RunParameterKey.Escalation, TypedValue = result.SiteName, ObservedAtUtc = nowUtc
-        });
+        Guid entryId = Guid.CreateVersion7();
+        RunParameterInput Row(RunParameterKey key, string value) =>
+            new() { ParameterKey = key, TypedValue = value, EntryId = entryId, ObservedAtUtc = nowUtc };
+
+        _escalationParameters.Add(Row(RunParameterKey.Escalation, result.SiteName));
         if (result.DungeonId is { } dungeonId)
-            _escalationParameters.Add(new RunParameterInput
-            {
-                ParameterKey = RunParameterKey.EscalationDungeonId,
-                TypedValue = dungeonId.ToString(CultureInfo.InvariantCulture),
-                ObservedAtUtc = nowUtc
-            });
-        _escalationParameters.Add(new RunParameterInput
-        {
-            ParameterKey = RunParameterKey.EscalationSystem, TypedValue = result.DestinationSystem, ObservedAtUtc = nowUtc
-        });
+            _escalationParameters.Add(Row(RunParameterKey.EscalationDungeonId,
+                dungeonId.ToString(CultureInfo.InvariantCulture)));
+        _escalationParameters.Add(Row(RunParameterKey.EscalationSystem, result.DestinationSystem));
         if (result.DestinationSolarSystemId is { } destinationSolarSystemId)
-            _escalationParameters.Add(new RunParameterInput
-            {
-                ParameterKey = RunParameterKey.EscalationSolarSystemId,
-                TypedValue = destinationSolarSystemId.ToString(CultureInfo.InvariantCulture),
-                ObservedAtUtc = nowUtc
-            });
-        _escalationParameters.Add(new RunParameterInput
-        {
-            ParameterKey = RunParameterKey.EscalationExpiresAtUtc,
-            TypedValue = result.ExpiresAtUtc.ToString("o", CultureInfo.InvariantCulture),
-            ObservedAtUtc = nowUtc
-        });
-        EscalationRegisteredText = $"{OpsecText.Mark(result.SiteName)} · {OpsecText.Mark(result.DestinationSystem)}";
+            _escalationParameters.Add(Row(RunParameterKey.EscalationSolarSystemId,
+                destinationSolarSystemId.ToString(CultureInfo.InvariantCulture)));
+        _escalationParameters.Add(Row(RunParameterKey.EscalationExpiresAtUtc,
+            result.ExpiresAtUtc.ToString("o", CultureInfo.InvariantCulture)));
+
+        _registeredEscalations.Add($"{OpsecText.Mark(result.SiteName)} · {OpsecText.Mark(result.DestinationSystem)}");
+        EscalationRegisteredText = string.Join(Environment.NewLine, _registeredEscalations);
+    }
+
+    /// <summary>The escalations registered before from this run's own catalogue site, for the dialog to rank first —
+    /// none while the site matched nothing or matched more than one site.</summary>
+    private async Task<IReadOnlyList<int>> _EscalationHistoryAsync()
+    {
+        if (SdeSiteCanonicalization.Canonicalize(Context.MatchedSites) is not [{ DungeonId: var sourceDungeonId }])
+            return [];
+
+        using var scope = Context.Services.CreateScope();
+        Result<IReadOnlyList<int>> history = await scope.ServiceProvider.GetRequiredService<CqrsDispatcher>()
+            .Query(new GetEscalationHistoryQuery(sourceDungeonId));
+        return history.Value ?? [];
     }
 
     // ── Where ──────────────────────────────────────────────────────────────────────────────────────

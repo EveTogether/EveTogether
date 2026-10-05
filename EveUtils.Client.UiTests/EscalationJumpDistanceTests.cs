@@ -6,6 +6,7 @@ using EveUtils.Client.Esi;
 using EveUtils.Client.Opsec;
 using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Client.ViewModels.Runs;
+using EveUtils.Client.ViewModels.Runs.Sections;
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Esi.Http;
@@ -30,7 +31,8 @@ public sealed class EscalationJumpDistanceTests
     [AvaloniaFact]
     public async Task JumpsNameTheirAnchor_AndStayVisibleAsAnEmptyStateWhenTheyCannotBeRead()
     {
-        var sde = new FakeSdeAccessor().AddSolarSystem(new SdeSolarSystem(30003867, "Ervekam", 0.69));
+        var sde = new FakeSdeAccessor().AddSolarSystem(new SdeSolarSystem(30003867, "Ervekam", 0.69))
+            .AddSite(new SdeSite(2406, "Command Relay Outpost", null, "Escalation", null, "Sansha's Nation", null, 3, false, []));
         using var harness = await ActivityWindowHarness.CreateAsync(
             configure: services => services.AddSingleton<ISdeAccessor>(sde));
         ActivityWindowViewModel model = await harness.OpenAsync(ActivityKind.Site);
@@ -39,7 +41,7 @@ public sealed class EscalationJumpDistanceTests
 
         harness.Dialogs.OnShowEscalationDialog = dialog =>
         {
-            dialog.SiteQuery = "Sansha Refuge";
+            dialog.SiteQuery = "Command Relay Outpost";
             dialog.DestinationSystem = "Ervekam";
             dialog.RemainingTimeText = "1:00:00";
             dialog.RegisterCommand.Execute(null);
@@ -57,16 +59,18 @@ public sealed class EscalationJumpDistanceTests
             esi: new FakeRouteEsiClient([30000001, 1, 2, 3, 4, 5, 30003867]),
             locations: new FakeLocationClient(30000001));
         await reachable.LoadAsync();
-        Assert.Equal($"{OpsecText.Mark("6")} jumps from here", reachable.Escalation().EscalationJumpsText);
-        Assert.Null(reachable.Escalation().EscalationJumpsEmptyText);
+        EscalationEntryViewModel counted = Assert.Single(reachable.Escalation().Entries);
+        Assert.Equal($"{OpsecText.Mark("6")} jumps from here", counted.EscalationJumpsText);
+        Assert.Null(counted.EscalationJumpsEmptyText);
 
         // ESI unreachable: the line must say so — not fall silent (which reads as "no destination") and not show a
         // bare/zero count (which reads as a measurement that came out at nothing).
         var unreachable = new ActivityDetailViewModel(dispatcher, row.ActivitySummaryId,
             esi: new ThrowingEsiClient(), locations: new FakeLocationClient(30000001));
         await unreachable.LoadAsync();
-        Assert.Null(unreachable.Escalation().EscalationJumpsText);
-        Assert.NotNull(unreachable.Escalation().EscalationJumpsEmptyText);
+        EscalationEntryViewModel uncounted = Assert.Single(unreachable.Escalation().Entries);
+        Assert.Null(uncounted.EscalationJumpsText);
+        Assert.NotNull(uncounted.EscalationJumpsEmptyText);
     }
 
     private sealed class FakeRouteEsiClient(int[] route) : IEsiClient

@@ -26,7 +26,9 @@ public sealed class ManualRunStartUncataloguedSiteTests
 {
     private const string RuinedSite = "Detected Ruined Rogue Drone Science Outpost";
     private static readonly DateTime StartedAtUtc = new(2026, 9, 25, 12, 0, 0, DateTimeKind.Utc);
-    private static readonly SdeSite CatalogueSite = new(4321, "Sansha's Nest", null, null, null, null, null, null, false, []);
+    // An escalation on purpose (ET-451): an escalation nobody registered is still started the ordinary way, so the
+    // manual start keeps offering every archetype rather than the escalation dialog's narrowed list.
+    private static readonly SdeSite CatalogueSite = new(4321, "Sansha's Nest", null, "Escalation", null, null, null, null, false, []);
 
     private static TestClientInstance CreateInstance(params SdeSite[] sites) =>
         TestClientInstance.Create(services =>

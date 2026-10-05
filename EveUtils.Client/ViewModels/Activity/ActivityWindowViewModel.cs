@@ -1077,6 +1077,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
                 Amount = parameter.Amount,
                 ItemTypeId = parameter.ItemTypeId,
                 BonusWindowSeconds = parameter.BonusWindowSeconds,
+                EntryId = parameter.EntryId,
                 ObservedAtUtc = parameter.ObservedAtUtc
             })];
         }

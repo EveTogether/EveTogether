@@ -592,6 +592,41 @@
             </StackPanel>
         </Border>
 
+        <!-- ══ Open escalations ══ (ET-451) every escalation still to be flown, across runs and characters, soonest
+             deadline first — START is the one click from a registered escalation to its run. Gone once none is open;
+             local only, like UNFINISHED. -->
+        <Border DockPanel.Dock="Top" Padding="14,10" BorderThickness="0,0,0,1"
+                BorderBrush="{DynamicResource BorderBrush}"
+                IsVisible="{Binding ShowOpenEscalationsBand}">
+            <StackPanel Spacing="5">
+                <TextBlock Classes="label" Text="OPEN ESCALATIONS"/>
+                <ScrollViewer MaxHeight="180" HorizontalScrollBarVisibility="Disabled">
+                    <ItemsControl x:Name="OpenEscalationsList" ItemsSource="{Binding OpenEscalations}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="vr:OpenEscalationRowViewModel">
+                                <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10" Margin="0,3">
+                                    <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                        <TextBlock FontSize="11.5" TextTrimming="CharacterEllipsis"
+                                                   Foreground="{StaticResource TextBrightBrush}">
+                                            <Run Text="{Binding EscalationSiteText}"/>
+                                            <Run Text=" · "/>
+                                            <Run Text="{Binding EscalationSystemText}"/>
+                                        </TextBlock>
+                                        <TextBlock Classes="rowsub" Text="{Binding SourceSiteText}"/>
+                                    </StackPanel>
+                                    <TextBlock Grid.Column="1" Classes="rowfigure" VerticalAlignment="Center"
+                                               Text="{Binding ExpiresText}"/>
+                                    <Button Grid.Column="2" Classes="rowaction" MinWidth="62"
+                                            Content="START" Command="{Binding StartCommand}"
+                                            ToolTip.Tip="Start the escalation run for this pilot, filled in and linked to the run it came from"/>
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </StackPanel>
+        </Border>
+
         <!-- ══ Range line and band (ET-292) ══ the month in view, or the day or week picked in the strip, with its
              totals — ET-266's weight on them kept: mono 12.5 semibold, the ISK 15 bold. Under it the band: the activity
              strip beside the two filter blocks RO-4 fills while they fit beside it, across the band with the blocks

@@ -255,6 +255,7 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsLocalTabSelected))]
     [NotifyPropertyChangedFor(nameof(ShowUnfinishedBand))]
+    [NotifyPropertyChangedFor(nameof(ShowOpenEscalationsBand))]
     [NotifyPropertyChangedFor(nameof(LocalInViewCount))]
     [NotifyPropertyChangedFor(nameof(ShowPublishView))]
     [NotifyPropertyChangedFor(nameof(PublishViewButtonText))]
@@ -281,6 +282,17 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
     private bool _hasUnfinishedRuns;
 
     public bool ShowUnfinishedBand => HasUnfinishedRuns && IsLocalTabSelected;
+
+    /// <summary>Escalations still to be flown across this machine's characters, soonest deadline first (ET-451) — the
+    /// one place they are seen together, each a click away from its run. Local only, like UNFINISHED: an escalation
+    /// is flown by a pilot on this machine.</summary>
+    public ObservableCollection<OpenEscalationRowViewModel> OpenEscalations { get; } = [];
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowOpenEscalationsBand))]
+    private bool _hasOpenEscalations;
+
+    public bool ShowOpenEscalationsBand => HasOpenEscalations && IsLocalTabSelected;
 
 
     /// <summary>"Runs for 'Woensdag Homefronts'" when opened from a fleet's RUNS button (ET-185), null otherwise —
@@ -740,6 +752,7 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
 
         Running.Show(read.Running);
         _ShowUnfinished(read.Unfinished);
+        await _ShowOpenEscalationsAsync();
         foreach ((string address, string header) in read.NewServers)
         {
             if (Tabs.Any(tab => tab.ServerAddress == address))
@@ -985,6 +998,25 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
         }
 
         return (servers.Count > 0, added, headers);
+    }
+
+    private async Task _ShowOpenEscalationsAsync()
+    {
+        Result<IReadOnlyList<OpenEscalationDto>> open =
+            await _dispatcher.Query(new GetOpenEscalationsQuery(_namesById.Keys.ToHashSet()));
+        DateTime nowUtc = _time.GetUtcNow().UtcDateTime;
+        OpenEscalations.ReconcileTo([.. (open.Value ?? []).Select(row => new OpenEscalationRowViewModel(row,
+            CharacterNameResolver.Resolve(row.CharacterNameSnapshot, row.CharacterId, _NameOf), nowUtc,
+            _StartEscalationRunAsync))]);
+        HasOpenEscalations = OpenEscalations.Count > 0;
+    }
+
+    /// <summary>START on an open escalation (ET-451): its run, filled in and linked to where it came from. The band
+    /// refreshes itself through RunsChangedEvent once the run is started.</summary>
+    private async Task _StartEscalationRunAsync(OpenEscalationRowViewModel row)
+    {
+        StatusMessage = await new EscalationRunStarter(_dispatcher, _dialogs, _services).StartAsync(
+            row.Escalation.SourceRunId, row.Escalation.CharacterId, row.CharacterText, row.Escalation.Escalation);
     }
 
     private void _ShowUnfinished(IReadOnlyList<UnfinishedRunDto> unfinished)

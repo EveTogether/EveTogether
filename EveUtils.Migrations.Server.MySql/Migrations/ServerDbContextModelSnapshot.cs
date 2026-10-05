@@ -1131,6 +1131,9 @@ namespace EveUtils.Migrations.Server.MySql.Migrations
                     b.Property<int?>("BonusWindowSeconds")
                         .HasColumnType("int");
 
+                    b.Property<Guid?>("EntryId")
+                        .HasColumnType("char(36)");
+
                     b.Property<int?>("ItemTypeId")
                         .HasColumnType("int");
 

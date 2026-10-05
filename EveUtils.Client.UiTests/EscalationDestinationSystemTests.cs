@@ -13,6 +13,9 @@ namespace EveUtils.Client.UiTests;
 /// </summary>
 public sealed class EscalationDestinationSystemTests
 {
+    private static readonly SdeSite RelayOutpost =
+        new(2406, "Command Relay Outpost", null, "Escalation", null, "Sansha's Nation", null, 3, false, []);
+
     /// <summary>AC-1: the ticket's whole saving — a destination typed as the Agency showed it resolves to the
     /// catalogue id and its security straight off the SDE, with no ESI layer in reach to fall back on. Must be red
     /// against an implementation that resolves this through <c>POST /universe/ids</c> or
@@ -20,10 +23,11 @@ public sealed class EscalationDestinationSystemTests
     [Fact]
     public void TypedDestination_ResolvesIdAndSecurity_FromTheSdeAlone()
     {
-        var sde = new FakeSdeAccessor().AddSolarSystem(new SdeSolarSystem(30003867, "Ervekam", 0.69));
+        var sde = new FakeSdeAccessor().AddSolarSystem(new SdeSolarSystem(30003867, "Ervekam", 0.69))
+            .AddSite(RelayOutpost);
         var dialog = new EscalationDialogViewModel(sde)
         {
-            SiteQuery = "Sansha Refuge", DestinationSystem = "Ervekam", RemainingTimeText = "1:00:00"
+            SiteQuery = "Command Relay Outpost", DestinationSystem = "Ervekam", RemainingTimeText = "1:00:00"
         };
 
         Assert.Equal(30003867, dialog.DestinationResolvedSystem?.SolarSystemId);
@@ -41,9 +45,9 @@ public sealed class EscalationDestinationSystemTests
     [Fact]
     public void UnknownDestination_RegistersPlainly_WithNoEnrichmentAndNoError()
     {
-        var dialog = new EscalationDialogViewModel(new FakeSdeAccessor())
+        var dialog = new EscalationDialogViewModel(new FakeSdeAccessor().AddSite(RelayOutpost))
         {
-            SiteQuery = "Sansha Refuge", DestinationSystem = "Nowhereton", RemainingTimeText = "1:00:00"
+            SiteQuery = "Command Relay Outpost", DestinationSystem = "Nowhereton", RemainingTimeText = "1:00:00"
         };
 
         Assert.Null(dialog.DestinationResolvedSystem);

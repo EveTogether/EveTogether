@@ -79,6 +79,20 @@ public sealed class OpsecSourceMarkingTests
         Assert.Equal($"{day} · {OpsecText.Mark("Alkabsi")} {OpsecText.Mark("0.7")} · {OpsecText.Mark("NKP-364")}", pane.MetaText);
     }
 
+    [Fact]
+    public void OpenEscalationRow_MarksSiteSystemAndSourceSite()
+    {
+        var escalation = new RunEscalationDto(Guid.NewGuid(), "Command Relay Outpost", 2406, "Ervekam", 30003867,
+            StartedAtUtc.AddHours(20), StartedAtUtc, null, null);
+        var row = new OpenEscalationRowViewModel(
+            new OpenEscalationDto(Guid.NewGuid(), Pilot, "Ra Vinter", "Sansha Refuge", StartedAtUtc, escalation, null),
+            "Ra Vinter", StartedAtUtc.AddHours(1), _ => Task.CompletedTask);
+
+        Assert.Equal((OpsecText.Mark("Command Relay Outpost"), OpsecText.Mark("Ervekam")),
+            (row.EscalationSiteText, row.EscalationSystemText));
+        Assert.StartsWith($"from {OpsecText.Mark("Sansha Refuge")} · ", row.SourceSiteText);
+    }
+
     [AvaloniaFact]
     public void RunningGroup_KindText_MarksTheSystem()
     {
@@ -210,7 +224,9 @@ public sealed class OpsecSourceMarkingTests
     [AvaloniaFact]
     public async Task EscalationRegistered_MarksSiteAndDestination()
     {
-        using var harness = await ActivityWindowHarness.CreateAsync();
+        var sde = new FakeSdeAccessor().AddSite(new SdeSite(2406, "Command Relay Outpost", null, "Escalation", null, "Sansha's Nation", null, 3, false, []));
+        using var harness = await ActivityWindowHarness.CreateAsync(
+            configure: services => services.AddSingleton<ISdeAccessor>(sde));
         ActivityWindowViewModel model = await harness.OpenAsync(ActivityKind.Site);
         model.SignatureName = "Sansha Refuge";
         await model.StartRunCommand.ExecuteAsync(null);

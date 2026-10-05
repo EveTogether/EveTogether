@@ -21,7 +21,7 @@ public sealed record RunEnemyObservationDto(
 
 public sealed record RunParameterDto(
     Guid RunId, RunParameterKey ParameterKey, string TypedValue, decimal? Amount, int? ItemTypeId,
-    int? BonusWindowSeconds, DateTime ObservedAtUtc);
+    int? BonusWindowSeconds, DateTime ObservedAtUtc, Guid? EntryId = null);
 
 /// <summary>One run within the activity, with its own loot captures — never another run's, and never the loot of
 /// whichever run happens to be running right now. <see cref="TimesCorrectedAtUtc"/> travels along because the
