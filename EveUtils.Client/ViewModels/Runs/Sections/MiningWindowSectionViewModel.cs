@@ -56,6 +56,9 @@ public sealed class MiningWindowSectionViewModel : RunWindowSection
     // Ore prices barely move mid-run and there are only ever a handful of distinct ores on one run, so every priced
     // type id is kept for the life of the section rather than re-asked once it has an answer.
     private readonly Dictionary<int, double> _prices = new();
+
+    // Each fleet mate's priced shared ore, as the last group build worked it out — what FLEET shows beside them.
+    private Dictionary<long, decimal> _mateIsk = [];
     private readonly HashSet<int> _priceAsked = [];
 
     // An ore's type never changes, so the SDE is asked once per ore name (ET-298): every tick prices every ore line
@@ -165,6 +168,15 @@ public sealed class MiningWindowSectionViewModel : RunWindowSection
 
         return rows.Any(row => row.Value is not null) ? (rows.Sum(row => row.Value.GetValueOrDefault()), true) : (null, true);
     }
+
+    /// <summary>What a fleet mate's shared ore is worth (ET-440), from the same groups MINING draws; null for a mate
+    /// with no priced ore.</summary>
+    public decimal? MateIskOf(int characterId) => _mateIsk.TryGetValue(characterId, out decimal isk) ? isk : null;
+
+    private IEnumerable<string> _SharedOres() =>
+        Context.GroupCode is { } groupCode && Context.Services.GetService<FleetRunShares>() is { } shares
+            ? shares.Of(groupCode).SelectMany(entry => entry.Share.Mining).Select(line => line.OreType)
+            : [];
 
     private decimal? _Total() => Rows.Any(row => row.Value is not null) ? Rows.Sum(row => row.Value.GetValueOrDefault()) : null;
 
@@ -292,7 +304,10 @@ public sealed class MiningWindowSectionViewModel : RunWindowSection
         if (_pricesAskedAtUtc is { } askedAt && (_nowUtc - askedAt >= PriceRetryInterval || _nowUtc < askedAt))
             _priceAsked.Clear();
 
+        // A fleet mate's shared ore too (ET-440): only this window's own ores were asked for, so a mate mining an ore
+        // nobody here mined stood at "—" for the whole run.
         int[] typeIds = [.. Context.Participants.SelectMany(p => p.MiningEntries).Select(e => e.OreType)
+            .Concat(_SharedOres())
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Select(ore => _OreTypeOf(sde, ore))
             .OfType<OreType>()
@@ -420,6 +435,8 @@ public sealed class MiningWindowSectionViewModel : RunWindowSection
 
         List<(MiningCharacterGroupViewModel Group, bool IsNotShared, decimal Isk)> built =
             [.. builds.Select(build => _ToGroup(build, sde, fleetOreUnits, isFleetScenario, nowUtc))];
+        _mateIsk = built.Where(entry => !entry.Group.IsLocal && entry.Isk > 0)
+            .ToDictionary(entry => entry.Group.CharacterId, entry => entry.Isk);
 
         List<MiningCharacterGroupViewModel> shown = [];
         foreach (MiningCharacterGroupViewModel fresh in built

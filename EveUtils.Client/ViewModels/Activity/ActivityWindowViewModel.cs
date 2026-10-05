@@ -788,6 +788,9 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
     public ObservableCollection<RunParticipantViewModel> Participants { get; } = [];
 
+    public decimal? FleetMateOreIsk(int characterId) =>
+        (_sections.GetValueOrDefault(RunSectionId.Mining) as MiningWindowSectionViewModel)?.MateIskOf(characterId);
+
     /// <summary>Who this window has actually heard from, one row per member that sent a sample. Never a roster:
     /// nothing here can see a member who is not sharing, which is what the FLEET section says under it.</summary>
     public ObservableCollection<ActivityFleetMemberViewModel> FleetMembers { get; } = [];
@@ -799,7 +802,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         ? _IsInPocket
             ? $"based on {AnchoredFleetMemberCount} of {FleetMemberCount} members sharing their location"
             : $"based on {FleetMemberCount} members sharing their location"
-        : "no other member has reported in yet";
+        : "no other member shares their location yet";
 
     /// <summary>
     /// Whether there is a fleet to show at all. Nothing here may claim "solo": the window is never told the pilot

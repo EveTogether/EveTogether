@@ -38,6 +38,22 @@
                             </StackPanel>
                             <TextBlock Classes="hint" Margin="0" IsVisible="{Binding SubText, Converter={x:Static ObjectConverters.IsNotNull}}"
                                        Text="{Binding SubText}"/>
+                            <!-- A fleet mate's standing (ET-440): connected, in this run, what they share, last heard. -->
+                            <ItemsControl ItemsSource="{Binding StatusChips}" Margin="0,2,0,0">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <WrapPanel Orientation="Horizontal"/>
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vr:FleetStatusChip">
+                                        <Border Classes="chip" Classes.dim="{Binding IsPlain}" Classes.ok="{Binding IsOk}" Classes.warn="{Binding IsWarn}"
+                                                Margin="0,0,4,2">
+                                            <TextBlock Text="{Binding Text}"/>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
                         </StackPanel>
                         <ItemsControl Grid.Column="2" ItemsSource="{Binding Figures}" VerticalAlignment="Center">
                             <ItemsControl.ItemsPanel>

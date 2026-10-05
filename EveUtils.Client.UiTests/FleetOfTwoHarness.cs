@@ -59,14 +59,15 @@ internal sealed class FleetOfTwo : IDisposable
     /// <c>MatchedSites</c> afterwards does not do this: <c>_runSiteTypeId</c> is already latched from this call's own
     /// announcement (0 by default) by the time a caller could reach it, so a later match on either window is a
     /// no-op for TYPE.</param>
-    public static async Task<FleetOfTwo> CreateAsync(int siteTypeId = 0)
+    public static async Task<FleetOfTwo> CreateAsync(int siteTypeId = 0, Action<IServiceCollection>? configure = null,
+        ActivityKind kind = ActivityKind.Site)
     {
-        Pilot jithran = await Pilot.CreateAsync(JithranId, "Jithran");
-        Pilot raymond = await Pilot.CreateAsync(RaymondId, "Raymond");
+        Pilot jithran = await Pilot.CreateAsync(JithranId, "Jithran", configure, kind);
+        Pilot raymond = await Pilot.CreateAsync(RaymondId, "Raymond", configure, kind);
         jithran.Wire.Destinations.Add(raymond.Instance.Services);
         raymond.Wire.Destinations.Add(jithran.Instance.Services);
 
-        RunGroupCodeStart start = new(FleetId, ActivityKind.Site, GroupCode, DateTime.UtcNow.AddMinutes(-2),
+        RunGroupCodeStart start = new(FleetId, kind, GroupCode, DateTime.UtcNow.AddMinutes(-2),
             IsFleetCommander: true, SiteTypeId: siteTypeId);
         await jithran.JoinAsync(start);
         await raymond.JoinAsync(start);
@@ -159,7 +160,8 @@ internal sealed class Pilot : IDisposable
 
     public int MetricsBeforeLastTick { get; private set; }
 
-    public static async Task<Pilot> CreateAsync(int characterId, string name)
+    public static async Task<Pilot> CreateAsync(int characterId, string name, Action<IServiceCollection>? configure = null,
+        ActivityKind kind = ActivityKind.Site)
     {
         ServerWire wire = new();
         TestClientInstance instance = TestClientInstance.Create(services =>
@@ -171,6 +173,7 @@ internal sealed class Pilot : IDisposable
             services.AddSingleton<ISdeAccessor>(new FakeSdeAccessor().Add(FleetOfTwo.Tritanium, "Tritanium", 18, 4));
             services.AddSingleton<IExternalCharacterLookup>(
                 new FakeExternalLookup { [FleetOfTwo.JithranId] = "Jithran", [FleetOfTwo.RaymondId] = "Raymond" });
+            configure?.Invoke(services);
         });
         await instance.Services.GetRequiredService<ICharacterRegistry>().AddOrUpdateAsync(new Character(name, characterId));
         await instance.Services.GetRequiredService<IMarketPriceRepository>().ReplaceAllAsync(
@@ -181,7 +184,7 @@ internal sealed class Pilot : IDisposable
             .Set([new FleetParticipant(characterId, FleetOfTwo.FleetId, ClientOnly: false, FleetOfTwo.JithranId, "fleet.example")]);
         _ = instance.Services.GetRequiredService<FleetRunShares>();
 
-        ActivityWindowViewModel window = new(ActivityKind.Site, instance.Services);
+        ActivityWindowViewModel window = new(kind, instance.Services);
         await window.LoadAsync();
         return new Pilot(characterId, instance, wire, window);
     }
