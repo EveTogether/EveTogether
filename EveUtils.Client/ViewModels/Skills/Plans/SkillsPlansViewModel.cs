@@ -421,7 +421,7 @@ public sealed partial class SkillsPlansViewModel : ObservableObject
         var ordered = SkillPlanOrdering.Order(stored, OrderMode, _dogma, timePerSkill);
 
         var fitRefs = stored.Where(row => row.Source == SkillPlanRowSource.Fit && row.SourceRef is not null)
-            .Select(row => (row.SourceRef!, row.SourceLabel ?? "fit")).Distinct().ToList();
+            .Select(row => (row.SourceRef ?? string.Empty, row.SourceLabel ?? "fit")).Distinct().ToList();
         var milestoneAfter = new Dictionary<int, string>();
         foreach (var (sourceRef, label) in fitRefs)
         {

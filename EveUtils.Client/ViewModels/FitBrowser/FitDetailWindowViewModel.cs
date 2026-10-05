@@ -511,7 +511,7 @@ public sealed class FitDetailWindowViewModel : ViewModelBase
     private Task _ShowSkillImpactAsync()
     {
         if (!CanShowSkillImpact || _skillImpactScanner is null || _trainedSkills is null || _onShowSkillImpact is null
-            || SelectedSkillMode?.CharacterId is not { } characterId)
+            || SelectedSkillMode is not { CharacterId: { } characterId } skillMode)
         {
             return Task.CompletedTask;
         }
@@ -527,7 +527,7 @@ public sealed class FitDetailWindowViewModel : ViewModelBase
             ? new SkillTargetsCalculator(_calculator, _validator, _trainingEstimator, _effectiveAttributes)
             : null;
         var viewModel = new SkillImpactViewModel(_skillImpactScanner, _validator, _trainingEstimator, _effectiveAttributes,
-            _names, $"skill-impact:{ModuleId}:{characterId}", SelectedSkillMode!.Label, ShipName, _BuildBaseFitInput(),
+            _names, $"skill-impact:{ModuleId}:{characterId}", skillMode.Label, ShipName, _BuildBaseFitInput(),
             _trainedSkills, targetsCalculator);
         _onShowSkillImpact(viewModel);
         return viewModel.LoadAsync();

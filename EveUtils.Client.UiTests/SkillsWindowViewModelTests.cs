@@ -151,7 +151,8 @@ public sealed class SkillsWindowViewModelTests
         await _SeedCharactersAsync(instance, (1, "Pilot"));
         var viewModel = new SkillsWindowViewModel(instance.Services, startingCharacterId: 1);
         await viewModel.LoadAsync(Ct);
-        Assert.Equal("0/150", viewModel.Queue!.SkillCountText);
+        var queue = viewModel.Queue ?? throw new InvalidOperationException("The queue loads with the character.");
+        Assert.Equal("0/150", queue.SkillCountText);
 
         // The background refresh's own call (SkillRefreshService.RefreshAllAsync), verbatim — the window stays open.
         // The queued skill's type id (3300) needs no SDE fixture here: SkillCountText counts future queue entries
@@ -168,8 +169,8 @@ public sealed class SkillsWindowViewModelTests
         var result = await importer.ImportAsync(1, Ct);
         Assert.True(result.IsSuccess);
 
-        await ActivityWindowHarness.WaitUntil(() => viewModel.Queue!.SkillCountText != "0/150");
+        await ActivityWindowHarness.WaitUntil(() => viewModel.Queue?.SkillCountText != "0/150");
 
-        Assert.Equal("1/150", viewModel.Queue!.SkillCountText);
+        Assert.Equal("1/150", viewModel.Queue?.SkillCountText);
     }
 }

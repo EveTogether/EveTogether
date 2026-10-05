@@ -23,7 +23,8 @@ public partial class SkillPlanTextImportWindow : ChromedWindow
             return;
         }
 
-        var box = this.FindControl<TextBox>("TextBoxInput")!;
+        var box = this.FindControl<TextBox>("TextBoxInput")
+            ?? throw new InvalidOperationException("TextBoxInput is declared in SkillPlanTextImportWindow.axaml.");
         box.Text = initialText;
         box.CaretIndex = initialText.Length;
     }

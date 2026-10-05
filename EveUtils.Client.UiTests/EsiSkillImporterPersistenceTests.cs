@@ -76,9 +76,9 @@ public class EsiSkillImporterPersistenceTests
         };
         await importer.ImportAsync(77, TestContext.Current.CancellationToken);
 
-        var reimported = await attributesRepository.GetAsync(77, TestContext.Current.CancellationToken);
-        Assert.NotNull(reimported);
-        Assert.Equal(new DateTimeOffset(2026, 3, 1, 0, 0, 0, TimeSpan.Zero), reimported!.LastRemapDate);
+        var reimported = await attributesRepository.GetAsync(77, TestContext.Current.CancellationToken)
+            ?? throw new InvalidOperationException("The re-imported attributes were not persisted.");
+        Assert.Equal(new DateTimeOffset(2026, 3, 1, 0, 0, 0, TimeSpan.Zero), reimported.LastRemapDate);
         Assert.Null(reimported.AccruedRemapCooldownDate);
         Assert.Equal(0, reimported.BonusRemaps);
     }

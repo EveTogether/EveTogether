@@ -74,8 +74,8 @@ public static class WhatIfCalculator
         var cumulative = now;
         foreach (var row in rows)
         {
-            cumulative += head is not null && head.SkillTypeId == row.SkillTypeId && head.FinishedLevel == row.Level
-                ? head.FinishDate!.Value - now
+            cumulative += head is { FinishDate: { } headFinish } && head.SkillTypeId == row.SkillTypeId && head.FinishedLevel == row.Level
+                ? headFinish - now
                 : estimator.Estimate(row.SkillTypeId, row.Level - 1, row.Level, attributes).TrainingTime;
         }
 
@@ -91,8 +91,8 @@ public static class WhatIfCalculator
         SkillTrainingEstimator estimator, CharacterAttributeSet attributes, DateTimeOffset now)
     {
         bool isPaused = queue.Count > 0 && queue.All(entry => entry.FinishDate is null);
-        DateTimeOffset queueEndsAt = queue.Where(entry => entry.FinishDate is not null)
-            .Select(entry => entry.FinishDate!.Value).DefaultIfEmpty(now).Max();
+        DateTimeOffset queueEndsAt = queue.Select(entry => entry.FinishDate).OfType<DateTimeOffset>()
+            .DefaultIfEmpty(now).Max();
         DateTimeOffset cumulative = isPaused ? now : queueEndsAt;
         DateTimeOffset latest = now;
 
@@ -101,9 +101,9 @@ public static class WhatIfCalculator
             var queued = queue.FirstOrDefault(entry =>
                 entry.SkillTypeId == row.SkillTypeId && entry.FinishedLevel == row.Level && entry.FinishDate is not null);
             DateTimeOffset rowDate;
-            if (queued is not null)
+            if (queued is { FinishDate: { } queuedFinish })
             {
-                rowDate = queued.FinishDate!.Value;
+                rowDate = queuedFinish;
             }
             else
             {
