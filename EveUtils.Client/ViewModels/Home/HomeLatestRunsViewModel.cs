@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EveUtils.Client.Formatting;
+using EveUtils.Client.Runs;
 using EveUtils.Client.ViewModels.Runs;
 using EveUtils.Shared.Modules.Runs.Dtos;
 
@@ -124,6 +125,6 @@ public sealed partial class HomeLatestRunsViewModel(
             day,
             day == today ? "TODAY · " + date : date,
             $"{activities.Count} run{(activities.Count == 1 ? "" : "s")} · {HomeEarningsTileViewModel.FlownText(flown)}",
-            RunsActivitySummaryText.Net(activities) is { } net ? IskFormat.Compact(net) : "—");
+            RunTotals.Net(activities) is { } net ? IskFormat.Compact(net) : "—");
     }
 }

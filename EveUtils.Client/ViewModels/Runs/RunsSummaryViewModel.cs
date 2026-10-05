@@ -7,6 +7,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EveUtils.Client.Calendar;
 using EveUtils.Client.Formatting;
+using EveUtils.Client.Runs;
 using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Runs.Isk;
 using Material.Icons;
@@ -347,18 +348,18 @@ public sealed partial class RunsSummaryViewModel : ObservableObject
 
         MetaText = string.Join(" · ", meta);
 
-        decimal? net = RunsActivitySummaryText.Net(rows);
+        decimal? net = RunTotals.Net(rows);
         HasNet = net.HasValue;
         NetText = net is { } value ? RunsActivitySummaryText.Signed(value) + " ISK" : "nothing recorded to value";
 
-        PerHourText = RunsActivitySummaryText.PerHour(rows) is { } perHour
+        PerHourText = RunTotals.PerHour(rows) is { } perHour
             ? IskFormat.Compact(perHour) + " ISK/h"
             : string.Empty;
     }
 
     private void _ShowSources(IReadOnlyList<RunsActivityFacts> rows)
     {
-        Isk = RunsActivitySummaryText.SourcesFor(rows);
+        Isk = RunTotals.Sources(rows);
         List<RunsIskPartViewModel> parts = [.. RunsActivityPaneViewModel.Sources
             .Select(source => (source.Label, Part: Isk.Of(source.Source)))
             .Where(line => line.Part is { Certainty: not IskCertainty.Unknown, Amount: not 0 })
@@ -378,7 +379,7 @@ public sealed partial class RunsSummaryViewModel : ObservableObject
         List<RunsSummaryTypeLine> lines = [.. rows
             .GroupBy(row => row.TypeId)
             .Select(group => (Definition: RunTypeCatalogue.For(group.Key), Rows: group.ToArray(),
-                Net: RunsActivitySummaryText.Net(group)))
+                Net: RunTotals.Net(group)))
             .OrderByDescending(type => type.Net ?? decimal.MinValue)
             .ThenByDescending(type => type.Rows.Length)
             .Select(type => new RunsSummaryTypeLine(type.Definition.Icon, type.Definition.Name, type.Rows.Length,
@@ -413,7 +414,7 @@ public sealed partial class RunsSummaryViewModel : ObservableObject
     private static List<RunsSummarySiteLine> _TopSites(IReadOnlyList<RunsActivityFacts> rows) =>
         [.. rows
             .GroupBy(row => row.SiteText)
-            .Select(site => (Site: site.Key, Runs: site.Count(), Net: RunsActivitySummaryText.Net(site)))
+            .Select(site => (Site: site.Key, Runs: site.Count(), Net: RunTotals.Net(site)))
             .Where(site => site.Net.HasValue)
             .OrderByDescending(site => site.Net)
             .Take(TopCount)
@@ -446,7 +447,7 @@ public sealed partial class RunsSummaryViewModel : ObservableObject
             string tooltip = started.Length == 0
                 ? $"{when} · no runs started"
                 : $"{when} · {RunsActivitySummaryText.ActivitiesCount(started.Length)} started"
-                  + (RunsActivitySummaryText.Net(started) is { } net ? $" · {RunsActivitySummaryText.Signed(net)} ISK" : string.Empty);
+                  + (RunTotals.Net(started) is { } net ? $" · {RunsActivitySummaryText.Signed(net)} ISK" : string.Empty);
             Hours[hour].Show(levelOf(RunsActivityStripViewModel.ValueOf(shade, started), started.Length > 0), tooltip);
         }
 

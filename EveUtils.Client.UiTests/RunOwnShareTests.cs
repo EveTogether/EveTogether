@@ -73,7 +73,7 @@ public sealed class RunOwnShareTests
         Assert.Equal("+47.7M ISK", screenRow.NetText);
         // The day header and the month bar are one formula over the same rows (ET-290), so they follow the row.
         Assert.Equal("+47.7M ISK net", RunsActivitySummaryText.NetFor([screenRow]));
-        Assert.Equal(47_700_000m, RunsActivitySummaryText.SourcesFor([screenRow]).Total);
+        Assert.Equal(47_700_000m, RunTotals.Sources([screenRow]).Total);
 
         EarningsPeriodFigures today = EarningsPeriods.For(EarningsPeriodKind.Today,
             [RunsActivityFacts.From(row, new RunRowFacts(null))], StartedAtUtc.ToLocalTime().AddHours(1), DayOfWeek.Monday, null);

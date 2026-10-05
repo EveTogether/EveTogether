@@ -101,6 +101,7 @@ public sealed class LocalApiServer(
             .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         var privacy = new LocalApiPrivacy(_rootServices, all.FirstOrDefault(s => s.Key == IncludeLocationSettingKey)?.Value == "true");
         var queries = new LocalApiQueries(_rootServices, privacy);
+        var runs = new LocalApiRuns(_rootServices, privacy); // runs/current + runs/summary, and their pushes
 
         var builder = WebApplication.CreateSlimBuilder();
         builder.Logging.ClearProviders(); // the host stays quiet; this service logs its own lifecycle
@@ -111,12 +112,13 @@ public sealed class LocalApiServer(
         builder.Services.AddSingleton(privacy);
         builder.Services.AddSingleton(queries); // reads the existing client services
         builder.Services.AddSingleton(_ => _rootServices.GetRequiredService<WidgetStore>()); // resolved on the first widget request
+        builder.Services.AddSingleton(runs);
         // Widgets are served by this host itself, so same-origin is enough; any other site has to be allowlisted
         // (localapi.allowedorigins), otherwise every page open in the browser could read the API.
         builder.Services.AddCors(options => options.AddDefaultPolicy(policy =>
             policy.WithOrigins(allowedOrigins).AllowAnyHeader().AllowAnyMethod()));
 
-        var broadcaster = new LocalApiBroadcaster(_rootServices, queries, privacy, logger); // shared realtime fan-out (WS + SignalR)
+        var broadcaster = new LocalApiBroadcaster(_rootServices, queries, privacy, runs, logger); // shared realtime fan-out (WS + SignalR)
         builder.Services.AddSingleton(broadcaster);                       // so FleetHub can report connect/disconnect
         builder.Services.AddSignalR()
             .AddJsonProtocol(options => options.PayloadSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase);
@@ -162,6 +164,7 @@ public sealed class LocalApiServer(
                 queries.GetLatestKillmailsAsync(kind ?? KillmailsLatestKind.All, limit ?? 1, ct))
             .WithSummary("Your latest kills and losses")
             .WithDescription("Newest first. kind = all | kills | losses (default all); limit 1-25 (default 1). Victim, corporation and final-blow names are ESI-resolved and cached. Solar system fields are null unless \"Include my location\" is on. Pushed live as killmail.added over /ws.");
+        LocalApiRuns.Map(app);
 
         app.Map("/ws", async (HttpContext context) =>
         {

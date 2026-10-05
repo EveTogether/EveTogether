@@ -1352,7 +1352,7 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
         RangeCountText = RunsActivitySummaryText.ActivitiesCount(figures.Count);
         RangeFlownText = RunsActivitySummaryText.FlownFor(figures);
         RangeNetText = RunsActivitySummaryText.NetFor(figures);
-        RangeIsk = RunsActivitySummaryText.SourcesFor(figures);
+        RangeIsk = RunTotals.Sources(figures);
         _ShowSummary();
     }
 

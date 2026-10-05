@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using EveUtils.Client.Calendar;
+using EveUtils.Client.Runs;
 using EveUtils.Client.ViewModels.Runs;
 using EveUtils.Shared.Modules.Runs.Isk;
 
@@ -51,11 +52,12 @@ public static class EarningsPeriods
         DateTime nowLocal, DayOfWeek firstDay, DateOnly? firstTracked)
     {
         DateOnly today = DateOnly.FromDateTime(nowLocal);
-        (DateOnly start, DateOnly previousStart) = kind switch
+        DateOnly start = RunsPeriods.FirstDayOf(_PeriodOf(kind), today, firstDay);
+        DateOnly previousStart = kind switch
         {
-            EarningsPeriodKind.Today => (today, today.AddDays(-1)),
-            EarningsPeriodKind.Week => (WeekMath.StartOf(today, firstDay), WeekMath.StartOf(today, firstDay).AddDays(-7)),
-            _ => (new DateOnly(today.Year, today.Month, 1), new DateOnly(today.Year, today.Month, 1).AddMonths(-1))
+            EarningsPeriodKind.Today => start.AddDays(-1),
+            EarningsPeriodKind.Week => start.AddDays(-7),
+            _ => start.AddMonths(-1)
         };
 
         DateTime startLocal = start.ToDateTime(TimeOnly.MinValue);
@@ -63,7 +65,7 @@ public static class EarningsPeriods
         // A month is shorter than the one after it now and then: the 31st compares with the previous month's end.
         DateTime previousCutoff = _Earlier(previousStartLocal + (nowLocal - startLocal), startLocal);
 
-        RunsActivityFacts[] current = [.. activities.Where(activity => activity.StartedAtLocal >= startLocal && activity.StartedAtLocal <= nowLocal)];
+        RunTotalsFigures current = RunTotals.Of(RunTotals.StartedBetween(activities, startLocal, nowLocal));
         RunsActivityFacts[] previous = [.. activities.Where(activity => activity.StartedAtLocal >= previousStartLocal && activity.StartedAtLocal < previousCutoff)];
         bool previousTracked = firstTracked is { } first && first <= previousStart;
 
@@ -72,12 +74,12 @@ public static class EarningsPeriods
             start,
             previousStart,
             previousCutoff,
-            current.Length,
-            TimeSpan.FromSeconds(current.Sum(activity => activity.Duration.TotalSeconds)),
-            RunsActivitySummaryText.Net(current),
-            RunsActivitySummaryText.PerHour(current),
-            RunsActivitySummaryText.SourcesFor(current),
-            previousTracked ? RunsActivitySummaryText.Net(previous) ?? 0m : null);
+            current.Runs,
+            current.Flown,
+            current.Net,
+            current.PerHour,
+            current.Sources,
+            previousTracked ? RunTotals.Net(previous) ?? 0m : null);
     }
 
     /// <summary>Each own character's share today and this month, as the runs summary's BY CHARACTER splits it.</summary>
@@ -99,6 +101,13 @@ public static class EarningsPeriods
 
         return totals;
     }
+
+    private static RunsPeriod _PeriodOf(EarningsPeriodKind kind) => kind switch
+    {
+        EarningsPeriodKind.Today => RunsPeriod.Today,
+        EarningsPeriodKind.Week => RunsPeriod.Week,
+        _ => RunsPeriod.Month
+    };
 
     private static DateTime _Earlier(DateTime left, DateTime right) => left < right ? left : right;
 }
