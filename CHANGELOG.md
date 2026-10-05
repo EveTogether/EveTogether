@@ -1342,6 +1342,7 @@ entries under `[Unreleased]` below that were not there yet at the previous night
   European Summer Time) that shifted a fleet mate's run by the reader's own time zone offset, and threw off
   the whole activity's shared duration along with it. Both directions of the sync now always read that time
   as UTC.
+- **Fixed: Abyssal runs now open with the starting and ending cargo hold fields.** Loot is what was added between the two (LOOT = AFTER − BEFORE, shown beside them). With the fields hidden behind a toggle, most pilots never filled them in and got everything in their cargo counted as loot. Other activities keep the clipboard-only default, one click away from the hold fields.
 
 ## v0.2.0-beta — 2026-07-06
 
