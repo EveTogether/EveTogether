@@ -1189,11 +1189,8 @@ public class DogmaCalculatorTests
     }
 
     // ── ET-356: SkillImpactScanner + SkillImpactViewModel ──────────────────────────────────────────────
-    // Extends the Ferox fixture above (railgun + CaldariBattlecruiser hull skill) with a propulsion module and a
-    // skill that only moves MaxVelocity while that module is Active: the propulsion boost is a code aggregate that
-    // contributes nothing at all unless the module state is Active (Propulsion_BoostsVelocityPerActivePropModule_
-    // WhenActive above), so a skill raising only the module's own speedBoostFactor is what actually exercises
-    // "module states matter to the scan" (A1) rather than a skill whose effect would show up regardless of state.
+    // Extends the Ferox fixture above with a propulsion module and a skill that only moves MaxVelocity while that module
+    // is Active, so it exercises "module states matter to the scan" (A1) rather than a state-independent effect.
     private const int SpeedImpactSkill = 33098;
 
     private static (FakeDogmaDataAccessor Data, FitInput Input) SkillImpactFixture(Dictionary<int, int> levels,
@@ -1251,10 +1248,9 @@ public class DogmaCalculatorTests
     private static SkillImpactScanner ScannerFor(FakeDogmaDataAccessor data, IDogmaCalculator? calculator = null) =>
         new(calculator ?? CalculatorFor(data), data);
 
-    // A1, with its counter-proof as the second row: only with the propmod in its real default state (Active) does
-    // the scan find the skill that raises speed only while the propmod is active; with every module forced Online
-    // (the old, wrong probe) that skill has nothing to move and drops out. The hull's DPS skill is state-independent,
-    // so it is found either way, and a skill with no effect on the fit at all never appears.
+    // A1 with its counter-proof: only with the propmod Active is the speed-only skill found; with every module forced
+    // Online (the old, wrong probe) it drops out. The state-independent hull DPS skill is found either way, and a skill
+    // with no effect on the fit never appears.
     [Theory]
     [InlineData(ModuleState.Active, true)]
     [InlineData(ModuleState.Online, false)]
@@ -1327,11 +1323,9 @@ public class DogmaCalculatorTests
         Assert.Equal("all skills that change this are at V", speedChip.UnavailableReason);
     }
 
-    // A6: the scan runs off the calling thread (the gated call observes a different managed thread id than the
-    // caller's), and a scan superseded by a fresher one before it finishes is discarded on completion. The gate makes
-    // this deterministic rather than delay-based: the stale scan's very first engine call blocks until released, so
-    // the test can prove it has genuinely started (off-thread) before the fresh scan runs to completion, and only
-    // then let the stale one finish — proving its late result produces zero further changes to the applied Rows.
+    // A6: the scan runs off the calling thread and a scan superseded by a fresher one is discarded on completion. The gate
+    // blocks the stale scan's first engine call until released, so the test proves it started off-thread and that its late
+    // result changes nothing in the applied Rows, without delay-based timing.
     [Fact]
     public async Task SkillImpactViewModel_LoadAsync_RunsOffTheCallingThread_AndDiscardsAStaleScan()
     {
@@ -1359,12 +1353,8 @@ public class DogmaCalculatorTests
     }
 
     // ── ET-357: SkillTargetsCalculator (can fly / optimal ±III / max / curve) ──────────────────────────
-    // Extends the fixture above with the data-driven align-time chain (DogmaPatches; wired manually since the fake
-    // accessor has no patch layer — same recipe as AlignTime_FoldsConstantTimesAgilityTimesMassOverMillion above), a
-    // uniform SP/min rate so a level's cost compares purely by its SP size, a CPU-hungry module (A2's greedy fit-check,
-    // optionally requiring AlignSkillId — A1/A3's "held at a higher level") and two more movers: AlignSkillId (reduces
-    // ship agility, so AlignTime — lower is better) and CpuManagementSkillId (raises ship CpuOutput, the fitting mover
-    // can fly's own greedy resolves an overload against).
+    // Extends the fixture above with the data-driven align-time chain (DogmaPatches, wired manually like AlignTime_Folds...),
+    // a uniform SP/min rate, a CPU-hungry module and two more movers: AlignSkillId (agility) and CpuManagementSkillId (CPU).
     private const int CpuHeavyModule = 90003;
     private const int AlignSkillId = 90011;
     private const int CpuManagementSkillId = 90012;

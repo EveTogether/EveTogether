@@ -61,10 +61,9 @@ public sealed class SkillImpactScanner(IDogmaCalculator calculator, IDogmaDataAc
         return new SkillImpactResult(baseValues, entries, maxedMovers);
     }
 
-    // A stat with no untrained mover reads two different ways in the UI: no skill touches it at all, or every skill
-    // that touches it is already trained to V. Distinguishing the two means testing the already-maxed skills too —
-    // at level 0 instead of their trained level — but only for the stats that still have no mover, and only over the
-    // handful of skills this character actually has at V (not the whole SDE).
+    // A stat with no untrained mover is either touched by no skill or only by skills already at V; telling them apart means
+    // testing the already-maxed skills at level 0, but only for stats still without a mover and only over the handful of
+    // skills this character has at V (not the whole SDE).
     private async Task<IReadOnlySet<SkillImpactStat>> _FindMaxedMoversAsync(FitInput baseInput,
         IReadOnlyDictionary<int, int> trainedLevels, IReadOnlyDictionary<SkillImpactStat, double> baseValues,
         IReadOnlyList<SkillImpactEntry> entries, CancellationToken cancellationToken)

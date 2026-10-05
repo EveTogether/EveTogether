@@ -128,11 +128,9 @@ public sealed partial class SkillsWindowViewModel : ObservableObject, IRefreshab
         return Task.CompletedTask;
     }
 
-    // A background skill import (SkillRefreshService's poll, or any other ImportAsync call) landed for the character
-    // this window shows right now — rebuild TRAINING QUEUE, OPTIMISE and the header SP text the way a manual F5
-    // would (ET-387). Deliberately narrower than a full reselect: SkillRefreshService re-imports every registered
-    // character every 120s, so routing this through _SelectCharacterAsync would rebuild CATALOGUE and PLANS on the
-    // same cadence and reset whatever skill or plan the pilot has selected there — an import never touches either.
+    // A background skill import landed for the character shown: rebuild TRAINING QUEUE, OPTIMISE and the header SP text like
+    // a manual F5 (ET-387). Narrower than _SelectCharacterAsync on purpose: the 120s poll would otherwise rebuild CATALOGUE
+    // and PLANS and reset the pilot's selection there.
     private async Task _OnSkillsChangedAsync(IReadOnlyList<SkillsChangedEvent> events)
     {
         if (SelectedCharacterId is not { } current || !events.Any(e => e.Data.CharacterId == current))

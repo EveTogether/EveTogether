@@ -62,11 +62,9 @@ public static class WhatIfCalculator
         ];
     }
 
-    // Scenario 2 ignores the queue's ORDER, but not the progress already banked on whichever skill is actively
-    // training right now (queue position 0): that one row's true remaining time is exactly what ESI's own
-    // FinishDate already says, not a fresh from-scratch estimate — crediting nothing here would make starting
-    // immediately look slower than waiting for the queue to run its course, which "plan first" can never be.
-    // Every other row, queued later or not queued at all, has not started, so the full level-to-level estimate applies.
+    // Scenario 2 ignores the queue's ORDER but credits the progress banked on the skill training right now (position 0):
+    // its remaining time is ESI's own FinishDate, else starting immediately would look slower than "plan first" can be.
+    // Every other row has not started, so the full level-to-level estimate applies.
     private static DateTimeOffset _PlanFirst(IReadOnlyList<SkillPlanRow> rows, IReadOnlyList<CharacterSkillQueueEntry> queue,
         SkillTrainingEstimator estimator, CharacterAttributeSet attributes, DateTimeOffset now)
     {
@@ -82,11 +80,9 @@ public static class WhatIfCalculator
         return cumulative;
     }
 
-    // A plan row queued right now (same skill, same target level, a real FinishDate) lands on that ESI date — it is
-    // already being trained. Everything else queues up after the current queue ends (or "now" for a paused queue,
-    // which reports no FinishDate at all), back to back in the given order. The plan's own completion date is the
-    // latest of every row's date: a queued row can never push it out (it always falls within the queue, at or before
-    // QueueEndsAt), but it can leave it exactly at the queue's own end when every row is already queued.
+    // A plan row queued right now (same skill and level, a real FinishDate) lands on that ESI date; every other row queues
+    // back to back after the queue's end ("now" for a paused queue). The plan's date is the latest row date; a queued row
+    // never pushes it past QueueEndsAt.
     private static DateTimeOffset _AsQueueStands(IReadOnlyList<SkillPlanRow> rows, IReadOnlyList<CharacterSkillQueueEntry> queue,
         SkillTrainingEstimator estimator, CharacterAttributeSet attributes, DateTimeOffset now)
     {

@@ -516,12 +516,9 @@ public sealed class FitDetailWindowViewModel : ViewModelBase
             return Task.CompletedTask;
         }
 
-        // Keyed on the character too, not just the fit: switching SKILLS to a different character while a SKILL
-        // IMPACT tab is already open must land in its own tab, not silently refocus the previous character's stale
-        // one (ModuleHostService.Open treats a re-used module id as "already open" and drops the new view model).
-        // ET-357: the three target cards need the same validator/estimator/attributes the row list already has, plus
-        // the calculator itself — opened from FIT DETAIL there is no selected PLANS plan to write to, so ADD TO PLAN
-        // stays disabled here (addToPlan: null); PLANS' own + FROM FIT (SkillsPlansViewModel) supplies it.
+        // Keyed on the character too: another character's SKILL IMPACT tab must open its own tab, not refocus a stale one
+        // (ModuleHostService.Open drops a re-used module id). ET-357: the target cards need the validator/estimator/attributes;
+        // addToPlan stays null here (no selected PLANS plan), PLANS' own + FROM FIT supplies it.
         SkillTargetsCalculator? targetsCalculator = _calculator is not null && _validator is not null
             && _trainingEstimator is not null && _effectiveAttributes is not null
             ? new SkillTargetsCalculator(_calculator, _validator, _trainingEstimator, _effectiveAttributes)
