@@ -503,8 +503,16 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         // server usable at all", and a character whose session the server dropped is invisible in it as soon as one
         // other character on the same server is healthy (ET-123).
         if (_busConnector is not null)
+        {
             _busConnector.CharacterStateChanged += (address, characterId, state) =>
                 Avalonia.Threading.Dispatcher.UIThread.Post(() => ApplyServerConnectionState(address, characterId, state));
+
+            // A server coming up gains its fits tab, one nobody is coupled to any more loses it, along with its link
+            // chips — whichever screen coupled or decoupled it; the Fleets window's "decouple server" refreshes only
+            // itself (ET-427).
+            _busConnector.CouplingChanged += address =>
+                Avalonia.Threading.Dispatcher.UIThread.Post(() => _ = _RefreshAfterCouplingChangeAsync());
+        }
 
         // Live Tranquility status → the bottom-bar indicator. Seed from the current snapshot (the poller may have
         // already run before this VM existed) and follow further changes.
@@ -1810,6 +1818,12 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         await _coupling.DecoupleCharacterAsync(link.Address, link.CharacterId);
 
         ActivityStatus = $"Decoupled from {link.DisplayName}.";
+        await RefreshCharactersAsync();
+        await RefreshFittingsTabsAsync();
+    }
+
+    private async Task _RefreshAfterCouplingChangeAsync()
+    {
         await RefreshCharactersAsync();
         await RefreshFittingsTabsAsync();
     }

@@ -97,7 +97,7 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
         // below can come back empty. Reload when a server reaches Connected so already-existing fleets appear without
         // a client restart (previously only a fleet.changed event or a restart re-fetched the list).
         _busConnector = services.GetRequiredService<IRemoteBusConnector>();
-        _busConnector.StateChanged += _OnServerConnectionStateChanged;
+        _busConnector.CouplingChanged += _OnCouplingChanged;
         _presence = services.GetService<ILocalCharacterPresence>();
         _presenceSubscription = _presence?.Subscribe(() => _ = RebuildOverviewAsync());
 
@@ -148,11 +148,9 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
         await ReloadAsync();
     }
 
-    private void _OnServerConnectionStateChanged(string serverAddress, ServerConnectionState state)
-    {
-        if (state == ServerConnectionState.Connected)
-            Avalonia.Threading.Dispatcher.UIThread.Post(() => _ = ReloadAsync());
-    }
+    // A server coming up or being decoupled: the list is only ever read from the coupled servers (ET-427).
+    private void _OnCouplingChanged(string serverAddress) =>
+        Avalonia.Threading.Dispatcher.UIThread.Post(() => _ = ReloadAsync());
 
     // Disposed by FleetsWindow on Closed: without this the event-bus subscription and the connection-state handler
     // (and the whole VM graph they capture) outlive the window, leaking and adding a duplicate ReloadAsync per event.
@@ -161,7 +159,7 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
         _rosterSubscription.Dispose();
         _presenceSubscription?.Dispose();
         StopClock();
-        _busConnector.StateChanged -= _OnServerConnectionStateChanged;
+        _busConnector.CouplingChanged -= _OnCouplingChanged;
     }
 
     /// <summary>All fleets per coupled server in one list: owned, joined and discoverable fleets are merged
