@@ -199,6 +199,7 @@ public partial class MainWindow : Window
         (DataContext as MainWindowViewModel)?.StartSdeUpdateCheck();
         (DataContext as MainWindowViewModel)?.StartUpdateCheck();
         (DataContext as MainWindowViewModel)?.StartStartupResumeNotice();
+        (DataContext as MainWindowViewModel)?.StartFirstStartSetup();   // after the SDE prompt, so the two modals never stack
     }
 
     // The module shell has two responsive axes — DockMode (docked host vs. floating narrow shell) and the

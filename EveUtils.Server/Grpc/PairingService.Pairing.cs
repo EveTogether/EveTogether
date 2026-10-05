@@ -25,7 +25,8 @@ public sealed partial class PairingService
             PairingId = pairingId,
             PairingChallenge = request.PairingChallenge,
             OAuthState = oauthState,
-            CreatedAt = DateTimeOffset.UtcNow
+            CreatedAt = DateTimeOffset.UtcNow,
+            ExpectedCharacterId = request.ExpectedCharacterId
         });
 
         IEnumerable<string> scopes = request.Scopes.Count > 0 ? request.Scopes : (IEnumerable<string>)esiOptions.Scopes;
@@ -60,7 +61,13 @@ public sealed partial class PairingService
         switch (state.Status)
         {
             case PairingStatus.Failed:
-                return Task.FromResult(new ClaimPairingReply { Completed = false, Message = state.FailureMessage ?? "Pairing failed." });
+                return Task.FromResult(new ClaimPairingReply
+                {
+                    Completed = false,
+                    Message = state.FailureMessage ?? "Pairing failed.",
+                    Failure = state.Failure,
+                    CharacterName = state.CharacterName ?? string.Empty
+                });
             case PairingStatus.Pending:
                 return Task.FromResult(new ClaimPairingReply { Completed = false, Message = "Pairing not completed yet." }); // client keeps polling
         }

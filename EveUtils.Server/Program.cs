@@ -648,8 +648,18 @@ app.MapGet("/status", () => Results.Ok(new
 
 // Mode B SSO callback: EVE redirects the browser here (the server has its own ESI app + callback).
 // The server completes the token exchange itself; the client just polls ClaimPairing.
-app.MapGet("/auth/eve/callback", async (string? code, string? state, PairingStateStore store, PairingCompleter completer, ServerInfo serverInfo, CancellationToken ct) =>
+app.MapGet("/auth/eve/callback", async (string? code, string? state, string? error, PairingStateStore store, PairingCompleter completer, ServerInfo serverInfo, CancellationToken ct) =>
 {
+    // Declined on the EVE page: fail the pairing now so the waiting client hears it was cancelled (ET-425), instead of
+    // polling on until the pairing expires.
+    if (!string.IsNullOrEmpty(error))
+    {
+        var declined = string.IsNullOrEmpty(state) ? null : store.GetByState(state);
+        declined?.Fail("The EVE login was not authorized.", EveUtils.Grpc.PairingFailure.Cancelled);
+        return Results.Content(PairingCallbackPage.Render("EVE Together — pairing cancelled",
+            "<p>The EVE login was not authorized. You can close this tab and try again from EVE Together.</p>"), "text/html; charset=utf-8");
+    }
+
     if (string.IsNullOrEmpty(code) || string.IsNullOrEmpty(state))
         return Results.Content(PairingCallbackPage.Render("EVE Together — pairing", "<p>Missing code or state.</p>"), "text/html; charset=utf-8");
 
