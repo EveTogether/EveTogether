@@ -701,11 +701,8 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         _dialogs.ShowCompositions(new CompositionsViewModel(_services));
     }
 
-    /// <summary>Opens the SKILLS module (ET-16) as a hosted module, like RUNS. Launched from the rail (no specific
-    /// character — SkillsWindowViewModel falls back to the last one used) or from a pilot row on HOME (this
-    /// character, AC2). If SKILLS is already open, re-opening it re-selects the running instance (ET-48 pattern) —
-    /// <paramref name="startingCharacterId"/> is then applied to that instance directly, so a pilot row still lands
-    /// on the right character instead of being silently ignored.</summary>
+    /// <summary>Opens the SKILLS module (ET-16) as a hosted module, like RUNS, from the rail (last used character) or a HOME pilot row
+    /// (that character, AC2). When SKILLS is already open <paramref name="startingCharacterId"/> is applied to the running instance (ET-48 pattern).</summary>
     private async Task OpenSkillsAsync(int? startingCharacterId = null)
     {
         if (_services is null || _dialogs is null)

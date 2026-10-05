@@ -13,14 +13,9 @@ using EveUtils.Shared.Modules.Skills.Plans.Commands;
 namespace EveUtils.Client.ViewModels.FitBrowser;
 
 /// <summary>
-/// SKILL IMPACT… (ET-356): scans every SDE skill against a fit snapshot taken from the fit-detail window, then ranks
-/// the skills that move at least one chosen stat by combined gain per hour of training. The scan is the expensive
-/// part (~500 engine calls, run off the UI thread); toggling which stats to optimise for only re-ranks the cached
-/// result — nothing is recalculated in the engine.
-///
-/// ET-357: with at least one stat chosen, three target cards (can fly / optimal ±III / max) and the greedy training
-/// curve between them — computed by <see cref="SkillTargetsCalculator"/> off the UI thread, version-stamped like the
-/// scan itself so a superseded recompute (a chip toggled again before the first finishes) is discarded on arrival.
+/// SKILL IMPACT… (ET-356): scans every SDE skill against a fit snapshot (~500 engine calls, off the UI thread) and ranks the skills
+/// that move a chosen stat by combined gain per hour, re-ranking the cached result when the stat chips change.
+/// ET-357 target cards and the training curve come from <see cref="SkillTargetsCalculator"/>, version-stamped so a superseded recompute is discarded.
 /// </summary>
 public sealed class SkillImpactViewModel : ViewModelBase, IRefreshableModule
 {

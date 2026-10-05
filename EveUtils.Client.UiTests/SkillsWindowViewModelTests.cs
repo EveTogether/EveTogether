@@ -112,11 +112,8 @@ public sealed class SkillsWindowViewModelTests
     }
 
     /// <summary>
-    /// Regression from the independent review, not one of ET-16's own acceptance criteria: re-opening SKILLS while
-    /// it is already open (ModuleHostService's ET-48 "route to existing" pattern) calls RefreshModule on the
-    /// running instance. RefreshModule used to re-run the constructor's starting-character resolution, which threw
-    /// away whatever the pilot had since picked from the header and snapped back to the character SKILLS first
-    /// opened on. LoadAsync now keeps the current selection on any call after the first.
+    /// Re-opening SKILLS while it is open (ET-48 "route to existing") calls RefreshModule on the running instance, which must
+    /// keep the pilot's current selection rather than snap back to the first character. LoadAsync keeps it on any call after the first.
     /// </summary>
     [Fact]
     public async Task RefreshModule_KeepsTheCharacterOnScreen_NeverTheOneItFirstOpenedOn()

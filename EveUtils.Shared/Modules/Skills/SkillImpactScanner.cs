@@ -9,11 +9,8 @@ using EveUtils.Shared.Modules.Sde;
 namespace EveUtils.Shared.Modules.Skills;
 
 /// <summary>
-/// Prices every SDE skill against a fit: a base calculation with the fit-detail's own module states (ET-356 — one
-/// pass, no separate propmod-online pass), then one at level V for each candidate skill still below V. A skill
-/// "moves" the fit when one of the fifteen <see cref="SkillImpactStat"/> values changes beyond a small epsilon; a
-/// mover is priced a second time at its current level + 1. Pure — no UI, no threading of its own, so the caller
-/// decides where it runs (off the UI thread, via <c>Task.Run</c>, per the grooming).
+/// Prices every SDE skill against a fit (ET-356): a base calculation with the fit-detail's own module states, then one at level V per candidate skill still below V.
+/// A skill "moves" the fit when one of the fifteen <see cref="SkillImpactStat"/> values changes beyond a small epsilon, and a mover is priced again at its current level + 1; pure, so the caller decides the thread.
 /// </summary>
 public sealed class SkillImpactScanner(IDogmaCalculator calculator, IDogmaDataAccessor data)
 {

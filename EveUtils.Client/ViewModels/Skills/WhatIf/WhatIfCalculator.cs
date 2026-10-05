@@ -9,22 +9,15 @@ using EveUtils.Shared.Modules.Skills.Plans.Entities;
 namespace EveUtils.Client.ViewModels.Skills.WhatIf;
 
 /// <summary>
-/// ET-358: the five what-if scenarios for one plan and character, pure over data the caller already holds — nothing
-/// here reads a repository or writes anything.
-///
+/// ET-358: the five what-if scenarios for one plan and character, pure over data the caller already holds; scenarios 3-5 are each at least as fast as the one before
+/// (the remap search covers the current split and implant sets only raise bonuses).
 /// <list type="number">
-/// <item>As the queue stands: a plan row already in the queue lands on its own ESI <c>FinishDate</c>; every other
-/// row trains after the queue ends (or "now" while paused), back to back, at the character's current attributes.</item>
-/// <item>Plan first: every row trains now, in the given order, ignoring the queue's order — except that the one
-/// skill actively training right now keeps the progress its own ESI <c>FinishDate</c> already reflects.</item>
-/// <item>Plan first + remap: <see cref="AttributeRemapOptimizer.Best"/> over the plan rows, implants unchanged.</item>
-/// <item>+ a matched +4 implant set, on top of the remap.</item>
-/// <item>+ a matched +5 implant set, on top of the remap.</item>
+/// <item>As the queue stands: a queued plan row lands on its own ESI <c>FinishDate</c>, every other row trains after the queue ends (or "now" while paused), back to back</item>
+/// <item>Plan first: every row trains now in the given order, ignoring the queue's order, except the skill training right now keeps its ESI <c>FinishDate</c> progress</item>
+/// <item>Plan first + remap: <see cref="AttributeRemapOptimizer.Best"/> over the plan rows, implants unchanged</item>
+/// <item>+ a matched +4 implant set, on top of the remap</item>
+/// <item>+ a matched +5 implant set, on top of the remap</item>
 /// </list>
-///
-/// Scenarios 3-5 are each at least as fast as the one before: <see cref="AttributeRemapOptimizer.Best"/> searches
-/// every valid base split, so it can never be slower than the character's own current split (scenario 2's baseline),
-/// and <see cref="ImplantSetBonus.Apply"/> only ever raises a bonus (<c>Math.Max</c>), never lowers it.
 /// </summary>
 public static class WhatIfCalculator
 {

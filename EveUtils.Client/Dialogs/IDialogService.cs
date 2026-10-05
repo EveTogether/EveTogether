@@ -324,9 +324,8 @@ public interface IDialogService
     /// window, like the other feature modules.</summary>
     void ShowCompositions(CompositionsViewModel viewModel);
 
-    /// <summary>Opens the SKILLS module (ET-16) as a hosted module — a docked tab or a floating window, like RUNS.
-    /// One screen for the whole app, not one per character: it reads a single selected character at a time. Returns
-    /// the screen now showing — the one already open, when it was.</summary>
+    /// <summary>Opens the SKILLS module (ET-16) as a hosted module, one screen for the whole app that reads a single
+    /// selected character at a time. Returns the screen now showing, the one already open when it was.</summary>
     SkillsWindowViewModel ShowSkills(SkillsWindowViewModel viewModel);
 
     /// <summary>Shows the radial fit-detail window non-modally — the fitting wheel plus the computed stats.</summary>
