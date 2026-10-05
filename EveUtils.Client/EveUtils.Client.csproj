@@ -21,6 +21,7 @@
     <EmbeddedResource Include="LocalApi\Docs\index.html" LogicalName="localapi.index.html" />
     <EmbeddedResource Include="LocalApi\Docs\docs.html" LogicalName="localapi.docs.html" />
     <EmbeddedResource Include="LocalApi\Docs\widget.html" LogicalName="localapi.widget.html" />
+    <EmbeddedResource Include="LocalApi\Docs\widget-page.html" LogicalName="localapi.widget-page.html" />
   </ItemGroup>
 
   <ItemGroup>

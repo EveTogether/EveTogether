@@ -107,7 +107,8 @@ public sealed class CommandSignalCoverageTests
             + "authentication reads the store per request",
         // ET-382: a key-value store whose every key has one component that writes and reads it (window placement, the
         // theme, a clipboard toggle). No key has a second writer for a signal to keep in line, and window placement
-        // writes on every move, which a signal would turn into a redraw per pixel.
+        // writes on every move, which a signal would turn into a redraw per pixel. The saved widgets (localapi.widget.*)
+        // follow the same rule: WidgetStore is their only writer and raises its own change for the open widget pages.
         [typeof(SetSettingCommand)] = "each key is written and read by the one component that owns it, and window "
             + "placement writes on every move; no key has a second writer or a screen showing it live",
         [typeof(DeleteSettingCommand)] = "each key is written and read by the one component that owns it; no key has a "
