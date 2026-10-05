@@ -52,6 +52,54 @@ jobs:
           delimiter="notes_$(openssl rand -hex 8)"
           { echo "notes<<$delimiter"; cat release-notes.md; echo "$delimiter"; } >> "$GITHUB_OUTPUT"
 
+  # Runs beside the builds and is not in publish-assets' needs: a failing test shows up in the run summary but
+  # does not hold the release back.
+  tests:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      # windows-latest boots in UTC, where a wire-timezone bug is invisible: shifting a value by a zero offset
+      # is a no-op, so the tests written to catch that class of bug (ET-366) would pass even with the bug back.
+      # A fixed non-UTC zone makes the runner behave like the developer machines these tests were written on.
+      - name: Set a non-UTC timezone
+        shell: pwsh
+        run: tzutil /s "W. Europe Standard Time"
+
+      - name: Run UI and server tests
+        shell: pwsh
+        run: |
+          # A test silent for 5 minutes is killed and named in the log instead of the job being cancelled at the job limit.
+          $PSNativeCommandUseErrorActionPreference = $false
+          dotnet test EveUtils.Client.UiTests/EveUtils.Client.UiTests.csproj -c Release --blame-hang --blame-hang-timeout 5m --blame-hang-dump-type none --logger "trx;LogFileName=ui.trx" --results-directory TestResults
+          $uiExit = $LASTEXITCODE
+          dotnet test EveUtils.Server.Tests/EveUtils.Server.Tests.csproj -c Release --blame-hang --blame-hang-timeout 5m --blame-hang-dump-type none --logger "trx;LogFileName=server.trx" --results-directory TestResults
+          $serverExit = $LASTEXITCODE
+
+          "## Release test results" >> $env:GITHUB_STEP_SUMMARY
+          $failedTests = @(Get-ChildItem TestResults -Filter '*.trx' -Recurse -ErrorAction SilentlyContinue | ForEach-Object {
+            ([xml](Get-Content -Raw -LiteralPath $_.FullName)).SelectNodes("//*[local-name()='UnitTestResult' and @outcome='Failed']") |
+              ForEach-Object { "- $($_.GetAttribute('testName'))" }
+          })
+          if ($failedTests.Count -gt 0) {
+            "### Failed tests" >> $env:GITHUB_STEP_SUMMARY
+            $failedTests >> $env:GITHUB_STEP_SUMMARY
+          }
+          if ($uiExit -ne 0 -or $serverExit -ne 0) {
+            if ($failedTests.Count -eq 0) {
+              "A test process failed before writing named results." >> $env:GITHUB_STEP_SUMMARY
+            }
+            exit 1
+          }
+          "UI and server tests passed." >> $env:GITHUB_STEP_SUMMARY
+
   build-windows:
     needs: notes
     runs-on: windows-latest
