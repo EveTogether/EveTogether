@@ -283,7 +283,7 @@ message AssignMemberFitRequest { int64 member_id = 1; FitReferenceDto fit = 2; o
 // 9 = FitSkillVerdict (FC-6 cross-client). 10 = unix ms this member's client last published into the fleet, absent
 // when it never has (ET-70). 11/12 = self-reported availability for the fleet's next start (ET-169, FleetMemberAvailability)
 // plus the optional note the member gave with it — absent note when none was given, not empty string.
-message MemberDto { int64 id = 1; int32 character_id = 2; int64 wing_id = 3; int64 squad_id = 4; int32 role = 5; bool is_external = 6; FitReferenceDto assigned_fit = 7; optional int64 assigned_composition_entry_id = 8; int32 fit_skill_verdict = 9; optional int64 last_seen_ms = 10; int32 availability = 11; optional string availability_note = 12; }
+message MemberDto { int64 id = 1; int32 character_id = 2; int64 wing_id = 3; int64 squad_id = 4; int32 role = 5; bool is_external = 6; FitReferenceDto assigned_fit = 7; optional int64 assigned_composition_entry_id = 8; int32 fit_skill_verdict = 9; optional int64 last_seen_ms = 10; int32 availability = 11; optional string availability_note = 12; optional bool is_connected = 13; }
 message ReportMemberFitVerdictRequest { int64 member_id = 1; int32 verdict = 2; }  // verdict = FitSkillVerdict; self-only
 message ReportMemberInGameFleetRequest { int64 member_id = 1; bool in_fleet = 2; }  // self-only in-game presence (D-126 M6)
 message SetFleetMemberAvailabilityRequest { int64 member_id = 1; int32 availability = 2; optional string note = 3; }  // availability = FleetMemberAvailability; self-only, strictly (ET-169)

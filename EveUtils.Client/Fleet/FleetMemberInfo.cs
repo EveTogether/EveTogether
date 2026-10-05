@@ -11,7 +11,9 @@ namespace EveUtils.Client.Fleet;
 /// <paramref name="LastSeenAt"/> is when the server last saw this member's client publish into the fleet, or null when
 /// it never has — the difference between a pilot who left and one we have simply never heard from (ET-70).
 /// <paramref name="Availability"/> is this member's self-reported availability for the fleet's next start (ET-169),
-/// set and cleared by the member only; <paramref name="AvailabilityNote"/> is the optional short note that came with it.</summary>
+/// set and cleared by the member only; <paramref name="AvailabilityNote"/> is the optional short note that came with it.
+/// <paramref name="IsConnected"/> is whether the server holds a connection for this character right now, or null from a
+/// server too old to say (ET-440).</summary>
 public sealed record FleetMemberInfo(
     long Id,
     int CharacterId,
@@ -24,4 +26,5 @@ public sealed record FleetMemberInfo(
     FitSkillVerdict FitSkillVerdict = FitSkillVerdict.Unknown,
     DateTimeOffset? LastSeenAt = null,
     FleetMemberAvailability Availability = FleetMemberAvailability.NotSet,
-    string? AvailabilityNote = null);
+    string? AvailabilityNote = null,
+    bool? IsConnected = null);

@@ -58,6 +58,19 @@ public sealed class MetricShareSnapshot(
         return fleetChoice ?? IsShared(kind);
     }
 
+    /// <summary>What this character offers this fleet right now, as the <see cref="MetricKind.Shares"/> manifest carries
+    /// it (ET-440). Combat stands for every live combat line: they share one switch.</summary>
+    public SharedMetrics SharesFor(long fleetId, int characterId)
+    {
+        SharedMetrics shares = SharedMetrics.None;
+        if (IsShared(fleetId, characterId, MetricKind.Location)) shares |= SharedMetrics.Location;
+        if (IsShared(fleetId, characterId, MetricKind.Dps)) shares |= SharedMetrics.Combat;
+        if (IsShared(fleetId, characterId, MetricKind.Bounty)) shares |= SharedMetrics.Bounty;
+        if (IsShared(fleetId, characterId, MetricKind.Loot)) shares |= SharedMetrics.Loot;
+        if (IsShared(fleetId, characterId, MetricKind.MiningYield)) shares |= SharedMetrics.Mining;
+        return shares;
+    }
+
     /// <summary>The current override choice for the per-fleet dialog: 0 = inherit (no override), 1 = share, 2 = don't share.</summary>
     public int OverrideChoiceIndex(long fleetId, int characterId, MetricKind kind) =>
         _Choice(OverrideKeyFor(fleetId, characterId, kind)) switch

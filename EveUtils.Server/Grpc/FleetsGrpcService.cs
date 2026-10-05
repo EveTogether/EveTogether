@@ -366,7 +366,9 @@ public sealed class FleetsGrpcService(
                 IsExternal = member.IsExternal,
                 AssignedFit = member.AssignedFit is null ? null : ToFitDto(member.AssignedFit),
                 FitSkillVerdict = (int)member.FitSkillVerdict,
-                Availability = (int)member.Availability
+                Availability = (int)member.Availability,
+                // Set always, so a client can tell "not connected" from a server too old to say (ET-440).
+                IsConnected = connectedClients.IsConnected(member.CharacterId)
             };
             if (member.AssignedCompositionEntryId is long entryId)
                 dto.AssignedCompositionEntryId = entryId;

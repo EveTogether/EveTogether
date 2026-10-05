@@ -107,4 +107,12 @@ public enum MetricKind
     /// the per-weapon breakdown for display. Not aggregatable — a fleet's application is no sum of its members'.
     /// </summary>
     Application = 16,
+
+    /// <summary>
+    /// What this member shares with the fleet right now (ET-440), as a <see cref="SharedMetrics"/> bit set in the value.
+    /// Sent every tick whatever the share settings say, because it carries no figure — it is what lets a receiver tell
+    /// "this pilot keeps their location to themselves" from "no system known yet". A client from before it never sends
+    /// one, and that absence is itself the answer "too old to say".
+    /// </summary>
+    Shares = 17,
 }
