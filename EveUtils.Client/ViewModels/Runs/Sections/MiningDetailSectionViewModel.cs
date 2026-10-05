@@ -111,21 +111,35 @@ public sealed partial class MiningDetailSectionViewModel(RunDetailSectionService
         Dictionary<int, double> prices = new();
         int[] typeIds = [.. resolved.Select(r => r.Ore?.TypeId).OfType<int>().Distinct()];
         if (typeIds.Length == 0)
+        {
             return prices;
+        }
 
         List<AppraisalLine> lines = [.. typeIds.Select(id => new AppraisalLine(id, string.Empty, 1))];
         Result<AppraisalOutcome> valued;
         if (services.Services?.GetService<IAppraisalProviderSelector>() is { } selector)
+        {
             valued = await selector.AppraiseWithFallbackAsync(lines, cancellationToken);
+        }
         else if (services.Appraisal is { } appraisal)
+        {
             valued = await appraisal.AppraiseAsync(lines, cancellationToken);
+        }
         else
+        {
             return prices;
+        }
 
         if (valued.Value is { } outcome)
+        {
             foreach (AppraisalRow row in outcome.Rows)
+            {
                 if (row.Price?.Estimate is { } estimate)
+                {
                     prices[row.Line.TypeId] = estimate;
+                }
+            }
+        }
         return prices;
     }
 

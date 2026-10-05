@@ -24,18 +24,26 @@ public sealed class AppraisalProviderSelector(IEnumerable<IAppraisalProvider> pr
         foreach (var candidateId in new[] { chosenId, MarketPriceAppraisalProvider.ProviderId })
         {
             if (candidateId is null)
+            {
                 continue;
+            }
 
             var candidate = providers.FirstOrDefault(provider => provider.Id == candidateId);
             if (candidate is not null && await candidate.IsAvailableAsync(cancellationToken))
+            {
                 return candidate;
+            }
         }
 
         // Neither the choice nor the default is available (e.g. the default provider itself is missing from a
         // minimal host) — any available provider beats returning one known to fail.
         foreach (var provider in providers)
+        {
             if (await provider.IsAvailableAsync(cancellationToken))
+            {
                 return provider;
+            }
+        }
 
         return providers.FirstOrDefault();
     }
@@ -45,24 +53,32 @@ public sealed class AppraisalProviderSelector(IEnumerable<IAppraisalProvider> pr
     {
         var chosen = await SelectAsync(cancellationToken);
         if (chosen is null)
+        {
             return Result<AppraisalOutcome>.Failure(new ResultMessage(
                 MessageSeverity.Warning, MessageCodes.NotFound, "No price source is available.", Source));
+        }
 
         var valued = await chosen.AppraiseAsync(lines, cancellationToken);
         if (valued.IsSuccess || chosen.Id == MarketPriceAppraisalProvider.ProviderId)
+        {
             return valued;
+        }
 
         var fallback = providers.FirstOrDefault(provider => provider.Id == MarketPriceAppraisalProvider.ProviderId);
         if (fallback is null)
+        {
             return valued;
+        }
 
         var fallbackValued = await fallback.AppraiseAsync(lines, cancellationToken);
-        if (!fallbackValued.IsSuccess)
-            return fallbackValued;
-
-        return Result<AppraisalOutcome>.Success(fallbackValued.Value! with
+        if (!fallbackValued.IsSuccess || fallbackValued.Value is not { } fallbackOutcome)
         {
-            PricingBasis = $"{chosen.DisplayName} unavailable, ESI average. {fallbackValued.Value!.PricingBasis}"
+            return fallbackValued;
+        }
+
+        return Result<AppraisalOutcome>.Success(fallbackOutcome with
+        {
+            PricingBasis = $"{chosen.DisplayName} unavailable, ESI average. {fallbackOutcome.PricingBasis}"
         });
     }
 }

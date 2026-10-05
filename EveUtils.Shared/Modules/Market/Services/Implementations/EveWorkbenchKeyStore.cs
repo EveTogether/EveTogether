@@ -6,9 +6,8 @@ using EveUtils.Shared.Modules.ServerAuth.Services;
 
 namespace EveUtils.Shared.Modules.Market.Services.Implementations;
 
-/// <summary>See <see cref="IEveWorkbenchKeyStore"/>. Same AES-256-GCM blob layout (nonce | tag | cipher) as
-/// <c>EncryptedPerCharacterTokenStore</c> uses for ESI tokens, base64-encoded so it fits one Settings string value.
-/// The protector's own key file never leaves the machine, so the setting value alone decrypts nothing.</summary>
+/// <summary>Stores the token in the AES-256-GCM layout the ESI token store uses, base64-encoded into one setting.
+/// The key file never leaves the machine, so the setting value alone decrypts nothing.</summary>
 public sealed class EveWorkbenchKeyStore(IDispatcher dispatcher, ITokenProtector protector) : IEveWorkbenchKeyStore
 {
     public const string SettingKey = "appraisal.eveworkbench.token";
@@ -21,7 +20,9 @@ public sealed class EveWorkbenchKeyStore(IDispatcher dispatcher, ITokenProtector
         var settings = await dispatcher.Query(new GetSettingsQuery(), cancellationToken);
         var stored = settings.FirstOrDefault(setting => setting.Key == SettingKey)?.Value;
         if (string.IsNullOrEmpty(stored))
+        {
             return null;
+        }
 
         try
         {
@@ -59,7 +60,9 @@ public sealed class EveWorkbenchKeyStore(IDispatcher dispatcher, ITokenProtector
     {
         var blob = Convert.FromBase64String(encoded);
         if (blob.Length < NonceSize + TagSize)
+        {
             throw new FormatException("The stored EVE Workbench token blob is too short.");
+        }
 
         return new EncryptedToken(
             Cipher: blob[(NonceSize + TagSize)..],

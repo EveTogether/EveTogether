@@ -7,15 +7,9 @@ using EveUtils.Shared.Modules.Fittings.Services.Implementations;
 
 namespace EveUtils.Shared.Modules.Market.Services.Implementations;
 
-/// <summary>
-/// Values a list against EVE Workbench's keyed appraisal endpoint (ET-364): Jita 4-4 station prices, authenticated
-/// with the user's own personal access token (header <c>Character-Access-Token</c>) rather than an application key,
-/// which needs an IP allowlist a desktop app cannot offer. <see cref="AppraisalPrice.Estimate"/> is the sell price,
-/// matching EVE Workbench's own default (<c>type=1</c>) appraisal.
-///
-/// The token never appears in a log line, a <see cref="Result{T}"/> message or an exception's text — every failure
-/// path below names the HTTP outcome, never the request that produced it.
-/// </summary>
+/// <summary>Values a list at Jita 4-4 through EVE Workbench (ET-364), with the user's personal access token because an
+/// application key needs an IP allowlist a desktop app cannot offer. Every failure names only the HTTP outcome, so
+/// the token never reaches a log line or a message.</summary>
 public sealed class EveWorkbenchAppraisalProvider(IHttpClientFactory httpClientFactory, IEveWorkbenchKeyStore keyStore)
     : IAppraisalProvider
 {
@@ -37,8 +31,10 @@ public sealed class EveWorkbenchAppraisalProvider(IHttpClientFactory httpClientF
     {
         var token = await keyStore.GetTokenAsync(cancellationToken);
         if (string.IsNullOrEmpty(token))
+        {
             return _Failed(MessageCodes.AuthRequired,
                 "No EVE Workbench personal access token is configured.");
+        }
 
         using var request = new HttpRequestMessage(HttpMethod.Post, RequestPath)
         {
@@ -63,11 +59,15 @@ public sealed class EveWorkbenchAppraisalProvider(IHttpClientFactory httpClientF
         }
 
         if (response.StatusCode == HttpStatusCode.Unauthorized)
+        {
             return _Failed(MessageCodes.AuthRequired,
                 "EVE Workbench rejected the personal access token — check it in Settings.");
+        }
         if (!response.IsSuccessStatusCode)
+        {
             return _Failed(MessageCodes.ServerError,
                 $"EVE Workbench could not value this listing (HTTP {(int)response.StatusCode}).");
+        }
 
         EwbAppraisalResponse? payload;
         try
@@ -80,7 +80,9 @@ public sealed class EveWorkbenchAppraisalProvider(IHttpClientFactory httpClientF
         }
 
         if (payload is null || payload.Error)
+        {
             return _Failed(MessageCodes.EsiFailed, payload?.Message ?? "EVE Workbench could not value this listing.");
+        }
 
         // Matched by type id, not by position: EWB's own parser silently drops a line it cannot read, so a request
         // line with no matching response item is the signal that it was dropped, not that it priced at nothing.
@@ -91,9 +93,13 @@ public sealed class EveWorkbenchAppraisalProvider(IHttpClientFactory httpClientF
         foreach (var line in lines)
         {
             if (byTypeId.TryGetValue(line.TypeId, out var item))
+            {
                 rows.Add(new AppraisalRow(line, new AppraisalPrice(item.SellPrice, item.BuyPrice, item.SellPrice)));
+            }
             else
+            {
                 unresolved.Add(line.Name);
+            }
         }
 
         return Result<AppraisalOutcome>.Success(

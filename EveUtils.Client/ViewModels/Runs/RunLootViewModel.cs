@@ -584,11 +584,17 @@ public sealed partial class RunLootViewModel : ViewModelBase
 
         Result<AppraisalOutcome> valued;
         if (_appraisalSelector is { } selector)
+        {
             valued = await selector.AppraiseWithFallbackAsync(lines, cancellationToken);
+        }
         else if (_appraisal is { } appraisal)
+        {
             valued = await appraisal.AppraiseAsync(lines, cancellationToken);
+        }
         else
+        {
             return;
+        }
 
         if (!valued.IsSuccess)
         {

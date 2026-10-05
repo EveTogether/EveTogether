@@ -119,18 +119,26 @@ public sealed partial class ConsumablesDetailSectionViewModel(RunDetailSectionSe
     {
         int[] wanted = [.. typeIds.Where(typeId => typeId > 0).Distinct()];
         if (wanted.Length == 0)
+        {
             return;
+        }
 
         List<AppraisalLine> lines = [.. wanted.Select(typeId => new AppraisalLine(typeId, string.Empty, 1))];
         // ET-364: the selector (the user's chosen provider, with a fallback to ESI average) takes priority;
         // services.Appraisal only still matters for a caller that never set Services.
         Result<AppraisalOutcome> valued;
         if (services.Services?.GetService<IAppraisalProviderSelector>() is { } selector)
+        {
             valued = await selector.AppraiseWithFallbackAsync(lines, cancellationToken);
+        }
         else if (services.Appraisal is { } appraisal)
+        {
             valued = await appraisal.AppraiseAsync(lines, cancellationToken);
+        }
         else
+        {
             return;
+        }
 
         if (!valued.IsSuccess || valued.Value is not { } outcome)
             return;

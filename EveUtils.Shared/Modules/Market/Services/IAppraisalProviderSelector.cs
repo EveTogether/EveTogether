@@ -2,15 +2,9 @@ using EveUtils.Shared.Messaging;
 
 namespace EveUtils.Shared.Modules.Market.Services;
 
-/// <summary>
-/// Resolves which <see cref="IAppraisalProvider"/> the user has chosen (ET-364). Every caller — the Appraisal tool
-/// and the run, mining and consumables screens alike — goes through this instead of
-/// <c>IServiceProvider.GetService&lt;IAppraisalProvider&gt;()</c>, which resolves to whichever provider was
-/// registered last and ignores the user's choice entirely once a second provider exists.
-///
-/// The setting is read fresh on every call rather than cached, so nothing here ever holds a stale pick — the same
-/// trade <c>SetSettingCommand</c>'s own signal exemption already makes.
-/// </summary>
+/// <summary>Resolves the <see cref="IAppraisalProvider"/> the user has chosen (ET-364), where a plain
+/// <c>GetService&lt;IAppraisalProvider&gt;()</c> returns whichever provider registered last. The setting is read on
+/// every call, so a pick never goes stale.</summary>
 public interface IAppraisalProviderSelector
 {
     /// <summary>The provider the user has chosen, or the default (<see cref="Implementations.MarketPriceAppraisalProvider"/>)

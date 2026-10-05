@@ -35,13 +35,12 @@ public partial class AppraisalViewModel : ViewModelBase
     private readonly IDialogService? _dialogs;
     private readonly IEveWorkbenchKeyStore? _eveWorkbenchKeyStore;
     private readonly IDispatcher? _dispatcher;
+    private readonly IAppraisalProviderSelector? _selector;
 
-    /// <param name="selector">The user's persisted provider choice (ET-364). Applied once it resolves, after the
-    /// synchronous default below — a selector cannot be awaited from a constructor, and the tool opens with
-    /// something selected either way rather than empty while that read is in flight.</param>
+    /// <param name="selector">The user's persisted provider choice (ET-364), applied by <see cref="LoadAsync"/> over
+    /// the synchronous default so the tool never opens with nothing selected.</param>
     /// <param name="eveWorkbenchKeyStore">Lets the EVE Workbench personal access token be set from this tool's own
-    /// screen. Null hides that field — the same "no service, no action" rule every other optional dependency here
-    /// follows.</param>
+    /// screen. Null hides that field, like every other optional dependency here.</param>
     /// <param name="dispatcher">Lets <see cref="MakeSelectionDefaultCommand"/> persist a pick as the default for
     /// every other consumer; null hides that command, leaving the picker session-only as it always was.</param>
     public AppraisalViewModel(IEnumerable<IAppraisalProvider> providers, ISdeAccessor sde, IDialogService? dialogs = null,
@@ -52,15 +51,26 @@ public partial class AppraisalViewModel : ViewModelBase
         _dialogs = dialogs;
         _eveWorkbenchKeyStore = eveWorkbenchKeyStore;
         _dispatcher = dispatcher;
+        _selector = selector;
         Providers = [.. providers.OrderBy(provider => provider.DisplayName, StringComparer.Ordinal)];
         SelectedProvider = Providers.FirstOrDefault();
         ShowEveWorkbenchToken = eveWorkbenchKeyStore is not null
             && Providers.Any(provider => provider.Id == EveWorkbenchAppraisalProvider.ProviderId);
         _constructed = true;
-        if (selector is not null)
-            _ = _ApplyPersistedSelectionAsync(selector);
-        if (eveWorkbenchKeyStore is not null)
-            _ = _RefreshEveWorkbenchTokenStatusAsync(eveWorkbenchKeyStore);
+    }
+
+    /// <summary>Applies the persisted provider choice and reads whether an EVE Workbench token is set. The opener
+    /// runs it through <see cref="IDialogService.ShowAppraisal"/>, which logs and reports a failure.</summary>
+    public async Task LoadAsync()
+    {
+        if (_selector is not null)
+        {
+            await _ApplyPersistedSelectionAsync(_selector);
+        }
+        if (_eveWorkbenchKeyStore is not null)
+        {
+            await _RefreshEveWorkbenchTokenStatusAsync(_eveWorkbenchKeyStore);
+        }
     }
 
     // Set once construction's own SelectedProvider assignment (above) has run, so OnSelectedProviderChanged below
@@ -71,7 +81,9 @@ public partial class AppraisalViewModel : ViewModelBase
     partial void OnSelectedProviderChanged(IAppraisalProvider? value)
     {
         if (_constructed)
+        {
             _selectionChangedByUser = true;
+        }
     }
 
     /// <summary>Applies the persisted default once it resolves — unless the operator already picked something of
@@ -79,9 +91,13 @@ public partial class AppraisalViewModel : ViewModelBase
     private async Task _ApplyPersistedSelectionAsync(IAppraisalProviderSelector selector)
     {
         if (await selector.SelectAsync() is not { } chosen || _selectionChangedByUser)
+        {
             return;
+        }
         if (Providers.FirstOrDefault(p => p.Id == chosen.Id) is { } match)
+        {
             SelectedProvider = match;
+        }
     }
 
     /// <summary>The price sources that are installed. The picker for them stays hidden while there is only one —
@@ -104,7 +120,10 @@ public partial class AppraisalViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(CanMakeSelectionDefault))]
     private async Task MakeSelectionDefaultAsync()
     {
-        if (_dispatcher is null || SelectedProvider is not { } provider) return;
+        if (_dispatcher is null || SelectedProvider is not { } provider)
+        {
+            return;
+        }
         await _dispatcher.Send(new SetSettingCommand(AppraisalProviderSelector.SettingKey, provider.Id));
         DefaultProviderStatus = $"{provider.DisplayName} is now the default for every screen.";
     }
@@ -134,7 +153,10 @@ public partial class AppraisalViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(CanSaveEveWorkbenchToken))]
     private async Task SaveEveWorkbenchTokenAsync()
     {
-        if (_eveWorkbenchKeyStore is null) return;
+        if (_eveWorkbenchKeyStore is null)
+        {
+            return;
+        }
         await _eveWorkbenchKeyStore.SetTokenAsync(EveWorkbenchTokenInput);
         EveWorkbenchTokenInput = string.Empty;
         await _RefreshEveWorkbenchTokenStatusAsync(_eveWorkbenchKeyStore);
@@ -145,7 +167,10 @@ public partial class AppraisalViewModel : ViewModelBase
     [RelayCommand]
     private async Task ClearEveWorkbenchTokenAsync()
     {
-        if (_eveWorkbenchKeyStore is null) return;
+        if (_eveWorkbenchKeyStore is null)
+        {
+            return;
+        }
         await _eveWorkbenchKeyStore.SetTokenAsync(null);
         await _RefreshEveWorkbenchTokenStatusAsync(_eveWorkbenchKeyStore);
     }

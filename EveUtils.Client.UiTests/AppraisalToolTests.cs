@@ -501,9 +501,9 @@ public sealed class AppraisalToolTests(ITestOutputHelper output)
         await shell.LaunchModuleCommand.ExecuteAsync("appraisal");
 
         var dialogs = (RecordingDialogService)instance.Services.GetRequiredService<IDialogService>();
-        Assert.NotNull(dialogs.LastAppraisal);
+        var appraisal = Assert.NotNull(dialogs.LastAppraisal);
         // The providers arrived through DI, not through a new-up (ET-364 added EVE Workbench as a second one).
-        Assert.Equal(2, dialogs.LastAppraisal!.Providers.Count);
+        Assert.Equal(2, appraisal.Providers.Count);
     }
 
     /// <summary>
