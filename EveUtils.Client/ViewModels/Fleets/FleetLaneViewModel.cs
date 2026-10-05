@@ -6,6 +6,8 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EveUtils.Shared.Identity;
 
+using EveUtils.Shared.Modules.Fleet.Dtos;
+
 namespace EveUtils.Client.ViewModels.Fleets;
 
 /// <summary>
@@ -105,6 +107,16 @@ public sealed partial class FleetLaneViewModel : ObservableObject
     /// that is not running — but on a one-line row that reads as a running clock at a glance, so scherm 13 puts a
     /// single dash there instead.</summary>
     public string CompactClockText => IsIdle ? "—" : ClockText;
+
+    /// <summary>The commander's run going in this pilot's fleet that this client has no window on (ET-440) — what
+    /// JOIN FLEET RUN on the lane joins. Null when there is none, or a run window is already up.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsJoinRunShown))]
+    private RunGroupCodeStart? _joinableRun;
+
+    public bool IsJoinRunShown => JoinableRun is not null && JoinRunCommand is not null;
+
+    public IRelayCommand? JoinRunCommand { get; init; }
 
     /// <summary>Time since the fleet started, from the same stamp the row's clock counts from. Invariant (ET-34).</summary>
     public void Tick(DateTimeOffset now)

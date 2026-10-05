@@ -237,6 +237,10 @@ public sealed class FleetRunWindowPresenter : ISingletonService, IDisposable
 
     private static string _OfferKey(string groupCode) => $"fleet-run-offer:{groupCode}";
 
+    /// <summary>"Join fleet run" on a run already going (ET-440): the same join the offer's button makes, for a member
+    /// who joined the fleet later, declined the offer, or was cut off by a discard.</summary>
+    public Task JoinAsync(RunGroupCodeStart start) => _Accept(new Offer(start, IsPrepared: false));
+
     /// <summary>
     /// The one path that actually joins a run, whether the pilot clicked "Join run" or auto-join chose it for them.
     /// <paramref name="announceJoin"/> is the only difference: a click already told the pilot they just joined, an

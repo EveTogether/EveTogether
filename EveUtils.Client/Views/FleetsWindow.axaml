@@ -802,6 +802,10 @@
                                                         Command="{Binding SecondaryCommand}" IsVisible="{Binding HasSecondaryAction}"/>
                                             </StackPanel>
                                         </Grid>
+                                        <!-- The commander's run is going and this client has no window on it (ET-440). -->
+                                        <Button Classes="pick accent" HorizontalAlignment="Left" Margin="0,6,0,0"
+                                                Content="JOIN FLEET RUN" Command="{Binding JoinRunCommand}"
+                                                IsVisible="{Binding IsJoinRunShown}"/>
                                         <ItemsControl Classes="lanefoot" ItemsSource="{Binding FootChips}" Margin="0,6,0,-2"
                                                       IsVisible="{Binding ShowFootChips}">
                                             <ItemsControl.ItemsPanel>

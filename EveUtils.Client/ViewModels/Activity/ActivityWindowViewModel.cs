@@ -1794,6 +1794,8 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         _ = _RefreshParticipantsAsync();
         _ShareRunLootWithFleet();
         _ShareRunMiningWithFleet();
+        _AnnounceRunningToFleet(nowUtc);
+        _RefreshJoinableFleetRun(nowUtc);
         _ = FleetSharing.SyncAsync(nowUtc, FleetId, GroupCode,
             RunState is ActivityRunState.Running or ActivityRunState.Stopped, _RunCharacterIds(), LootOverview,
             Participants);

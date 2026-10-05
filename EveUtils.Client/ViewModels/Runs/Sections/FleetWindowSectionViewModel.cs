@@ -8,6 +8,7 @@ using EveUtils.Client.Fleet;
 using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Client.ViewModels.Runs.Attendance;
 using EveUtils.Shared.Modules.Fleet.Dtos;
+using EveUtils.Shared.Modules.Fleet.Metrics;
 using EveUtils.Shared.Modules.Runs.Commands;
 using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Runs.Isk;
@@ -47,7 +48,27 @@ public sealed partial class FleetWindowSectionViewModel(IRunWindowContext contex
     // Never "solo": nothing here can observe the absence of a fleet, only the presence of one. Without any the section
     // is hidden (IsShown) and this line is not on screen at all.
     public override void RefreshSummary() =>
-        HeaderSummary = Context.FleetMemberCount > 1 ? Context.FleetStatusText : $"{Rows.Count} characters";
+        HeaderSummary = _readiness ?? (Context.FleetMemberCount > 1 ? Context.FleetStatusText : $"{Rows.Count} characters");
+
+    // "2 of 3 ready · 1 offline" over the whole roster (ET-440), the FC's answer to "who am I going in with"; null
+    // while no fleet is known, so a solo run keeps its own line.
+    private string? _readiness;
+
+    private static string? _ReadinessOf(IReadOnlyList<FleetMateStatus> standings)
+    {
+        if (standings.Count < 2)
+            return null;
+
+        int ready = standings.Count(standing => standing.IsConnected is not false && standing.Reason
+            is FleetMemberStatusReason.InSystem or FleetMemberStatusReason.NoSystemYet
+            or FleetMemberStatusReason.LocationWithheld or FleetMemberStatusReason.OldClient
+            or FleetMemberStatusReason.ReportingElsewhere);
+        int offline = standings.Count(standing => standing.Reason
+            is FleetMemberStatusReason.NotInGame or FleetMemberStatusReason.Silent or FleetMemberStatusReason.NotConnected);
+        return offline > 0
+            ? $"{ready} of {standings.Count} ready · {offline} offline"
+            : $"{ready} of {standings.Count} ready";
+    }
 
     public override void Refresh(DateTime nowUtc) => _ = _LoadOwnAsync();
 
@@ -99,6 +120,7 @@ public sealed partial class FleetWindowSectionViewModel(IRunWindowContext contex
             && Context.Services.GetService<FleetMemberBoard>() is { } board
                 ? board.Read(fleetId, now)
                 : [];
+        _readiness = _ReadinessOf(standings);
         IEnumerable<int> mates = Context.FleetMembers.Select(member => member.CharacterId)
             .Concat(standings.Select(standing => standing.CharacterId))
             .Distinct()
@@ -111,7 +133,7 @@ public sealed partial class FleetWindowSectionViewModel(IRunWindowContext contex
             FleetCharacterRowViewModel row = _RowFor(characterId);
             row.Name = member?.Name ?? _NameOf(characterId);
             row.IsLocal = _own.Contains(characterId);
-            row.SubText = standing is null || row.IsLocal
+            row.SubText = standing is null
                 ? member?.LocationText
                 : FleetMemberStatusText.Line(standing, member?.LocationText, now);
             row.StatusChips = standing is null || row.IsLocal
