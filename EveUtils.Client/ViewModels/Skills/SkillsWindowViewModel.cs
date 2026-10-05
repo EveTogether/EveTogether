@@ -18,6 +18,7 @@ using EveUtils.Shared.Modules.Settings.Repositories;
 using EveUtils.Shared.Modules.Skills.Entities;
 using EveUtils.Shared.Modules.Skills.Events;
 using EveUtils.Shared.Modules.Skills.Plans.Events;
+using EveUtils.Shared.Modules.Skills.Plans.Repositories;
 using EveUtils.Shared.Modules.Skills.Repositories;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -37,6 +38,9 @@ public sealed partial class SkillsWindowViewModel : ObservableObject, IRefreshab
     /// PLANS, OPTIMISE — used by the TRAINING QUEUE REMAP line's "OPTIMISE ›" jump.</summary>
     public const int OptimiseTabIndex = 3;
 
+    /// <summary>The PLANS tab's index — OPTIMISE's WHAT IF… lands there, where the what-if lives (ET-358).</summary>
+    public const int PlansTabIndex = 2;
+
     private readonly IServiceProvider _services;
     private readonly ICharacterRegistry _registry;
     private readonly ICharacterSkillRepository _skillRepository;
@@ -50,6 +54,7 @@ public sealed partial class SkillsWindowViewModel : ObservableObject, IRefreshab
     private readonly ILogger<SkillsWindowViewModel>? _logger;
     private readonly SkillPlansChangeFeed? _plansFeed;
     private readonly SkillsChangeFeed? _skillsFeed;
+    private readonly ISkillPlanReader? _planReader;
     private readonly int? _startingCharacterId;
     private IDisposable? _plansFeedSubscription;
     private IDisposable? _skillsFeedSubscription;
@@ -105,6 +110,7 @@ public sealed partial class SkillsWindowViewModel : ObservableObject, IRefreshab
         _logger = services.GetService<ILogger<SkillsWindowViewModel>>();
         _plansFeed = services.GetService<SkillPlansChangeFeed>();
         _skillsFeed = services.GetService<SkillsChangeFeed>();
+        _planReader = services.GetService<ISkillPlanReader>();
         _startingCharacterId = startingCharacterId;
         _plansFeedSubscription = _plansFeed?.Subscribe(_OnPlansChangedAsync);
         _skillsFeedSubscription = _skillsFeed?.Subscribe(_OnSkillsChangedAsync);
@@ -118,14 +124,14 @@ public sealed partial class SkillsWindowViewModel : ObservableObject, IRefreshab
 
     // A plan changed on this or another window — reload PLANS only when it is about the character showing right now;
     // a change for a different character updates that character's tab next time it is selected instead (LoadAsync).
-    private Task _OnPlansChangedAsync(IReadOnlyList<SkillPlansChangedEvent> events)
+    // OPTIMISE FOR lists the plans too, so it is rebuilt alongside.
+    private async Task _OnPlansChangedAsync(IReadOnlyList<SkillPlansChangedEvent> events)
     {
-        if (Plans is not null && events.Any(e => e.Data.CharacterId == SelectedCharacterId))
+        if (Plans is not null && SelectedCharacterId is { } current && events.Any(e => e.Data.CharacterId == current))
         {
-            return Plans.LoadAsync();
+            await Plans.LoadAsync();
+            await _RebuildQueueAndOptimiseAsync(current);
         }
-
-        return Task.CompletedTask;
     }
 
     // A background skill import landed for the character shown: rebuild TRAINING QUEUE, OPTIMISE and the header SP text
@@ -138,16 +144,21 @@ public sealed partial class SkillsWindowViewModel : ObservableObject, IRefreshab
             return;
         }
 
+        await _RebuildQueueAndOptimiseAsync(current);
+    }
+
+    private async Task _RebuildQueueAndOptimiseAsync(int current)
+    {
         var snapshot = await _BuildSnapshotAsync(current, CancellationToken.None);
+        var plans = await _LoadOptimisePlansAsync(current, CancellationToken.None);
         var (queue, optimise) = await Task.Run(() =>
-            (new SkillsQueueViewModel(snapshot), new SkillsOptimiseViewModel(snapshot, _dogma)));
+            (new SkillsQueueViewModel(snapshot), new SkillsOptimiseViewModel(snapshot, _dogma, plans)));
         if (SelectedCharacterId != current)
         {
             return; // the pilot switched characters while this reload was in flight — the new selection covers it
         }
 
-        queue.GoToOptimise = () => SelectedTabIndex = OptimiseTabIndex;
-        queue.RemapLineText = optimise.RemapLineText;
+        _WireTabs(queue, optimise);
         Queue = queue;
         Optimise = optimise;
         _ApplyTotalSp(snapshot);
@@ -290,13 +301,13 @@ public sealed partial class SkillsWindowViewModel : ObservableObject, IRefreshab
             }
 
             var snapshot = await _BuildSnapshotAsync(characterId, cancellationToken);
+            var optimisePlans = await _LoadOptimisePlansAsync(characterId, cancellationToken);
             // The SDE/dogma reads inside these view-models are synchronous SQLite queries — off the UI thread, the
             // same rule RunsOverviewViewModel and KillmailsOverviewViewModel hold themselves to for their own reads.
             var (catalogue, queue, optimise) = await Task.Run(() =>
                 (new SkillsCatalogueViewModel(snapshot), new SkillsQueueViewModel(snapshot),
-                 new SkillsOptimiseViewModel(snapshot, _dogma)), cancellationToken);
-            queue.GoToOptimise = () => SelectedTabIndex = OptimiseTabIndex;
-            queue.RemapLineText = optimise.RemapLineText;
+                 new SkillsOptimiseViewModel(snapshot, _dogma, optimisePlans)), cancellationToken);
+            _WireTabs(queue, optimise);
             var plans = new SkillsPlansViewModel(_services, snapshot, characterId, character.Name);
             await plans.LoadAsync(cancellationToken);
 
@@ -342,6 +353,30 @@ public sealed partial class SkillsWindowViewModel : ObservableObject, IRefreshab
         {
             IsLoading = false;
         }
+    }
+
+    private void _WireTabs(SkillsQueueViewModel queue, SkillsOptimiseViewModel optimise)
+    {
+        queue.GoToOptimise = () => SelectedTabIndex = OptimiseTabIndex;
+        queue.RemapLineText = optimise.RemapLineText;
+        optimise.GoToWhatIf = () => SelectedTabIndex = PlansTabIndex;
+    }
+
+    // OPTIMISE FOR offers each of the character's plans next to the queue; a plan's rows are read once here.
+    private async Task<IReadOnlyList<OptimisePlanInput>> _LoadOptimisePlansAsync(int characterId, CancellationToken cancellationToken)
+    {
+        if (_planReader is null)
+        {
+            return [];
+        }
+
+        var result = new List<OptimisePlanInput>();
+        foreach (var plan in await _planReader.GetForCharacterAsync(characterId, cancellationToken))
+        {
+            result.Add(new OptimisePlanInput(plan.Name, await _planReader.GetRowsAsync(plan.Id, cancellationToken)));
+        }
+
+        return result;
     }
 
     // AC6: straight from ESI total_sp/unallocated_sp — never a sum over trained levels. Null only when this

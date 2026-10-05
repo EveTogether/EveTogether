@@ -1,5 +1,5 @@
 namespace EveUtils.Client.ViewModels.Skills;
 
-/// <summary>One OPTIMISE-tab row: the training time the queue's rows for one primary/secondary attribute pair take
-/// under the best remap.</summary>
-public sealed record AttributePairTimeRowViewModel(string AttributePairText, string TimeText);
+/// <summary>One "where the time goes" bar on OPTIMISE: a primary/secondary pair, its share of the total training time
+/// (0-1, the bar's length) and that time at today's attributes.</summary>
+public sealed record AttributePairTimeRowViewModel(string AttributePairText, double Share, string TimeText);
