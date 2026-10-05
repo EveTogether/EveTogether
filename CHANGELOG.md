@@ -17,6 +17,41 @@ entries under `[Unreleased]` below that were not there yet at the previous night
 
 ## [Unreleased]
 
+- **Changed: every SKILLS screen now looks like the approved mockup, and says what each number means.** The SKILLS
+  window, the doctrine readiness in COMP and SKILL IMPACT were rebuilt to match mockup v5, screen by screen:
+  - **OPTIMISE** lets you pick the training queue or one of your plans. For each, a CHA/INT/MEM/PER/WIL table shows
+    your attributes now against the remap, with the training time and end date before and after, what it saves (also
+    as a percentage) and one sentence on why. The implants show per slot with what a +4 or +5 set would do, and a
+    sorted bar per attribute pair shows where the time goes. A side pane explains how it is all computed; ET never
+    remaps for you.
+  - **TRAINING QUEUE** shows the skill in training with a progress bar and its end, the time the queue has left with
+    its end date, a timeline, and labelled columns.
+  - **CATALOGUE** has a filter and a search over all skills, every group at once with a bar for how much of it is
+    trained, the skills in two columns, and "QUEUE → IV" on a skill already queued.
+  - **The skill pane** shows the rank, the time per level at your attributes, your five attributes and implants, and
+    where the skill sits in the queue, with SHOW IN QUEUE.
+  - **PLANS** has labelled summary blocks, column heads with group, rank and attributes, the queue position of a level
+    already queued, dated milestones, a third order "by attribute", "Add from an item" with its requirements before
+    you add it, IN THIS PLAN with the levels each source brought in, and what was dropped because it was already
+    trained. PUT PLAN FIRST IN QUEUE… copies the plan in order for the in-game queue. WHAT IF numbers its five
+    scenarios and says what each assumes, and SHARE explains each option and previews the text.
+  - **COMP** shows per doctrine fit the skills it requires, its skill minimums and how many of your characters are
+    ready, fly below the minimum or not yet. The pane lists them in columns with how long each needs, what is missing
+    and buttons to add it to a plan, open the fit or see the what-if. EDIT on an entry opens the skill-minimum editor
+    in the same pane, with its effect on your characters and FROM A PLAN…. START FLEET opens a new fleet in FLEETS;
+    a local doctrine is set on the new local fleet straight away.
+  - **From a fit** now lives in SKILLS → PLANS (+ FROM FIT…, or SKILL IMPACT… in a fit's detail, which opens SKILLS
+    on that character with the fit picked) instead of a window of its own. It lets you switch the fit and pick stats
+    from a grouped menu. Its three target cards show each
+    stat's value and share with a fit check, there is a warning when the fit cannot fit at any level, a chart of the
+    gain against training time, and a side list of the skills that move the chosen stats.
+  - The header shows when the skills were last refreshed. Every duration is written one way ("252d 13h", "1h 13m",
+    "53m"), and dates read "today 11:47" or "Sat 26 Sep 01:22".
+- **Fixed: what-if savings showed raw numbers like "242.03:29:44.4587905".**
+- **Fixed: TO FLY and TO MIN ran into each other in the COMP readiness list.**
+- **Changed: can fly no longer trains fitting skills for a shortfall no level can close.** When a fit cannot fit at
+  any skill level, can fly now fixes only what skills can fix and reports the rest, instead of training every
+  fitting skill to V.
 - **Changed: the run window's FLEET list shows everyone in your fleet, and says why they read the way they do.** Every member on the fleet's roster now has a row, not only those who shared a system. Under each name it says where they are, or why it cannot: "keeps their location private", "no system yet", "not in game", "EVE Together closed" with when they were last seen, "not connected to the server", or an older EVE Together that cannot tell. Small tags show whether they are connected, whether they are in this run, what they share and when they were last heard from. A fleet mate's mined ore now shows its ISK value in FLEET and MINING too, where it used to read "—" for an ore you had not mined yourself.
 - **Fixed: the Fleets screen showed fleet mates as "unknown" or "offline" while they were flying.** Their status came from a snapshot taken when the list last loaded, so a pilot who joined after it read "unknown" and everyone else turned "offline" a minute and a half later. It now follows what their client reports live: online, not in game, app closed or no link, with the reason on hover. Each fleet card also shows how many pilots are ready to fly, in game and connected, before and while the fleet runs, for example "2/3 ready", with the full count on hover.
 - **Fixed: a fleet mate no longer flickers between their system and "offline".** When a pilot had the same character signed in to EVE Together on two computers, for instance the one they play on and one that was simply left open, both sent their status to the fleet every second and everyone else saw them jump back and forth between their system and "offline". The server now only passes on the computer that actually has the game running for that character. If that game is closed, the other computer takes over within ten seconds. This needs the updated server.
@@ -29,6 +64,59 @@ entries under `[Unreleased]` below that were not there yet at the previous night
 - **Changed: the Local API no longer gives away where you are, unless you ask it to.** Your current system used to be sent to every widget and tool reading the Local API, even with location sharing turned off. It is now left out by default. If your own overlay shows your system, turn on the new "Include my location" setting under Settings › Integrations to get it back. OPSEC mode now covers the Local API and widgets too: while it is on, your location stays out even with that setting on. **Breaking for widget authors:** `location` in `metrics` is now empty and `fleet.metrics` sends no location samples until the setting is turned on.
 - **Changed: only your own widgets can read the Local API.** Any web page open in your browser could read your characters, fits and fleets from the Local API while it was running. Now only pages served by the Local API itself, such as its widget, are allowed, on the live stream as well. If you host a widget somewhere else, add its address to the `localapi.allowedorigins` setting. Names and systems shown in the sample widget can no longer inject HTML or scripts into your stream.
 - **Fixed: the destroyed/dropped bar on a killmail now shows the split.** The bar under the value figures in a killmail's detail window was a single solid colour. It now shows how the ISK value divides: red for what was destroyed (the ship included) and green for what dropped, with the two parts adding up to the total. Items without a price are left out of the bar.
+- **Added: three skill-training targets in SKILL IMPACT… — can fly, optimal ±III and max.** With at least one
+  OPTIMISE FOR stat picked, three cards show the levels, training time and skill points to fly the fit at all
+  (prerequisites plus the cheapest fitting skills if it overloads CPU or power grid — or "This fit does not fit at
+  any skill level" when no amount of training fixes it), to have every chosen stat's movers at least at III, and to
+  have them all at V, each with the chosen stats as a percentage of what's achievable between can fly and max. A
+  curve plots that percentage against cumulative training time, greedily picking the next level with the best gain
+  per hour, with markers where optimal and 100% are reached. ADD TO PLAN on a card, and a new "+" next to each
+  impact row, add straight to a skill plan. PLANS' + FROM FIT… now opens this view instead of adding a fit's raw
+  prerequisites directly, so the fitting-skill fix and the three targets are available from there too.
+- **Added: + FROM DOCTRINE… in PLANS.** Pick a composition, a role and one of its entries, and the plan gets the
+  entry's fit plus its doctrine skill minimums as one source — prerequisites included, same as every other + button.
+  A second milestone, "◆ doctrine minimum met", lands after the last minimum-only level, next to "✈ flyable" after
+  the last level the fit itself needs. The composition list is read-only (`IFleetCompositionReader`); nothing here
+  ever writes to a composition.
+- **Added: WHAT IF panel in PLANS.** For the selected plan and character, five scenarios and the date each finishes:
+  the queue as it stands today, training the plan first, the same plan with the fastest attribute remap, and that
+  remap plus a matched +4 or +5 implant set. A SHARE dialog next to it offers COPY AS TEXT, PUT IT IN THE DOCTRINE
+  (opens the composition editor with the plan's skills pre-filled as a DOCTRINE MINIMUM, saved only when you press
+  SAVE there), and EVE Workbench, shown disabled for now. A two-line summary says how many of your other characters
+  can already fly the plan's target levels today and how soon the nearest of the rest gets there. Nothing here is
+  saved by itself — it is a calculator, not a write path.
+- **Added: doctrine skill minimums per fit.** In the composition editor every fit entry now has a DOCTRINE MINIMUM
+  section: pick a skill and a level (I–V) a pilot must have on top of what the fit itself requires. Each row shows
+  what the fit already needs, and says "no effect" when the minimum asks nothing extra. Like the rest of the editor
+  it is only saved on SAVE. A shared composition carries its minimums to everyone on the server; a local one keeps
+  them on this machine. The readiness list in COMP gains a TO MIN column: a character that can fly the fit but is
+  still under the minimum shows as "flies", with the training time to reach the minimum.
+- **Fixed: an open SKILLS window now updates on its own when a background skill refresh lands for the character it
+  is showing**, instead of keeping the CATALOGUE, TRAINING QUEUE, PLANS and OPTIMISE tabs frozen on whatever they
+  read when the window was last (re-)opened.
+- **Fixed: a killmail pasted from a link now joins its run and shows up in an open KILLMAILS window right away.**
+  PASTE LINK stored the loss but skipped two things the automatic feed always does for it: linking it to the run it
+  happened in — so it never counted as FAILED or added to TOTAL ISK — and telling an already open KILLMAILS window
+  about it, which only picked up the pasted mail after being reopened. Both now happen exactly like the feed.
+- **Added: OPTIMISE in the SKILLS module.** The attribute remap that trains your current training queue fastest,
+  brute-forced over every valid 17-27-per-attribute split, with your implants left plugged in. Shows what a +4 or
+  +5 implant set would save instead, your current implants by attribute, when your next remap is available (or
+  "unknown" if ESI hasn't reported it), and the training time per attribute pair. The TRAINING QUEUE tab now shows a
+  REMAP line with the same savings figures and a jump to OPTIMISE. This is advice only — EVE Together cannot perform
+  a remap for you, since ESI has no endpoint for it.
+- **Added: PLANS in the SKILLS module.** Build a skill plan for a character from a single skill, from any fit in your
+  local or shared library, or from any published item — prerequisites are added automatically, and levels you have
+  already trained are left off. Order the plan "fly first" (default), "shortest first" or "by attribute"; a
+  prerequisite always trains before the skill that needs it. The total time, an end date and a "✈ flyable after"
+  milestone are shown for the fit that seeded the plan, and a level already in your training queue is marked. COPY AS
+  TEXT and IMPORT FROM TEXT move a plan as plain text (one "Skill N" per line). A plan lives only on this machine and
+  is never sent anywhere.
+- **Added: pasting a killmail's own clipboard text shows it right away, marked provisional.** PASTE LINK in KILLMAILS
+  now also accepts the plain "Copy" text from a killmail window, not just a link — useful the moment a kill happens,
+  before ESI has it. The row appears immediately, marked "FROM CLIPBOARD · WAITING FOR ESI", with no run link and no
+  ISK counted yet; once the real killmail arrives from the feed or a pasted link, it replaces the provisional row in
+  full. A pasted link still wins over pasted text when both are on the clipboard at once.
+- **Added: SKILL IMPACT… in the fit-detail window shows which skills are worth training for this fit.** With a character selected under SKILLS, a new SKILL IMPACT… button scans every skill and lists the ones that actually move the fit — DPS, EHP, speed, capacitor, targeting and fitting-room stats — with the gain at the next level and at V, and the training time. Pick which stats you're optimising for with the OPTIMISE FOR chips; a stat with nothing left to gain shows why. Off in the All I–V baseline modes, since there is no trained character to scan against.
 - **Added: new EVE static data is noticed while the app runs.** The check for a newer static data build (item names, fittings) used to happen only at startup. It now repeats every hour together with the update check, and a new build shows a "Later / Update" notice in the corner instead of a dialog that blocks what you are doing. Update starts the usual download with its progress window. Each build is announced once, and a check that fails stays quiet. The question at startup, which you need on a first run without data, is unchanged.
 - **Added: EVE Together now checks for updates while it runs.** Until now it only looked at startup, so a new build released while the app was open went unnoticed until you restarted. It now checks again every hour, on the same channel (stable or nightly) as at startup, and the usual "Update available" notice appears when something new is out. Each version is announced once, so choosing Later does not bring it back, and a check that fails (offline, GitHub unreachable) stays quiet.
 - **Fixed: a server that is down no longer flickers.** While EVE Together kept trying to reach a server that was down, the "not reachable" warning on Home disappeared every few seconds and the character's server link briefly looked healthy. Both now stay put until the server really answers, and only then turn back to connected.
@@ -85,6 +173,16 @@ entries under `[Unreleased]` below that were not there yet at the previous night
   server is never asked for its fleets there, so those fleets used to be missing without a word. The fleet list now
   shows one line per server, such as "Catbank is not connected to <server> — its fleets are not shown here", naming
   every character in that position. The line disappears as soon as they are all connected.
+- **Added: SKILLS module.** A new rail entry between COMP and TOOLS reads one character's skills at a time, picked
+  from a header combobox (the same row CharacterPickerWindow uses, with a search field once you have 9 or more
+  characters). CATALOGUE lists every skill group with how many of its skills are injected, and — per group — each
+  skill's level pips plus either the trained mark, its queued target level, or the plain time to the next level, with
+  the SDE's own description and a per-level SP/time breakdown in a 400 px detail pane. TRAINING QUEUE shows only the
+  rows still ahead of you (a row ESI already finished never lingers), with the queue-left duration read straight from
+  ESI's own dates, and a paused queue (training stopped) shows ≈ estimates instead of invented dates. The header's
+  total skill points come from ESI's own `total_sp` rather than a sum over trained levels. PLANS and OPTIMISE are
+  placeholder tabs for now. CharacterPickerWindow (ET-184) itself gained the same search field, from the row
+  component the two now share.
 - **Fixed: a HOMEFRONT outcome you pick by hand is no longer lost.** Choosing Failed (or any outcome) could quietly flip back to Completed when the game log or the run's own default caught up a moment later; your pick now always stands. Changing attendance, waves or pilots from two windows on the same run at once also no longer mixes up the result.
 - **Fixed: the "run is not shared" fleet notice no longer stays blank when you open a run window.** It could miss the first check and stay empty until a later one; it now shows straight away when it applies.
 - **Added: e-war, EHP, signature and speed data for abyssal deadspace enemies**, read from EVE's own data plus a
@@ -101,6 +199,7 @@ entries under `[Unreleased]` below that were not there yet at the previous night
   to your killmails while the window stays open, and the background import starts immediately instead of waiting up
   to 5 minutes for its next tick. A killmail the background refresh finds later, with the window still open, now
   appears the same way.
+- **Added: see which of your characters can fly each fit in a fleet composition.** COMP shows readiness counts per fit and a searchable list of names, with the time and queued skills still needed to fly it.
 - **Added: opening a killmail shows its full detail.** Double-click a row in KILLMAILS, or press OPEN KILLMAIL on a
   linked loss, to see the victim, the fit split into what was destroyed and what dropped, every attacker with their
   ship, weapon, damage and share, and the total value at today's prices. OPEN FIT reconstructs the fit as it was flown

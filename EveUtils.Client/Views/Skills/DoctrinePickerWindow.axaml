@@ -1,0 +1,31 @@
+<v:ChromedWindow xmlns="https://github.com/avaloniaui" xmlns:v="using:EveUtils.Client.Views"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:EveUtils.Client.ViewModels.Skills.Plans"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="380"
+        x:Class="EveUtils.Client.Views.Skills.DoctrinePickerWindow"
+        x:DataType="vm:DoctrinePickerViewModel"
+        Width="380" SizeToContent="Height" CanResize="False"
+        WindowStartupLocation="CenterOwner"
+        Title="+ FROM DOCTRINE">
+
+    <StackPanel Margin="16" Spacing="10">
+        <TextBlock Classes="label" FontSize="10" Text="COMPOSITION"/>
+        <ComboBox HorizontalAlignment="Stretch" ItemsSource="{Binding Compositions}"
+                  SelectedItem="{Binding SelectedComposition, Mode=TwoWay}" DisplayMemberBinding="{Binding Name}"/>
+
+        <TextBlock Classes="label" FontSize="10" Text="ROLE"/>
+        <ComboBox HorizontalAlignment="Stretch" ItemsSource="{Binding Roles}"
+                  SelectedItem="{Binding SelectedRole, Mode=TwoWay}" DisplayMemberBinding="{Binding RoleName}"/>
+
+        <TextBlock Classes="label" FontSize="10" Text="ENTRY"/>
+        <ComboBox HorizontalAlignment="Stretch" ItemsSource="{Binding Entries}"
+                  SelectedItem="{Binding SelectedEntry, Mode=TwoWay}" DisplayMemberBinding="{Binding Fit.FitName}"/>
+
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,10,0,0">
+            <Button Content="CANCEL" Click="OnCancel"/>
+            <Button Content="SELECT" Click="OnSelect" IsEnabled="{Binding CanConfirm}"/>
+        </StackPanel>
+    </StackPanel>
+</v:ChromedWindow>

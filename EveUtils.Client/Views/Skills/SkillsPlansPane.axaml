@@ -1,0 +1,373 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vs="using:EveUtils.Client.ViewModels.Skills.Plans"
+             xmlns:sk="using:EveUtils.Client.Views.Skills"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="1200" d:DesignHeight="700"
+             x:Class="EveUtils.Client.Views.Skills.SkillsPlansPane"
+             x:DataType="vs:SkillsPlansViewModel"
+             x:Name="PlansRoot">
+
+    <!-- PLANS (ET-355/358), laid out as mockup v5 screens c and e: the plan and its + actions, four summary blocks with
+         ORDER, the table with column heads and milestones, what was dropped, and a 400 px pane that shows the what-if or,
+         after + FROM ITEM…, "Add from an item"; both end in IN THIS PLAN with PUT FIRST and SHARE. -->
+    <UserControl.Styles>
+        <Style Selector="Border.qblock">
+            <Setter Property="Padding" Value="12,10"/>
+            <Setter Property="BorderThickness" Value="0,0,1,0"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}"/>
+        </Style>
+        <Style Selector="TextBlock.qlabel">
+            <Setter Property="Foreground" Value="{DynamicResource TextAccentBrush}"/>
+            <Setter Property="FontSize" Value="10"/>
+            <Setter Property="LetterSpacing" Value="1.8"/>
+            <Setter Property="Margin" Value="0,0,0,4"/>
+        </Style>
+        <Style Selector="TextBlock.qbig">
+            <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+            <Setter Property="FontSize" Value="20"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+        </Style>
+        <Style Selector="TextBlock.qsub">
+            <Setter Property="FontSize" Value="10.5"/>
+            <Setter Property="Margin" Value="0,4,0,0"/>
+        </Style>
+        <Style Selector="TextBlock.colhead">
+            <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+            <Setter Property="FontSize" Value="9.5"/>
+            <Setter Property="LetterSpacing" Value="1.2"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="Border.planrow">
+            <Setter Property="Padding" Value="14,0"/>
+            <Setter Property="Height" Value="28"/>
+            <Setter Property="BorderThickness" Value="0,0,0,1"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}"/>
+        </Style>
+        <Style Selector="Border.planrow:pointerover">
+            <Setter Property="Background" Value="{DynamicResource BgRowHoverBrush}"/>
+        </Style>
+        <Style Selector="Border.milestone">
+            <Setter Property="Padding" Value="40,0,14,0"/>
+            <Setter Property="Height" Value="28"/>
+            <Setter Property="Background" Value="{DynamicResource BgRowSelectedBrush}"/>
+            <Setter Property="BorderThickness" Value="0,0,0,1"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}"/>
+        </Style>
+        <Style Selector="TextBlock.cell">
+            <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+            <Setter Property="FontSize" Value="10.5"/>
+            <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+            <Setter Property="TextAlignment" Value="Right"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="Border.chip">
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="4,0"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="HorizontalAlignment" Value="Left"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+        </Style>
+        <Style Selector="Border.chip > TextBlock">
+            <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+            <Setter Property="FontSize" Value="9"/>
+            <Setter Property="LetterSpacing" Value="0.8"/>
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+        </Style>
+        <Style Selector="Border.chip.fit">
+            <Setter Property="BorderBrush" Value="{StaticResource BlueBrush}"/>
+        </Style>
+        <Style Selector="Border.chip.fit > TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource BlueBrush}"/>
+        </Style>
+        <Style Selector="Border.chip.min">
+            <Setter Property="BorderBrush" Value="{StaticResource MagentaBrush}"/>
+        </Style>
+        <Style Selector="Border.chip.min > TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource MagentaBrush}"/>
+        </Style>
+        <Style Selector="Border.chip.item">
+            <Setter Property="BorderBrush" Value="{StaticResource WarnBrush}"/>
+        </Style>
+        <Style Selector="Border.chip.item > TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource WarnBrush}"/>
+        </Style>
+        <Style Selector="Border.chip.queue">
+            <Setter Property="Margin" Value="8,0,0,0"/>
+        </Style>
+        <Style Selector="Button.tool">
+            <Setter Property="Padding" Value="10,3"/>
+            <Setter Property="FontSize" Value="10.5"/>
+        </Style>
+        <Style Selector="Button.tool.on">
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+            <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+        </Style>
+        <Style Selector="Button.xrow">
+            <Setter Property="Padding" Value="4,0"/>
+            <Setter Property="FontSize" Value="10"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+        </Style>
+        <Style Selector="Border.dsec">
+            <Setter Property="Padding" Value="16,10,16,12"/>
+            <Setter Property="BorderThickness" Value="0,0,0,1"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}"/>
+        </Style>
+        <Style Selector="TextBlock.dl">
+            <Setter Property="Foreground" Value="{DynamicResource TextAccentBrush}"/>
+            <Setter Property="FontSize" Value="10"/>
+            <Setter Property="LetterSpacing" Value="1.8"/>
+            <Setter Property="Margin" Value="0,0,0,6"/>
+        </Style>
+    </UserControl.Styles>
+
+    <Panel>
+    <Grid ColumnDefinitions="*,400" IsVisible="{Binding HasNoFromFit}">
+        <DockPanel Grid.Column="0">
+            <!-- PLAN + its menu + the + actions. -->
+            <Border DockPanel.Dock="Top" Padding="14,8" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource BorderBrush}">
+                <Grid ColumnDefinitions="Auto,Auto,Auto,Auto,*,Auto" ColumnSpacing="8">
+                    <TextBlock Grid.Column="0" Classes="label" VerticalAlignment="Center" Text="PLAN"/>
+                    <ComboBox Grid.Column="1" MinWidth="170" FontSize="11.5" ItemsSource="{Binding Plans}"
+                              SelectedItem="{Binding SelectedPlan, Mode=TwoWay}" DisplayMemberBinding="{Binding Name}"/>
+                    <TextBlock Grid.Column="2" FontSize="10.5" Foreground="{StaticResource TextDimBrush}" VerticalAlignment="Center"
+                               Text="{Binding PlansCountText}"/>
+                    <Button Grid.Column="3" Classes="tool" Content="PLAN ▾" ToolTip.Tip="New, rename, delete or import a plan">
+                        <Button.Flyout>
+                            <MenuFlyout Placement="BottomEdgeAlignedLeft">
+                                <MenuItem Header="New plan…" Command="{Binding CreatePlanCommand}"/>
+                                <MenuItem Header="Rename…" Command="{Binding RenamePlanCommand}"/>
+                                <MenuItem Header="Import from text…" Command="{Binding ImportFromTextCommand}"/>
+                                <MenuItem Header="Delete…" Command="{Binding DeletePlanCommand}"/>
+                            </MenuFlyout>
+                        </Button.Flyout>
+                    </Button>
+                    <StackPanel Grid.Column="5" Orientation="Horizontal" Spacing="6">
+                        <Button Classes="tool" Content="+ SKILL" Command="{Binding AddSkillCommand}"/>
+                        <Button Classes="tool" Content="+ FROM FIT…" Command="{Binding AddFromFitCommand}"/>
+                        <Button Classes="tool" Classes.on="{Binding IsItemPaneOpen}" Content="+ FROM ITEM…" Command="{Binding ToggleItemPaneCommand}"/>
+                        <Button Classes="tool" Content="+ FROM DOCTRINE…" Command="{Binding AddFromDoctrineCommand}"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <TextBlock DockPanel.Dock="Top" Margin="14,8,14,0" FontSize="11" Foreground="{DynamicResource AccentBrightBrush}" TextWrapping="Wrap"
+                       IsVisible="{Binding StatusMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                       Text="{Binding StatusMessage}"/>
+
+            <!-- Four summary blocks. -->
+            <Border DockPanel.Dock="Top" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource DividerBrush}">
+                <Grid ColumnDefinitions="*,*,*,1.2*">
+                    <Border Grid.Column="0" Classes="qblock">
+                        <StackPanel>
+                            <TextBlock Classes="qlabel" Text="TOTAL, TRAINED FIRST"/>
+                            <TextBlock Classes="qbig" Text="{Binding TotalTimeText}"/>
+                            <TextBlock Classes="qsub" Text="{Binding TotalDoneText}"/>
+                        </StackPanel>
+                    </Border>
+                    <Border Grid.Column="1" Classes="qblock">
+                        <StackPanel>
+                            <TextBlock Classes="qlabel" Text="LEVELS"/>
+                            <TextBlock Classes="qbig" Text="{Binding LevelsText}"/>
+                            <TextBlock Classes="qsub" Text="{Binding LevelsQueuedText}"/>
+                        </StackPanel>
+                    </Border>
+                    <Border Grid.Column="2" Classes="qblock">
+                        <StackPanel>
+                            <TextBlock Classes="qlabel" Text="FLYABLE AFTER"/>
+                            <TextBlock Classes="qbig" Text="{Binding FlyableAfterText}"/>
+                            <TextBlock Classes="qsub" Text="{Binding FlyableAfterSubText}"/>
+                        </StackPanel>
+                    </Border>
+                    <Border Grid.Column="3" Classes="qblock" BorderThickness="0">
+                        <StackPanel>
+                            <TextBlock Classes="qlabel" Text="ORDER"/>
+                            <StackPanel Orientation="Horizontal" Margin="1,0,0,0">
+                                <Button Classes="seg" Classes.on="{Binding IsFlyFirst}" Padding="8,2" Content="fly first"
+                                        Command="{Binding SetOrderModeCommand}" CommandParameter="{x:Static vs:SkillPlanOrderMode.FlyFirst}"/>
+                                <Button Classes="seg" Classes.on="{Binding IsShortestFirst}" Padding="8,2" Content="shortest first"
+                                        Command="{Binding SetOrderModeCommand}" CommandParameter="{x:Static vs:SkillPlanOrderMode.ShortestFirst}"/>
+                                <Button Classes="seg" Classes.on="{Binding IsByAttribute}" Padding="8,2" Content="by attribute"
+                                        Command="{Binding SetOrderModeCommand}" CommandParameter="{x:Static vs:SkillPlanOrderMode.ByAttribute}"/>
+                            </StackPanel>
+                            <TextBlock Classes="qsub" Text="{Binding OrderHint}"/>
+                        </StackPanel>
+                    </Border>
+                </Grid>
+            </Border>
+
+            <!-- Column heads. -->
+            <Border DockPanel.Dock="Top" Padding="14,6,14,5" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource DividerBrush}">
+                <Grid ColumnDefinitions="22,56,*,130,90,60,60,44,18" ColumnSpacing="8">
+                    <TextBlock Grid.Column="0" Classes="colhead" HorizontalAlignment="Right" Text="#"/>
+                    <TextBlock Grid.Column="1" Classes="colhead" Text="LEVEL"/>
+                    <TextBlock Grid.Column="2" Classes="colhead" Text="SKILL"/>
+                    <TextBlock Grid.Column="3" Classes="colhead" Text="GROUP"/>
+                    <TextBlock Grid.Column="4" Classes="colhead" Text="RANK · ATTR"/>
+                    <TextBlock Grid.Column="5" Classes="colhead" HorizontalAlignment="Right" Text="TIME"/>
+                    <TextBlock Grid.Column="6" Classes="colhead" HorizontalAlignment="Right" Text="TOTAL"/>
+                    <TextBlock Grid.Column="7" Classes="colhead" Text="FROM"/>
+                </Grid>
+            </Border>
+
+            <!-- What was asked for but already trained. -->
+            <Border DockPanel.Dock="Bottom" Padding="14,8" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource DividerBrush}"
+                    IsVisible="{Binding HasDropped}">
+                <TextBlock FontSize="10.5" Foreground="{StaticResource TextDimBrush}" TextWrapping="Wrap" Text="{Binding DroppedText}"/>
+            </Border>
+
+            <TextBlock DockPanel.Dock="Top" Margin="14,12" FontSize="11" Foreground="{StaticResource TextDimBrush}" TextWrapping="Wrap"
+                       Text="No plan yet. Start one from PLAN ▾ → New plan…, then add a skill, a fit, an item or a doctrine entry."
+                       IsVisible="{Binding SelectedPlan, Converter={x:Static ObjectConverters.IsNull}}"/>
+
+            <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+                <ItemsControl ItemsSource="{Binding Rows}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vs:SkillPlanDisplayRow">
+                            <Panel>
+                                <Border Classes="milestone" IsVisible="{Binding IsMilestone}">
+                                    <TextBlock VerticalAlignment="Center" FontSize="11.5">
+                                        <Run FontWeight="Bold" Foreground="{StaticResource TextBrightBrush}" Text="{Binding MilestoneText}"/><Run Text="   "/><Run
+                                             FontFamily="{StaticResource MonoFont}" FontSize="10.5" Text="{Binding MilestoneDetail}"/>
+                                    </TextBlock>
+                                </Border>
+                                <Border Classes="planrow" IsVisible="{Binding !IsMilestone}">
+                                    <Grid ColumnDefinitions="22,56,*,130,90,60,60,44,18" ColumnSpacing="8">
+                                        <TextBlock Grid.Column="0" Classes="cell" Foreground="{StaticResource TextDimBrush}" Text="{Binding Number}"/>
+                                        <sk:SkillPipsView Grid.Column="1" VerticalAlignment="Center" CurrentLevel="{Binding CurrentLevel}"
+                                                          QueuedLevel="{Binding Level}"/>
+                                        <StackPanel Grid.Column="2" Orientation="Horizontal">
+                                            <TextBlock FontSize="11.5" Foreground="{StaticResource TextBrightBrush}" VerticalAlignment="Center"
+                                                       TextTrimming="CharacterEllipsis">
+                                                <Run Text="{Binding SkillName}"/><Run Text=" "/><Run Text="{Binding LevelText}"/>
+                                            </TextBlock>
+                                            <Border Classes="chip queue" IsVisible="{Binding HasQueueChip}">
+                                                <TextBlock Text="{Binding QueueChipText}"/>
+                                            </Border>
+                                        </StackPanel>
+                                        <TextBlock Grid.Column="3" FontSize="11" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Text="{Binding GroupName}"/>
+                                        <TextBlock Grid.Column="4" Classes="cell" TextAlignment="Left" Foreground="{StaticResource TextDimBrush}"
+                                                   Text="{Binding RankAttributesText}"/>
+                                        <TextBlock Grid.Column="5" Classes="cell" Text="{Binding TimeText}"/>
+                                        <TextBlock Grid.Column="6" Classes="cell" Text="{Binding TotalText}"/>
+                                        <Border Grid.Column="7" Classes="chip" Classes.fit="{Binding IsFit}" Classes.min="{Binding IsMin}"
+                                                Classes.item="{Binding IsItem}">
+                                            <TextBlock Text="{Binding FromText}"/>
+                                        </Border>
+                                        <Button Grid.Column="8" Classes="xrow" Content="✕" ToolTip.Tip="Remove this level from the plan"
+                                                Command="{Binding #PlansRoot.((vs:SkillsPlansViewModel)DataContext).RemoveRowCommand}"
+                                                CommandParameter="{Binding}"/>
+                                    </Grid>
+                                </Border>
+                            </Panel>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+        </DockPanel>
+
+        <!-- The pane: what-if, or "Add from an item"; both end in IN THIS PLAN. -->
+        <Border Grid.Column="1" BorderThickness="1,0,0,0" BorderBrush="{DynamicResource BorderBrush}"
+                Background="{StaticResource DrawerSurfaceBrush}">
+            <DockPanel>
+                <Border DockPanel.Dock="Bottom" Padding="16,10" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource DividerBrush}">
+                    <Panel>
+                        <TextBlock FontSize="10.5" Foreground="{StaticResource TextDimBrush}" TextWrapping="Wrap" IsVisible="{Binding IsItemPaneOpen}"
+                                   Text="ET does not write the queue (no ESI endpoint for it): PUT FIRST copies the order as text for the in-game queue."/>
+                        <TextBlock FontSize="10.5" Foreground="{StaticResource TextDimBrush}" TextWrapping="Wrap" IsVisible="{Binding !IsItemPaneOpen}"
+                                   Text="A what-if never changes the plan; ORDER only reorders it."/>
+                    </Panel>
+                </Border>
+                <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel>
+                        <!-- Add from an item. -->
+                        <StackPanel IsVisible="{Binding IsItemPaneOpen}">
+                            <Border Padding="16,14,16,10" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource DividerBrush}">
+                                <StackPanel>
+                                    <TextBlock FontSize="16" FontWeight="SemiBold" Foreground="{StaticResource TextBrightBrush}" Text="Add from an item"/>
+                                    <TextBlock FontSize="11" Margin="0,3,0,0" TextWrapping="Wrap"
+                                               Text="any published type from the SDE: ship, module, charge, drone, implant"/>
+                                </StackPanel>
+                            </Border>
+                            <Border Classes="dsec">
+                                <TextBox FontSize="11.5" PlaceholderText="Type the item's exact name…" Text="{Binding ItemSearchText, Mode=TwoWay}"/>
+                            </Border>
+                            <Border Classes="dsec" IsVisible="{Binding ItemHint, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                                <StackPanel>
+                                    <TextBlock Classes="dl" Text="REQUIRED"/>
+                                    <ItemsControl ItemsSource="{Binding ItemRequirements}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="vs:PlanItemRequirementRow">
+                                                <Grid ColumnDefinitions="*,Auto" Margin="0,3">
+                                                    <TextBlock FontSize="11.5" Text="{Binding SkillText}"/>
+                                                    <TextBlock Grid.Column="1" FontSize="11" Foreground="{StaticResource GreenBrush}" Text="{Binding StateText}"
+                                                               IsVisible="{Binding IsTrained}"/>
+                                                    <TextBlock Grid.Column="1" FontSize="11" Foreground="{StaticResource WarnBrush}" Text="{Binding StateText}"
+                                                               IsVisible="{Binding !IsTrained}"/>
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                    <TextBlock FontSize="11" Margin="0,6,0,0" Foreground="{StaticResource TextDimBrush}" TextWrapping="Wrap" Text="{Binding ItemHint}"/>
+                                    <Button Classes="tool" Margin="0,8,0,0" HorizontalAlignment="Left" Content="ADD TO PLAN"
+                                            Command="{Binding AddItemCommand}" IsEnabled="{Binding CanAddItem}"/>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+
+                        <!-- What if. -->
+                        <StackPanel IsVisible="{Binding !IsItemPaneOpen}">
+                            <Border Padding="16,14,16,10" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource DividerBrush}">
+                                <StackPanel>
+                                    <TextBlock FontSize="16" FontWeight="SemiBold" Foreground="{StaticResource TextBrightBrush}"
+                                               Text="{Binding WhatIf.Title, FallbackValue='What if'}"/>
+                                    <TextBlock FontSize="11" Margin="0,3,0,0" Text="{Binding CharacterName}"/>
+                                </StackPanel>
+                            </Border>
+                            <Panel IsVisible="{Binding WhatIf, Converter={x:Static ObjectConverters.IsNotNull}}">
+                                <sk:SkillsWhatIfPane DataContext="{Binding WhatIf}"/>
+                            </Panel>
+                            <TextBlock Margin="16,10" FontSize="11" Foreground="{StaticResource TextDimBrush}" TextWrapping="Wrap"
+                                       Text="Add something to the plan to see when it is done, and what a remap or implants would change."
+                                       IsVisible="{Binding WhatIf, Converter={x:Static ObjectConverters.IsNull}}"/>
+                        </StackPanel>
+
+                        <!-- In this plan. -->
+                        <Border Classes="dsec" IsVisible="{Binding SelectedPlan, Converter={x:Static ObjectConverters.IsNotNull}}">
+                            <StackPanel>
+                                <TextBlock Classes="dl" Text="IN THIS PLAN"/>
+                                <ItemsControl ItemsSource="{Binding InThisPlan}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="vs:PlanSourceRow">
+                                            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="6" Margin="0,3">
+                                                <Border Classes="chip" Classes.fit="{Binding IsFit}" Classes.min="{Binding IsMin}" Classes.item="{Binding IsItem}">
+                                                    <TextBlock Text="{Binding Kind}"/>
+                                                </Border>
+                                                <TextBlock Grid.Column="1" FontSize="11.5" TextTrimming="CharacterEllipsis" Text="{Binding Label}"/>
+                                                <TextBlock Grid.Column="2" FontFamily="{StaticResource MonoFont}" FontSize="11"
+                                                           Foreground="{StaticResource TextBrightBrush}" Text="{Binding LevelsText}"/>
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,10,0,0">
+                                    <Button Classes="tool accent" Content="PUT PLAN FIRST IN QUEUE…" Command="{Binding PutPlanFirstCommand}"/>
+                                    <Button Classes="tool" Content="SHARE…" Command="{Binding ShareCommand}"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </DockPanel>
+        </Border>
+    </Grid>
+        <!-- From a fit (D1): + FROM FIT… and the fit detail's SKILL IMPACT… land here, in place of the plan. -->
+        <Panel IsVisible="{Binding HasFromFit}">
+            <sk:SkillImpactView DataContext="{Binding FromFit}"/>
+        </Panel>
+    </Panel>
+</UserControl>

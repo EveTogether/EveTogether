@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using EveUtils.Client.Skills;
 using EveUtils.Shared.Modules.Skills.Entities;
 
 namespace EveUtils.Client.ViewModels.Home;
@@ -36,7 +37,7 @@ public sealed record SkillQueueStanding(
             entries.Max(entry => entry.FinishDate), entries.Count);
     }
 
-    public string SkillText => $"{SkillName} {_Roman(Level)}";
+    public string SkillText => $"{SkillName} {RomanLevel.Text(Level)}";
 
     public TimeSpan? QueueLeft(DateTimeOffset now) => QueueEndsAt is { } end ? _NotNegative(end - now) : null;
 
@@ -55,24 +56,8 @@ public sealed record SkillQueueStanding(
     public double BarFraction(DateTimeOffset now) =>
         QueueLeft(now) is { } left ? Math.Min(1, left / FullBar) : 0;
 
-    /// <summary>"56d 13h", or "3h 07m" under a day.</summary>
-    public static string Until(TimeSpan left)
-    {
-        int minutes = (int)Math.Round(left.TotalMinutes);
-        int days = minutes / 1440;
-        int hours = minutes % 1440 / 60;
-        return days > 0 ? $"{days}d {hours}h" : $"{hours}h {minutes % 60:00}m";
-    }
+    /// <summary>"56d 13h", "3h 7m" under a day, "53m" under an hour — the one SKILLS notation.</summary>
+    public static string Until(TimeSpan left) => EveUtils.Shared.Modules.Skills.EveDurationFormatter.Format(left);
 
     private static TimeSpan _NotNegative(TimeSpan span) => span < TimeSpan.Zero ? TimeSpan.Zero : span;
-
-    private static string _Roman(int level) => level switch
-    {
-        1 => "I",
-        2 => "II",
-        3 => "III",
-        4 => "IV",
-        5 => "V",
-        _ => level.ToString(System.Globalization.CultureInfo.InvariantCulture)
-    };
 }

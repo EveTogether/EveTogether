@@ -720,8 +720,14 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>Creates a client-only fleet: pick the owning local toon, name it, persist locally.</summary>
+    /// <summary>START FLEET in a local doctrine's header (COMP): the same NEW LOCAL FLEET flow, with the new fleet
+    /// coupled to <paramref name="compositionId"/> straight away, as the roster's own composition picker would.</summary>
+    public Task NewLocalFleetForCompositionAsync(long compositionId) => _NewLocalFleetAsync(compositionId);
+
     [RelayCommand]
-    private async Task NewLocalFleet()
+    private Task NewLocalFleet() => _NewLocalFleetAsync(null);
+
+    private async Task _NewLocalFleetAsync(long? compositionId)
     {
         if (!CanInteractLocal)
             return;
@@ -749,6 +755,13 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
         StatusMessage = created.IsSuccess
             ? $"Created local fleet '{name}'."
             : $"Create failed: {created.Messages.FirstOrDefault()?.Text}";
+        if (created.IsSuccess && compositionId is { } doctrine)
+        {
+            var coupled = await _localFleets.SetFleetCompositionAsync(created.Value, doctrine, ownerId.Value);
+            StatusMessage = coupled.IsSuccess
+                ? $"Created local fleet '{name}' with its doctrine."
+                : $"Created local fleet '{name}', but the doctrine could not be set: {coupled.Messages.FirstOrDefault()?.Text}";
+        }
         if (created.IsSuccess)
             await LoadLocalFleetsAsync();
     }

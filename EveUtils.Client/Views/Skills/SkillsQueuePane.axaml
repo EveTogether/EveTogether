@@ -1,0 +1,217 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vs="using:EveUtils.Client.ViewModels.Skills"
+             xmlns:sk="using:EveUtils.Client.Views.Skills"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="1200" d:DesignHeight="700"
+             x:Class="EveUtils.Client.Views.Skills.SkillsQueuePane"
+             x:DataType="vs:SkillsQueueViewModel">
+
+    <!-- TRAINING QUEUE (ET-16), laid out as mockup v5 screen a: the REMAP line, four labelled stats, the timeline, the
+         table with its column heads, and the shared 400 px detail pane. -->
+    <UserControl.Styles>
+        <Style Selector="Border.qstat">
+            <Setter Property="Padding" Value="12,10"/>
+            <Setter Property="BorderThickness" Value="0,0,1,0"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}"/>
+        </Style>
+        <Style Selector="TextBlock.qstatlabel">
+            <Setter Property="Foreground" Value="{DynamicResource TextAccentBrush}"/>
+            <Setter Property="FontSize" Value="10"/>
+            <Setter Property="LetterSpacing" Value="1.8"/>
+            <Setter Property="Margin" Value="0,0,0,4"/>
+        </Style>
+        <Style Selector="TextBlock.qbig">
+            <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+            <Setter Property="FontSize" Value="20"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+        </Style>
+        <Style Selector="TextBlock.qsub">
+            <Setter Property="FontSize" Value="10.5"/>
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+            <Setter Property="Margin" Value="0,4,0,0"/>
+        </Style>
+        <Style Selector="TextBlock.colhead">
+            <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+            <Setter Property="FontSize" Value="9.5"/>
+            <Setter Property="LetterSpacing" Value="1.2"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="ListBox.queuelist">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="0"/>
+        </Style>
+        <Style Selector="ListBox.queuelist ListBoxItem">
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="MinHeight" Value="0"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+        </Style>
+        <Style Selector="ListBox.queuelist ListBoxItem:selected /template/ ContentPresenter">
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+        <Style Selector="Border.queuerow">
+            <Setter Property="Padding" Value="14,6"/>
+            <Setter Property="BorderThickness" Value="2,0,0,1"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}"/>
+        </Style>
+        <Style Selector="Border.queuerow.selected">
+            <Setter Property="Background" Value="{DynamicResource BgRowSelectedBrush}"/>
+        </Style>
+        <Style Selector="Border.queuerow:pointerover">
+            <Setter Property="Background" Value="{DynamicResource BgRowHoverBrush}"/>
+        </Style>
+        <Style Selector="TextBlock.qcell">
+            <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+            <Setter Property="FontSize" Value="10.5"/>
+            <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+            <Setter Property="TextAlignment" Value="Right"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="Border.trainingbadge">
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="5,0"/>
+            <Setter Property="Margin" Value="8,0,0,0"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="Border.trainingbadge > TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+            <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+            <Setter Property="FontSize" Value="9"/>
+            <Setter Property="LetterSpacing" Value="1"/>
+        </Style>
+    </UserControl.Styles>
+
+    <Grid ColumnDefinitions="*,400">
+        <DockPanel Grid.Column="0">
+            <!-- REMAP line (ET-354): what a remap or implants would save on this queue, with a jump to OPTIMISE. -->
+            <Border DockPanel.Dock="Top" Padding="14,7" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource DividerBrush}"
+                    IsVisible="{Binding RemapLineText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+                    <TextBlock Grid.Column="0" Classes="label" VerticalAlignment="Center" Text="REMAP"/>
+                    <TextBlock Grid.Column="1" FontSize="11.5" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                               Text="{Binding RemapLineText}"/>
+                    <Button Grid.Column="2" Padding="10,3" FontSize="10.5" Content="OPTIMISE ›" Command="{Binding OpenOptimiseCommand}"/>
+                </Grid>
+            </Border>
+
+            <!-- Four labelled stats. -->
+            <Border DockPanel.Dock="Top" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource DividerBrush}">
+                <Grid ColumnDefinitions="1.3*,*,*,*">
+                    <Border Grid.Column="0" Classes="qstat">
+                        <StackPanel>
+                            <TextBlock Classes="qstatlabel" Text="TRAINING NOW"/>
+                            <TextBlock FontSize="13" Foreground="{StaticResource TextBrightBrush}" TextTrimming="CharacterEllipsis"
+                                       Text="{Binding TrainingNowText}"/>
+                            <ProgressBar Margin="0,6,0,0" Height="4" MinHeight="4" Minimum="0" Maximum="1" CornerRadius="0"
+                                         Value="{Binding TrainingProgress}" Foreground="{DynamicResource AccentBrush}"
+                                         Background="#1CFFFFFF"/>
+                            <TextBlock Classes="qsub" Text="{Binding TrainingEndsText}"/>
+                        </StackPanel>
+                    </Border>
+                    <Border Grid.Column="1" Classes="qstat">
+                        <StackPanel>
+                            <TextBlock Classes="qstatlabel" Text="QUEUE LEFT"/>
+                            <TextBlock Classes="qbig" Text="{Binding QueueLeftBigText}"/>
+                            <TextBlock Classes="qsub" Text="{Binding QueueUntilText}"/>
+                        </StackPanel>
+                    </Border>
+                    <Border Grid.Column="2" Classes="qstat">
+                        <StackPanel>
+                            <TextBlock Classes="qstatlabel" Text="SKILLS"/>
+                            <TextBlock Classes="qbig">
+                                <Run Text="{Binding QueuedCountText}"/><Run FontSize="13" Foreground="{StaticResource TextDimBrush}" Text=" / 150"/>
+                            </TextBlock>
+                            <TextBlock Classes="qsub" Text="{Binding DistinctSkillsText}"/>
+                        </StackPanel>
+                    </Border>
+                    <Border Grid.Column="3" Classes="qstat" BorderThickness="0">
+                        <StackPanel>
+                            <TextBlock Classes="qstatlabel" Text="SP IN QUEUE"/>
+                            <TextBlock Classes="qbig">
+                                <Run Text="{Binding SpInQueueNumberText}"/><Run FontSize="11" Text="M"/>
+                            </TextBlock>
+                            <TextBlock Classes="qsub" Text="to be trained"/>
+                        </StackPanel>
+                    </Border>
+                </Grid>
+            </Border>
+
+            <!-- Timeline: now to the end of the queue, a tick per level. -->
+            <Border DockPanel.Dock="Top" Padding="14,8,14,6" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource DividerBrush}"
+                    IsVisible="{Binding TimelineEndText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                <StackPanel>
+                    <TextBlock Classes="label" Margin="0,0,0,6" Text="TIMELINE"/>
+                    <sk:QueueTimelineView Opacity="0.6" Boundaries="{Binding TimelineBoundaries}"/>
+                    <Grid ColumnDefinitions="*,Auto,*" Margin="0,4,0,0">
+                        <TextBlock Grid.Column="0" FontFamily="{StaticResource MonoFont}" FontSize="9.5" Foreground="{StaticResource TextDimBrush}" Text="now"/>
+                        <TextBlock Grid.Column="1" FontFamily="{StaticResource MonoFont}" FontSize="9.5" Foreground="{StaticResource TextDimBrush}" Text="{Binding TimelineMidText}"/>
+                        <TextBlock Grid.Column="2" FontFamily="{StaticResource MonoFont}" FontSize="9.5" Foreground="{StaticResource TextDimBrush}"
+                                   HorizontalAlignment="Right" Text="{Binding TimelineEndText}"/>
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <TextBlock DockPanel.Dock="Top" Classes="hint" Margin="14,10" FontSize="11" Text="Nothing queued for this character."
+                       IsVisible="{Binding !HasQueue}"/>
+
+            <!-- Column heads. -->
+            <Border DockPanel.Dock="Top" Padding="16,6,14,5" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource DividerBrush}"
+                    IsVisible="{Binding HasQueue}">
+                <Grid ColumnDefinitions="24,56,*,150,72,140,72" ColumnSpacing="8">
+                    <TextBlock Grid.Column="0" Classes="colhead" HorizontalAlignment="Right" Text="#"/>
+                    <TextBlock Grid.Column="1" Classes="colhead" Text="LEVEL"/>
+                    <TextBlock Grid.Column="2" Classes="colhead" Text="SKILL"/>
+                    <TextBlock Grid.Column="3" Classes="colhead" Text="GROUP"/>
+                    <TextBlock Grid.Column="4" Classes="colhead" HorizontalAlignment="Right" Text="THIS LEVEL"/>
+                    <TextBlock Grid.Column="5" Classes="colhead" Text="ENDS"/>
+                    <TextBlock Grid.Column="6" Classes="colhead" HorizontalAlignment="Right" Text="FROM NOW"/>
+                </Grid>
+            </Border>
+
+            <ScrollViewer IsVisible="{Binding HasQueue}" HorizontalScrollBarVisibility="Disabled">
+                <ListBox Classes="queuelist" ItemsSource="{Binding Rows}" SelectedItem="{Binding SelectedRow, Mode=TwoWay}">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate x:DataType="vs:SkillQueueRowViewModel">
+                            <Border Classes="queuerow" Classes.selected="{Binding IsSelected}">
+                                <Grid ColumnDefinitions="24,56,*,150,72,140,72" ColumnSpacing="8">
+                                    <TextBlock Grid.Column="0" Classes="qcell" Foreground="{StaticResource TextDimBrush}" Text="{Binding Position}"/>
+                                    <sk:SkillPipsView Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Left"
+                                                      CurrentLevel="{Binding CurrentLevel}" QueuedLevel="{Binding QueuedLevel}"
+                                                      TrainingLevel="{Binding TrainingLevel}"/>
+                                    <StackPanel Grid.Column="2" Orientation="Horizontal">
+                                        <TextBlock FontSize="11.5" Foreground="{StaticResource TextBrightBrush}" TextTrimming="CharacterEllipsis"
+                                                   VerticalAlignment="Center" Text="{Binding SkillText}"/>
+                                        <Border Classes="trainingbadge" IsVisible="{Binding IsTraining}">
+                                            <TextBlock Text="TRAINING"/>
+                                        </Border>
+                                    </StackPanel>
+                                    <TextBlock Grid.Column="3" FontSize="11" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Text="{Binding GroupName}"/>
+                                    <TextBlock Grid.Column="4" Classes="qcell" Text="{Binding ThisLevelText}"/>
+                                    <TextBlock Grid.Column="5" Classes="qcell" TextAlignment="Left" Text="{Binding EndsText}"/>
+                                    <TextBlock Grid.Column="6" Classes="qcell" Text="{Binding FromNowText}"/>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </ScrollViewer>
+        </DockPanel>
+
+        <!-- The 400 px pane, same as CATALOGUE (ET-16). -->
+        <Border Grid.Column="1" BorderThickness="1,0,0,0" BorderBrush="{DynamicResource BorderBrush}"
+                Background="{StaticResource DrawerSurfaceBrush}">
+            <Panel>
+                <TextBlock Classes="hint" Margin="14" TextWrapping="Wrap" HorizontalAlignment="Center"
+                           VerticalAlignment="Center" Text="Pick a row to see its detail."
+                           IsVisible="{Binding SelectedDetail, Converter={x:Static ObjectConverters.IsNull}}"/>
+                <Panel IsVisible="{Binding SelectedDetail, Converter={x:Static ObjectConverters.IsNotNull}}">
+                    <sk:SkillDetailPane DataContext="{Binding SelectedDetail}"/>
+                </Panel>
+            </Panel>
+        </Border>
+    </Grid>
+</UserControl>

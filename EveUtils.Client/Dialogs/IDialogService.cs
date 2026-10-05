@@ -8,6 +8,7 @@ using EveUtils.Client.ViewModels.GameLogs;
 using EveUtils.Client.ViewModels.Killmails;
 using EveUtils.Client.ViewModels.Map;
 using EveUtils.Client.ViewModels.Runs;
+using EveUtils.Client.ViewModels.Skills;
 using EveUtils.Shared.Modules.Esi;
 using EveUtils.Shared.Modules.Fittings.Dtos;
 using EveUtils.Shared.Modules.Fleet.Entities;
@@ -86,6 +87,10 @@ public interface IDialogService
     /// <summary>eveship.fit (ESF) link dialog: returns the pasted link, or null if cancelled/empty. The
     /// link decodes through the same fit-text importer.</summary>
     Task<string?> ImportFitEsfLinkAsync();
+
+    /// <summary>IMPORT FROM TEXT dialog for a skill plan (ET-355): returns the pasted text, or null if
+    /// cancelled/empty. Parsing (<c>SkillPlanTextCodec</c>) and storing are the caller's job.</summary>
+    Task<string?> ImportSkillPlanTextAsync(string? initialText = null);
 
     /// <summary>Edit-fit-metadata dialog (fit-metadata): prefilled with the fit's current name/description/tags, returns
     /// the edited <see cref="FitMetadataDraft"/> on Save or null on cancel. The fit's modules/identity are untouched.</summary>
@@ -322,6 +327,10 @@ public interface IDialogService
     /// window, like the other feature modules.</summary>
     void ShowCompositions(CompositionsViewModel viewModel);
 
+    /// <summary>Opens the SKILLS module (ET-16) as a hosted module, one screen for the whole app that reads a single
+    /// selected character at a time. Returns the screen now showing, the one already open when it was.</summary>
+    SkillsWindowViewModel ShowSkills(SkillsWindowViewModel viewModel);
+
     /// <summary>Shows the radial fit-detail window non-modally — the fitting wheel plus the computed stats.</summary>
     void ShowFitDetail(FitDetailWindowViewModel viewModel);
 
@@ -388,4 +397,17 @@ public interface IDialogService
 
     /// <summary>Re-render the open module set after a dock/float switch — migrates modules to the new mode.</summary>
     void SwitchMode();
+
+    /// <summary>Opens the SHARE dialog for a skill plan (ET-358): COPY AS TEXT, PUT IT IN THE DOCTRINE (the ET-353
+    /// composition editor) and the disabled EVE Workbench option. Modal; completes once the view model raises
+    /// <see cref="ViewModels.Skills.WhatIf.SkillPlanShareDialogViewModel.CloseRequested"/>.</summary>
+    Task ShowSkillPlanShareAsync(ViewModels.Skills.WhatIf.SkillPlanShareDialogViewModel viewModel);
+
+    /// <summary>
+    /// + FROM DOCTRINE… picker (ET-386): choose a composition, a role, then one of its entries — the view model
+    /// reads only through <see cref="EveUtils.Shared.Modules.Fleet.Composition.Repositories.IFleetCompositionReader"/>
+    /// (ET-383 guard), never the composition's write-repository. Returns the picked entry plus its composition/role
+    /// names, or null if cancelled.
+    /// </summary>
+    Task<ViewModels.Skills.Plans.DoctrineEntryPick?> PickDoctrineEntryAsync(ViewModels.Skills.Plans.DoctrinePickerViewModel viewModel);
 }

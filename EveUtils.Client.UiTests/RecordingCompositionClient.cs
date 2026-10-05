@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using EveUtils.Client.Fleet;
+using EveUtils.Shared.Modules.Skills;
 
 namespace EveUtils.Client.UiTests;
 
@@ -17,6 +18,7 @@ public sealed class RecordingCompositionClient(bool sharesFitsToServer) : IFleet
 
     public int CreateCount { get; private set; }
     public List<FitReferenceInfo> AddedFits { get; } = [];
+    public List<(long EntryId, IReadOnlyList<SkillMinimum>? SkillMinimums)> EditedEntries { get; } = [];
 
     /// <summary>Compositions owned by the acting character — what <see cref="ListAsync"/> (ListByOwner on a server) returns.</summary>
     public List<FleetCompositionInfo> OwnCompositions { get; } = [];
@@ -48,13 +50,18 @@ public sealed class RecordingCompositionClient(bool sharesFitsToServer) : IFleet
     public Task<(bool Ok, string Message)> RemoveRoleAsync(long roleId) => Ok();
     public Task<(bool Ok, string Message)> ReorderRolesAsync(long compositionId, IReadOnlyList<long> orderedRoleIds) => Ok();
 
-    public Task<(bool Ok, string Message, long Id)> AddEntryAsync(long roleId, FitReferenceInfo fit, int? entryMinCount)
+    public Task<(bool Ok, string Message, long Id)> AddEntryAsync(long roleId, FitReferenceInfo fit, int? entryMinCount,
+        IReadOnlyList<SkillMinimum> skillMinimums)
     {
         AddedFits.Add(fit);
         return Task.FromResult((true, string.Empty, ++_nextId));
     }
 
-    public Task<(bool Ok, string Message)> EditEntryAsync(long entryId, int? entryMinCount) => Ok();
+    public Task<(bool Ok, string Message)> EditEntryAsync(long entryId, int? entryMinCount, IReadOnlyList<SkillMinimum>? skillMinimums)
+    {
+        EditedEntries.Add((entryId, skillMinimums));
+        return Ok();
+    }
     public Task<(bool Ok, string Message)> RemoveEntryAsync(long entryId) => Ok();
     public Task<(bool Ok, string Message)> ReorderEntriesAsync(long roleId, IReadOnlyList<long> orderedEntryIds) => Ok();
 

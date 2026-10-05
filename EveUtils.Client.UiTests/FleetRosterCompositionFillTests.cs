@@ -57,10 +57,10 @@ public class FleetRosterCompositionFillTests
         // Doctrine: DPS (≥40, no per-fit min) + Logistics (≥5, Guardian ≥3, Scimitar ≥2).
         var composition = await compositions.CreateAsync("Homefront Vanguard", null);
         var dpsRole = await compositions.AddRoleAsync(composition.Id, "DPS", 40);
-        await compositions.AddEntryAsync(dpsRole.Id, Fit(16227, "Ferox — Blaster", "h-ferox"), null);
+        await compositions.AddEntryAsync(dpsRole.Id, Fit(16227, "Ferox — Blaster", "h-ferox"), null, []);
         var logiRole = await compositions.AddRoleAsync(composition.Id, "Logistics", 5);
-        var guardian = await compositions.AddEntryAsync(logiRole.Id, Fit(11987, "Guardian — Armor", "h-guardian"), 3);
-        var scimitar = await compositions.AddEntryAsync(logiRole.Id, Fit(11978, "Scimitar — Shield", "h-scimitar"), 2);
+        var guardian = await compositions.AddEntryAsync(logiRole.Id, Fit(11987, "Guardian — Armor", "h-guardian"), 3, []);
+        var scimitar = await compositions.AddEntryAsync(logiRole.Id, Fit(11978, "Scimitar — Shield", "h-scimitar"), 2, []);
         var ferox = (await compositions.GetAsync(composition.Id))!.Roles.Single(r => r.RoleName == "DPS").Entries[0];
 
         Assert.True((await client.SetFleetCompositionAsync(fleetId, composition.Id)).Ok);
@@ -142,7 +142,7 @@ public class FleetRosterCompositionFillTests
 
         // Edit the doctrine freely while it is coupled: drop the Guardian entry and bump Scimitar's per-fit minimum.
         Assert.True((await scenario.Compositions.RemoveEntryAsync(scenario.GuardianEntryId)).Ok);
-        Assert.True((await scenario.Compositions.EditEntryAsync(scenario.ScimitarEntryId, 9)).Ok);
+        Assert.True((await scenario.Compositions.EditEntryAsync(scenario.ScimitarEntryId, 9, null)).Ok);
 
         // Both Guardian members still fly the exact fit snapshot they were assigned — the edit didn't reach into the
         // roster. Their composition-entry tag is kept as provenance (now dangling), not rewritten or cleared.

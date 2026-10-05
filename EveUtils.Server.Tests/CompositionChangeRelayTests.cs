@@ -102,6 +102,44 @@ public sealed class CompositionChangeRelayTests : IDisposable
         Assert.Equal(expected, _actor.Changes());
     }
 
+    /// <summary>ET-353 A1: skill minimums saved through the server come back on the entry any client reads. An edit
+    /// that does not carry them (an older client) leaves them alone; one that carries an empty list clears them.</summary>
+    [Fact]
+    public async Task SkillMinimums_RoundTripThroughTheServer_AndOnlyAnEditCarryingThemReplacesThem()
+    {
+        var (service, token) = await _ServiceAsync();
+        var context = _Context(token);
+        var created = await service.CreateFleetComposition(new CreateFleetCompositionRequest { Name = "Armor doctrine" }, context);
+        var role = await service.AddFleetCompositionRole(
+            new AddFleetCompositionRoleRequest { CompositionId = created.Id, RoleName = "Logistics" }, context);
+        var entry = await service.AddFleetCompositionEntry(new AddFleetCompositionEntryRequest
+        {
+            RoleId = role.Id,
+            Fit = new FitReferenceDto { ShipTypeId = 11987, FitName = "Guardian", RawJson = "{}", ContentHash = "h-guardian" },
+            SkillMinimums = { new SkillMinimumDto { SkillTypeId = 3336, Level = 5 }, new SkillMinimumDto { SkillTypeId = 12096, Level = 4 } }
+        }, context);
+        Assert.True(entry.Accepted, entry.Message);
+
+        await service.EditFleetCompositionEntry(new EditFleetCompositionEntryRequest { EntryId = entry.Id, EntryMinCount = 3 }, context);
+        var afterOldClientEdit = await _SkillMinimumsAsync(service, created.Id, context);
+        await service.EditFleetCompositionEntry(new EditFleetCompositionEntryRequest
+        {
+            EntryId = entry.Id, SkillMinimums = new SkillMinimumListDto()
+        }, context);
+        var afterClearingEdit = await _SkillMinimumsAsync(service, created.Id, context);
+
+        Assert.Equal([(3336, 5), (12096, 4)], afterOldClientEdit);
+        Assert.Empty(afterClearingEdit);
+    }
+
+    private static async Task<List<(int SkillTypeId, int Level)>> _SkillMinimumsAsync(
+        FleetsGrpcService service, long compositionId, ServerCallContext context)
+    {
+        var read = await service.GetFleetComposition(new GetFleetCompositionRequest { CompositionId = compositionId }, context);
+        var entry = Assert.Single(Assert.Single(read.Composition.Roles).Entries);
+        return [.. entry.SkillMinimums.Select(m => (m.SkillTypeId, m.Level)).OrderBy(m => m.SkillTypeId)];
+    }
+
     [Fact]
     public async Task AClientOnlyComposition_IsAnnouncedToNobody()
     {

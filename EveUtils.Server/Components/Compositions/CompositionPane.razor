@@ -99,7 +99,13 @@
     private static RenderFragment _FitChip(CompositionEntryItem entry) => __builder =>
     {
         var fit = entry.Entry.Fit;
-        var minimum = entry.Entry.EntryMinCount is { } min ? $"at least {min}" : null;
+        var skillMinimums = entry.Entry.SkillMinimums.Count;
+        string?[] notes =
+        [
+            entry.Entry.EntryMinCount is { } min ? $"at least {min}" : null,
+            skillMinimums > 0 ? $"{skillMinimums} skill minimum{(skillMinimums == 1 ? "" : "s")}" : null,
+        ];
+        var minimum = notes.Any(note => note is not null) ? string.Join(" · ", notes.OfType<string>()) : null;
         if (entry.LinkedSharedFitId is { } fitId)
         {
             <span class="fitchip" title="Linked to shared fit #@fitId">

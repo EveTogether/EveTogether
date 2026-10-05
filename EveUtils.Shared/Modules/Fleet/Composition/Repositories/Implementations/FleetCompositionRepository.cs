@@ -171,10 +171,38 @@ internal sealed class FleetCompositionRepository(IDbContextFactory<SharedDbConte
             .FirstOrDefaultAsync(e => e.Id == entryId, cancellationToken);
     }
 
-    public async Task UpdateEntryAsync(FleetCompositionEntry entry, CancellationToken cancellationToken = default)
+    public async Task UpdateEntryAsync(FleetCompositionEntry entry, bool replaceSkillMinimums, CancellationToken cancellationToken = default)
     {
         await using var db = await contextFactory.CreateDbContextAsync(cancellationToken);
-        db.Set<FleetCompositionEntry>().Update(entry);
+        var tracked = await db.Set<FleetCompositionEntry>().FirstOrDefaultAsync(e => e.Id == entry.Id, cancellationToken);
+        if (tracked is null)
+        {
+            return;
+        }
+
+        tracked.EntryMinCount = entry.EntryMinCount;
+        tracked.SortOrder = entry.SortOrder;
+        if (!replaceSkillMinimums)
+        {
+            await db.SaveChangesAsync(cancellationToken);
+            return;
+        }
+
+        // Diff the owned rows on the tracked entry: a detached Update would mark a new row Modified (no row to
+        // update) and never delete a dropped one.
+        tracked.SkillMinimums.RemoveAll(m => entry.SkillMinimums.All(wanted => wanted.SkillTypeId != m.SkillTypeId));
+        foreach (var wanted in entry.SkillMinimums)
+        {
+            if (tracked.SkillMinimums.Find(m => m.SkillTypeId == wanted.SkillTypeId) is { } existing)
+            {
+                existing.Level = wanted.Level;
+            }
+            else
+            {
+                tracked.SkillMinimums.Add(new FleetCompositionEntrySkillMinimum { SkillTypeId = wanted.SkillTypeId, Level = wanted.Level });
+            }
+        }
+
         await db.SaveChangesAsync(cancellationToken);
     }
 

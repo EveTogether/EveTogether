@@ -15,7 +15,7 @@ namespace EveUtils.Migrations.Client.Sqlite.Migrations
         protected override void BuildModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
-            modelBuilder.HasAnnotation("ProductVersion", "10.0.11");
+            modelBuilder.HasAnnotation("ProductVersion", "10.0.12");
 
             modelBuilder.Entity("EveUtils.Shared.Identity.LocalCharacter", b =>
                 {
@@ -702,6 +702,36 @@ namespace EveUtils.Migrations.Client.Sqlite.Migrations
                     b.ToTable("LocalKillmailItem");
                 });
 
+            modelBuilder.Entity("EveUtils.Shared.Modules.Killmails.Entities.ProvisionalKillmail", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("CharacterId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("KillmailTimeUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RawText")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("VictimName")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("VictimShipTypeId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("ProvisionalKillmail");
+                });
+
             modelBuilder.Entity("EveUtils.Shared.Modules.Market.Entities.LocalMarketPrice", b =>
                 {
                     b.Property<int>("TypeId")
@@ -1378,16 +1408,34 @@ namespace EveUtils.Migrations.Client.Sqlite.Migrations
                     b.Property<int>("CharacterId")
                         .HasColumnType("INTEGER");
 
+                    b.Property<DateTimeOffset?>("AccruedRemapCooldownDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("BonusRemaps")
+                        .HasColumnType("INTEGER");
+
                     b.Property<int>("Charisma")
                         .HasColumnType("INTEGER");
 
                     b.Property<int>("Intelligence")
                         .HasColumnType("INTEGER");
 
+                    b.Property<DateTimeOffset?>("LastRemapDate")
+                        .HasColumnType("TEXT");
+
                     b.Property<int>("Memory")
                         .HasColumnType("INTEGER");
 
                     b.Property<int>("Perception")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTimeOffset?>("SkillsRefreshedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("TotalSp")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("UnallocatedSp")
                         .HasColumnType("INTEGER");
 
                     b.Property<int>("Willpower")
@@ -1437,6 +1485,102 @@ namespace EveUtils.Migrations.Client.Sqlite.Migrations
                     b.HasKey("CharacterId", "QueuePosition");
 
                     b.ToTable("CharacterSkillQueueEntry");
+                });
+
+            modelBuilder.Entity("EveUtils.Shared.Modules.Skills.Plans.Entities.SkillPlan", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("CharacterId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CharacterId");
+
+                    b.ToTable("SkillPlan");
+                });
+
+            modelBuilder.Entity("EveUtils.Shared.Modules.Skills.Plans.Entities.SkillPlanRow", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Level")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("PlanId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Position")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("SkillTypeId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Source")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("SourceLabel")
+                        .HasMaxLength(255)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SourceRef")
+                        .HasMaxLength(255)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PlanId", "Position");
+
+                    b.HasIndex("PlanId", "SkillTypeId", "Level")
+                        .IsUnique();
+
+                    b.ToTable("SkillPlanRow");
+                });
+
+            modelBuilder.Entity("EveUtils.Shared.Modules.Skills.Plans.Entities.SkillPlanSource", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("DroppedLevels")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Label")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("PlanId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Source")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("SourceRef")
+                        .HasMaxLength(255)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PlanId");
+
+                    b.ToTable("SkillPlanSource");
                 });
 
             modelBuilder.Entity("EveUtils.Shared.Transport.ClientServerSession", b =>
@@ -1531,6 +1675,25 @@ namespace EveUtils.Migrations.Client.Sqlite.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.OwnsMany("EveUtils.Shared.Modules.Fleet.Composition.FleetCompositionEntrySkillMinimum", "SkillMinimums", b1 =>
+                        {
+                            b1.Property<long>("EntryId")
+                                .HasColumnType("INTEGER");
+
+                            b1.Property<int>("SkillTypeId")
+                                .HasColumnType("INTEGER");
+
+                            b1.Property<int>("Level")
+                                .HasColumnType("INTEGER");
+
+                            b1.HasKey("EntryId", "SkillTypeId");
+
+                            b1.ToTable("FleetCompositionEntrySkillMinimum", (string)null);
+
+                            b1.WithOwner()
+                                .HasForeignKey("EntryId");
+                        });
+
                     b.OwnsOne("EveUtils.Shared.Modules.Fleet.Composition.FitReference", "Fit", b1 =>
                         {
                             b1.Property<long>("FleetCompositionEntryId")
@@ -1569,6 +1732,8 @@ namespace EveUtils.Migrations.Client.Sqlite.Migrations
 
                     b.Navigation("Fit")
                         .IsRequired();
+
+                    b.Navigation("SkillMinimums");
                 });
 
             modelBuilder.Entity("EveUtils.Shared.Modules.Fleet.Composition.FleetCompositionRole", b =>

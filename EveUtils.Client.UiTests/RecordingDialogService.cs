@@ -12,6 +12,9 @@ using EveUtils.Client.ViewModels.GameLogs;
 using EveUtils.Client.ViewModels.Killmails;
 using EveUtils.Client.ViewModels.Map;
 using EveUtils.Client.ViewModels.Runs;
+using EveUtils.Client.ViewModels.Skills;
+using EveUtils.Client.ViewModels.Skills.Plans;
+using EveUtils.Client.ViewModels.Skills.WhatIf;
 using EveUtils.Shared.Modules.Esi;
 using EveUtils.Shared.Modules.Fittings.Dtos;
 using EveUtils.Client.ViewModels.Coupling;
@@ -141,6 +144,11 @@ public sealed class RecordingDialogService : IDialogService
         return Task.FromResult(ImportFitTextResult);
     }
     public Task<string?> ImportFitEsfLinkAsync() => throw NotUsed();
+
+    /// <summary>What IMPORT FROM TEXT (skill plan, ET-355) returns. Null (the default) stands for the user cancelling it.</summary>
+    public string? ImportSkillPlanTextResult { get; set; }
+
+    public Task<string?> ImportSkillPlanTextAsync(string? initialText = null) => Task.FromResult(ImportSkillPlanTextResult);
 
     /// <summary>Stub for the edit-fit-metadata dialog: set to inspect the prefilled draft and drive the result.
     /// Defaults to returning null (cancel), so a flow that unexpectedly edits doesn't silently mutate.</summary>
@@ -300,6 +308,12 @@ public sealed class RecordingDialogService : IDialogService
         _ => Task.FromResult<FitReferenceInfo?>(null);
 
     public Task<FitReferenceInfo?> PickFitAsync(FitPickerViewModel viewModel) => OnPickFit(viewModel);
+
+    /// <summary>Returns the doctrine entry the picker "selects" (or null to cancel). Default: cancel.</summary>
+    public Func<DoctrinePickerViewModel, Task<DoctrineEntryPick?>> OnPickDoctrineEntry { get; set; } =
+        _ => Task.FromResult<DoctrineEntryPick?>(null);
+
+    public Task<DoctrineEntryPick?> PickDoctrineEntryAsync(DoctrinePickerViewModel viewModel) => OnPickDoctrineEntry(viewModel);
     public void ShowInbox(InboxViewModel viewModel) => throw NotUsed();
     public void ShowLogs(ClientLogViewModel viewModel) => throw NotUsed();
 
@@ -370,6 +384,12 @@ public sealed class RecordingDialogService : IDialogService
 
     public KillmailsOverviewViewModel ShowKillmails(KillmailsOverviewViewModel viewModel) => LastKillmails = viewModel;
 
+    /// <summary>The SKILLS module the module launcher asked for, or null — a hook to drive it without standing up
+    /// the real window (ET-16).</summary>
+    public SkillsWindowViewModel? LastSkills { get; private set; }
+
+    public SkillsWindowViewModel ShowSkills(SkillsWindowViewModel viewModel) => LastSkills = viewModel;
+
     /// <summary>The MAP module the launcher asked for, or null (ET-392).</summary>
     public MapViewModel? LastMap { get; private set; }
 
@@ -437,6 +457,11 @@ public sealed class RecordingDialogService : IDialogService
     public void ShowCompositions(CompositionsViewModel viewModel) => throw NotUsed();
     public FitDetailWindowViewModel? LastFitDetail { get; private set; }
     public void ShowFitDetail(FitDetailWindowViewModel viewModel) => LastFitDetail = viewModel;
+
+    /// <summary>The SKILL IMPACT… screen the fit-detail window asked to open, or null — how a test asserts the
+    /// entry point reached the service with the right character/state snapshot (ET-356) without a real window.</summary>
+    public SkillImpactViewModel? LastSkillImpact { get; private set; }
+    public void ShowSkillImpact(SkillImpactViewModel viewModel) => LastSkillImpact = viewModel;
     public void ShowTypeInfo(TypeInfoWindowViewModel viewModel) => throw NotUsed();
     public Task<FleetInviteResult?> PickFleetInviteAsync(string fleetName, IReadOnlyList<CharacterPickOption> options) => throw NotUsed();
     /// <summary>Answers the add-external-pilot search dialog with a character id (or null to cancel). Default: cancel.</summary>
@@ -499,6 +524,16 @@ public sealed class RecordingDialogService : IDialogService
     public void ShowFleetMetrics(FleetMetricsViewModel viewModel) => OpenedFleetMetrics.Add(viewModel);
     public Task ShowSdeUpdateAsync(SdeProgressViewModel viewModel) => throw NotUsed();
     public void SwitchMode() { }
+
+    /// <summary>The last skill-plan SHARE dialog shown, or null — how a test asserts WHAT IF opened it without a
+    /// real window (ET-358).</summary>
+    public SkillPlanShareDialogViewModel? LastSkillPlanShare { get; private set; }
+
+    public Task ShowSkillPlanShareAsync(SkillPlanShareDialogViewModel viewModel)
+    {
+        LastSkillPlanShare = viewModel;
+        return Task.CompletedTask;
+    }
 
     private static NotSupportedException NotUsed() =>
         new("RecordingDialogService: this dialog is not expected in the fleet request-to-join picker test.");

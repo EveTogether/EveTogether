@@ -1,0 +1,72 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vw="using:EveUtils.Client.ViewModels.Skills.WhatIf"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="400" d:DesignHeight="420"
+             x:Class="EveUtils.Client.Views.Skills.SkillsWhatIfPane"
+             x:DataType="vw:SkillsWhatIfViewModel">
+
+    <!-- WHAT IF (ET-358), the top of the PLANS pane as in mockup v5 screen e: the five scenarios, numbered, each with
+         what it assumes and its date, and the other characters in two lines. -->
+    <UserControl.Styles>
+        <Style Selector="Border.scn">
+            <Setter Property="Padding" Value="8,6"/>
+            <Setter Property="BorderThickness" Value="2,0,0,0"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+        </Style>
+        <Style Selector="Border.scn.on">
+            <Setter Property="Background" Value="{DynamicResource BgRowSelectedBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+        </Style>
+    </UserControl.Styles>
+
+    <StackPanel>
+        <Border Padding="16,10,16,12" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource DividerBrush}">
+            <StackPanel>
+                <TextBlock Foreground="{DynamicResource TextAccentBrush}" FontSize="10" LetterSpacing="1.8" Margin="0,0,0,6" Text="WHEN"/>
+                <ItemsControl ItemsSource="{Binding ScenarioRows}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vw:WhatIfScenarioRow">
+                            <Border Classes="scn" Classes.on="{Binding IsMarked}">
+                                <Grid ColumnDefinitions="20,*,Auto" ColumnSpacing="8">
+                                    <TextBlock Grid.Column="0" FontFamily="{StaticResource MonoFont}" FontSize="11"
+                                               Foreground="{StaticResource TextDimBrush}" VerticalAlignment="Center" Text="{Binding Number}"/>
+                                    <StackPanel Grid.Column="1">
+                                        <TextBlock FontSize="11.5" Foreground="{StaticResource TextBrightBrush}" Text="{Binding Name}"/>
+                                        <TextBlock FontSize="10.5" Foreground="{StaticResource TextDimBrush}" TextWrapping="Wrap" Text="{Binding Detail}"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2" VerticalAlignment="Center">
+                                        <TextBlock FontFamily="{StaticResource MonoFont}" FontSize="10.5" HorizontalAlignment="Right"
+                                                   Foreground="{DynamicResource AccentBrightBrush}" Text="{Binding DateText}"/>
+                                        <TextBlock FontFamily="{StaticResource MonoFont}" FontSize="9.5" HorizontalAlignment="Right"
+                                                   Foreground="{StaticResource TextDimBrush}" Text="{Binding SavedText}"/>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </Border>
+
+        <Border Padding="16,10,16,12" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource DividerBrush}">
+            <StackPanel>
+                <TextBlock Foreground="{DynamicResource TextAccentBrush}" FontSize="10" LetterSpacing="1.8" Margin="0,0,0,6"
+                           Text="{Binding OtherCharactersHeading}"/>
+                <Grid ColumnDefinitions="*,Auto" Margin="0,3">
+                    <TextBlock FontSize="11.5" Text="fly it today"/>
+                    <TextBlock Grid.Column="1" FontFamily="{StaticResource MonoFont}" FontSize="11"
+                               Foreground="{StaticResource TextBrightBrush}" Text="{Binding FlyItTodayCountText}"/>
+                </Grid>
+                <Grid ColumnDefinitions="*,Auto" Margin="0,3">
+                    <TextBlock FontSize="11.5" Text="soonest of the rest"/>
+                    <TextBlock Grid.Column="1" FontFamily="{StaticResource MonoFont}" FontSize="11"
+                               Foreground="{StaticResource TextBrightBrush}" Text="{Binding SoonestText}"/>
+                </Grid>
+                <TextBlock FontSize="11" Margin="0,6,0,0" Foreground="{StaticResource TextDimBrush}" TextWrapping="Wrap"
+                           Text="The full list sits on the doctrine entry (COMP), sorted by time."/>
+            </StackPanel>
+        </Border>
+    </StackPanel>
+</UserControl>

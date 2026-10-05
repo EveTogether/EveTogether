@@ -82,11 +82,14 @@ public class BackupSchemaMapTests : IDisposable
         Assert.Equal(["Id"], synced.StoreGeneratedKeyColumns);
     }
 
-    /// <summary>The audit table this ticket adds has to be in the plan, or a backup would not carry the record of
-    /// who took the previous ones.</summary>
-    [Fact]
-    public void Build_Includes_TheBackupDownloadAudit()
+    /// <summary>Tables added after the format have to be in the plan: the backup-download audit (or a backup would not
+    /// carry the record of who took the previous ones) and the doctrine skill minimums of ET-353 (an owned collection in
+    /// its own table, so not carried on the entry row).</summary>
+    [Theory]
+    [InlineData("BackupDownload")]
+    [InlineData("FleetCompositionEntrySkillMinimum")]
+    public void Build_Includes_TablesAddedLater(string table)
     {
-        Assert.Contains(_tables, t => t.Name == "BackupDownload");
+        Assert.Contains(_tables, t => t.Name == table);
     }
 }

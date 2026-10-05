@@ -119,6 +119,11 @@
                         </DataTemplate>
                     </ComboBox.ItemTemplate>
                 </ComboBox>
+                <!-- ET-356: which skills move this fit, for the character just selected above; off in All I–V mode
+                     (no trained levels to scan against) — the tooltip on the disabled button says why. -->
+                <Button Content="SKILL IMPACT…" Command="{Binding ShowSkillImpactCommand}" IsEnabled="{Binding CanShowSkillImpact}"
+                        ToolTip.Tip="{Binding SkillImpactDisabledReason}" FontSize="11" Padding="8,2" Margin="10,0,0,0"
+                        VerticalAlignment="Center"/>
                 <TextBlock Text="IMPLANTS" Classes="label" FontSize="10" VerticalAlignment="Center" Margin="14,0,0,0"
                            IsVisible="{Binding !IsStructure}"/>
                 <ComboBox ItemsSource="{Binding ImplantModes}" SelectedItem="{Binding SelectedImplantMode, Mode=TwoWay}"

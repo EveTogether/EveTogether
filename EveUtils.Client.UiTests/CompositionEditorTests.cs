@@ -17,6 +17,7 @@ using EveUtils.Shared.Modules.Fleet.Composition;
 using EveUtils.Shared.Modules.Fleet.Composition.Repositories;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+using EveUtils.Shared.Modules.Skills;
 
 namespace EveUtils.Client.UiTests;
 
@@ -300,5 +301,29 @@ public class CompositionEditorTests
         Assert.NotNull(frame);
         TestCapture.Save(frame, "eveutils-composition-readonly.png");
         window.Close();
+    }
+
+    /// <summary>ET-353 A4: a skill minimum added in the editor is tentative: CANCEL sends nothing, and only SAVE replays
+    /// it as an entry edit.</summary>
+    [AvaloniaFact]
+    public async Task SkillMinimum_CancelSendsNothing_SaveSendsTheEdit()
+    {
+        using var instance = TestClientInstance.Create();
+        var client = new RecordingCompositionClient(sharesFitsToServer: false);
+        var fit = new FitReferenceInfo(11987, "Guardian — Armor", "{}", "h-guardian", null, null);
+        var detail = new FleetCompositionDetail(
+            new FleetCompositionInfo(7, "Armor doctrine", null, Owner, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow),
+            [new FleetCompositionRoleInfo(8, 7, "Logistics", null, 0, [new FleetCompositionEntryInfo(9, 8, null, 0, fit, [])])]);
+        using var editor = CompositionEditorViewModel.ForExisting(instance.Services, client, detail);
+        var entry = Assert.Single(Assert.Single(editor.Roles).Entries);
+        entry.AddSkillMinimum(3336, "Logistics Cruisers", 5);
+
+        editor.CancelCommand.Execute(null);
+        var afterCancel = client.EditedEntries.Count;
+        await editor.SaveCommand.ExecuteAsync(null);
+
+        Assert.Equal(0, afterCancel);
+        var edit = Assert.Single(client.EditedEntries);
+        Assert.Equal([new SkillMinimum(3336, 5)], edit.SkillMinimums);
     }
 }

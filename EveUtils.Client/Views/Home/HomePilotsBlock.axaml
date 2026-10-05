@@ -94,19 +94,28 @@
                                 </Panel>
 
                                 <Panel Grid.Column="3" VerticalAlignment="Center">
-                                    <StackPanel Background="Transparent" ToolTip.Tip="{Binding TrainingTooltip}"
-                                                IsVisible="{Binding Training, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static vh:TrainingState.Training}}">
-                                        <TextBlock Classes="cellmain" Text="{Binding SkillText}"/>
-                                        <TextBlock Classes="cellsub" Classes.warn="{Binding IsQueueShort}" Text="{Binding TrainingDetailText}"/>
-                                        <ProgressBar Classes="qbar" Classes.warn="{Binding IsQueueShort}" Value="{Binding QueueBarFraction}"/>
-                                    </StackPanel>
-                                    <StackPanel Background="Transparent" ToolTip.Tip="{Binding TrainingTooltip}"
-                                                IsVisible="{Binding Training, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static vh:TrainingState.Paused}}">
-                                        <TextBlock Classes="cellmain" Text="{Binding SkillText}"/>
-                                        <TextBlock Classes="cellsub warn" Text="{Binding TrainingDetailText}"/>
-                                    </StackPanel>
-                                    <TextBlock Classes="none" Text="nothing in the queue"
-                                               IsVisible="{Binding Training, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static vh:TrainingState.Empty}}"/>
+                                    <!-- The TRAINING cell opens SKILLS on this character (ET-16 AC2) whenever there is
+                                         something to show — training, paused or an empty queue alike. NotShared below
+                                         stays a plain ALLOW… prompt: there is nothing to open yet. -->
+                                    <Button Classes="pilotlink" ToolTip.Tip="{Binding TrainingTooltip}" Command="{Binding OpenSkillsCommand}"
+                                            IsVisible="{Binding Training, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static vh:TrainingState.Training}}">
+                                        <StackPanel>
+                                            <TextBlock Classes="cellmain" Text="{Binding SkillText}"/>
+                                            <TextBlock Classes="cellsub" Classes.warn="{Binding IsQueueShort}" Text="{Binding TrainingDetailText}"/>
+                                            <ProgressBar Classes="qbar" Classes.warn="{Binding IsQueueShort}" Value="{Binding QueueBarFraction}"/>
+                                        </StackPanel>
+                                    </Button>
+                                    <Button Classes="pilotlink" ToolTip.Tip="{Binding TrainingTooltip}" Command="{Binding OpenSkillsCommand}"
+                                            IsVisible="{Binding Training, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static vh:TrainingState.Paused}}">
+                                        <StackPanel>
+                                            <TextBlock Classes="cellmain" Text="{Binding SkillText}"/>
+                                            <TextBlock Classes="cellsub warn" Text="{Binding TrainingDetailText}"/>
+                                        </StackPanel>
+                                    </Button>
+                                    <Button Classes="pilotlink" Command="{Binding OpenSkillsCommand}"
+                                            IsVisible="{Binding Training, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static vh:TrainingState.Empty}}">
+                                        <TextBlock Classes="none" Text="nothing in the queue"/>
+                                    </Button>
                                     <StackPanel Orientation="Horizontal" Background="Transparent" ToolTip.Tip="{Binding QueueNotSharedTooltip}"
                                                 IsVisible="{Binding Training, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static vh:TrainingState.NotShared}}">
                                         <TextBlock Classes="none" Text="not shared"/>

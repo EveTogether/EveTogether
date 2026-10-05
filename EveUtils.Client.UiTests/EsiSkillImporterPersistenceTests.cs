@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using EveUtils.Client.Skills;
+using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Esi.Http;
 using EveUtils.Shared.Modules.Skills.Entities;
 using EveUtils.Shared.Modules.Skills.Repositories;
@@ -36,12 +37,16 @@ public class EsiSkillImporterPersistenceTests
         };
         esi.Responses["/characters/77/attributes/"] = new EsiCharacterAttributes
         {
-            Charisma = 19, Intelligence = 20, Memory = 21, Perception = 22, Willpower = 23
+            Charisma = 19, Intelligence = 20, Memory = 21, Perception = 22, Willpower = 23,
+            LastRemapDate = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero),
+            AccruedRemapCooldownDate = new DateTimeOffset(2027, 1, 1, 0, 0, 0, TimeSpan.Zero),
+            BonusRemaps = 1
         };
         using var instance = TestClientInstance.Create(s => s.AddSingleton<IEsiClient>(esi));
+        var importer = instance.Services.GetRequiredService<IEsiSkillImporter>();
+        var attributesRepository = instance.Services.GetRequiredService<ICharacterAttributesRepository>();
 
-        var result = await instance.Services.GetRequiredService<IEsiSkillImporter>()
-            .ImportAsync(77, TestContext.Current.CancellationToken);
+        var result = await importer.ImportAsync(77, TestContext.Current.CancellationToken);
         Assert.True(result.IsSuccess);
 
         var queue = await instance.Services.GetRequiredService<ICharacterSkillQueueRepository>()
@@ -52,11 +57,30 @@ public class EsiSkillImporterPersistenceTests
         Assert.Equal(5, queue[0].FinishedLevel);
         Assert.NotNull(queue[0].FinishDate);
 
-        var attributes = await instance.Services.GetRequiredService<ICharacterAttributesRepository>()
-            .GetAsync(77, TestContext.Current.CancellationToken);
+        var attributes = await attributesRepository.GetAsync(77, TestContext.Current.CancellationToken);
         Assert.NotNull(attributes);
         Assert.Equal(22, attributes!.Perception);
         Assert.Equal(20, attributes.Intelligence);
+        Assert.Equal(new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero), attributes.LastRemapDate);
+        Assert.Equal(new DateTimeOffset(2027, 1, 1, 0, 0, 0, TimeSpan.Zero), attributes.AccruedRemapCooldownDate);
+        Assert.Equal(1, attributes.BonusRemaps);
+
+        // A5 (ET-354): a second import overwrites the remap fields, and a field ESI stops reporting (here the
+        // cooldown, e.g. because the character just remapped) goes back to null rather than keeping the stale value.
+        esi.Responses["/characters/77/attributes/"] = new EsiCharacterAttributes
+        {
+            Charisma = 19, Intelligence = 20, Memory = 21, Perception = 22, Willpower = 23,
+            LastRemapDate = new DateTimeOffset(2026, 3, 1, 0, 0, 0, TimeSpan.Zero),
+            AccruedRemapCooldownDate = null,
+            BonusRemaps = 0
+        };
+        await importer.ImportAsync(77, TestContext.Current.CancellationToken);
+
+        var reimported = await attributesRepository.GetAsync(77, TestContext.Current.CancellationToken)
+            ?? throw new InvalidOperationException("The re-imported attributes were not persisted.");
+        Assert.Equal(new DateTimeOffset(2026, 3, 1, 0, 0, 0, TimeSpan.Zero), reimported.LastRemapDate);
+        Assert.Null(reimported.AccruedRemapCooldownDate);
+        Assert.Equal(0, reimported.BonusRemaps);
     }
 
     [Fact]
@@ -79,7 +103,8 @@ public class EsiSkillImporterPersistenceTests
             Charisma = 1, Intelligence = 1, Memory = 1, Perception = 1, Willpower = 1
         };
         var skillRepository = new ConcurrencyTrackingSkillRepository();
-        var importer = new EsiSkillImporter(esi, skillRepository, new NoOpQueueRepository(), new NoOpAttributesRepository());
+        var importer = new EsiSkillImporter(
+            esi, skillRepository, new NoOpQueueRepository(), new NoOpAttributesRepository(), new InProcessEventBus());
 
         var results = await Task.WhenAll(Enumerable.Range(0, 6)
             .Select(_ => importer.ImportAsync(characterId, TestContext.Current.CancellationToken)));
@@ -131,16 +156,5 @@ public class EsiSkillImporterPersistenceTests
 
         public Task<CharacterAttributes?> GetAsync(int characterId, CancellationToken cancellationToken = default) =>
             Task.FromResult<CharacterAttributes?>(null);
-    }
-
-    /// <summary>An <see cref="IEsiClient"/> that answers each typed GET from a per-path response table.</summary>
-    private sealed class RoutingEsiClient : IEsiClient
-    {
-        public Dictionary<string, object?> Responses { get; } = new();
-
-        public Task<EsiResult<T>> RequestAsync<T>(EsiRequest request, CancellationToken cancellationToken = default) =>
-            Task.FromResult(Responses.TryGetValue(request.Path, out var value) && value is T typed
-                ? EsiResult<T>.Ok(typed)
-                : EsiResult<T>.Fail(EsiError.Of(EsiErrorKind.ServerError, $"no stub for {request.Path}", 500)));
     }
 }

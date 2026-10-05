@@ -155,24 +155,27 @@ public sealed class DestructiveActionCatalog(
         var roleIds = db.Set<FleetCompositionRole>().Where(r => r.CompositionId == compositionId).Select(r => r.Id);
         var roles = await roleIds.CountAsync(ct);
         var entries = await db.Set<FleetCompositionEntry>().CountAsync(e => roleIds.Contains(e.RoleId), ct);
+        var skillMinimums = await db.Set<FleetCompositionEntry>().Where(e => roleIds.Contains(e.RoleId))
+            .SelectMany(e => e.SkillMinimums).CountAsync(ct);
         var usedBy = await db.Set<Fleet>().AsNoTracking()
             .Where(f => f.FleetCompositionId == compositionId)
             .OrderBy(f => f.Name).Select(f => f.Name).ToListAsync(ct);
-        var cascade = _List([_Count(roles, "role", "roles"), _Count(entries, "entry", "entries")]);
+        var cascade = _List([_Count(roles, "role", "roles"), _Count(entries, "entry", "entries"),
+            _Count(skillMinimums, "skill minimum", "skill minimums")]);
 
         return
         [
             new DestructiveAction
             {
                 Title = "Delete composition",
-                Summary = "Hard delete. Its roles and entries go with it.",
+                Summary = "Hard delete. Its roles, entries and skill minimums go with it.",
                 ButtonLabel = "Delete",
                 Question = $"Delete composition “{composition.Name}”?",
                 Consequences =
                 [
                     _Line(cascade is null
                         ? "It has no roles yet."
-                        : $"{cascade} {(roles + entries == 1 ? "is" : "are")} deleted with it."),
+                        : $"{cascade} {(roles + entries + skillMinimums == 1 ? "is" : "are")} deleted with it."),
                     usedBy.Count == 0
                         ? _Line("No fleet uses it.")
                         : _Warning($"{_Names(usedBy)} {(usedBy.Count == 1 ? "keeps" : "keep")} pointing at it. There is no foreign key, " +

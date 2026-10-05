@@ -3,9 +3,11 @@ using System.Collections.Concurrent;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Esi.Http;
 using EveUtils.Shared.Modules.Skills;
 using EveUtils.Shared.Modules.Skills.Entities;
+using EveUtils.Shared.Modules.Skills.Events;
 using EveUtils.Shared.Modules.Skills.Repositories;
 
 namespace EveUtils.Client.Skills;
@@ -22,7 +24,8 @@ public sealed class EsiSkillImporter(
     IEsiClient esi,
     ICharacterSkillRepository repository,
     ICharacterSkillQueueRepository queueRepository,
-    ICharacterAttributesRepository attributesRepository) : IEsiSkillImporter
+    ICharacterAttributesRepository attributesRepository,
+    IEventBus eventBus) : IEsiSkillImporter
 {
     // Imports for one character must not overlap. The background refresh (timer + the RegistryChanged fire-and-forget)
     // and the on-demand fit-detail import can call ImportAsync for the same character concurrently; each
@@ -60,7 +63,13 @@ public sealed class EsiSkillImporter(
             var attributes = await esi.GetAsync<EsiCharacterAttributes>($"/characters/{characterId}/attributes/",
                 characterId, [SkillsScopeCatalog.ReadSkills], cancellationToken);
             if (attributes is { IsSuccess: true, Value: not null })
-                await attributesRepository.ReplaceForCharacterAsync(_ToEntity(characterId, attributes.Value), cancellationToken);
+                await attributesRepository.ReplaceForCharacterAsync(
+                    _ToEntity(characterId, attributes.Value, skills.Value.TotalSp, skills.Value.UnallocatedSp),
+                    cancellationToken);
+
+            // ET-387: nothing else told an already-open SKILLS window that this character's data moved — the
+            // background refresh (SkillRefreshService) wrote straight to the repositories otherwise.
+            await eventBus.PublishAsync(new SkillsChangedEvent(characterId), EventTarget.Local, cancellationToken);
 
             return SkillImportResult.Ok(levels.Count);
         }
@@ -80,14 +89,20 @@ public sealed class EsiSkillImporter(
         FinishDate = entry.FinishDate
     };
 
-    private static CharacterAttributes _ToEntity(int characterId, EsiCharacterAttributes attributes) => new()
+    private static CharacterAttributes _ToEntity(int characterId, EsiCharacterAttributes attributes, long totalSp, int unallocatedSp) => new()
     {
         CharacterId = characterId,
         Charisma = attributes.Charisma,
         Intelligence = attributes.Intelligence,
         Memory = attributes.Memory,
         Perception = attributes.Perception,
-        Willpower = attributes.Willpower
+        Willpower = attributes.Willpower,
+        TotalSp = totalSp,
+        UnallocatedSp = unallocatedSp,
+        LastRemapDate = attributes.LastRemapDate,
+        AccruedRemapCooldownDate = attributes.AccruedRemapCooldownDate,
+        BonusRemaps = attributes.BonusRemaps,
+        SkillsRefreshedAt = DateTimeOffset.UtcNow
     };
 
     private static SkillImportResult Failure(EsiError? error) => error?.Kind switch

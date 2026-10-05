@@ -22,6 +22,7 @@ using EveUtils.Client.ViewModels.Home;
 using EveUtils.Client.ViewModels.Killmails;
 using EveUtils.Client.ViewModels.Map;
 using EveUtils.Client.ViewModels.Runs;
+using EveUtils.Client.ViewModels.Skills;
 using EveUtils.Client.ViewModels.Coupling;
 using EveUtils.Client.ViewModels.Setup;
 using EveUtils.Client.Esi;
@@ -29,6 +30,7 @@ using EveUtils.Client.EveSettings;
 using EveUtils.Client.Platform;
 using EveUtils.Client.Skills;
 using EveUtils.Client.Implants;
+using EveUtils.Shared.Modules.Dogma;
 using EveUtils.Shared.Modules.Skills.Repositories;
 using EveUtils.Shared.Modules.Implants.Repositories;
 using EveUtils.Shared.Modules.Settings.Repositories;
@@ -78,6 +80,7 @@ using EveUtils.Shared.Modules.Ships.Dtos;
 using EveUtils.Shared.Modules.Ships.Events;
 using EveUtils.Shared.Modules.Ships.Queries;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace EveUtils.Client.ViewModels;
 
@@ -98,6 +101,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
     private readonly IThemeService? _theme;
     private readonly Calendar.IWeekStartService? _weekStart;
     private readonly IDialogService? _dialogs;
+    private readonly ILogger<MainWindowViewModel>? _logger;
     private readonly IEsiAvailabilityState? _availability;
     private readonly IEsiScopeRegistry? _scopeRegistry;
     private readonly ServerFitShareClient? _fitShare;
@@ -137,6 +141,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         ["game-logs"] = "gamelogs",
         ["settings"] = "settings",
         ["runs"] = "runs",
+        ["skills"] = "skills",
         ["map"] = "map",
     };
 
@@ -298,6 +303,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
     public bool IsGameLogsActive => ActiveModule == "gamelogs";
     public bool IsLogsGroupActive => IsEsiActive || IsInboxActive || IsLogsActive || IsGameLogsActive;
     public bool IsCompositionsActive => ActiveModule == "compositions";
+    public bool IsSkillsActive => ActiveModule == "skills";
     public bool IsToolsActive => ActiveModule == "tools";
 
     /// <summary>Lit for the runs overview and for a single activity's detail alike: both are tagged "runs", and a
@@ -350,6 +356,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         OnPropertyChanged(nameof(IsGameLogsActive));
         OnPropertyChanged(nameof(IsLogsGroupActive));
         OnPropertyChanged(nameof(IsCompositionsActive));
+        OnPropertyChanged(nameof(IsSkillsActive));
         OnPropertyChanged(nameof(IsToolsActive));
         OnPropertyChanged(nameof(IsRunsActive));
     }
@@ -377,6 +384,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
             case "runs": await OpenRunsAsync(); break;
             case "runs-start": await OpenManualRunStartAsync(); break;
             case "killmails": await OpenKillmailsAsync(); break;
+            case "skills": await OpenSkillsAsync(); break;
             case "inbox": OpenInbox(); break;
             case "logs": OpenLogs(); break;
             case "gamelogs": await OpenGameLogsAsync(); break;
@@ -462,6 +470,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         _registry = services.GetRequiredService<ICharacterRegistry>();
         _dialogs = services.GetRequiredService<IDialogService>();
         _dialogs.ModuleClosed += OnModuleClosed;   // ET-209: Ctrl+Shift+T reopens the last eligible one
+        _logger = services.GetService<ILogger<MainWindowViewModel>>();
         _scopeRegistry = services.GetRequiredService<IEsiScopeRegistry>();
         _fitShare = services.GetRequiredService<ServerFitShareClient>();
         _fitExportActions = services.GetRequiredService<IFitExportActions>();
@@ -481,7 +490,8 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
             OpenCharacterDpsOverlay,
             (characterId, scope) => ReAuthenticateAsync(characterId, [scope]),
             characterId => ReAuthenticateAsync(characterId),
-            () => ImportFittingsCommand.ExecuteAsync(null)), Characters, Fittings, Inbox);
+            () => ImportFittingsCommand.ExecuteAsync(null),
+            characterId => _ = OpenSkillsAsync(characterId)), Characters, Fittings, Inbox);
 
         SetupLocalFittingsTab();
 
@@ -692,6 +702,33 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         if (_services is null || _dialogs is null)
             return;
         _dialogs.ShowCompositions(new CompositionsViewModel(_services));
+    }
+
+    /// <summary>Opens the SKILLS module (ET-16) as a hosted module, like RUNS, from the rail (last used character) or a
+    /// HOME pilot row (that character, AC2). When SKILLS is already open <paramref name="startingCharacterId"/> is
+    /// applied to the running instance (ET-48 pattern).</summary>
+    private async Task OpenSkillsAsync(int? startingCharacterId = null)
+    {
+        if (_services is null || _dialogs is null)
+        {
+            return;
+        }
+
+        // Fired fire-and-forget from a pilot row's TRAINING cell (HomeNavigation.OpenSkills is an Action<int>) —
+        // an exception here would otherwise go unobserved, the same reason ET-365 wraps killmail image loading.
+        try
+        {
+            var fresh = new SkillsWindowViewModel(_services, startingCharacterId);
+            var shown = _dialogs.ShowSkills(fresh);
+            if (startingCharacterId is { } characterId && !ReferenceEquals(shown, fresh))
+            {
+                await shown.GoToCharacterAsync(characterId);
+            }
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            _logger?.LogError(exception, "SKILLS could not be opened for character {CharacterId}.", startingCharacterId);
+        }
     }
 
     /// <summary>Opens the message inbox — non-modal so deliveries keep arriving while it is open.</summary>
@@ -1012,7 +1049,9 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
             _services.GetService<IToastService>(),                    // toast on a refused module activation (cloak conflict)
             onEditMetadata,                                           // in-place edit of the fit's name/notes/tags (local fits)
             _refreshServerFitBrowserTab,                              // refresh the browser's server tab after a share (null if the browser was never opened this session)
-            metadata?.Name);                                          // fit-metadata: the stored name, which RawJson does not carry after a rename
+            metadata?.Name,                                           // fit-metadata: the stored name, which RawJson does not carry after a rename
+            _services.GetService<IDogmaCalculator>(),                 // ET-356: SKILL IMPACT… scan engine
+            (characterId, impact) => SkillsLauncher.OpenFromFitAsync(_services, _dialogs, characterId, impact)); // ET-356/D1: SKILLS → PLANS
         await viewModel.InitializeAsync();
         _dialogs.ShowFitDetail(viewModel);
         _ = viewModel.LoadImagesAsync();   // opt-in CCP images pop in after the window shows

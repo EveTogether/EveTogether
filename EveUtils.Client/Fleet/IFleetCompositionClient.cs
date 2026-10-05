@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using EveUtils.Shared.Modules.Skills;
 
 namespace EveUtils.Client.Fleet;
 
@@ -33,8 +34,10 @@ public interface IFleetCompositionClient
     Task<(bool Ok, string Message)> RemoveRoleAsync(long roleId);
     Task<(bool Ok, string Message)> ReorderRolesAsync(long compositionId, IReadOnlyList<long> orderedRoleIds);
 
-    Task<(bool Ok, string Message, long Id)> AddEntryAsync(long roleId, FitReferenceInfo fit, int? entryMinCount);
-    Task<(bool Ok, string Message)> EditEntryAsync(long entryId, int? entryMinCount);
+    Task<(bool Ok, string Message, long Id)> AddEntryAsync(long roleId, FitReferenceInfo fit, int? entryMinCount, IReadOnlyList<SkillMinimum> skillMinimums);
+
+    /// <summary>Sets the per-fit minimum; <paramref name="skillMinimums"/> replaces the skill minimums, null leaves them.</summary>
+    Task<(bool Ok, string Message)> EditEntryAsync(long entryId, int? entryMinCount, IReadOnlyList<SkillMinimum>? skillMinimums);
     Task<(bool Ok, string Message)> RemoveEntryAsync(long entryId);
     Task<(bool Ok, string Message)> ReorderEntriesAsync(long roleId, IReadOnlyList<long> orderedEntryIds);
 }

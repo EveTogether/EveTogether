@@ -29,9 +29,10 @@ public class SkillTrainingMathTests
 
     [Theory]
     [InlineData(0, "0m")]
-    [InlineData(90, "1h 30m")]          // leading zero day/month dropped
-    [InlineData(24224, "16d 19h 44m")]  // 16d19h44m
-    [InlineData(50400, "1mo 5d 0h 0m")] // 35 days = 1 month + 5 days; inner zeros kept
+    [InlineData(53, "53m")]             // under an hour: minutes only
+    [InlineData(90, "1h 30m")]          // under a day: hours and minutes
+    [InlineData(24224, "16d 19h")]      // a day or more: days and hours, never months
+    [InlineData(363780, "252d 15h")]    // a long queue stays in days, as the queue tab writes it
     public void EveDurationFormatter_FormatsTheEveWay(int totalMinutes, string expected) =>
         Assert.Equal(expected, EveDurationFormatter.Format(TimeSpan.FromMinutes(totalMinutes)));
 

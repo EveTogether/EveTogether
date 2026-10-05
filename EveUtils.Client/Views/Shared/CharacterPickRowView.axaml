@@ -1,0 +1,102 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:dlg="using:EveUtils.Client.Dialogs"
+             xmlns:mi="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="400" d:DesignHeight="60"
+             x:Class="EveUtils.Client.Views.Shared.CharacterPickRowView"
+             x:Name="Root"
+             x:DataType="dlg:CharacterPickRowViewModel">
+
+    <!-- One row card: resting / selected / disabled (ET-184). Its own styles, not the host window's (RunsActivityPane's
+         same rule): this control renders in a modal dialog (CharacterPickerWindow) and a header popup (SKILLS, ET-16)
+         alike, and must look identical in both without either host having to carry its styles for it. -->
+    <UserControl.Styles>
+        <Style Selector="Border.pickrow">
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Background" Value="{StaticResource BgRowBrush}"/>
+            <Setter Property="Padding" Value="9,7"/>
+            <Setter Property="Margin" Value="0,0,0,6"/>
+        </Style>
+        <Style Selector="Border.pickrow.selected">
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+            <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
+        </Style>
+
+        <Style Selector="TextBlock.pickname">
+            <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+            <Setter Property="FontSize" Value="12.5"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+        </Style>
+        <Style Selector="Border.pickrow.disabled TextBlock.pickname">
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+        </Style>
+        <Style Selector="TextBlock.pickdetail">
+            <Setter Property="Foreground" Value="{DynamicResource TextAccentBrush}"/>
+            <Setter Property="FontSize" Value="10"/>
+            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+        </Style>
+        <Style Selector="TextBlock.pickdetail.why">
+            <Setter Property="Foreground" Value="#E0B341"/>
+        </Style>
+        <Style Selector="Border.pickrow.disabled Panel.pickhex">
+            <Setter Property="Opacity" Value="0.5"/>
+        </Style>
+
+        <Style Selector="mi|MaterialIcon.markoff">
+            <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+        </Style>
+        <Style Selector="mi|MaterialIcon.markon">
+            <Setter Property="IsVisible" Value="False"/>
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+        </Style>
+        <Style Selector="Border.pickrow.selected mi|MaterialIcon.markoff">
+            <Setter Property="IsVisible" Value="False"/>
+        </Style>
+        <Style Selector="Border.pickrow.selected mi|MaterialIcon.markon">
+            <Setter Property="IsVisible" Value="True"/>
+        </Style>
+        <Style Selector="Border.pickrow.disabled mi|MaterialIcon.markoff">
+            <Setter Property="Opacity" Value="0.4"/>
+        </Style>
+    </UserControl.Styles>
+
+    <Border Classes="pickrow" Classes.selected="{Binding IsSelected}" Classes.disabled="{Binding !Enabled}">
+        <Grid ColumnDefinitions="Auto,10,*,10,Auto">
+            <!-- hex ESI portrait + glyph fallback (MainWindow.axaml:635-644) -->
+            <Panel Grid.Column="0" Classes="pickhex" Width="46" Height="52" VerticalAlignment="Center">
+                <Panel.Clip><PathGeometry Figures="M23,0 L46,13 L46,39 L23,52 L0,39 L0,13 Z"/></Panel.Clip>
+                <Border Background="{DynamicResource AccentSoftBrush}" IsVisible="{Binding !HasPortrait}">
+                    <TextBlock Text="{Binding Initial}" FontSize="18" FontWeight="Bold"
+                               Foreground="{DynamicResource AccentBrightBrush}"
+                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                </Border>
+                <Image Source="{Binding Portrait}" Stretch="UniformToFill" IsVisible="{Binding HasPortrait}"/>
+            </Panel>
+
+            <StackPanel Grid.Column="2" Spacing="2" VerticalAlignment="Center">
+                <TextBlock Classes="pickname" Text="{Binding Name}"/>
+                <StackPanel Orientation="Horizontal" Spacing="4"
+                            IsVisible="{Binding Detail, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                    <mi:MaterialIcon Classes="icon-sm" Kind="AlertOutline" Foreground="#E0B341"
+                                      IsVisible="{Binding !Enabled}"/>
+                    <TextBlock Classes="pickdetail" Classes.why="{Binding !Enabled}" Text="{Binding Detail}"/>
+                </StackPanel>
+            </StackPanel>
+
+            <Panel Grid.Column="4" Width="20" Height="20" VerticalAlignment="Center">
+                <Panel IsVisible="{Binding IsMultiSelect, ElementName=Root}">
+                    <mi:MaterialIcon Classes="icon-lg markoff" Kind="CheckboxBlankOutline"/>
+                    <mi:MaterialIcon Classes="icon-lg markon" Kind="CheckboxMarked"/>
+                </Panel>
+                <Panel IsVisible="{Binding !IsMultiSelect, ElementName=Root}">
+                    <mi:MaterialIcon Classes="icon-lg markoff" Kind="RadioboxBlank"/>
+                    <mi:MaterialIcon Classes="icon-lg markon" Kind="RadioboxMarked"/>
+                </Panel>
+            </Panel>
+        </Grid>
+    </Border>
+</UserControl>

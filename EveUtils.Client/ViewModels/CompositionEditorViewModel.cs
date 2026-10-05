@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -11,8 +12,11 @@ using EveUtils.Client.Fleet;
 using EveUtils.Client.Imaging;
 using EveUtils.Client.ViewModels.FitBrowser;
 using EveUtils.Shared.Messaging;
+using EveUtils.Shared.Modules.Fittings.Dtos;
 using EveUtils.Shared.Modules.Fleet.Enums;
 using EveUtils.Shared.Modules.Fleet.Events;
+using EveUtils.Shared.Modules.Sde;
+using EveUtils.Shared.Modules.Skills;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace EveUtils.Client.ViewModels;
@@ -20,7 +24,7 @@ namespace EveUtils.Client.ViewModels;
 /// <summary>
 /// The create/edit composition dialog: name + description and a list of role groups, each with an
 /// optional group minimum and fit entries (added through the reusable <see cref="FitPickerViewModel"/>) that may carry
-/// an optional per-fit minimum. Edits are tentative — the editor works on a mutable copy of the composition graph and,
+/// an optional per-fit minimum and doctrine skill minimums. Edits are tentative — the editor works on a mutable copy of the composition graph and,
 /// on save, diffs against the loaded snapshot and replays the minimal set of granular commands through
 /// <see cref="IFleetCompositionClient"/> (cancel discards). New roles/entries have no id until they are saved.
 ///
@@ -34,25 +38,39 @@ public sealed partial class CompositionEditorViewModel : ObservableObject, IDisp
     private readonly IDialogService _dialogs;
     private readonly ISdeNameResolver _resolver;
     private readonly ITypeImageProvider? _images;
+    private readonly IFitValidator? _validator;
+    private readonly Dictionary<string, int> _skillIdsByName;
     private readonly long? _compositionId;
     private readonly Guid _newCompositionId = Guid.NewGuid();
     private readonly IDisposable? _changeSubscription;
+    // ET-358 "put it in the doctrine": a plan's target levels, applied to the first entry a fresh editor gets
+    // added through AddFit and cleared right after — nowhere else touches this, so an editor opened the ordinary
+    // way never carries one, and a second (or a batch-picked) fit never repeats the first entry's minimums.
+    private IReadOnlyList<SkillMinimum>? _prefillSkillMinimums;
     private FleetCompositionDetail? _snapshot;
     private bool _isSaving;
 
     private CompositionEditorViewModel(IServiceProvider services, IFleetCompositionClient client, FleetCompositionDetail? snapshot,
-        bool isReadOnly = false)
+        bool isReadOnly = false, string? suggestedName = null, IReadOnlyList<SkillMinimum>? prefillSkillMinimums = null)
     {
         _services = services;
         _client = client;
         _dialogs = services.GetRequiredService<IDialogService>();
         _resolver = FitNameResolverFactory.For(services);
         _images = services.GetRequiredService<ITypeImageProvider>();
+        _validator = services.GetService<IFitValidator>();
         _compositionId = snapshot?.Composition.Id;
         IsReadOnly = isReadOnly;
+        _prefillSkillMinimums = prefillSkillMinimums;
+        _skillIdsByName = SkillIdsByName(services.GetService<ISdeAccessor>());
+        SkillNames = [.. _skillIdsByName.Keys.Order(StringComparer.OrdinalIgnoreCase)];
 
         if (snapshot is not null)
             _Load(snapshot);
+        else if (suggestedName is not null)
+        {
+            Name = suggestedName;
+        }
 
         Roles.CollectionChanged += _OnRolesChanged;
         _Recompute();
@@ -63,9 +81,14 @@ public sealed partial class CompositionEditorViewModel : ObservableObject, IDisp
 
     public void Dispose() => _changeSubscription?.Dispose();
 
-    /// <summary>A blank editor that creates a new composition through <paramref name="client"/> on save.</summary>
-    public static CompositionEditorViewModel ForNew(IServiceProvider services, IFleetCompositionClient client) =>
-        new(services, client, snapshot: null);
+    /// <summary>A blank editor that creates a new composition through <paramref name="client"/> on save.
+    /// <paramref name="suggestedName"/> and <paramref name="prefillSkillMinimums"/> seed the editor for a caller
+    /// that already knows what it wants in it (ET-358's "put it in the doctrine"): the name box opens filled in,
+    /// and the first fit added through <see cref="AddFitCommand"/> starts with those DOCTRINE MINIMUM rows instead
+    /// of empty ones. Neither is sent anywhere until the pilot presses SAVE.</summary>
+    public static CompositionEditorViewModel ForNew(IServiceProvider services, IFleetCompositionClient client,
+        string? suggestedName = null, IReadOnlyList<SkillMinimum>? prefillSkillMinimums = null) =>
+        new(services, client, snapshot: null, suggestedName: suggestedName, prefillSkillMinimums: prefillSkillMinimums);
 
     /// <summary>An editor pre-filled from an existing composition graph, edited in place on save.</summary>
     public static CompositionEditorViewModel ForExisting(IServiceProvider services, IFleetCompositionClient client, FleetCompositionDetail detail) =>
@@ -111,6 +134,9 @@ public sealed partial class CompositionEditorViewModel : ObservableObject, IDisp
 
     public ObservableCollection<EditorRoleViewModel> Roles { get; } = [];
 
+    /// <summary>Every published skill (SDE category 16) by name, for the DOCTRINE MINIMUM picker.</summary>
+    public IReadOnlyList<string> SkillNames { get; }
+
     [RelayCommand]
     private void AddRoleGroup() => _Track(new EditorRoleViewModel(id: null, roleName: "New role", groupMinCount: null));
 
@@ -136,7 +162,8 @@ public sealed partial class CompositionEditorViewModel : ObservableObject, IDisp
         {
             if (role.Entries.Any(e => string.Equals(e.Fit.ContentHash, fit.ContentHash, StringComparison.OrdinalIgnoreCase)))
                 continue;
-            role.Add(_NewEntry(id: null, fit, entryMinCount: null));
+            role.Add(_NewEntry(id: null, fit, entryMinCount: null, skillMinimums: _prefillSkillMinimums ?? []));
+            _prefillSkillMinimums = null; // only the very first entry added anywhere in this editor gets it
         }
         _Recompute();
     }
@@ -146,12 +173,77 @@ public sealed partial class CompositionEditorViewModel : ObservableObject, IDisp
     private Task OpenFitDetail(EditorEntryViewModel? entry) =>
         entry is null ? Task.CompletedTask : FitDetailLauncher.OpenAsync(_services, _dialogs, entry.Fit);
 
-    /// <summary>Builds an entry view-model with the hull render kicked off on demand.</summary>
-    private EditorEntryViewModel _NewEntry(long? id, FitReferenceInfo fit, int? entryMinCount)
+    /// <summary>Adds the skill typed into an entry's DOCTRINE MINIMUM row at the chosen level. An unknown name
+    /// only sets the status; nothing is sent until save.</summary>
+    [RelayCommand]
+    private void AddSkillMinimum(EditorEntryViewModel? entry)
     {
-        var entry = new EditorEntryViewModel(id, fit, _resolver.TypeName(fit.ShipTypeId), entryMinCount, _images);
+        if (entry is null || IsReadOnly)
+        {
+            return;
+        }
+
+        if (!_skillIdsByName.TryGetValue(entry.NewSkillText.Trim(), out var skillTypeId))
+        {
+            Status = "Pick a skill from the list.";
+            return;
+        }
+
+        entry.AddSkillMinimum(skillTypeId, _resolver.TypeName(skillTypeId), Math.Clamp(entry.NewSkillLevelIndex + 1, 1, 5));
+        entry.NewSkillText = "";
+        Status = "";
+    }
+
+    /// <summary>Builds an entry view-model with the hull render kicked off on demand.</summary>
+    private EditorEntryViewModel _NewEntry(long? id, FitReferenceInfo fit, int? entryMinCount, IReadOnlyList<SkillMinimum> skillMinimums)
+    {
+        var entry = new EditorEntryViewModel(id, fit, _resolver.TypeName(fit.ShipTypeId), entryMinCount, _images,
+            skillMinimums, FitSkillLevels(_validator, fit), _resolver.TypeName);
         _ = entry.LoadHullImageAsync();
         return entry;
+    }
+
+    /// <summary>The level the fit itself requires of each skill (its whole prerequisite closure), for the "fit needs"
+    /// hint. Empty when there is no validator or the snapshot is not a readable fit.</summary>
+    internal static IReadOnlyDictionary<int, int> FitSkillLevels(IFitValidator? validator, FitReferenceInfo fit)
+    {
+        EsiFitting? fitting;
+        try
+        {
+            fitting = JsonSerializer.Deserialize<EsiFitting>(fit.RawJson);
+        }
+        catch (JsonException)
+        {
+            fitting = null;
+        }
+
+        if (validator is null || fitting?.Items is null)
+        {
+            return new Dictionary<int, int>();
+        }
+
+        return validator.ValidateSkills(fitting, new Dictionary<int, int>())
+            .ToDictionary(gap => gap.SkillTypeId, gap => gap.RequiredLevel);
+    }
+
+    /// <summary>Every SDE skill (category 16) by name, for the "add a skill" pickers.</summary>
+    internal static Dictionary<string, int> SkillIdsByName(ISdeAccessor? sde)
+    {
+        Dictionary<string, int> skillIds = new(StringComparer.OrdinalIgnoreCase);
+        if (sde is not { IsAvailable: true })
+        {
+            return skillIds;
+        }
+
+        foreach (var group in sde.GetGroupsByCategory(16))
+        {
+            foreach (var skill in sde.GetSkillsInGroup(group.GroupId))
+            {
+                skillIds.TryAdd(skill.Name, skill.TypeId);
+            }
+        }
+
+        return skillIds;
     }
 
     [RelayCommand]
@@ -232,7 +324,7 @@ public sealed partial class CompositionEditorViewModel : ObservableObject, IDisp
         {
             var roleVm = new EditorRoleViewModel(role.Id, role.RoleName, role.GroupMinCount);
             foreach (var entry in role.Entries)
-                roleVm.Add(_NewEntry(entry.Id, entry.Fit, entry.EntryMinCount));
+                roleVm.Add(_NewEntry(entry.Id, entry.Fit, entry.EntryMinCount, entry.SkillMinimums));
             _Track(roleVm);
         }
     }
@@ -299,8 +391,11 @@ public sealed partial class CompositionEditorViewModel : ObservableObject, IDisp
             foreach (var entry in role.Entries)
             {
                 var snapEntry = snapRole.Entries.FirstOrDefault(e => e.Id == entry.Id);
-                if (snapEntry is null || entry.EntryMinCount != snapEntry.EntryMinCount)
+                if (snapEntry is null || entry.EntryMinCount != snapEntry.EntryMinCount
+                    || !_SameSkillMinimums(entry.SkillMinimumList, snapEntry.SkillMinimums))
+                {
                     return true;
+                }
             }
         }
 
@@ -408,21 +503,25 @@ public sealed partial class CompositionEditorViewModel : ObservableObject, IDisp
                     }
             }
 
-            // Entries: add new ones, edit a changed per-fit minimum (the fit snapshot itself never changes).
+            // Entries: add new ones, edit a changed per-fit minimum or skill minimums (the fit snapshot itself never
+            // changes). Unchanged skill minimums are not sent, so the server keeps what it has.
             foreach (var entry in role.Entries)
             {
-                if (entry.Id is null)
+                if (entry.Id is not { } entryId)
                 {
-                    var (ok, message, _) = await _client.AddEntryAsync(roleId, entry.Fit, entry.EntryMinCount);
+                    var (ok, message, _) = await _client.AddEntryAsync(roleId, entry.Fit, entry.EntryMinCount, entry.SkillMinimumList);
                     if (!ok)
                         return _Fail(message);
                 }
                 else if (snapRole is not null)
                 {
-                    var snapEntry = snapRole.Entries.First(e => e.Id == entry.Id);
-                    if (entry.EntryMinCount != snapEntry.EntryMinCount)
+                    var snapEntry = snapRole.Entries.First(e => e.Id == entryId);
+                    var skillMinimums = entry.SkillMinimumList;
+                    var skillMinimumsChanged = !_SameSkillMinimums(skillMinimums, snapEntry.SkillMinimums);
+                    if (entry.EntryMinCount != snapEntry.EntryMinCount || skillMinimumsChanged)
                     {
-                        var (ok, message) = await _client.EditEntryAsync(entry.Id.Value, entry.EntryMinCount);
+                        var (ok, message) = await _client.EditEntryAsync(entryId, entry.EntryMinCount,
+                            skillMinimumsChanged ? skillMinimums : null);
                         if (!ok)
                             return _Fail(message);
                     }
@@ -459,6 +558,9 @@ public sealed partial class CompositionEditorViewModel : ObservableObject, IDisp
         FitCount = Roles.Sum(r => r.Entries.Count);
         MinPilots = Roles.Sum(r => r.Requirement);
     }
+
+    private static bool _SameSkillMinimums(IReadOnlyList<SkillMinimum> working, IReadOnlyList<SkillMinimum> saved) =>
+        working.Count == saved.Count && working.All(saved.Contains);
 
     private static string? _NullIfBlank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }

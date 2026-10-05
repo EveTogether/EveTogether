@@ -1,7 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Diagnostics;
+using System.Globalization;
 using System.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -14,6 +17,18 @@ using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Fleet.Events;
 using EveUtils.Shared.Modules.Fleet.Composition.Repositories;
 using EveUtils.Client.Imaging;
+using EveUtils.Client.ViewModels.FitBrowser;
+using EveUtils.Client.ViewModels.Skills;
+using EveUtils.Client.ViewModels.Skills.Plans;
+using EveUtils.Shared.Cqrs;
+using EveUtils.Shared.Modules.Fittings.Dtos;
+using EveUtils.Shared.Modules.Skills.Plans.Commands;
+using EveUtils.Shared.Modules.Skills.Plans.Enums;
+using EveUtils.Shared.Modules.Skills.Plans.Repositories;
+using EveUtils.Shared.Modules.Sde;
+using EveUtils.Shared.Modules.Skills;
+using EveUtils.Shared.Modules.Skills.Repositories;
+using EveUtils.Shared.Modules.Skills.Entities;
 using EveUtils.Shared.Transport;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -38,6 +53,8 @@ public sealed partial class CompositionsViewModel : ObservableObject, IRefreshab
     private readonly IDialogService _dialogs;
 
     private Task? _initTask;
+    private IReadOnlyList<CompositionCharacterSnapshot> _snapshots = [];
+    private CompositionReadinessCalculator? _calculator;
 
     public CompositionsViewModel(IServiceProvider services)
     {
@@ -57,8 +74,17 @@ public sealed partial class CompositionsViewModel : ObservableObject, IRefreshab
     public void Dispose() => _changeSubscription.Dispose();
 
     // Local changes and server pushes both arrive here, on the UI thread; a tab the batch touches twice reloads once.
-    private Task _OnCompositionsChangedAsync(IReadOnlyList<CompositionChangedEvent> changes) =>
-        Task.WhenAll(Tabs.Where(tab => changes.Any(tab.Shows)).Select(tab => tab.RefreshAfterChangeAsync()));
+    private Task _OnCompositionsChangedAsync(IReadOnlyList<CompositionChangedEvent> changes)
+    {
+        // The doctrine on screen changed (an EDIT, a minimum SAVE, another client): show it as it is now, unless the
+        // minimum editor holds tentative edits, which its own SAVE/CANCEL resolves.
+        if (SelectedComposition is { } selected && MinimumEditor is null &&
+            changes.Any(change => SelectedTab?.Shows(change) == true && change.Data.CompositionId == selected.Id))
+        {
+            _ = _ObserveAsync(_LoadReadinessAsync(selected, keepSelection: true));
+        }
+        return Task.WhenAll(Tabs.Where(tab => changes.Any(tab.Shows)).Select(tab => tab.RefreshAfterChangeAsync()));
+    }
 
     /// <summary>Local library first, then one tab per coupled server.</summary>
     public ObservableCollection<CompositionTabViewModel> Tabs { get; } = [];
@@ -66,13 +92,35 @@ public sealed partial class CompositionsViewModel : ObservableObject, IRefreshab
     [ObservableProperty] private CompositionTabViewModel? _selectedTab;
     [ObservableProperty] private string _searchText = "";
     [ObservableProperty] private string _statusMessage = "";
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasReadiness), nameof(HasNoReadiness))]
+    private CompositionRowViewModel? _selectedComposition;
+    public bool HasReadiness => SelectedComposition is not null;
+    public bool HasNoReadiness => SelectedComposition is null;
+    [ObservableProperty] private CompositionReadinessEntry? _selectedReadinessEntry;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasMinimumEditor), nameof(HasNoMinimumEditor))]
+    private CompositionMinimumEditorViewModel? _minimumEditor;
+    public bool HasMinimumEditor => MinimumEditor is not null;
+    public bool HasNoMinimumEditor => MinimumEditor is null;
+
+    /// <summary>"Shield battlecruiser doctrine · 3 roles · owner RaymondKrah" under the doctrine name.</summary>
+    [ObservableProperty] private string _doctrineLine = "";
+    [ObservableProperty] private string _sourceLabel = "";
+    public ObservableCollection<CompositionReadinessEntry> ReadinessEntries { get; } = [];
+    public TimeSpan LastReadinessElapsed { get; private set; }
 
     partial void OnSearchTextChanged(string value) => SelectedTab?.SetFilter(value);
 
     partial void OnSelectedTabChanged(CompositionTabViewModel? value)
     {
+        SelectedComposition = null;
+        SelectedReadinessEntry = null;
+        ReadinessEntries.Clear();
         if (value is null)
+        {
             return;
+        }
         value.SetFilter(SearchText);
         _ = value.EnsureLoadedAsync();
     }
@@ -130,6 +178,265 @@ public sealed partial class CompositionsViewModel : ObservableObject, IRefreshab
 
     [RelayCommand]
     private Task Refresh() => SelectedTab?.ReloadAsync() ?? Task.CompletedTask;
+
+    [RelayCommand]
+    private Task ShowReadiness(CompositionRowViewModel? row) =>
+        row is null ? Task.CompletedTask : _LoadReadinessAsync(row, keepSelection: false);
+
+    private async Task _LoadReadinessAsync(CompositionRowViewModel row, bool keepSelection)
+    {
+        FleetCompositionDetail? detail = await row.Client.GetAsync(row.Id);
+        if (detail is null)
+        {
+            StatusMessage = "Could not load this composition.";
+            CloseReadiness();
+            return;
+        }
+
+        IDogmaDataAccessor? data = _services.GetService<IDogmaDataAccessor>();
+        ICharacterSkillRepository? skills = _services.GetService<ICharacterSkillRepository>();
+        ICharacterAttributesRepository? attributes = _services.GetService<ICharacterAttributesRepository>();
+        ICharacterSkillQueueRepository? queue = _services.GetService<ICharacterSkillQueueRepository>();
+        if (data is null || skills is null || attributes is null || queue is null)
+        {
+            StatusMessage = "Local skill data is unavailable.";
+            return;
+        }
+
+        Stopwatch clock = Stopwatch.StartNew();
+        CharacterAttributeResolver attributeResolver = new(data);
+        List<CompositionCharacterSnapshot> snapshots = [];
+        foreach (Character character in await _characters.GetAllAsync())
+        {
+            if (character.EsiCharacterId is not { } characterId)
+            {
+                continue;
+            }
+
+            bool hasScope = character.HasScope(SkillsScopeCatalog.ReadSkills);
+            bool hasQueueScope = character.HasScope(SkillsScopeCatalog.ReadSkillQueue);
+            IReadOnlyDictionary<int, int> levels = hasScope
+                ? await skills.GetLevelsAsync(characterId) : new Dictionary<int, int>();
+            CharacterAttributes? storedAttributes = hasScope ? await attributes.GetAsync(characterId) : null;
+            IReadOnlyList<CharacterSkillQueueEntry> storedQueue = hasQueueScope
+                ? await queue.GetForCharacterAsync(characterId) : [];
+            snapshots.Add(new CompositionCharacterSnapshot(character.Name, hasScope, hasQueueScope, levels,
+                storedAttributes is null ? null : attributeResolver.Resolve(storedAttributes, []), storedQueue, characterId));
+        }
+
+        CompositionReadinessCalculator calculator = new(new FitValidator(data),
+            new SkillTrainingEstimator(data), FitNameResolverFactory.For(_services), data);
+        int keptIndex = keepSelection && SelectedReadinessEntry is { } kept ? ReadinessEntries.IndexOf(kept) : 0;
+        string? keptCharacter = keepSelection ? SelectedReadinessEntry?.SelectedCharacter?.Name : null;
+        ReadinessEntries.Clear();
+        foreach (FleetCompositionRoleInfo role in detail.Roles)
+        {
+            bool first = true;
+            foreach (FleetCompositionEntryInfo entry in role.Entries)
+            {
+                CompositionReadinessEntry readiness = calculator.Evaluate(role.RoleName, entry.Fit, entry.SkillMinimums, snapshots);
+                readiness.Entry = entry;
+                readiness.CompositionName = detail.Composition.Name;
+                readiness.CanEdit = row.CanEdit;
+                readiness.IsFirstInRole = first;
+                readiness.RoleMinLabel = role.GroupMinCount is { } min ? $"≥ {min} pilots" : "";
+                ReadinessEntries.Add(readiness);
+                first = false;
+            }
+        }
+
+        _snapshots = snapshots;
+        _calculator = calculator;
+        LastReadinessElapsed = clock.Elapsed;
+        DoctrineLine = string.Join(" · ", new[]
+        {
+            detail.Composition.Description?.Trim() ?? "",
+            detail.Roles.Count == 1 ? "1 role" : $"{detail.Roles.Count} roles",
+            string.IsNullOrWhiteSpace(row.OwnerName) ? "" : $"owner {row.OwnerName}"
+        }.Where(part => part.Length > 0));
+        SourceLabel = row.IsLocal ? "local library" : $"synced to {SelectedTab?.Title}";
+        SelectedComposition = row;
+        MinimumEditor = null;
+        SelectedReadinessEntry = ReadinessEntries.ElementAtOrDefault(Math.Max(keptIndex, 0)) ?? ReadinessEntries.FirstOrDefault();
+        SelectedReadinessEntry?.SelectByName(keptCharacter);
+        StatusMessage = "";
+    }
+
+    partial void OnSelectedReadinessEntryChanged(CompositionReadinessEntry? value)
+    {
+        foreach (CompositionReadinessEntry entry in ReadinessEntries)
+        {
+            entry.IsSelected = ReferenceEquals(entry, value);
+        }
+    }
+
+    [RelayCommand]
+    private void SelectReadinessEntry(CompositionReadinessEntry? entry)
+    {
+        if (entry is null)
+        {
+            return;
+        }
+        MinimumEditor = null;
+        SelectedReadinessEntry = entry;
+    }
+
+    [RelayCommand]
+    private void CloseReadiness()
+    {
+        MinimumEditor = null;
+        SelectedComposition = null;
+        SelectedReadinessEntry = null;
+        ReadinessEntries.Clear();
+    }
+
+    /// <summary>START FLEET in the doctrine header: the FLEETS module's own new-fleet flow. A local doctrine is coupled to
+    /// the new local fleet at once; a server fleet's create returns no id, so there the doctrine is set in its roster.</summary>
+    [RelayCommand]
+    private Task StartFleet() => _ObserveAsync(_StartFleetAsync());
+
+    private async Task _StartFleetAsync()
+    {
+        if (SelectedComposition is not { } doctrine)
+        {
+            return;
+        }
+
+        var fleets = _dialogs.ShowFleets(new FleetsViewModel(_services));
+        if (doctrine.IsLocal)
+        {
+            await fleets.NewLocalFleetForCompositionAsync(doctrine.Id);
+            return;
+        }
+
+        await fleets.NewFleetCommand.ExecuteAsync(null);
+        StatusMessage = $"A server fleet takes its doctrine in its roster: pick \"{doctrine.Name}\" under COMPOSITION once the fleet exists.";
+    }
+
+    /// <summary>EDIT in the doctrine header: the full composition editor, as OPEN on the library card.</summary>
+    [RelayCommand]
+    private Task EditDoctrine() => OpenCompositionCommand.ExecuteAsync(SelectedComposition);
+
+    /// <summary>EDIT on an entry: swaps the right pane from readiness to that entry's skill minimum editor.</summary>
+    [RelayCommand]
+    private async Task EditMinimum(CompositionReadinessEntry? readiness)
+    {
+        if (readiness?.Entry is not { } entry || SelectedComposition is not { CanEdit: true } row || _calculator is not { } calculator)
+        {
+            return;
+        }
+
+        SelectedReadinessEntry = readiness;
+        CompositionMinimumEditorViewModel editor = new(readiness, entry, row.Client, calculator, _snapshots,
+            CompositionEditorViewModel.SkillIdsByName(_services.GetService<ISdeAccessor>()),
+            FitNameResolverFactory.For(_services).TypeName, _services.GetService<ISkillPlanReader>(),
+            () => _LoadReadinessAsync(row, keepSelection: true), () => MinimumEditor = null);
+        MinimumEditor = editor;
+        await _ObserveAsync(editor.LoadPlansAsync());
+    }
+
+    /// <summary>OPEN FIT: the read-only fit detail, the route the composition editor's fit icon takes.</summary>
+    [RelayCommand]
+    private Task OpenFit() =>
+        SelectedReadinessEntry?.Entry is { } entry ? FitDetailLauncher.OpenAsync(_services, _dialogs, entry.Fit) : Task.CompletedTask;
+
+    /// <summary>ADD TO PLAN…: the doctrine entry's missing levels into the selected character's "doctrine · fit" plan
+    /// (PLANS' + FROM DOCTRINE path), then SKILLS on that plan.</summary>
+    [RelayCommand]
+    private Task AddToPlan() => _ObserveAsync(_AddToPlanAndOpenAsync(addRows: true));
+
+    /// <summary>WHAT IF…: the what-if lives on PLANS, so it opens this fit's plan there; it never writes one.</summary>
+    [RelayCommand]
+    private Task WhatIf() => _ObserveAsync(_AddToPlanAndOpenAsync(addRows: false));
+
+    private async Task _AddToPlanAndOpenAsync(bool addRows)
+    {
+        if (SelectedReadinessEntry is not { Entry: { } entry } readiness ||
+            readiness.SelectedCharacter is not { CharacterId: > 0 } character ||
+            _snapshots.FirstOrDefault(snapshot => snapshot.CharacterId == character.CharacterId) is not { } snapshot ||
+            _services.GetService<IFitValidator>() is not { } validator)
+        {
+            return;
+        }
+
+        EsiFitting? fit;
+        try
+        {
+            fit = JsonSerializer.Deserialize<EsiFitting>(entry.Fit.RawJson);
+        }
+        catch (JsonException)
+        {
+            fit = null;
+        }
+        if (fit is null)
+        {
+            StatusMessage = "This fit could not be read.";
+            return;
+        }
+
+        IDispatcher dispatcher = _services.GetRequiredService<IDispatcher>();
+        string planName = $"{readiness.CompositionName} · {readiness.FitName}";
+        int planId;
+        if ((await _services.GetRequiredService<ISkillPlanReader>().GetForCharacterAsync(character.CharacterId))
+            .FirstOrDefault(plan => plan.Name == planName) is { } existing)
+        {
+            planId = existing.Id;
+        }
+        else if (!addRows)
+        {
+            StatusMessage = $"{character.Name} has no plan \"{planName}\" yet. ADD TO PLAN… makes it, with its what-if.";
+            return;
+        }
+        else
+        {
+            var created = await dispatcher.Send(new CreateSkillPlanCommand(character.CharacterId, planName));
+            if (!created.IsSuccess)
+            {
+                StatusMessage = $"The plan \"{planName}\" could not be made.";
+                return;
+            }
+            planId = created.Value;
+        }
+
+        if (addRows)
+        {
+            List<int> seeds = [fit.ShipTypeId, .. (fit.Items ?? []).Select(item => item.TypeId)];
+            string label = $"{readiness.CompositionName} · {readiness.RoleName} · {readiness.FitName}";
+            SkillPlanBuildResult built = SkillPlanRowFactory.FromDoctrine(validator, seeds, entry.SkillMinimums, snapshot.Levels, label);
+            // Sent even with no rows, so the plan lists this entry under IN THIS PLAN and says what was dropped.
+            var added = await dispatcher.Send(new AddSkillPlanRowsCommand(character.CharacterId, planId, SkillPlanRowSource.Doctrine,
+                entry.Id.ToString(CultureInfo.InvariantCulture), built.Rows, built.Label, built.Dropped));
+            if (!added.IsSuccess)
+            {
+                StatusMessage = $"The levels could not be added to \"{planName}\".";
+                return;
+            }
+
+            StatusMessage = built.Message ?? $"{character.Name}: the missing levels are in the plan \"{planName}\".";
+        }
+
+        SkillsWindowViewModel fresh = new(_services, character.CharacterId);
+        fresh.OpenOnPlan(character.CharacterId, planId);
+        SkillsWindowViewModel shown = _dialogs.ShowSkills(fresh);
+        if (!ReferenceEquals(shown, fresh))
+        {
+            shown.OpenOnPlan(character.CharacterId, planId);
+            await shown.GoToCharacterAsync(character.CharacterId);
+        }
+    }
+
+    // A command or change handler nobody awaits: a failure lands on the status line instead of going unobserved.
+    private async Task _ObserveAsync(Task work)
+    {
+        try
+        {
+            await work;
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            StatusMessage = $"Something went wrong: {exception.Message}";
+        }
+    }
 
     /// <summary>Loads every local character's own client-only compositions into the Local tab.</summary>
     private async Task _LoadLocalTabAsync(CompositionTabViewModel tab)
@@ -477,7 +784,7 @@ public sealed partial class CompositionsViewModel : ObservableObject, IRefreshab
 
             foreach (var entry in role.Entries)
             {
-                var (entryOk, entryMessage, _) = await target.AddEntryAsync(roleId, entry.Fit, entry.EntryMinCount);
+                var (entryOk, entryMessage, _) = await target.AddEntryAsync(roleId, entry.Fit, entry.EntryMinCount, entry.SkillMinimums);
                 if (!entryOk)
                     return (false, entryMessage);
             }

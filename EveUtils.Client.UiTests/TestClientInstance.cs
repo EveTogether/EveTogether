@@ -3,6 +3,7 @@ using EveUtils.Client.Fittings;
 using EveUtils.Client.Fleet;
 using EveUtils.Client.Killmails;
 using EveUtils.Client.Runs;
+using EveUtils.Client.Skills.Plans;
 using EveUtils.Shared.Data;
 using EveUtils.Shared.Messaging;
 using Microsoft.Data.Sqlite;
@@ -65,6 +66,8 @@ public sealed class TestClientInstance : IDisposable
                 provider.GetRequiredService<ILogger<FittingsChangeFeed>>(), TimeSpan.Zero));
             collection.AddSingleton(provider => new KillmailsChangeFeed(provider.GetRequiredService<IEventBus>(),
                 provider.GetRequiredService<ILogger<KillmailsChangeFeed>>(), TimeSpan.Zero));
+            collection.AddSingleton(provider => new SkillPlansChangeFeed(provider.GetRequiredService<IEventBus>(),
+                provider.GetRequiredService<ILogger<SkillPlansChangeFeed>>(), TimeSpan.Zero));
             configure?.Invoke(collection);
         });
 

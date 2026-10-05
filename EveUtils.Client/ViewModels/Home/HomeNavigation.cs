@@ -15,6 +15,7 @@ namespace EveUtils.Client.ViewModels.Home;
 /// <param name="AllowScope">Re-authorise a character with one more scope ticked in the scope picker (D-21).</param>
 /// <param name="ReAuthorize">Re-authorise a character whose sign-in ESI refused, with its scopes as granted.</param>
 /// <param name="ImportFittings">IMPORT FROM EVE: the fit import with its own character picker.</param>
+/// <param name="OpenSkills">Opens the SKILLS module (ET-16) on the given character — a pilot row's TRAINING cell.</param>
 public sealed record HomeNavigation(
     Func<Func<RunsOverviewViewModel, Task>?, Task> OpenRuns,
     Action<string> LaunchModule,
@@ -24,9 +25,10 @@ public sealed record HomeNavigation(
     Action<CharacterViewModel> OpenDpsOverlay,
     Func<int, string, Task> AllowScope,
     Func<int, Task> ReAuthorize,
-    Func<Task> ImportFittings)
+    Func<Task> ImportFittings,
+    Action<int> OpenSkills)
 {
     public static readonly HomeNavigation None = new(
         _ => Task.CompletedTask, _ => { }, _ => Task.CompletedTask, _ => Task.CompletedTask, _ => { }, _ => { },
-        (_, _) => Task.CompletedTask, _ => Task.CompletedTask, () => Task.CompletedTask);
+        (_, _) => Task.CompletedTask, _ => Task.CompletedTask, () => Task.CompletedTask, _ => { });
 }

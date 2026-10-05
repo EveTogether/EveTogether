@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Fleet.Composition;
 using EveUtils.Shared.Modules.Fleet.Composition.Repositories;
+using EveUtils.Shared.Modules.Skills;
 
 namespace EveUtils.Client.Fleet;
 
@@ -55,11 +56,12 @@ public sealed class LocalFleetCompositionClient(
     public async Task<(bool Ok, string Message)> ReorderRolesAsync(long compositionId, IReadOnlyList<long> orderedRoleIds) =>
         Map(await local.ReorderCompositionRolesAsync(compositionId, orderedRoleIds, ownerCharacterId));
 
-    public async Task<(bool Ok, string Message, long Id)> AddEntryAsync(long roleId, FitReferenceInfo fit, int? entryMinCount) =>
-        MapId(await local.AddCompositionEntryAsync(roleId, ToFit(fit), entryMinCount, ownerCharacterId));
+    public async Task<(bool Ok, string Message, long Id)> AddEntryAsync(long roleId, FitReferenceInfo fit, int? entryMinCount,
+        IReadOnlyList<SkillMinimum> skillMinimums) =>
+        MapId(await local.AddCompositionEntryAsync(roleId, ToFit(fit), entryMinCount, skillMinimums, ownerCharacterId));
 
-    public async Task<(bool Ok, string Message)> EditEntryAsync(long entryId, int? entryMinCount) =>
-        Map(await local.EditCompositionEntryAsync(entryId, entryMinCount, ownerCharacterId));
+    public async Task<(bool Ok, string Message)> EditEntryAsync(long entryId, int? entryMinCount, IReadOnlyList<SkillMinimum>? skillMinimums) =>
+        Map(await local.EditCompositionEntryAsync(entryId, entryMinCount, skillMinimums, ownerCharacterId));
 
     public async Task<(bool Ok, string Message)> RemoveEntryAsync(long entryId) =>
         Map(await local.RemoveCompositionEntryAsync(entryId, ownerCharacterId));
@@ -81,7 +83,8 @@ public sealed class LocalFleetCompositionClient(
             roleGraph.Role.GroupMinCount, roleGraph.Role.SortOrder, roleGraph.Entries.Select(MapEntry).ToList());
 
     private static FleetCompositionEntryInfo MapEntry(FleetCompositionEntry entry) =>
-        new(entry.Id, entry.RoleId, entry.EntryMinCount, entry.SortOrder, MapFit(entry.Fit));
+        new(entry.Id, entry.RoleId, entry.EntryMinCount, entry.SortOrder, MapFit(entry.Fit),
+            [.. entry.SkillMinimums.Select(m => new SkillMinimum(m.SkillTypeId, m.Level))]);
 
     private static FitReferenceInfo MapFit(FitReference fit) =>
         new(fit.ShipTypeId, fit.FitName, fit.RawJson, fit.ContentHash, fit.LocalFittingId, fit.ServerSharedFitId);

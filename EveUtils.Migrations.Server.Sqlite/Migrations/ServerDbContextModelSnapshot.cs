@@ -1337,6 +1337,25 @@ namespace EveUtils.Migrations.Server.Sqlite.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.OwnsMany("EveUtils.Shared.Modules.Fleet.Composition.FleetCompositionEntrySkillMinimum", "SkillMinimums", b1 =>
+                        {
+                            b1.Property<long>("EntryId")
+                                .HasColumnType("INTEGER");
+
+                            b1.Property<int>("SkillTypeId")
+                                .HasColumnType("INTEGER");
+
+                            b1.Property<int>("Level")
+                                .HasColumnType("INTEGER");
+
+                            b1.HasKey("EntryId", "SkillTypeId");
+
+                            b1.ToTable("FleetCompositionEntrySkillMinimum", (string)null);
+
+                            b1.WithOwner()
+                                .HasForeignKey("EntryId");
+                        });
+
                     b.OwnsOne("EveUtils.Shared.Modules.Fleet.Composition.FitReference", "Fit", b1 =>
                         {
                             b1.Property<long>("FleetCompositionEntryId")
@@ -1375,6 +1394,8 @@ namespace EveUtils.Migrations.Server.Sqlite.Migrations
 
                     b.Navigation("Fit")
                         .IsRequired();
+
+                    b.Navigation("SkillMinimums");
                 });
 
             modelBuilder.Entity("EveUtils.Shared.Modules.Fleet.Composition.FleetCompositionRole", b =>

@@ -1,0 +1,201 @@
+<v:ChromedWindow xmlns="https://github.com/avaloniaui" xmlns:v="using:EveUtils.Client.Views"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vs="using:EveUtils.Client.ViewModels.Skills"
+        xmlns:sk="using:EveUtils.Client.Views.Skills"
+        xmlns:sh="using:EveUtils.Client.Views.Shared"
+        xmlns:dlg="using:EveUtils.Client.Dialogs"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="1200" d:DesignHeight="760"
+        x:Class="EveUtils.Client.Views.SkillsWindow"
+        x:DataType="vs:SkillsWindowViewModel"
+        Width="1200" Height="760" MinWidth="700" MinHeight="480"
+        WindowStartupLocation="CenterOwner"
+        Title="Skills">
+
+    <!-- SKILLS (ET-16): one rail module between COMP and TOOLS, drawn like the RUNS window — a list with a 400 px
+         detail pane — for both CATALOGUE and TRAINING QUEUE. The character choice lives in the header, where
+         FitDetailWindow puts its own SKILLS combobox, and reuses the ET-184 CharacterPickerWindow row. -->
+    <DockPanel>
+
+        <DockPanel.Styles>
+            <!-- The tab strip as in mockup v5: uppercase tabs with a dim counter, the selected one bright on an accent
+                 underline, and one rule under the whole strip. -->
+            <Style Selector="TabControl.skilltabs">
+                <Setter Property="Padding" Value="0"/>
+                <Setter Property="Template">
+                    <ControlTemplate>
+                        <DockPanel>
+                            <Border DockPanel.Dock="Top" Padding="12,0" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource BorderBrush}">
+                                <ItemsPresenter Name="PART_ItemsPresenter" ItemsPanel="{TemplateBinding ItemsPanel}"/>
+                            </Border>
+                            <ContentPresenter Name="PART_SelectedContentHost" Content="{TemplateBinding SelectedContent}"
+                                              ContentTemplate="{TemplateBinding SelectedContentTemplate}"/>
+                        </DockPanel>
+                    </ControlTemplate>
+                </Setter>
+                <Setter Property="ItemsPanel">
+                    <ItemsPanelTemplate>
+                        <StackPanel Orientation="Horizontal"/>
+                    </ItemsPanelTemplate>
+                </Setter>
+            </Style>
+            <Style Selector="TabControl.skilltabs > TabItem">
+                <Setter Property="Padding" Value="12,8,12,6"/>
+                <Setter Property="MinHeight" Value="0"/>
+                <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+                <Setter Property="Template">
+                    <ControlTemplate>
+                        <Border Name="PART_LayoutRoot" Background="Transparent" Padding="{TemplateBinding Padding}"
+                                BorderThickness="0,0,0,2" BorderBrush="Transparent">
+                            <ContentPresenter Content="{TemplateBinding Header}" ContentTemplate="{TemplateBinding HeaderTemplate}"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter>
+            </Style>
+            <Style Selector="TabControl.skilltabs > TabItem:selected">
+                <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+            </Style>
+            <Style Selector="TabControl.skilltabs > TabItem:selected /template/ Border#PART_LayoutRoot">
+                <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+            </Style>
+            <Style Selector="TabControl.skilltabs > TabItem:pointerover">
+                <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+            </Style>
+            <Style Selector="TextBlock.tabname">
+                <Setter Property="FontSize" Value="11"/>
+                <Setter Property="LetterSpacing" Value="1.5"/>
+            </Style>
+            <Style Selector="TextBlock.tabcount">
+                <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+                <Setter Property="FontSize" Value="10"/>
+                <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+            </Style>
+
+            <!-- The header character choice (ET-16): a real ComboBox — closing on selection is then the control's
+                 own default rather than logic this window has to reimplement. Its closed box shows the current
+                 character; its dropdown is the ET-184 row (sh:CharacterPickRowView) behind a search field that only
+                 appears once scrolling stops being faster (ShowCharacterSearch, D-point-8). -->
+            <Style Selector="ComboBox.characterpick">
+                <Setter Property="MinWidth" Value="200"/>
+                <Setter Property="Padding" Value="6,3"/>
+                <Setter Property="FontSize" Value="11.5"/>
+                <Setter Property="Template">
+                    <ControlTemplate>
+                        <Panel>
+                            <Border Background="{StaticResource BgRowBrush}" BorderBrush="{DynamicResource BorderBrush}"
+                                    BorderThickness="1" Padding="{TemplateBinding Padding}">
+                                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="6">
+                                    <Image Grid.Column="0" Width="18" Height="18" Stretch="UniformToFill"
+                                           Source="{Binding SelectedCharacterOption.Portrait}"/>
+                                    <TextBlock Grid.Column="1" TextTrimming="CharacterEllipsis" FontWeight="SemiBold"
+                                               Foreground="{StaticResource TextBrightBrush}" VerticalAlignment="Center"
+                                               Text="{Binding SelectedCharacterName}"/>
+                                    <TextBlock Grid.Column="2" Text="▾" VerticalAlignment="Center" Foreground="{StaticResource TextDimBrush}"/>
+                                </Grid>
+                            </Border>
+                            <Popup Name="PART_Popup" IsOpen="{TemplateBinding IsDropDownOpen, Mode=TwoWay}"
+                                   IsLightDismissEnabled="True" Placement="Bottom" HorizontalOffset="0">
+                                <Border Classes="panel" Padding="6" MinWidth="320">
+                                    <DockPanel>
+                                        <TextBox DockPanel.Dock="Top" Margin="0,0,0,6"
+                                                 PlaceholderText="{Binding CharacterSearchWatermark}"
+                                                 Text="{Binding CharacterSearchText, Mode=TwoWay}"
+                                                 IsVisible="{Binding ShowCharacterSearch}"/>
+                                        <ScrollViewer MaxHeight="420" HorizontalScrollBarVisibility="Disabled">
+                                            <ItemsPresenter Name="PART_ItemsPresenter"
+                                                             ItemsPanel="{TemplateBinding ItemsPanel}"/>
+                                        </ScrollViewer>
+                                    </DockPanel>
+                                </Border>
+                            </Popup>
+                        </Panel>
+                    </ControlTemplate>
+                </Setter>
+            </Style>
+        </DockPanel.Styles>
+
+        <!-- Header (mockup v5): the diamond and SKILLS, the character choice, "n of N", the skill points from ESI, and when
+             the skills were last imported. -->
+        <Border DockPanel.Dock="Top" Padding="14,8" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource BorderBrush}"
+                Background="{DynamicResource BgHeaderBrush}">
+            <Grid ColumnDefinitions="Auto,*,Auto">
+                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                    <TextBlock Classes="panel-title" FontSize="13" VerticalAlignment="Center">
+                        <Run Foreground="{DynamicResource AccentBrush}" Text="◆ "/><Run Text="SKILLS"/>
+                    </TextBlock>
+                    <TextBlock Classes="label" FontSize="10" VerticalAlignment="Center" Margin="6,0,0,0" Text="CHARACTER"/>
+                    <!-- The FitDetailWindow SKILLS-combobox spot, with the ET-184 row as the item template (ET-16). -->
+                    <ComboBox Classes="characterpick" VerticalAlignment="Center"
+                              ItemsSource="{Binding FilteredCharacterOptions}"
+                              SelectedItem="{Binding SelectedCharacterOption, Mode=TwoWay}">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate x:DataType="dlg:CharacterPickRowViewModel">
+                                <sh:CharacterPickRowView/>
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+                    <TextBlock FontSize="11" Foreground="{StaticResource TextDimBrush}" VerticalAlignment="Center"
+                               Text="{Binding CharacterOrdinalText}"/>
+                    <TextBlock FontSize="11" VerticalAlignment="Center" Margin="8,0,0,0" FontFamily="{StaticResource MonoFont}"
+                               Foreground="{DynamicResource AccentBrightBrush}" Text="{Binding TotalSpText}"/>
+                    <TextBlock FontSize="11" VerticalAlignment="Center" Foreground="{StaticResource TextDimBrush}"
+                               Text="{Binding UnallocatedSpText}"
+                               IsVisible="{Binding UnallocatedSpText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                </StackPanel>
+                <Border Grid.Column="2" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1" Padding="9,3"
+                        Background="#33000000" VerticalAlignment="Center">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <Ellipse Width="7" Height="7" VerticalAlignment="Center" Fill="{StaticResource GreenBrush}" IsVisible="{Binding IsRefreshRecent}"/>
+                        <Ellipse Width="7" Height="7" VerticalAlignment="Center" Fill="{StaticResource WarnBrush}" IsVisible="{Binding !IsRefreshRecent}"/>
+                        <TextBlock FontSize="10.5" VerticalAlignment="Center" Text="{Binding RefreshedText}"/>
+                    </StackPanel>
+                </Border>
+            </Grid>
+        </Border>
+
+        <TextBlock DockPanel.Dock="Top" Classes="hint" Margin="14,10" TextWrapping="Wrap"
+                   IsVisible="{Binding StatusMessage, Converter={x:Static ObjectConverters.IsNotNull}}"
+                   Text="{Binding StatusMessage}"/>
+
+        <TabControl Classes="skilltabs" SelectedIndex="{Binding SelectedTabIndex, Mode=TwoWay}"
+                    IsVisible="{Binding StatusMessage, Converter={x:Static ObjectConverters.IsNull}}">
+            <TabItem>
+                <TabItem.Header>
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <TextBlock Classes="tabname" Text="CATALOGUE"/>
+                        <TextBlock Classes="tabcount" Text="{Binding CatalogueCountText}"/>
+                    </StackPanel>
+                </TabItem.Header>
+                <sk:SkillsCataloguePane DataContext="{Binding Catalogue}"/>
+            </TabItem>
+            <TabItem>
+                <TabItem.Header>
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <TextBlock Classes="tabname" Text="TRAINING QUEUE"/>
+                        <TextBlock Classes="tabcount" Text="{Binding QueueCountText}"/>
+                    </StackPanel>
+                </TabItem.Header>
+                <sk:SkillsQueuePane DataContext="{Binding Queue}"/>
+            </TabItem>
+            <TabItem>
+                <TabItem.Header>
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <TextBlock Classes="tabname" Text="PLANS"/>
+                        <TextBlock Classes="tabcount" Text="{Binding PlansCountText}"/>
+                    </StackPanel>
+                </TabItem.Header>
+                <sk:SkillsPlansPane DataContext="{Binding Plans}"/>
+            </TabItem>
+            <TabItem>
+                <TabItem.Header>
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <TextBlock Classes="tabname" Text="OPTIMISE"/>
+                    </StackPanel>
+                </TabItem.Header>
+                <sk:SkillsOptimisePane DataContext="{Binding Optimise}"/>
+            </TabItem>
+        </TabControl>
+    </DockPanel>
+</v:ChromedWindow>

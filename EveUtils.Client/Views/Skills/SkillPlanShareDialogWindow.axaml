@@ -1,0 +1,77 @@
+<v:ChromedWindow xmlns="https://github.com/avaloniaui" xmlns:v="using:EveUtils.Client.Views"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:EveUtils.Client.ViewModels.Skills.WhatIf"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="520"
+        x:Class="EveUtils.Client.Views.Skills.SkillPlanShareDialogWindow"
+        x:DataType="vm:SkillPlanShareDialogViewModel"
+        Width="520" SizeToContent="Height" CanResize="False"
+        WindowStartupLocation="CenterOwner"
+        Title="{Binding Title}">
+
+    <!-- SHARE PLAN (ET-358), as mockup v5 screen e: three options with what each one does — copy as text (with the
+         text itself), put it in the doctrine, EVE Workbench later — and COPY / CLOSE. -->
+    <Window.Styles>
+        <Style Selector="Button.opt">
+            <Setter Property="HorizontalAlignment" Value="Stretch"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="Background" Value="#26000000"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}"/>
+            <Setter Property="Padding" Value="10,8"/>
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+        </Style>
+        <Style Selector="Button.opt.on">
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+            <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
+        </Style>
+        <Style Selector="Button.opt TextBlock.ot">
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+        </Style>
+        <Style Selector="Button.opt TextBlock.od">
+            <Setter Property="FontSize" Value="11.5"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+        </Style>
+    </Window.Styles>
+
+    <DockPanel>
+        <Border DockPanel.Dock="Bottom" Padding="14,10" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource DividerBrush}">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="6">
+                <Button Classes="accent" Padding="12,4" Content="{Binding PrimaryText}" Command="{Binding RunCommand}"/>
+                <Button Padding="12,4" Content="CLOSE" Command="{Binding CloseCommand}"/>
+            </StackPanel>
+        </Border>
+        <StackPanel Margin="14,12" Spacing="8">
+            <Button Classes="opt" Classes.on="{Binding IsCopyChosen}" Command="{Binding ChooseCopyCommand}">
+                <StackPanel Spacing="4">
+                    <TextBlock Classes="ot" Text="Copy as text"/>
+                    <TextBlock Classes="od" Text="One skill and level per line: EVEMon and Pyfa read it; whether the in-game skill plan accepts it on paste is still to be checked."/>
+                    <Border Background="#40000000" Padding="8,6" Margin="0,4,0,0" MaxHeight="120">
+                        <TextBlock FontFamily="{StaticResource MonoFont}" FontSize="10.5" Foreground="{StaticResource TextBrightBrush}"
+                                   Text="{Binding PreviewText}"/>
+                    </Border>
+                </StackPanel>
+            </Button>
+            <Button Classes="opt" Classes.on="{Binding IsDoctrineChosen}" Command="{Binding ChooseDoctrineCommand}">
+                <StackPanel Spacing="4">
+                    <TextBlock Classes="ot" Text="Put it in the doctrine"/>
+                    <TextBlock Classes="od" Text="As a skill minimum on a composition entry: that travels over the coupled server to every member, as compositions do today."/>
+                </StackPanel>
+            </Button>
+            <Button Classes="opt" IsEnabled="{Binding IsEwbEnabled}">
+                <StackPanel Spacing="4">
+                    <TextBlock Classes="ot" Text="EVE Workbench"/>
+                    <TextBlock Classes="od" Text="Later: EWB has no endpoint for plans or doctrines. ET-325 only sends runs."/>
+                </StackPanel>
+            </Button>
+            <TextBlock FontSize="11" Foreground="{StaticResource TextDimBrush}" TextWrapping="Wrap"
+                       Text="A plan is never sent anywhere by itself: it holds the character's gaps."/>
+            <TextBlock FontSize="11" Foreground="{DynamicResource AccentBrightBrush}" TextWrapping="Wrap"
+                       IsVisible="{Binding StatusMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                       Text="{Binding StatusMessage}"/>
+        </StackPanel>
+    </DockPanel>
+</v:ChromedWindow>

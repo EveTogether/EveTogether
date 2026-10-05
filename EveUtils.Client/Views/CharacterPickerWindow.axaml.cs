@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Data;
 using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
 using EveUtils.Client.Dialogs;
@@ -20,12 +21,34 @@ public partial class CharacterPickerWindow : ChromedWindow
     private readonly bool _multiSelect;
     private PixelPoint? _lastPosition;
 
+    public static readonly StyledProperty<string> SearchTextProperty =
+        AvaloniaProperty.Register<CharacterPickerWindow, string>(nameof(SearchText), "", defaultBindingMode: BindingMode.TwoWay);
+
     public ObservableCollection<CharacterPickRowViewModel> Options { get; } = [];
+
+    /// <summary>What <see cref="FilteredOptions"/> actually shows — <see cref="Options"/> narrowed to rows whose
+    /// name matches <see cref="SearchText"/> (ET-16 D-point-8, shared with the SKILLS header via
+    /// <see cref="CharacterPickerSearch"/>). Rebuilt on every keystroke; up to ~30 rows, so a full rescan each time
+    /// costs nothing worth caching for.</summary>
+    public ObservableCollection<CharacterPickRowViewModel> FilteredOptions { get; } = [];
 
     /// <summary>Whether more than one row can be picked — bound by the row template to switch its selection mark
     /// between a checkbox (many) and a radio dot (one), so which mode this dialog is in is visible before anything
     /// is clicked (ET-184).</summary>
     public bool IsMultiSelect => _multiSelect;
+
+    /// <summary>The search field only earns its place once scrolling stops being the faster way to find a name
+    /// (ET-16 D-point-8). Fixed once <see cref="Options"/> is populated in the constructor — the option count never
+    /// changes for the lifetime of this dialog.</summary>
+    public bool ShowSearch => Options.Count >= CharacterPickerSearch.SearchThreshold;
+
+    public string SearchWatermark => $"Search {Options.Count} characters…";
+
+    public string SearchText
+    {
+        get => GetValue(SearchTextProperty);
+        set => SetValue(SearchTextProperty, value);
+    }
 
     public CharacterPickerWindow()
     {
@@ -36,6 +59,7 @@ public partial class CharacterPickerWindow : ChromedWindow
         // there is no frame where the dialog paints behind the client and then jumps in front of it.
         Topmost = true;
         PositionChanged += (_, e) => _lastPosition = e.Point;
+        PropertyChanged += (_, e) => { if (e.Property == SearchTextProperty) _RebuildFilteredOptions(); };
     }
 
     public CharacterPickerWindow(string prompt, IReadOnlyList<CharacterPickOption> options, bool multiSelect = false,
@@ -54,6 +78,7 @@ public partial class CharacterPickerWindow : ChromedWindow
 
         foreach (var o in options)
             Options.Add(new CharacterPickRowViewModel(o));
+        _RebuildFilteredOptions();
 
         // ET-216 (widened to a list, ET-221 follow-up): whoever's own clipboard copy raised this question starts
         // ticked — or, for the manual start dialog, whichever characters were already ticked the last time this
@@ -79,6 +104,19 @@ public partial class CharacterPickerWindow : ChromedWindow
         if (Program.Services?.GetService<ICharacterPortraitProvider>() is { } portraits)
             foreach (var row in Options)
                 _ = row.LoadPortraitAsync(portraits);
+    }
+
+    // Full rescan on every keystroke: up to ~30 rows (ET-341's own scaling target), nothing worth caching for.
+    private void _RebuildFilteredOptions()
+    {
+        FilteredOptions.Clear();
+        foreach (var option in Options)
+        {
+            if (CharacterPickerSearch.Matches(option, SearchText))
+            {
+                FilteredOptions.Add(option);
+            }
+        }
     }
 
     protected override void OnOpened(EventArgs e)

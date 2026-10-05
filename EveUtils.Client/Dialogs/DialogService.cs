@@ -15,7 +15,11 @@ using EveUtils.Client.ViewModels.GameLogs;
 using EveUtils.Client.ViewModels.Killmails;
 using EveUtils.Client.ViewModels.Map;
 using EveUtils.Client.ViewModels.Runs;
+using EveUtils.Client.ViewModels.Skills;
+using EveUtils.Client.ViewModels.Skills.Plans;
+using EveUtils.Client.ViewModels.Skills.WhatIf;
 using EveUtils.Client.Views;
+using EveUtils.Client.Views.Skills;
 using EveUtils.Shared.Modules.Esi;
 using EveUtils.Shared.Modules.Fittings.Dtos;
 using EveUtils.Shared.Modules.Fleet.Entities;
@@ -364,6 +368,15 @@ public sealed class DialogService : IDialogService, ISingletonService
         return await _Over(new FitEsfImportWindow()).ShowDialog<string?>(_owner);
     }
 
+    public async Task<string?> ImportSkillPlanTextAsync(string? initialText = null)
+    {
+        if (_owner is null)
+        {
+            return null;
+        }
+        return await _Over(new SkillPlanTextImportWindow(initialText)).ShowDialog<string?>(_owner);
+    }
+
     public async Task<FitMetadataDraft?> EditFitMetadataAsync(FitMetadataDraft current)
     {
         if (_owner is null) return null;
@@ -487,6 +500,15 @@ public sealed class DialogService : IDialogService, ISingletonService
     {
         if (_owner is null) return null;
         return await _Over(new FitPickerWindow(viewModel)).ShowDialog<Fleet.FitReferenceInfo?>(_owner);
+    }
+
+    public async Task<DoctrineEntryPick?> PickDoctrineEntryAsync(DoctrinePickerViewModel viewModel)
+    {
+        if (_owner is null)
+        {
+            return null;
+        }
+        return await _Over(new DoctrinePickerWindow(viewModel)).ShowDialog<DoctrineEntryPick?>(_owner);
     }
 
     public void ShowInbox(InboxViewModel viewModel)
@@ -618,6 +640,21 @@ public sealed class DialogService : IDialogService, ISingletonService
         return tcs.Task;
     }
 
+    public Task ShowSkillPlanShareAsync(SkillPlanShareDialogViewModel viewModel)
+    {
+        if (_owner is null)
+        {
+            return Task.CompletedTask;
+        }
+
+        var tcs = new TaskCompletionSource();
+        viewModel.CloseRequested += () => tcs.TrySetResult();
+        var window = new SkillPlanShareDialogWindow(viewModel);
+        window.Closed += (_, _) => tcs.TrySetResult();
+        _Over(window).ShowDialog(_owner);
+        return tcs.Task;
+    }
+
     public void ShowFitBrowser(FitBrowserViewModel viewModel) =>
         // One fit-browser module for the whole app (not per-entity, unlike roster/metrics): re-opening re-selects
         // it and refreshes instead of silently handing back the library as it stood at first open (ET-48, same
@@ -629,11 +666,22 @@ public sealed class DialogService : IDialogService, ISingletonService
         // instead of re-selecting a stale one (ET-48).
         Route(new CompositionsWindow(viewModel), "COMPOSITIONS", "compositions", "compositions", MaterialIconKind.ViewGridOutline);
 
+    public SkillsWindowViewModel ShowSkills(SkillsWindowViewModel viewModel)
+    {
+        _Observe(viewModel.LoadAsync(), "this screen could not be read");
+        return Route(new SkillsWindow(viewModel), "SKILLS", "skills", "skills", MaterialIconKind.SchoolOutline)
+            as SkillsWindowViewModel ?? viewModel;
+    }
+
     public void ShowFitDetail(FitDetailWindowViewModel viewModel) =>
         // The fits wrench, shared with the browser: a fit detail is titled after the fit, so its tab is the one that
         // most needs something saying which module it belongs to at all.
         Route(new FitDetailWindow(viewModel), string.IsNullOrWhiteSpace(viewModel.Name) ? "FIT DETAIL" : viewModel.Name,
             "fits", viewModel.ModuleId, MaterialIconKind.WrenchOutline);
+
+    // Not _Observe(viewModel.LoadAsync()): the fit-detail command already awaits the scan itself (ET-356) and returns
+    // that task, so calling LoadAsync here too would run the ~500-calculation scan twice. The window shows its loading
+    // state on open; the command's own await fills it in.
 
     public void ShowTypeInfo(TypeInfoWindowViewModel viewModel)
     {

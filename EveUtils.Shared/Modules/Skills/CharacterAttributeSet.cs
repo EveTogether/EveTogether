@@ -32,4 +32,16 @@ public sealed record CharacterAttributeSet(
         DogmaAttributeIds.Willpower => Willpower,
         _ => 0
     };
+
+    /// <summary>Per-attribute difference — used to recover the current implant bonus as
+    /// <c>Resolve(...) - Base(...)</c> (ET-354's remap advice needs it on its own to compare against a
+    /// hypothetical implant set).</summary>
+    public static CharacterAttributeSet operator -(CharacterAttributeSet a, CharacterAttributeSet b) => new(
+        a.Charisma - b.Charisma, a.Intelligence - b.Intelligence, a.Memory - b.Memory,
+        a.Perception - b.Perception, a.Willpower - b.Willpower);
+
+    /// <summary>Per-attribute sum — used to fold a (hypothetical) implant bonus back onto a base allocation.</summary>
+    public static CharacterAttributeSet operator +(CharacterAttributeSet a, CharacterAttributeSet b) => new(
+        a.Charisma + b.Charisma, a.Intelligence + b.Intelligence, a.Memory + b.Memory,
+        a.Perception + b.Perception, a.Willpower + b.Willpower);
 }

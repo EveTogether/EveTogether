@@ -6,6 +6,11 @@ using EveUtils.Shared.Modules.Fleet.Composition.Commands;
 using EveUtils.Shared.Modules.Fleet.Composition.Repositories;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+using EveUtils.Client.Fleet;
+using EveUtils.Client.Transport;
+using EveUtils.Shared.Data;
+using EveUtils.Shared.Modules.Skills;
+using Microsoft.EntityFrameworkCore;
 
 namespace EveUtils.Client.UiTests;
 
@@ -123,5 +128,50 @@ public class FleetCompositionHandlerTests
 
         Assert.True(delete.IsSuccess);
         Assert.Null(await repo.GetAsync(composition.Value));
+    }
+
+    /// <summary>ET-353 A3: removing an entry takes its skill minimums with it, and only its own.</summary>
+    [AvaloniaFact]
+    public async Task RemoveEntry_CascadesItsSkillMinimums()
+    {
+        using var instance = TestClientInstance.Create();
+        var dispatcher = instance.Services.GetRequiredService<IDispatcher>();
+        var composition = await dispatcher.Send(new CreateFleetCompositionCommand("Doctrine", null, true, Owner));
+        var role = await dispatcher.Send(new AddFleetCompositionRoleCommand(composition.Value, "Logistics", null, Owner));
+        var removed = await dispatcher.Send(new AddFleetCompositionEntryCommand(role.Value, Fit("Guardian", 11987), null, Owner,
+            [new SkillMinimum(3336, 5), new SkillMinimum(12096, 4)]));
+        var kept = await dispatcher.Send(new AddFleetCompositionEntryCommand(role.Value, Fit("Scimitar", 11985), null, Owner,
+            [new SkillMinimum(3336, 4)]));
+
+        var remove = await dispatcher.Send(new RemoveFleetCompositionEntryCommand(removed.Value, Owner));
+
+        Assert.True(remove.IsSuccess);
+        await using var db = await instance.Services.GetRequiredService<IDbContextFactory<ClientDbContext>>().CreateDbContextAsync();
+        var owners = await db.Database
+            .SqlQueryRaw<long>("SELECT EntryId AS Value FROM FleetCompositionEntrySkillMinimum").ToListAsync();
+        Assert.Equal([kept.Value], owners);
+    }
+
+    /// <summary>ET-353 A5: a client-only library stores the minimums in the local database through the Shared handlers
+    /// and never reaches for the transport.</summary>
+    [AvaloniaFact]
+    public async Task LocalLibrary_StoresSkillMinimums_WithoutATransportCall()
+    {
+        var transport = new RecordingFleetTransportClient();
+        using var instance = TestClientInstance.Create(s => s.AddSingleton<IFleetTransportClient>(transport));
+        var client = new LocalFleetCompositionClient(instance.Services.GetRequiredService<ClientFleetService>(),
+            instance.Services.GetRequiredService<IFleetCompositionRepository>(), Owner);
+        var (_, _, compositionId) = await client.CreateAsync("Local doctrine", null);
+        var (_, _, roleId) = await client.AddRoleAsync(compositionId, "DPS", null);
+        var (_, _, entryId) = await client.AddEntryAsync(roleId,
+            new FitReferenceInfo(11987, "Guardian", "{}", "h-guardian", null, null), null, [new SkillMinimum(3336, 4)]);
+
+        var (edited, message) = await client.EditEntryAsync(entryId, null, [new SkillMinimum(3336, 5)]);
+
+        Assert.True(edited, message);
+        var detail = await client.GetAsync(compositionId);
+        var entry = Assert.Single(Assert.Single(detail?.Roles ?? []).Entries);
+        Assert.Equal([new SkillMinimum(3336, 5)], entry.SkillMinimums);
+        Assert.Equal(0, transport.CompositionEntryCalls);
     }
 }

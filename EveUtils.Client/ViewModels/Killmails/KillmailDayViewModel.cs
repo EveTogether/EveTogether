@@ -18,9 +18,11 @@ public sealed class KillmailDayViewModel(DateOnly day, IReadOnlyList<KillmailRow
 
     public IReadOnlyList<KillmailRowViewModel> Rows { get; } = rows;
 
-    public int KillCount { get; } = rows.Count(row => !row.IsLoss);
+    // ET-340: a provisional row (not yet confirmed by the real ESI mail) counts toward neither — it excludes
+    // itself from NetIsk below too, since its own Isk is always null.
+    public int KillCount { get; } = rows.Count(row => !row.IsLoss && !row.IsProvisional);
 
-    public int LossCount { get; } = rows.Count(row => row.IsLoss);
+    public int LossCount { get; } = rows.Count(row => row.IsLoss && !row.IsProvisional);
 
     public string KillCountText => KillCount == 1 ? "1 kill" : $"{KillCount} kills";
 

@@ -40,7 +40,7 @@ public class FleetCompositionCouplingTests
     {
         var (_, _, compositionId) = await client.CreateAsync("Homefront Vanguard", "armor doctrine");
         var (_, _, roleId) = await client.AddRoleAsync(compositionId, "Logistics", 5);
-        await client.AddEntryAsync(roleId, new FitReferenceInfo(11987, "Guardian — Armor", "{}", "h-guardian", null, null), 3);
+        await client.AddEntryAsync(roleId, new FitReferenceInfo(11987, "Guardian — Armor", "{}", "h-guardian", null, null), 3, []);
         return compositionId;
     }
 

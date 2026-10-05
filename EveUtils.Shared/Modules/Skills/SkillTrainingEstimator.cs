@@ -16,22 +16,34 @@ public sealed class SkillTrainingEstimator(IDogmaDataAccessor dogma)
 {
     public SkillTrainingEstimate Estimate(int skillTypeId, int currentLevel, int requiredLevel, CharacterAttributeSet attributes)
     {
+        var (rank, primaryAttributeId, secondaryAttributeId) = AttributesOf(skillTypeId);
+
+        var skillPoints = SkillPointMath.SkillPointsForLevel(rank, requiredLevel)
+                          - SkillPointMath.SkillPointsForLevel(rank, currentLevel);
+
+        var primary = attributes.For(primaryAttributeId);
+        var secondary = attributes.For(secondaryAttributeId);
+        var perMinute = SkillPointMath.SkillPointsPerMinute(primary, secondary);
+
+        var time = perMinute > 0 ? TimeSpan.FromMinutes(skillPoints / perMinute) : TimeSpan.Zero;
+        return new SkillTrainingEstimate(skillPoints, time);
+    }
+
+    /// <summary>The skill's own rank and primary/secondary training attribute ids, straight off the SDE — the same
+    /// lookup <see cref="Estimate"/> makes, exposed for a caller that needs the raw numbers to build something other
+    /// than a single level-to-level estimate (ET-358's <c>RemapTrainingRow</c> rows).</summary>
+    public (int Rank, int PrimaryAttributeId, int SecondaryAttributeId) AttributesOf(int skillTypeId)
+    {
         var skillAttributes = dogma.GetBaseAttributes(skillTypeId);
         double Attribute(int attributeId) =>
             skillAttributes.FirstOrDefault(attribute => attribute.AttributeId == attributeId)?.Value ?? 0;
 
         var rank = (int)Attribute(DogmaAttributeIds.SkillTimeConstant);
         if (rank <= 0)
+        {
             rank = 1;   // every published skill carries a rank; default to 1 rather than divide nonsense
+        }
 
-        var skillPoints = SkillPointMath.SkillPointsForLevel(rank, requiredLevel)
-                          - SkillPointMath.SkillPointsForLevel(rank, currentLevel);
-
-        var primary = attributes.For((int)Attribute(DogmaAttributeIds.SkillPrimaryAttribute));
-        var secondary = attributes.For((int)Attribute(DogmaAttributeIds.SkillSecondaryAttribute));
-        var perMinute = SkillPointMath.SkillPointsPerMinute(primary, secondary);
-
-        var time = perMinute > 0 ? TimeSpan.FromMinutes(skillPoints / perMinute) : TimeSpan.Zero;
-        return new SkillTrainingEstimate(skillPoints, time);
+        return (rank, (int)Attribute(DogmaAttributeIds.SkillPrimaryAttribute), (int)Attribute(DogmaAttributeIds.SkillSecondaryAttribute));
     }
 }

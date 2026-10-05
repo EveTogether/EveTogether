@@ -7,5 +7,8 @@ public enum KillmailsChangeKind
     RunLinkChanged,
 
     /// <summary>New killmails were stored for the character (ET-383).</summary>
-    Imported
+    Imported,
+
+    /// <summary>A provisional killmail was added or replaced by the real mail for the character (ET-340).</summary>
+    ProvisionalChanged
 }
