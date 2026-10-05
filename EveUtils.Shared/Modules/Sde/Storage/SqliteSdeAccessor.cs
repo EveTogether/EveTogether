@@ -545,6 +545,118 @@ public sealed class SqliteSdeAccessor : ISdeAccessor
         return (em + th + kin + exp) <= 0 ? null : normalised;
     }
 
+    // Effect/range pairs verified against SDE build 3542233; single-disruptor types disambiguate TD and GD.
+    private const int ScrambleEffect = 6745, ScrambleRangeAttr = 2507;                     // behaviorWarpScramble / behaviorWarpScrambleRange
+    private const int NeutralizerEffect = 6756, NeutralizerRangeAttr = 2520;                // npcBehaviorEnergyNeutralizer / behaviorEnergyNeutralizerRange
+    private const int WebifierEffect = 6743, WebifierRangeAttr = 2500;                      // npcBehaviorWebifier / behaviorWebifierRange
+    private const int SensorDampenerEffect = 6755, SensorDampenerRangeAttr = 2528;          // behaviorSensorDampener / behaviorSensorDampenerRange
+    private const int TrackingDisruptorEffect = 6747, TrackingDisruptorRangeAttr = 2516;    // npcBehaviorTrackingDisruptor / npcTrackingDisruptorRange
+    private const int GuidanceDisruptorEffect = 6746, GuidanceDisruptorRangeAttr = 2512;    // npcBehaviorGuidanceDisruptor / npcGuidanceDisruptorRange
+    private const int TargetPainterEffect = 6754, TargetPainterRangeAttr = 2524;            // behaviorTargetPainter / behaviorTargetPainterRange
+    private const int RemoteArmorRepairerEffect = 6741, RemoteArmorRepairerRangeAttr = 2492;// npcBehaviorRemoteArmorRepairer / behaviorRemoteArmorRepairRange
+    private const int ChainLightningEffect = 8088, ChainLightningRangeAttr = 3036;          // EntityChainLightning (vorton) / VortonArcRange
+
+    /// <summary>Reads category-11 NPC e-war and defenses. Effect presence gates each range;
+    /// missing resonance attributes mean no recorded resistance.</summary>
+    public NpcEwarProfile? GetNpcEwarProfile(int typeId)
+    {
+        using var connection = Open();
+        if (connection is null)
+        {
+            return null;
+        }
+
+        using (var categoryCommand = connection.CreateCommand())
+        {
+            categoryCommand.CommandText =
+                """
+                SELECT 1
+                FROM Type t
+                JOIN InvGroup g ON g.groupId = t.groupId
+                WHERE t.typeId = $id AND g.categoryId = 11;
+                """;
+            categoryCommand.Parameters.AddWithValue("$id", typeId);
+            if (categoryCommand.ExecuteScalar() is null)
+            {
+                return null;
+            }
+        }
+
+        var effectIds = new HashSet<int>();
+        using (var effectCommand = connection.CreateCommand())
+        {
+            effectCommand.CommandText =
+                $"""
+                SELECT effectId FROM TypeDogmaEffect
+                WHERE typeId = $id
+                  AND effectId IN ({ScrambleEffect}, {NeutralizerEffect}, {WebifierEffect}, {SensorDampenerEffect},
+                                    {TrackingDisruptorEffect}, {GuidanceDisruptorEffect}, {TargetPainterEffect},
+                                    {RemoteArmorRepairerEffect}, {ChainLightningEffect});
+                """;
+            effectCommand.Parameters.AddWithValue("$id", typeId);
+            using var reader = effectCommand.ExecuteReader();
+            while (reader.Read())
+            {
+                effectIds.Add(reader.GetInt32(0));
+            }
+        }
+
+        var attributes = new Dictionary<int, double>();
+        using (var attributeCommand = connection.CreateCommand())
+        {
+            attributeCommand.CommandText =
+                $"""
+                SELECT attributeId, value FROM TypeDogmaAttribute
+                WHERE typeId = $id
+                  AND attributeId IN ({ScrambleRangeAttr}, {NeutralizerRangeAttr}, {WebifierRangeAttr}, {SensorDampenerRangeAttr},
+                                       {TrackingDisruptorRangeAttr}, {GuidanceDisruptorRangeAttr}, {TargetPainterRangeAttr},
+                                       {RemoteArmorRepairerRangeAttr}, {ChainLightningRangeAttr},
+                                       {DogmaAttributeIds.StructureHp}, {DogmaAttributeIds.ShieldCapacity}, {DogmaAttributeIds.ArmorHp},
+                                       {DogmaAttributeIds.SignatureRadius}, {DogmaAttributeIds.MaxVelocity},
+                                       {DogmaAttributeIds.ShieldResonance[0]}, {DogmaAttributeIds.ShieldResonance[1]},
+                                       {DogmaAttributeIds.ShieldResonance[2]}, {DogmaAttributeIds.ShieldResonance[3]},
+                                       {DogmaAttributeIds.ArmorResonance[0]}, {DogmaAttributeIds.ArmorResonance[1]},
+                                       {DogmaAttributeIds.ArmorResonance[2]}, {DogmaAttributeIds.ArmorResonance[3]},
+                                       {DogmaAttributeIds.StructureResonance[0]}, {DogmaAttributeIds.StructureResonance[1]},
+                                       {DogmaAttributeIds.StructureResonance[2]}, {DogmaAttributeIds.StructureResonance[3]});
+                """;
+            attributeCommand.Parameters.AddWithValue("$id", typeId);
+            using var reader = attributeCommand.ExecuteReader();
+            while (reader.Read())
+            {
+                attributes[reader.GetInt32(0)] = reader.GetDouble(1);
+            }
+        }
+
+        double? RangeOf(int effectId, int rangeAttributeId) =>
+            effectIds.Contains(effectId) ? attributes.GetValueOrDefault(rangeAttributeId) : null;
+        // A resonance row absent from TypeDogmaAttribute means no resist data was recorded for that layer, i.e. no
+        // resist at all (resonance 1.0) — defaulting to 0.0 would misread as full immunity and blow up the EHP division.
+        double ResonanceOrDefault(int attributeId) => attributes.TryGetValue(attributeId, out var value) ? value : 1.0;
+        double LayerEhp(int hpAttributeId, int[] resonanceAttributeIds) =>
+            DamageProfile.Uniform.WeightedEhp(attributes.GetValueOrDefault(hpAttributeId),
+                ResonanceOrDefault(resonanceAttributeIds[0]), ResonanceOrDefault(resonanceAttributeIds[1]),
+                ResonanceOrDefault(resonanceAttributeIds[2]), ResonanceOrDefault(resonanceAttributeIds[3]));
+
+        var ehp = LayerEhp(DogmaAttributeIds.ShieldCapacity, DogmaAttributeIds.ShieldResonance)
+                + LayerEhp(DogmaAttributeIds.ArmorHp, DogmaAttributeIds.ArmorResonance)
+                + LayerEhp(DogmaAttributeIds.StructureHp, DogmaAttributeIds.StructureResonance);
+
+        return new NpcEwarProfile(
+            ScrambleRange: RangeOf(ScrambleEffect, ScrambleRangeAttr),
+            NeutralizerRange: RangeOf(NeutralizerEffect, NeutralizerRangeAttr),
+            WebifierRange: RangeOf(WebifierEffect, WebifierRangeAttr),
+            SensorDampenerRange: RangeOf(SensorDampenerEffect, SensorDampenerRangeAttr),
+            TrackingDisruptorRange: RangeOf(TrackingDisruptorEffect, TrackingDisruptorRangeAttr),
+            GuidanceDisruptorRange: RangeOf(GuidanceDisruptorEffect, GuidanceDisruptorRangeAttr),
+            TargetPainterRange: RangeOf(TargetPainterEffect, TargetPainterRangeAttr),
+            RemoteArmorRepairerRange: RangeOf(RemoteArmorRepairerEffect, RemoteArmorRepairerRangeAttr),
+            VortonRange: RangeOf(ChainLightningEffect, ChainLightningRangeAttr),
+            Ehp: ehp,
+            SignatureRadius: attributes.GetValueOrDefault(DogmaAttributeIds.SignatureRadius),
+            MaxVelocity: attributes.GetValueOrDefault(DogmaAttributeIds.MaxVelocity));
+    }
+
     public IReadOnlyList<SdeSite> SearchSites(string? nameQuery = null, int? archetypeId = null, int? factionId = null)
     {
         using var connection = Open();

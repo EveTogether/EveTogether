@@ -89,6 +89,10 @@ public interface ISdeAccessor
     /// no positive damage attributes.</summary>
     DamageProfile? GetNpcDamageProfile(int typeId);
 
+    /// <summary>Reads NPC e-war ranges and defenses from the SDE. Returns null for an absent type
+    /// or one outside category 11.</summary>
+    NpcEwarProfile? GetNpcEwarProfile(int typeId);
+
     /// <summary>The site/dungeon catalogue, ordered by name. Every argument is an optional narrowing: a null or blank
     /// <paramref name="nameQuery"/> matches every name (case-insensitive substring), a null
     /// <paramref name="archetypeId"/> or <paramref name="factionId"/> does not filter on that axis. Empty when the
