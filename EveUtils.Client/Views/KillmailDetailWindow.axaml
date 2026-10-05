@@ -2,6 +2,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vk="using:EveUtils.Client.ViewModels.Killmails"
         xmlns:vwk="using:EveUtils.Client.Views.Killmails"
+        xmlns:ctl="using:EveUtils.Client.Controls"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d" d:DesignWidth="758" d:DesignHeight="720"
@@ -61,10 +62,9 @@
                                    HorizontalAlignment="Right" Text="{Binding FifthFigureText}"/>
                     </StackPanel>
                 </Grid>
-                <Grid Height="5">
-                    <Border Background="{StaticResource RedBrush}" IsVisible="{Binding IsLoss}"/>
-                    <Border Background="{StaticResource GreenBrush}" IsVisible="{Binding !IsLoss}"/>
-                </Grid>
+                <!-- Destroyed (red) against dropped (green) by ISK, as in the mockup — loss and kill alike. -->
+                <ctl:MeterBar Height="5" Fill="{StaticResource RedBrush}" Track="{StaticResource GreenBrush}"
+                              Fraction="{Binding DestroyedShare}"/>
                 <TextBlock Classes="hint" Margin="0" TextWrapping="Wrap"
                            IsVisible="{Binding StatusMessage, Converter={x:Static ObjectConverters.IsNotNull}}"
                            Text="{Binding StatusMessage}"/>

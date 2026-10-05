@@ -17,6 +17,7 @@ entries under `[Unreleased]` below that were not there yet at the previous night
 
 ## [Unreleased]
 
+- **Fixed: the destroyed/dropped bar on a killmail now shows the split.** The bar under the value figures in a killmail's detail window was a single solid colour. It now shows how the ISK value divides: red for what was destroyed (the ship included) and green for what dropped, with the two parts adding up to the total. Items without a price are left out of the bar.
 - **Added: three skill-training targets in SKILL IMPACT… — can fly, optimal ±III and max.** With at least one
   OPTIMISE FOR stat picked, three cards show the levels, training time and skill points to fly the fit at all
   (prerequisites plus the cheapest fitting skills if it overloads CPU or power grid — or "This fit does not fit at

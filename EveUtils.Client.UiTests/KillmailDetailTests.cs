@@ -148,6 +148,35 @@ public sealed class KillmailDetailTests
         Assert.Equal(expected, viewModel.PrimaryFigureText);
     }
 
+    // Ship 100M unless a row says otherwise; flag 27 = HiSlot0, 5 = Cargo, 87 = DroneBay.
+    public static TheoryData<(int TypeId, double Price)[], LocalKillmailItem[], double> BarRows() => new()
+    {
+        { [(Gila, 100e6), (ModuleTypeId, 50e6)], [new() { Flag = 27, TypeId = ModuleTypeId, QuantityDestroyed = 1 }], 1.0 },
+        { [(Gila, 100e6), (ModuleTypeId, 50e6)], [new() { Flag = 27, TypeId = ModuleTypeId, QuantityDropped = 1 }], 100.0 / 150 },
+        { [(Gila, 100e6), (ModuleTypeId, 45.7e6)], [new() { Flag = 27, TypeId = ModuleTypeId, QuantityDestroyed = 1, QuantityDropped = 1 }], 145.7 / 191.4 },
+        { [(Gila, 100e6), (ModuleTypeId, 1e6), (ModuleTypeId + 1, 2.5e6)],
+            [new() { Flag = 5, TypeId = ModuleTypeId, QuantityDropped = 10 }, new() { Flag = 87, TypeId = ModuleTypeId + 1, QuantityDestroyed = 4 }], 110.0 / 120 },
+        { [(Gila, 100e6)], [new() { Flag = 27, TypeId = ModuleTypeId, QuantityDropped = 3 }], 1.0 },   // unpriced item adds no green
+        { [], [new() { Flag = 27, TypeId = ModuleTypeId, QuantityDropped = 1 }], 1.0 },                  // nothing priced: ship is destroyed
+        { [(ModuleTypeId, 50e6)], [new() { Flag = 27, TypeId = ModuleTypeId, QuantityDropped = 1 }], 0.0 }  // unpriced ship counts as nothing
+    };
+
+    /// <summary>Criterion 2, the bar: destroyed (ship included) against dropped by ISK, adding up to the header
+    /// total. Red if the bar ignores the split, e.g. one solid colour per loss or kill.</summary>
+    [Theory]
+    [MemberData(nameof(BarRows))]
+    public async Task DestroyedShare_SplitsTheBarByIsk_WithTheShipCountedAsDestroyed(
+        (int TypeId, double Price)[] prices, LocalKillmailItem[] items, double expected)
+    {
+        using TestClientInstance instance = _NewInstance();
+        await _PriceAsync(instance, prices);
+        await _AddAsync(instance, _LossWithItems(1, items));
+
+        KillmailDetailViewModel viewModel = await _LoadDetailAsync(instance, Pilot, 1);
+
+        Assert.Equal(expected, viewModel.DestroyedShare, 6);
+    }
+
     /// <summary>Criterion 3. Red if a charge becomes its own slot, an implant lands in the fit, or a second stack
     /// overwrites the first.</summary>
     [Fact]
