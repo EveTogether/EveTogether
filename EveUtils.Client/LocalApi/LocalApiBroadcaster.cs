@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using EveUtils.Client.LocalApi.Dtos;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Fleet.Events;
+using EveUtils.Shared.Modules.Fleet.Metrics;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -29,6 +30,7 @@ public sealed class LocalApiBroadcaster
 
     private readonly IServiceProvider _rootServices;
     private readonly LocalApiQueries _queries;
+    private readonly LocalApiPrivacy _privacy;
     private readonly ILogger _logger;
     private readonly Dictionary<Guid, WebSocket> _clients = [];
     private readonly object _clientsGate = new();
@@ -39,10 +41,11 @@ public sealed class LocalApiBroadcaster
     private IHubContext<FleetHub>? _hub;
     private int _signalRCount;
 
-    public LocalApiBroadcaster(IServiceProvider rootServices, ILogger logger)
+    public LocalApiBroadcaster(IServiceProvider rootServices, LocalApiQueries queries, LocalApiPrivacy privacy, ILogger logger)
     {
         _rootServices = rootServices;
-        _queries = new LocalApiQueries(rootServices);
+        _queries = queries;
+        _privacy = privacy;
         _logger = logger;
     }
 
@@ -59,7 +62,9 @@ public sealed class LocalApiBroadcaster
         if (_rootServices.GetService<IEventBus>() is { } bus)
         {
             _subscriptions.Add(bus.Subscribe<FleetMetricEvent>((e, _) =>
-                _BroadcastAsync("fleet.metrics", FleetMetricSampleDto.FromSample(e.Data), e.Data.UnixMs)));
+                e.Data.Kind == MetricKind.Location && !_privacy.ExposesLocation
+                    ? Task.CompletedTask
+                    : _BroadcastAsync("fleet.metrics", FleetMetricSampleDto.FromSample(e.Data), e.Data.UnixMs)));
             _subscriptions.Add(bus.Subscribe<FleetChangedEvent>((e, _) =>
                 _BroadcastAsync("fleet.changed", FleetChangedDto.FromEvent(e), _NowMs())));
         }

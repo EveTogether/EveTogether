@@ -270,6 +270,9 @@
                         </StackPanel>
                         <TextBlock Text="Off by default. A read-only server bound to 127.0.0.1 only (never your network) — for example to feed your own stream overlays or widgets (Twitch/OBS). Start or stop it here; the interactive API reference (Scalar) opens via API docs. Default port 8001."
                                    FontSize="10" Opacity="0.6" TextWrapping="Wrap"/>
+                        <CheckBox x:Name="IncludeLocationInLocalApiBox" Content="Include my location" Margin="0,6,0,0"/>
+                        <TextBlock Text="Off by default. When on, the API and widgets also get the system you are in. OPSEC mode leaves it out again while it is on."
+                                   FontSize="10" Opacity="0.6" TextWrapping="Wrap"/>
                     </StackPanel>
                 </StackPanel>
 

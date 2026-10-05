@@ -25,7 +25,7 @@ namespace EveUtils.Client.LocalApi;
 /// root provider (the composition-root seam). Singleton client services are read directly; the scoped fitting repository gets a
 /// per-call scope. Maps everything to the public, versioned DTOs — interns/entities and tokens never leave here.
 /// </summary>
-public sealed partial class LocalApiQueries(IServiceProvider rootServices)
+public sealed partial class LocalApiQueries(IServiceProvider rootServices, LocalApiPrivacy privacy)
 {
     /// <summary>Live combat metrics for your own currently-running characters (gamelog-driven, fleet independent).</summary>
     public async Task<IReadOnlyList<CharacterMetricsDto>> GetMetricsAsync(CancellationToken cancellationToken = default)
@@ -36,6 +36,7 @@ public sealed partial class LocalApiQueries(IServiceProvider rootServices)
         var running = rootServices.GetService<EveClientPresenceService>()?.Current.CharacterNames ?? new HashSet<string>();
         var idByName = await _IdByNameAsync(cancellationToken);
         var locationMonitor = rootServices.GetService<IEsiLocationMonitor>();
+        var exposesLocation = privacy.ExposesLocation;
 
         return running.Select(name =>
         {
@@ -52,7 +53,7 @@ public sealed partial class LocalApiQueries(IServiceProvider rootServices)
                 CapPerSecond: rates.Cap,
                 BountyTotal: snapshot.BountyTotal,
                 Kills: snapshot.Kills,
-                Location: snapshot.Location,
+                Location: exposesLocation ? snapshot.Location : null,
                 PeakDps: snapshot.PeakDealtDps,
                 // ET-96: whether the ESI location watch is active right now, and why it has nothing to say when it
                 // is not showing a system — the two facts this ticket's own investigation needed a debugger for.
