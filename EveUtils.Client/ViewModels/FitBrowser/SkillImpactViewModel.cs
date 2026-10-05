@@ -71,7 +71,9 @@ public sealed class SkillImpactViewModel : ViewModelBase, IRefreshableModule
         Chips = _BuildChips();
         _labels = Chips.ToDictionary(chip => chip.Stat, chip => chip.Label);
         foreach (var chip in Chips)
+        {
             chip.SelectionChanged += _OnStatSelectionChanged;
+        }
     }
 
     public string ModuleId { get; }
@@ -134,7 +136,9 @@ public sealed class SkillImpactViewModel : ViewModelBase, IRefreshableModule
         var result = await Task.Run(
             () => _scanner.ScanAsync(_baseInput, _trainedLevels, cancellationToken), cancellationToken);
         if (version != _scanVersion)
+        {
             return;   // a newer scan started (e.g. the character changed) while this one ran — its result is stale
+        }
 
         _result = result;
         _ApplyAvailability(result);
@@ -185,7 +189,9 @@ public sealed class SkillImpactViewModel : ViewModelBase, IRefreshableModule
         }
 
         if (version != _targetsVersion)
+        {
             return;   // a newer selection (or a fresh scan) superseded this recompute — its result is stale
+        }
 
         TargetsErrorMessage = null;
         CanFlyCard = _BuildCard(result.CanFly);
@@ -208,13 +214,21 @@ public sealed class SkillImpactViewModel : ViewModelBase, IRefreshableModule
         foreach (var chip in Chips)
         {
             if (!result.BaseValues.ContainsKey(chip.Stat))
+            {
                 chip.SetUnavailable("no turret or drone weapons");
+            }
             else if (result.Entries.Any(entry => entry.AtFive.ContainsKey(chip.Stat)))
+            {
                 chip.SetAvailable();
+            }
             else if (result.StatsWithOnlyMaxedMovers.Contains(chip.Stat))
+            {
                 chip.SetUnavailable("all skills that change this are at V");
+            }
             else
+            {
                 chip.SetUnavailable("no skill changes this for this fit");
+            }
         }
     }
 
@@ -222,11 +236,15 @@ public sealed class SkillImpactViewModel : ViewModelBase, IRefreshableModule
     {
         Rows.Clear();
         if (_result is null)
+        {
             return;
+        }
 
         var selected = Chips.Where(chip => chip.IsSelected && chip.IsAvailable).Select(chip => chip.Stat).ToList();
         if (selected.Count == 0)
+        {
             return;
+        }
 
         var best = new Dictionary<SkillImpactStat, double>();
         foreach (var stat in selected)
@@ -234,7 +252,9 @@ public sealed class SkillImpactViewModel : ViewModelBase, IRefreshableModule
             var atFiveValues = _result.Entries
                 .Where(entry => entry.AtFive.ContainsKey(stat)).Select(entry => entry.AtFive[stat]).ToList();
             if (atFiveValues.Count > 0)
+            {
                 best[stat] = LowerIsBetter.Contains(stat) ? atFiveValues.Min() : atFiveValues.Max();
+            }
         }
 
         var rows = new List<SkillImpactRowViewModel>();
@@ -242,7 +262,9 @@ public sealed class SkillImpactViewModel : ViewModelBase, IRefreshableModule
         {
             var movedSelected = selected.Where(entry.AtFive.ContainsKey).ToList();
             if (movedSelected.Count == 0)
+            {
                 continue;
+            }
 
             var score = movedSelected.Average(stat => StatShare.Compute(
                 _result.BaseValues[stat], entry.AtFive[stat], best[stat], LowerIsBetter.Contains(stat)));
@@ -258,7 +280,9 @@ public sealed class SkillImpactViewModel : ViewModelBase, IRefreshableModule
         }
 
         foreach (var row in rows.OrderByDescending(row => row.ScorePerHour))
+        {
             Rows.Add(row);
+        }
     }
 
     // ET-357 D1: the "+" per impact-row — adds this one skill to V (prerequisites included) via AddSkillPlanRowsCommand,
@@ -266,7 +290,9 @@ public sealed class SkillImpactViewModel : ViewModelBase, IRefreshableModule
     private Func<Task>? _RowAddToPlan(int skillTypeId, string skillName)
     {
         if (_addToPlan is not { } add || _validator is not { } validator)
+        {
             return null;
+        }
         return () => add(SkillPlanRowFactory.FromSkill(validator, skillTypeId, 5, _trainedLevels, skillName).Rows, _planSourceLabel);
     }
 
@@ -275,12 +301,16 @@ public sealed class SkillImpactViewModel : ViewModelBase, IRefreshableModule
     private TimeSpan _TimeToFive(int skillTypeId)
     {
         if (_validator is null || _trainingEstimator is null || _attributes is null)
+        {
             return TimeSpan.Zero;
+        }
 
         var gaps = _validator.SkillRequirements([], [new SkillMinimum(skillTypeId, 5)], _trainedLevels);
         var total = TimeSpan.Zero;
         foreach (var gap in gaps)
+        {
             total += _trainingEstimator.Estimate(gap.SkillTypeId, gap.CurrentLevel, gap.RequiredLevel, _attributes).TrainingTime;
+        }
         return total;
     }
 

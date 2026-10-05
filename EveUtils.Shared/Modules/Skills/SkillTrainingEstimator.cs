@@ -40,7 +40,9 @@ public sealed class SkillTrainingEstimator(IDogmaDataAccessor dogma)
 
         var rank = (int)Attribute(DogmaAttributeIds.SkillTimeConstant);
         if (rank <= 0)
+        {
             rank = 1;   // every published skill carries a rank; default to 1 rather than divide nonsense
+        }
 
         return (rank, (int)Attribute(DogmaAttributeIds.SkillPrimaryAttribute), (int)Attribute(DogmaAttributeIds.SkillSecondaryAttribute));
     }

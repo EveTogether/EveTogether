@@ -370,7 +370,10 @@ public sealed class DialogService : IDialogService, ISingletonService
 
     public async Task<string?> ImportSkillPlanTextAsync(string? initialText = null)
     {
-        if (_owner is null) return null;
+        if (_owner is null)
+        {
+            return null;
+        }
         return await _Over(new SkillPlanTextImportWindow(initialText)).ShowDialog<string?>(_owner);
     }
 
@@ -501,7 +504,10 @@ public sealed class DialogService : IDialogService, ISingletonService
 
     public async Task<DoctrineEntryPick?> PickDoctrineEntryAsync(DoctrinePickerViewModel viewModel)
     {
-        if (_owner is null) return null;
+        if (_owner is null)
+        {
+            return null;
+        }
         return await _Over(new DoctrinePickerWindow(viewModel)).ShowDialog<DoctrineEntryPick?>(_owner);
     }
 
@@ -629,7 +635,10 @@ public sealed class DialogService : IDialogService, ISingletonService
 
     public Task ShowSkillPlanShareAsync(SkillPlanShareDialogViewModel viewModel)
     {
-        if (_owner is null) return Task.CompletedTask;
+        if (_owner is null)
+        {
+            return Task.CompletedTask;
+        }
 
         var tcs = new TaskCompletionSource();
         viewModel.CloseRequested += () => tcs.TrySetResult();

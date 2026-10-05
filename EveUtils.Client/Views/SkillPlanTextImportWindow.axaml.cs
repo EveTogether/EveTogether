@@ -19,7 +19,9 @@ public partial class SkillPlanTextImportWindow : ChromedWindow
         AvaloniaXamlLoader.Load(this);
 
         if (string.IsNullOrEmpty(initialText))
+        {
             return;
+        }
 
         var box = this.FindControl<TextBox>("TextBoxInput")!;
         box.Text = initialText;

@@ -52,11 +52,15 @@ public sealed class FitValidator(IDogmaDataAccessor data) : IFitValidator, ISing
         }
 
         foreach (var typeId in seedTypeIds)
+        {
             foreach (var (skillTypeId, level) in _RequiredSkills(typeId))
                 Require(skillTypeId, level);
+        }
 
         foreach (var minimum in extra ?? [])
+        {
             Require(minimum.SkillTypeId, minimum.Level);
+        }
 
         while (toExpand.Count > 0)
             foreach (var (skillTypeId, level) in _RequiredSkills(toExpand.Dequeue()))
@@ -78,7 +82,9 @@ public sealed class FitValidator(IDogmaDataAccessor data) : IFitValidator, ISing
         void Check(FitResource resource, double used, double available)
         {
             if (used > available)
+            {
                 overloads.Add(new ResourceOverload(resource, used, available));
+            }
         }
 
         Check(FitResource.Cpu, stats.CpuUsed, stats.CpuOutput);
@@ -97,7 +103,9 @@ public sealed class FitValidator(IDogmaDataAccessor data) : IFitValidator, ISing
     {
         var fittedTypes = new HashSet<int> { fit.ShipTypeId };
         foreach (var item in fit.Items)
+        {
             fittedTypes.Add(item.TypeId);
+        }
         return SkillRequirements(fittedTypes, null, trainedSkills);
     }
 

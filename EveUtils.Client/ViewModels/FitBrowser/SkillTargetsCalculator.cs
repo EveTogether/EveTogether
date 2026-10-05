@@ -81,7 +81,9 @@ public sealed class SkillTargetsCalculator(
         {
             var step = await _BestStepAsync(baseInput, levels, fittingMovers, _ShortfallScore, _ShortfallScore(stats), cancellationToken);
             if (step is null)
+            {
                 break;   // every fitting mover already at V, and still short
+            }
 
             _ApplyBundle(levels, step.Value.Bundle);
             stats = await _StatsAtAsync(baseInput, levels, cancellationToken);
@@ -89,9 +91,13 @@ public sealed class SkillTargetsCalculator(
 
         var shortfalls = new List<SkillTargetResourceShortfall>();
         if (stats[SkillImpactStat.FreeCpu] < 0)
+        {
             shortfalls.Add(new SkillTargetResourceShortfall(SkillImpactStat.FreeCpu, -stats[SkillImpactStat.FreeCpu]));
+        }
         if (stats[SkillImpactStat.FreePg] < 0)
+        {
             shortfalls.Add(new SkillTargetResourceShortfall(SkillImpactStat.FreePg, -stats[SkillImpactStat.FreePg]));
+        }
         return (levels, shortfalls);
     }
 
@@ -115,7 +121,9 @@ public sealed class SkillTargetsCalculator(
         {
             var step = await _BestStepAsync(baseInput, levels, statMovers, scoreOf, score, cancellationToken);
             if (step is null)
+            {
                 break;
+            }
 
             _ApplyBundle(levels, step.Value.Bundle);
             cumulativeTime += step.Value.Time;
@@ -128,11 +136,15 @@ public sealed class SkillTargetsCalculator(
             points.Add(new SkillTargetCurvePoint(step.Value.SkillTypeId, step.Value.Level, cumulativeSp, cumulativeTime, score, shares));
 
             if (optimalIndex == int.MinValue && _Satisfies(levels, optimalLevels))
+            {
                 optimalIndex = points.Count - 1;
+            }
         }
 
         if (optimalIndex == int.MinValue)
+        {
             optimalIndex = points.Count - 1;   // never reached mid-walk (e.g. no stat movers at all) — clamp to the end
+        }
         return new SkillTargetCurve(points, optimalIndex, points.Count - 1);
     }
 
@@ -150,11 +162,15 @@ public sealed class SkillTargetsCalculator(
         {
             int level = currentLevels.GetValueOrDefault(skillTypeId);
             if (level >= MaxLevel)
+            {
                 continue;
+            }
 
             var bundle = validator.SkillRequirements([], [new SkillMinimum(skillTypeId, level + 1)], currentLevels);
             if (bundle.Count == 0)
+            {
                 continue;
+            }
 
             var time = _BundleTime(bundle);
             var afterStats = await _StatsAtAsync(baseInput, _WithBundle(currentLevels, bundle), cancellationToken);
@@ -162,7 +178,9 @@ public sealed class SkillTargetsCalculator(
             double perHour = time.TotalHours > 0 ? gain / time.TotalHours : double.PositiveInfinity;
 
             if (best is null || perHour > best.Value.PerHour)
+            {
                 best = new GreedyStep(skillTypeId, level + 1, bundle, time, gain, perHour, afterStats);
+            }
         }
         return best;
     }
@@ -176,7 +194,9 @@ public sealed class SkillTargetsCalculator(
     {
         var total = TimeSpan.Zero;
         foreach (var gap in bundle)
+        {
             total += estimator.Estimate(gap.SkillTypeId, gap.CurrentLevel, gap.RequiredLevel, attributes).TrainingTime;
+        }
         return total;
     }
 
@@ -190,14 +210,18 @@ public sealed class SkillTargetsCalculator(
     private static void _ApplyBundle(Dictionary<int, int> levels, IReadOnlyList<SkillGap> bundle)
     {
         foreach (var gap in bundle)
+        {
             levels[gap.SkillTypeId] = gap.RequiredLevel;
+        }
     }
 
     private static Dictionary<int, int> _Merge(IReadOnlyDictionary<int, int> baseLevels, IReadOnlyList<SkillGap> gaps)
     {
         var merged = new Dictionary<int, int>(baseLevels);
         foreach (var gap in gaps)
+        {
             merged[gap.SkillTypeId] = gap.RequiredLevel;
+        }
         return merged;
     }
 
@@ -214,10 +238,14 @@ public sealed class SkillTargetsCalculator(
         {
             ids.Add(module.TypeId);
             if (module.ChargeTypeId is { } charge)
+            {
                 ids.Add(charge);
+            }
         }
         if (input.Drones is { } drones)
+        {
             ids.AddRange(drones.Select(drone => drone.TypeId));
+        }
         return ids;
     }
 
@@ -234,7 +262,9 @@ public sealed class SkillTargetsCalculator(
         {
             int current = trained.GetValueOrDefault(skillTypeId);
             if (level <= current)
+            {
                 continue;   // AC6: only what still needs training — never a level already trained
+            }
 
             levels.Add(new SkillTargetLevel(skillTypeId, level));
             var estimate = estimator.Estimate(skillTypeId, current, level, attributes);

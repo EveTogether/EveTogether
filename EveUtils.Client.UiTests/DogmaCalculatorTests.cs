@@ -1431,7 +1431,9 @@ public class DogmaCalculatorTests
         // A5: antimatterDamage scales TurretDps (baseline 2.0 * damage / 10) into "large stat" territory, disparate
         // from AlignTime's single-digit-second scale, without touching any of this fixture's other proven values.
         if (input.Modules[0].ChargeTypeId is { } antimatterId && Math.Abs(antimatterDamage - 10) > 1e-9)
+        {
             data.Type(antimatterId, 85, 8, new SdeDogmaAttribute(114, antimatterDamage));
+        }
 
         var withCpuModule = input with { Modules = [.. input.Modules, new ModuleInput(CpuHeavyModule, ModuleState.Online)] };
         return (data, withCpuModule);

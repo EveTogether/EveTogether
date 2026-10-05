@@ -512,7 +512,9 @@ public sealed class FitDetailWindowViewModel : ViewModelBase
     {
         if (!CanShowSkillImpact || _skillImpactScanner is null || _trainedSkills is null || _onShowSkillImpact is null
             || SelectedSkillMode?.CharacterId is not { } characterId)
+        {
             return Task.CompletedTask;
+        }
 
         // Keyed on the character too, not just the fit: switching SKILLS to a different character while a SKILL
         // IMPACT tab is already open must land in its own tab, not silently refocus the previous character's stale

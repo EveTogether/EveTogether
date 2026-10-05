@@ -12,7 +12,9 @@ public static class StatShare
     {
         var range = lowerIsBetter ? baseValue - bestValue : bestValue - baseValue;
         if (range <= 0)
+        {
             return 0;
+        }
 
         var gain = lowerIsBetter ? baseValue - skillValue : skillValue - baseValue;
         return gain / range;

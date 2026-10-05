@@ -37,7 +37,9 @@ public sealed class SkillImpactStatChipViewModel : ViewModelBase
         set
         {
             if (SetProperty(ref _isSelected, value))
+            {
                 SelectionChanged?.Invoke();
+            }
         }
     }
 

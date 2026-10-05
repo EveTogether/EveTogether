@@ -34,13 +34,17 @@ public sealed class SkillImpactScanner(IDogmaCalculator calculator, IDogmaDataAc
         {
             var currentLevel = trainedLevels.GetValueOrDefault(skillTypeId);
             if (currentLevel >= 5)
+            {
                 continue;
+            }
 
             var atFive = ReadStats(await calculator.CalculateAsync(
                 _WithLevel(baseInput, trainedLevels, skillTypeId, 5), cancellationToken));
             var moved = baseValues.Keys.Where(stat => Math.Abs(baseValues[stat] - atFive[stat]) > Epsilon).ToList();
             if (moved.Count == 0)
+            {
                 continue;
+            }
 
             var nextLevel = currentLevel + 1;
             var atNext = nextLevel == 5
@@ -67,21 +71,29 @@ public sealed class SkillImpactScanner(IDogmaCalculator calculator, IDogmaDataAc
     {
         var stillStats = new HashSet<SkillImpactStat>(baseValues.Keys);
         foreach (var entry in entries)
+        {
             stillStats.ExceptWith(entry.AtFive.Keys);
+        }
         if (stillStats.Count == 0)
+        {
             return stillStats;
+        }
 
         var maxedMovers = new HashSet<SkillImpactStat>();
         foreach (var (skillTypeId, level) in trainedLevels)
         {
             if (level < 5)
+            {
                 continue;
+            }
 
             var atZero = ReadStats(await calculator.CalculateAsync(
                 _WithLevel(baseInput, trainedLevels, skillTypeId, 0), cancellationToken));
             foreach (var stat in stillStats)
                 if (Math.Abs(baseValues[stat] - atZero[stat]) > Epsilon)
+                {
                     maxedMovers.Add(stat);
+                }
         }
         return maxedMovers;
     }

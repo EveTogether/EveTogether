@@ -67,7 +67,9 @@ public sealed partial class CompositionEditorViewModel : ObservableObject, IDisp
         if (snapshot is not null)
             _Load(snapshot);
         else if (suggestedName is not null)
+        {
             Name = suggestedName;
+        }
 
         Roles.CollectionChanged += _OnRolesChanged;
         _Recompute();
