@@ -7,6 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using EveUtils.Client.Dialogs;
+using EveUtils.Client.Controls.Map;
 using EveUtils.Client.Imaging;
 using EveUtils.Client.Skills;
 using EveUtils.Client.Skills.Plans;
@@ -74,6 +75,11 @@ public sealed partial class SkillsWindowViewModel : ObservableObject, IRefreshab
     [ObservableProperty] private SkillsPlansViewModel? _plans;
     [ObservableProperty] private SkillsOptimiseViewModel? _optimise;
     [ObservableProperty] private bool _isLoading;
+    [ObservableProperty] private string _catalogueCountText = "";
+    [ObservableProperty] private string _queueCountText = "";
+    [ObservableProperty] private string _plansCountText = "";
+    [ObservableProperty] private string _refreshedText = "skills not imported yet";
+    [ObservableProperty] private bool _isRefreshRecent;
     [ObservableProperty] private string? _statusMessage;
 
     /// <summary>Every character, for the header ComboBox — the ET-184 row (hex, name, "SP · queue", radio).</summary>
@@ -131,6 +137,7 @@ public sealed partial class SkillsWindowViewModel : ObservableObject, IRefreshab
         {
             await Plans.LoadAsync();
             await _RebuildQueueAndOptimiseAsync(current);
+            _ApplyTabCounts();
         }
     }
 
@@ -162,6 +169,7 @@ public sealed partial class SkillsWindowViewModel : ObservableObject, IRefreshab
         Queue = queue;
         Optimise = optimise;
         _ApplyTotalSp(snapshot);
+        _ApplyTabCounts();
     }
 
     public async Task LoadAsync(CancellationToken cancellationToken = default)
@@ -334,6 +342,7 @@ public sealed partial class SkillsWindowViewModel : ObservableObject, IRefreshab
             Queue = queue;
             Plans = plans;
             Optimise = optimise;
+            _ApplyTabCounts();
             StatusMessage = null;
 
             if (_settings is not null)
@@ -379,6 +388,14 @@ public sealed partial class SkillsWindowViewModel : ObservableObject, IRefreshab
         return result;
     }
 
+    // The tab strip's counters (mockup v5): skills injected, queue entries against the 150 cap, and plans.
+    private void _ApplyTabCounts()
+    {
+        CatalogueCountText = Catalogue is { } catalogue ? catalogue.InjectedSkillCount.ToString(CultureInfo.InvariantCulture) : "";
+        QueueCountText = Queue?.SkillCountText.Replace(" ", "") ?? "";
+        PlansCountText = Plans is { } plans ? plans.Plans.Count.ToString(CultureInfo.InvariantCulture) : "";
+    }
+
     // AC6: straight from ESI total_sp/unallocated_sp — never a sum over trained levels. Null only when this
     // character's skills have never been imported — a clear placeholder rather than a blank header.
     private void _ApplyTotalSp(SkillsCharacterSnapshot snapshot)
@@ -386,12 +403,18 @@ public sealed partial class SkillsWindowViewModel : ObservableObject, IRefreshab
         if (snapshot.Attributes is { } attrs)
         {
             TotalSpText = $"{attrs.TotalSp.ToString("N0", CultureInfo.InvariantCulture)} Total Skill Points";
+            RefreshedText = attrs.SkillsRefreshedAt is { } refreshed
+                ? $"skills refreshed {MapFleetBadge.Ago(snapshot.Now - refreshed)}"
+                : "skills refresh time unknown";
+            IsRefreshRecent = attrs.SkillsRefreshedAt is { } at && snapshot.Now - at < TimeSpan.FromMinutes(15);
             UnallocatedSpText = $"{attrs.UnallocatedSp.ToString("N0", CultureInfo.InvariantCulture)} unallocated skill points";
         }
         else
         {
             TotalSpText = "Total Skill Points not imported yet";
             UnallocatedSpText = "";
+            RefreshedText = "skills not imported yet";
+            IsRefreshRecent = false;
         }
     }
 

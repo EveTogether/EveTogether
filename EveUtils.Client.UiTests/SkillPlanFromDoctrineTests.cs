@@ -163,6 +163,9 @@ public sealed class SkillPlanFromDoctrineTests
 
         public Task<IReadOnlyList<SkillPlanRow>> GetRowsAsync(int planId, CancellationToken cancellationToken = default) =>
             Task.FromResult<IReadOnlyList<SkillPlanRow>>([]);
+
+        public Task<IReadOnlyList<SkillPlanSource>> GetSourcesAsync(int planId, CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<SkillPlanSource>>([]);
     }
 
     private sealed class _EmptyFleetCompositionReader : IFleetCompositionReader
