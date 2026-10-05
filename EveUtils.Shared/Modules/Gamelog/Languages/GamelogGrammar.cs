@@ -82,7 +82,7 @@ internal sealed class GamelogGrammar
         Mined = _Compile(t.Mined);
         CriticalMined = _Compile(t.CriticalMined);
         MiningResidue = _Compile(t.MiningResidue);
-        Bounty = _Compile(t.Bounty);
+        Bounty = _Compile(t.Bounty, withNote: true);
         Jumping = _Compile(t.Jumping);
         Undocking = _Compile(t.Undocking);
         LocationMarkers = [_LongestWord(t.Jumping), _LongestWord(t.Undocking)];
@@ -117,7 +117,7 @@ internal sealed class GamelogGrammar
     /// known location from parsing every line of a large log.</summary>
     public IReadOnlyList<string> LocationMarkers { get; }
 
-    private static Regex _Compile(string template, bool withTail = false)
+    private static Regex _Compile(string template, bool withTail = false, bool withNote = false)
     {
         StringBuilder pattern = new("^");
         int position = 0;
@@ -141,6 +141,12 @@ internal sealed class GamelogGrammar
         if (withTail)
         {
             pattern.Append(@"(?<tail>\s+-\s+.+)?");
+        }
+
+        // A bounty line can end in a bracketed note in the client's language, e.g. "(payment adjusted)" (ET-449).
+        if (withNote)
+        {
+            pattern.Append(@"(?:\s*[(（][^()（）]+[)）])?");
         }
 
         pattern.Append('$');

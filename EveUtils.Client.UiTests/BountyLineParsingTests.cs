@@ -26,4 +26,34 @@ public class BountyLineParsingTests
         var parsed = Assert.IsType<BountyEvent>(LogLineParser.Parse(line));
         Assert.Equal(expected, parsed.Isk);
     }
+
+    [Theory]
+    [InlineData("11,813", " (payment adjusted)", 11_813)]
+    [InlineData("7,875", " (payment adjusted)", 7_875)]
+    [InlineData("7,875", "(payment adjusted)", 7_875)]
+    [InlineData("7,875", " (payment adjusted) ", 7_875)]
+    public void Bounty_IsParsed_WhenEveAppendsABracketedNote(string amount, string note, long expected)
+    {
+        var line = "[ 2026.10.05 21:32:38 ] (bounty) <font size=12><b><color=0xff00aa00>"
+                   + amount + " ISK</b><color=0x77ffffff> added to next bounty payout" + note;
+
+        var parsed = Assert.IsType<BountyEvent>(LogLineParser.Parse(line));
+        Assert.Equal(expected, parsed.Isk);
+    }
+
+    [Fact]
+    public void Bounty_IsParsed_WhenAnotherLanguageAppendsABracketedNote()
+    {
+        var line = "[ 2026.10.05 21:32:38 ] (bounty) <b><color=0xff00aa00>7.875 ISK</b><color=0x77ffffff> zur nächsten Kopfgeldzahlung hinzugefügt (Zahlung angepasst)";
+
+        Assert.Equal(7_875, Assert.IsType<BountyEvent>(LogLineParser.Parse(line, GamelogLanguage.German)).Isk);
+    }
+
+    [Fact]
+    public void Bounty_IsNotParsed_WhenTrailingTextIsNotABracketedNote()
+    {
+        var line = "[ 2026.10.05 21:32:38 ] (bounty) <font size=12><b><color=0xff00aa00>7,875 ISK</b><color=0x77ffffff> added to next bounty payout and more";
+
+        Assert.Null(LogLineParser.Parse(line));
+    }
 }
