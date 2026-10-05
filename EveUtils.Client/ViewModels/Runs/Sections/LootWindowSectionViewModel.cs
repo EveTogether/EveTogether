@@ -86,10 +86,9 @@ public sealed partial class LootWindowSectionViewModel : RunWindowSection
             {
                 nameof(ActivityLootMode.CargoDiff) => ActivityLootMode.CargoDiff,
                 nameof(ActivityLootMode.Clipboard) => ActivityLootMode.Clipboard,
-                // Nothing chosen yet for this kind (ET-384, Raymond 2026-09-24 — the AbyssalTracker model): an
-                // abyssal run has a cargo hold worth naming from the start, so start + end hold is the default
-                // rather than something to find. Every other kind keeps the clipboard-only default, which cannot
-                // surprise a pilot who only ever picks things up (there is no cargo hold to name on a combat site).
+                // Nothing chosen yet (ET-384): an abyssal run has a hold worth naming from the start, so start + end
+                // hold is the default rather than something to find; other kinds have no hold to name and keep the
+                // clipboard-only default.
                 _ => Context.Kind is ActivityKind.Abyssal ? ActivityLootMode.CargoDiff : ActivityLootMode.Clipboard
             };
         }

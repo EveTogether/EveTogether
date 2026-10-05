@@ -316,16 +316,8 @@ public sealed class ClipboardLootCaptureTests
         Assert.Equal(0.30m, summary.LootVolume);
     }
 
-    /// <summary>
-    /// ET-384, Raymond's own reproduction (2026-09-24): paste a starting hold, then an ending hold, into the run
-    /// window's two fields — the AbyssalTracker model — while the clipboard watch is on, exactly as it always is
-    /// during a real run. The same text that goes into a field was also just copied in EVE, so the watch sees it
-    /// too and stores its own, separate Snapshot capture alongside the field's CargoBefore/CargoAfter one — a real
-    /// duplicate, not a hypothetical one, from a code path (<see cref="ClipboardLootCapture"/>) that never touches
-    /// the role the field's write sets. Counter-proof: make <c>LootTally.Ends</c> ignore role and sum every
-    /// unexcluded capture instead, and this total inflates to the full stock on both sides instead of the 5 Gravid
-    /// Mutaplasmid actually picked up.
-    /// </summary>
+    /// <summary>ET-384: a starting and an ending hold pasted while the clipboard watch also stores each copy as a
+    /// Snapshot count only the difference. The tally reads the two holds by role, so the watch's duplicates never add up.</summary>
     [AvaloniaFact]
     public async Task BeforeAndAfterPastedWhileTheWatchIsOn_CountsOnlyTheDifference()
     {
