@@ -59,7 +59,7 @@
     <Border Width="560" Background="{DynamicResource DrawerSurfaceBrush}" BorderThickness="1"
             BorderBrush="{DynamicResource BorderStrongBrush}">
         <DockPanel>
-            <TextBox DockPanel.Dock="Top" Margin="8" FontSize="11.5" Watermark="{Binding StatFilterWatermark}"
+            <TextBox DockPanel.Dock="Top" Margin="8" FontSize="11.5" PlaceholderText="{Binding StatFilterWatermark}"
                      Text="{Binding StatFilter, Mode=TwoWay}"/>
             <Border DockPanel.Dock="Bottom" Padding="10,6" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource DividerBrush}">
                 <TextBlock FontSize="10" Foreground="{StaticResource TextDimBrush}" TextWrapping="Wrap"
