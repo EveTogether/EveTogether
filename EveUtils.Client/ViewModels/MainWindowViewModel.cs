@@ -22,6 +22,7 @@ using EveUtils.Client.ViewModels.Home;
 using EveUtils.Client.ViewModels.Killmails;
 using EveUtils.Client.ViewModels.Map;
 using EveUtils.Client.ViewModels.Runs;
+using EveUtils.Client.ViewModels.Coupling;
 using EveUtils.Client.ViewModels.Setup;
 using EveUtils.Client.Esi;
 using EveUtils.Client.EveSettings;
@@ -503,8 +504,16 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         // server usable at all", and a character whose session the server dropped is invisible in it as soon as one
         // other character on the same server is healthy (ET-123).
         if (_busConnector is not null)
+        {
             _busConnector.CharacterStateChanged += (address, characterId, state) =>
                 Avalonia.Threading.Dispatcher.UIThread.Post(() => ApplyServerConnectionState(address, characterId, state));
+
+            // A server coming up gains its fits tab, one nobody is coupled to any more loses it, along with its link
+            // chips — whichever screen coupled or decoupled it; the Fleets window's "decouple server" refreshes only
+            // itself (ET-427).
+            _busConnector.CouplingChanged += address =>
+                Avalonia.Threading.Dispatcher.UIThread.Post(() => _ = _RefreshAfterCouplingChangeAsync());
+        }
 
         // Live Tranquility status → the bottom-bar indicator. Seed from the current snapshot (the poller may have
         // already run before this VM existed) and follow further changes.
@@ -1814,6 +1823,12 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         await RefreshFittingsTabsAsync();
     }
 
+    private async Task _RefreshAfterCouplingChangeAsync()
+    {
+        await RefreshCharactersAsync();
+        await RefreshFittingsTabsAsync();
+    }
+
     /// <summary>What stands in the way of removing a character: an active fleet it commands, or a run still on the
     /// clock (ET-345).</summary>
     public async Task<CharacterRemovalCheck?> CheckCharacterRemovalAsync(int characterId) =>
@@ -2339,77 +2354,25 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
     }
 
     /// <summary>
-    /// Couple a character to a server: ask for the address + optional label, query the server's
-    /// optional scopes, run the SSO pairing, then attach the bus and refresh the per-character links/tabs.
-    /// </summary>
-    /// <summary>
-    /// Couple a character to a server: ask for the address + optional label, query the server's
-    /// optional scopes, run the SSO pairing, then attach the bus and refresh links/tabs. Returns true if a
-    /// server was coupled, false if the user cancelled or it failed. Invoked from a character's settings dialog;
-    /// the server decides which character from EVE's signed token.
-    /// </summary>
-    /// <summary>Unauthenticated probe for the couple dialog: returns the server's own name, or null
-    /// if unreachable. Reuses the accept-any-cert scopes probe; display-only (real trust = TOFU at pairing).</summary>
-    private async Task<string?> ProbeServerNameAsync(string address, CancellationToken cancellationToken)
-    {
-        if (_pairing is null) return null;
-        var scopes = await _pairing.GetServerScopesAsync(address, cancellationToken);
-        return scopes?.ServerName;
-    }
-
-    /// <summary>
-    /// <paramref name="restoreAddress"/> couples a server this client is already paired to again — the way back from
-    /// a session the server has dropped. The dialog opens with the address and the user's own label already filled
-    /// in, because both are stored with the coupling being restored and retyping them is asking for something the
-    /// client already knows (ET-123).
-    /// <para>Deliberately NOT offered after a refused certificate: there the address is precisely what is in
-    /// question, and handing it back pre-filled would walk the user past the fingerprint check (ET-95). The only
-    /// caller that passes an address is the link's recouple action, which is gated on
-    /// <see cref="ServerLinkViewModel.CanRecouple"/>.</para>
+    /// "Couple to server" for one character, in a window of its own that is the setup wizard's server step (ET-428):
+    /// connecting, Cancel and the errors to retry all show there.
+    /// <para><paramref name="restoreAddress"/> couples a server this client is already paired to again — the way back
+    /// from a session the server has dropped. The window opens on that server, so connecting and signing in are the
+    /// only steps left (ET-123). Deliberately NOT offered after a refused certificate: there the address is precisely
+    /// what is in question (ET-95). The only caller that passes an address is the link's recouple action, which is
+    /// gated on <see cref="ServerLinkViewModel.CanRecouple"/>.</para>
     /// </summary>
     /// <param name="expectedCharacterId">The character being coupled; the server refuses any other one that signs in on
     /// the EVE page (ET-425).</param>
     public async Task<bool> RunCoupleAsync(string? restoreAddress = null, int expectedCharacterId = 0)
     {
-        if (_pairing is null || _dialogs is null) return false;
+        if (_dialogs is null) return false;
 
-        CoupleServerResult? prefill = null;
-        if (!string.IsNullOrWhiteSpace(restoreAddress))
-        {
-            // The label only — not the server's own name, which the dialog already falls back to on its own; putting
-            // it in the box would turn it into a user label the user never chose.
-            var known = _serverRegistry is null ? null : await _serverRegistry.GetAsync(restoreAddress);
-            prefill = new CoupleServerResult(restoreAddress, known?.Label);
-        }
-
-        var couple = await _dialogs.CoupleServerAsync(ProbeServerNameAsync, prefill);
-        if (couple is null) { ActivityStatus = "Coupling cancelled."; return false; }
-        var address = couple.Address;
-
-        try
-        {
-            // ask the server which optional scopes it wants, let the user opt in before pairing.
-            var serverScopes = await _pairing.GetServerScopesAsync(address);
-            var scopes = new List<string>(serverScopes?.RequiredScopes ?? ["publicData"]);
-
-            if (serverScopes is { OptionalScopes.Count: > 0 })
-            {
-                var optional = serverScopes.OptionalScopes
-                    .Select(o => new EsiScopeRequirement(o.Scope, EsiScopeTarget.Server, o.Feature, o.Reason))
-                    .ToList();
-                var chosen = await _dialogs.SelectScopesAsync(optional);
-                if (chosen is null) { ActivityStatus = "Pairing cancelled."; return false; }
-                scopes.AddRange(chosen);
-            }
-
-            await CoupleCharacterAsync(address, couple.Label, scopes, expectedCharacterId);
-            return true;
-        }
-        catch (Exception ex)
-        {
-            ActivityStatus = $"Pairing failed: {ex.Message}";
-            return false;
-        }
+        var name = Characters.FirstOrDefault(character => character.CharacterId == expectedCharacterId)?.Name ?? "this character";
+        using var couple = new ServerCoupleViewModel(this);
+        await couple.StartAsync(expectedCharacterId, name, restoreAddress);
+        await _dialogs.CoupleServerAsync(couple);
+        return couple.IsCoupled;
     }
 
     /// <summary>

@@ -23,6 +23,7 @@ using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.DependencyInjection;
 using Material.Icons;
 using Microsoft.Extensions.DependencyInjection;
+using EveUtils.Client.ViewModels.Coupling;
 using EveUtils.Client.ViewModels.Setup;
 
 namespace EveUtils.Client.Dialogs;
@@ -331,12 +332,10 @@ public sealed class DialogService : IDialogService, ISingletonService
         await _Over(new SetupWizardWindow(viewModel)).ShowDialog(_owner);
     }
 
-    public async Task<CoupleServerResult?> CoupleServerAsync(
-        Func<string, CancellationToken, Task<string?>> probeServerName, CoupleServerResult? prefill = null)
+    public async Task CoupleServerAsync(ServerCoupleViewModel viewModel)
     {
-        if (_owner is null) return null;
-        var dialog = new CoupleServerWindow(probeServerName, prefill);
-        return await _Over(dialog).ShowDialog<CoupleServerResult?>(_owner);
+        if (_owner is null) return;
+        await _Over(new CoupleServerWindow(viewModel)).ShowDialog(_owner);
     }
 
     public async Task<string?> SelectServerAsync(string prompt, IReadOnlyList<ServerPickOption> options)

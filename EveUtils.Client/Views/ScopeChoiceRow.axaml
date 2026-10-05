@@ -1,0 +1,26 @@
+<!-- One ESI scope with its tick box; publicData is ticked and fixed. -->
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:dlg="using:EveUtils.Client.Dialogs"
+             x:Class="EveUtils.Client.Views.ScopeChoiceRow"
+             x:DataType="dlg:ScopeChoiceViewModel">
+    <Border Classes="scope" Classes.fixed="{Binding IsFixed}" Margin="0,0,0,5" Padding="8,7" Background="#14FFFFFF">
+        <Grid ColumnDefinitions="Auto,*">
+            <CheckBox IsChecked="{Binding IsSelected}" IsEnabled="{Binding IsEditable}"
+                      VerticalAlignment="Top" Margin="0,0,0,0"/>
+            <StackPanel Grid.Column="1" Spacing="1" Margin="2,0,0,0">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                    <TextBlock Text="{Binding Feature}" FontWeight="SemiBold" FontSize="11"
+                               Foreground="{StaticResource TextBrightBrush}"/>
+                    <TextBlock Text="OPT-IN" FontSize="9" LetterSpacing="1" VerticalAlignment="Center"
+                               Foreground="{StaticResource WarnBrush}" IsVisible="{Binding IsOptIn}"/>
+                    <TextBlock Text="ALWAYS" FontSize="9" LetterSpacing="1" VerticalAlignment="Center"
+                               Foreground="{StaticResource TextDimBrush}" IsVisible="{Binding IsFixed}"/>
+                </StackPanel>
+                <TextBlock Text="{Binding Scope}" FontSize="10" FontFamily="{StaticResource MonoFont}"
+                           Foreground="{DynamicResource TextAccentBrush}"/>
+                <TextBlock Text="{Binding Description}" FontSize="11" TextWrapping="Wrap" Opacity="0.85"/>
+            </StackPanel>
+        </Grid>
+    </Border>
+</UserControl>

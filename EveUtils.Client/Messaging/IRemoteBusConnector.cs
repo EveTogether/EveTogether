@@ -24,7 +24,8 @@ public interface IRemoteBusConnector
     /// <summary>Live connection state per server address.</summary>
     IReadOnlyDictionary<string, ServerConnectionState> States { get; }
 
-    /// <summary>Live connection state for one server (Disconnected if not attached). This is the roll-up across the
+    /// <summary>Live connection state for one server (<see cref="ServerConnectionState.NotCoupled"/> if no character
+    /// is attached to it). This is the roll-up across the
     /// characters coupled to it — "is this server usable at all" — so it is the wrong thing to paint a per-character
     /// indicator with; use the overload below for that.</summary>
     ServerConnectionState StateFor(string serverAddress);
@@ -39,8 +40,17 @@ public interface IRemoteBusConnector
     ServerConnectionState StateFor(string serverAddress, int characterId);
 
     /// <summary>Raised whenever a server's roll-up state changes: (serverAddress, newState). For consumers that care
-    /// about the server as a whole — reloading its lists, the home dashboard's summary.</summary>
+    /// about the server as a whole — reloading its lists, the home dashboard's summary. A decouple of the last character
+    /// raises <see cref="ServerConnectionState.NotCoupled"/>, the cue to drop that server from whatever is shown.</summary>
     event Action<string, ServerConnectionState> StateChanged;
+
+    /// <summary>
+    /// Raised with the server's address whenever what can be read from the coupled servers changes (ET-427): a
+    /// character's connection to it comes up — a fresh coupling, or one that is back after the server was away — or the
+    /// last character is decoupled from it (<see cref="ServerConnectionState.NotCoupled"/>). The one cue for every screen
+    /// that shows server data to read it again; the screens do not each work it out from the states.
+    /// </summary>
+    event Action<string> CouplingChanged;
 
     /// <summary>Raised whenever ONE character's connection changes: (serverAddress, characterId, newState). What the
     /// per-character link indicators follow, so one character's trouble is neither hidden by its neighbours nor

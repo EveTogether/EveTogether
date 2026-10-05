@@ -18,5 +18,9 @@ public enum ServerConnectionState
     SessionGone,
     /// <summary>The server's TLS certificate no longer matches the pinned one — auto-reconnect stopped; the user must
     /// check the new fingerprint and re-pair.</summary>
-    CertificateRejected
+    CertificateRejected,
+    /// <summary>No character on this PC is coupled to the server any more (ET-427). Nothing is sent there and nothing
+    /// about it is shown; unlike <see cref="Disconnected"/> it is not a server that is down, so it is never reported
+    /// as unreachable.</summary>
+    NotCoupled
 }
