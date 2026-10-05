@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Threading.Tasks;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using EveUtils.Client.Clipboard;
 using EveUtils.Client.EveSettings;
 using EveUtils.Client.LocalApi;
@@ -27,10 +28,13 @@ public sealed partial class HomeSystemStripViewModel : ObservableObject, IDispos
     private readonly IServiceProvider? _services;
     private readonly ClipboardWatchService? _clipboard;
     private readonly ILocalApiServer? _localApi;
+    private readonly Action? _openWidgetManager;
 
-    public HomeSystemStripViewModel(IServiceProvider? services)
+    /// <param name="openWidgetManager">Where a click on the Local API status leads: the widget manager.</param>
+    public HomeSystemStripViewModel(IServiceProvider? services, Action? openWidgetManager = null)
     {
         _services = services;
+        _openWidgetManager = openWidgetManager;
         _clipboard = services?.GetService<ClipboardWatchService>();
         _localApi = services?.GetService<ILocalApiServer>();
         if (_clipboard is not null)
@@ -96,6 +100,9 @@ public sealed partial class HomeSystemStripViewModel : ObservableObject, IDispos
     }
 
     private void _ShowClipboard() => IsClipboardWatching = _clipboard?.IsWatching ?? false;
+
+    [RelayCommand]
+    private void OpenWidgetManager() => _openWidgetManager?.Invoke();
 
     private void _OnLocalApiChanged(LocalApiStatusSnapshot status) => Dispatcher.UIThread.Post(_ShowLocalApi);
 

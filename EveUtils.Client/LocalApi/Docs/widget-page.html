@@ -120,7 +120,8 @@ const shortName = name => name.split(/\s+/).filter(Boolean).slice(0, 3).map(word
 const has = field => config.fields.includes(field);
 const option = (name, fallback) => config.options[name] ?? fallback;
 const wants = id => config.characterIds.length === 0 || config.characterIds.includes(id);
-const showLocation = () => config.showLocation === true;
+// A location field shows only when it is on and the API hands out the location at all (the value is null otherwise).
+const located = field => config.showLocation === true && has(field);
 
 function hexToRgb(hex) { return [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16)); }
 function applyConfig(next) {
@@ -236,7 +237,7 @@ function liveDps() {
       const percent = m.application.percent != null &&m.application.verdict !== 'sweetSpot' ? ` ${Math.round(m.application.percent)}%` : '';
       c.stat('Applied', verdicts[m.application.verdict] + percent, m.application.verdict === 'adjust' ? 'warn' : 'pos');
     }
-    if (showLocation() && m.location) c.note(m.location);
+    if (located('system') && m.location) c.note(m.location);
     return c;
   });
 }
@@ -395,7 +396,7 @@ function dpsGraph() {
   if (config.theme === 'ticker')
     for (const line of GRAPH_LINES.filter(l => has(l.field) && (l.key === 'dpsOut' || l.key === 'dpsIn' || graph.lines[l.key].seen)))
       c.stat(line.label, n0(graph.lines[line.key].shown));
-  if (showLocation() && m.location) c.note(m.location);
+  if (located('system') && m.location) c.note(m.location);
   return c;
 }
 
@@ -410,7 +411,7 @@ function currentRun() {
 
   const headline = [has('type') ? run.type : null, has('site') ? run.site : null].filter(Boolean).join(' · ');
   if (headline || (has('tier') && tier)) c.row(headline, has('tier') ? tier : '', 'strong', 'acc');
-  if (showLocation()) c.note([run.signature, run.system].filter(Boolean).join(' · '));
+  c.note([located('signature') ? run.signature : null, located('system') ? run.system : null].filter(Boolean).join(' · '));
 
   if (has('clock')) {
     const elapsed = (Date.now() - utcMs(run.startedAtUtc)) / 1000;
@@ -450,9 +451,9 @@ function runTotals() {
   if (has('runs')) c.stat('Runs', n0(summary.runs));
   if (has('iskPerHour')) c.stat('ISK / hour', isk(summary.iskPerHour), 'pos');
   if (has('flownTime')) c.stat('Flown', clock(summary.flownSeconds));
-  if (has('average')) c.stat('Avg / run', isk(summary.averageIskPerRun));
+  if (has('averagePerRun')) c.stat('Avg / run', isk(summary.averageIskPerRun));
   if (has('bestDrop') && summary.bestDrop) c.row(el('span', 'k', 'Best drop'), `${summary.bestDrop.name} · ${isk(summary.bestDrop.isk)}`);
-  if (has('byCharacter'))
+  if (has('perCharacter'))
     for (const character of summary.characters.filter(ch => wants(ch.characterId))) c.row(character.name, isk(character.isk));
   return c;
 }
@@ -499,7 +500,7 @@ function lastKillmail() {
   if (has('ship')) c.icon = shortName(mail.shipName);
   if (has('badge') || has('ago')) c.row(has('badge') ? badge(mail) : '', has('ago') ? ago(utcMs(mail.killmailTimeUtc)) : '', '', 'dim');
   const who = has('victim') && mail.victimName
-    ? mail.victimName + (has('corp') && mail.victimCorporationName ? ` [${mail.victimCorporationName}]` : '') : null;
+    ? mail.victimName + (has('corporation') && mail.victimCorporationName ? ` [${mail.victimCorporationName}]` : '') : null;
   if (has('ship') || who) c.row([has('ship') ? mail.shipName : null, who].filter(Boolean).join(' · '), '', 'strong');
   const detail = [
     has('attackers') ? `${mail.attackerCount} attacker${mail.attackerCount === 1 ? '' : 's'}` : null,
@@ -507,7 +508,7 @@ function lastKillmail() {
   ].filter(Boolean).join(' · ');
   if (has('isk')) c.row(el('span', 'mid ' + (mail.kind === 'Loss' ? 'neg' : 'pos'), isk(mail.iskValue)), detail, '', 'dim');
   else c.note(detail);
-  c.note([has('run') && mail.runId ? 'During a run' : null, showLocation() ? mail.solarSystemName : null].filter(Boolean).join(' · '));
+  c.note([has('run') && mail.runId ? 'During a run' : null, located('system') ? mail.solarSystemName : null].filter(Boolean).join(' · '));
   return c;
 }
 
@@ -520,7 +521,7 @@ function killAlert() {
   if (has('ship')) c.icon = shortName(mail.shipName);
   c.row(badge(mail), has('isk') ? el('span', 'mid ' + (mail.kind === 'Loss' ? 'neg' : 'pos'), isk(mail.iskValue)) : '');
   if (has('ship')) c.row(mail.shipName, '', 'strong');
-  c.note([has('victim') ? mail.victimName : null, showLocation() ? mail.solarSystemName : null].filter(Boolean).join(' · '));
+  c.note([has('victim') ? mail.victimName : null, located('system') ? mail.solarSystemName : null].filter(Boolean).join(' · '));
   return c;
 }
 
@@ -545,7 +546,7 @@ function fleetDps() {
     const out = sample.Dps || 0, received = sample.DpsIn || 0;
     total += out;
     const name = el('span', '', has('names') ? member.characterName || `Pilot ${i + 1}` : `Member ${i + 1}`);
-    if (showLocation() && sample.Location) name.append(' ', el('span', 'dim', sample.Location));
+    if (located('systems') && sample.Location) name.append(' ', el('span', 'dim', sample.Location));
     const figures = el('span', 'v');
     if (has('dpsOut')) figures.append(n0(out));
     if (has('dpsIn')) figures.append(' ', el('span', 'neg', n0(received)));
