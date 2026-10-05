@@ -69,6 +69,21 @@
         <Style Selector="ProgressBar.pc.full">
             <Setter Property="Opacity" Value="0.5"/>
         </Style>
+        <Style Selector="Button.addplan">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="10,3"/>
+            <Setter Property="MinHeight" Value="24"/>
+            <Setter Property="FontSize" Value="10.5"/>
+            <Setter Property="LetterSpacing" Value="0.6"/>
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+        </Style>
+        <Style Selector="Button.addplan.pri">
+            <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}"/>
+            <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+        </Style>
         <Style Selector="Button.plus">
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}"/>
@@ -150,7 +165,7 @@
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
-                    <Button HorizontalAlignment="Left" Content="ADD TO PLAN" Classes.accent="{Binding IsRecommended}"
+                    <Button HorizontalAlignment="Left" Classes="addplan" Content="ADD TO PLAN" Classes.pri="{Binding IsRecommended}"
                             IsVisible="{Binding CanAddToPlan}" Command="{Binding AddToPlanCommand}"/>
                 </StackPanel>
             </Border>
