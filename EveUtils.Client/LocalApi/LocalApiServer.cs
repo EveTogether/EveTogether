@@ -138,7 +138,14 @@ public sealed class LocalApiServer(
         app.MapWidgetEndpoints(baseUrl, apiKey);
 
         app.MapGet("/api/v1/health", () => new HealthResponse("ok", _AppVersion(), ApiVersion));
-        app.MapGet("/api/v1/metrics", (LocalApiQueries queries, CancellationToken ct) => queries.GetMetricsAsync(ct));
+        app.MapGet("/api/v1/metrics", (LocalApiQueries queries, CancellationToken ct) => queries.GetMetricsAsync(ct))
+            .WithSummary("Live combat metrics for your running characters")
+            .WithDescription(
+                "Per second, from the gamelog. dpsOut/dpsIn are damage dealt/received in hp/s; repIn/repOut remote repairs " +
+                "received/given in hp/s; neutIn/neutOut energy neutralized on you/by you and capIn/capOut remote capacitor " +
+                "received/given, both in GJ/s. neutPerSecond and capPerSecond are the two directions added. application " +
+                "judges how well the main weapon lands: verdict is idle, notEnoughShots, notMeasurable, adjust, ok, " +
+                "sweetSpot or learning, percent (0-100) is only set for adjust, ok and sweetSpot.");
         app.MapGet("/api/v1/characters", (LocalApiQueries queries, CancellationToken ct) => queries.GetCharactersAsync(ct));
         app.MapGet("/api/v1/fits", (LocalApiQueries queries, CancellationToken ct) => queries.GetFitsAsync(ct));
         app.MapGet("/api/v1/fits/{id:int}", async (int id, bool? stats, string? server, LocalApiQueries queries, CancellationToken ct) =>
@@ -151,6 +158,10 @@ public sealed class LocalApiServer(
         app.MapGet("/api/v1/compositions/{id:long}", async (long id, string? server, LocalApiQueries queries, CancellationToken ct) =>
             await queries.GetCompositionAsync(id, server, ct) is { } composition ? Results.Ok(composition) : Results.NotFound());
         app.MapGet("/api/v1/types/{id:int}", (int id, LocalApiQueries queries) => queries.GetTypeInfo(id)); // name/icon resolver
+        app.MapGet("/api/v1/killmails/latest", (KillmailsLatestKind? kind, int? limit, LocalApiQueries queries, CancellationToken ct) =>
+                queries.GetLatestKillmailsAsync(kind ?? KillmailsLatestKind.All, limit ?? 1, ct))
+            .WithSummary("Your latest kills and losses")
+            .WithDescription("Newest first. kind = all | kills | losses (default all); limit 1-25 (default 1). Victim, corporation and final-blow names are ESI-resolved and cached. Solar system fields are null unless \"Include my location\" is on. Pushed live as killmail.added over /ws.");
 
         app.Map("/ws", async (HttpContext context) =>
         {

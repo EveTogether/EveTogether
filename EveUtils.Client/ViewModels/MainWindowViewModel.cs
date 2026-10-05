@@ -116,6 +116,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
     private CancellationTokenSource? _feedCts;
     private CancellationTokenSource? _signInCts;
     private readonly DpsRenderDriver? _renderDriver;
+    private readonly CombatHistory? _combatHistory;
     private string _localCharacter = "Pilot-" + (Composition.ClientDataLocation.InstanceName() ?? "Local");
 
     // ── Ctrl+Shift+T: reopen last closed tab (ET-209) ────────────────────────────────────────────
@@ -572,6 +573,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         // Smooth, demo-parity DPS graphs: every tracker (own + fleet) renders through the one shared
         // ~30fps DpsRenderDriver, so the curve scrolls + decays continuously and all graphs share one render path.
         _renderDriver = services.GetRequiredService<DpsRenderDriver>();
+        _combatHistory = services.GetService<CombatHistory>();
 
         _startupTask = RunStartupResilientAsync();
     }
@@ -2288,7 +2290,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         if (!_trackersByCharacter.TryGetValue(character, out var tracker))
         {
             var isSelf = string.Equals(character, _localCharacter, StringComparison.OrdinalIgnoreCase);
-            tracker = new DpsViewModel(character, isSelf);
+            tracker = new DpsViewModel(character, isSelf, _combatHistory);
             _trackersByCharacter[character] = tracker;
             if (isSelf) DpsTrackers.Insert(0, tracker);
             else DpsTrackers.Add(tracker);

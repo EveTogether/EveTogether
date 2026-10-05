@@ -8,6 +8,6 @@ namespace EveUtils.Shared.Modules.Killmails.Repositories;
 /// </summary>
 public interface ILocalKillmailRepository : ILocalKillmailReader
 {
-    /// <summary>Stores the killmails with their items and attackers in one transaction, skipping any already stored.</summary>
-    Task AddMissingAsync(int characterId, IReadOnlyList<LocalKillmail> killmails, CancellationToken cancellationToken = default);
+    /// <summary>Stores the killmails with their items and attackers in one transaction, skipping any already stored; returns the ones it added.</summary>
+    Task<IReadOnlyList<LocalKillmail>> AddMissingAsync(int characterId, IReadOnlyList<LocalKillmail> killmails, CancellationToken cancellationToken = default);
 }

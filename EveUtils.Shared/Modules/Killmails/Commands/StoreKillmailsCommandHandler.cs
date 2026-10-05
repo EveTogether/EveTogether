@@ -16,9 +16,10 @@ internal sealed class StoreKillmailsCommandHandler(ILocalKillmailRepository repo
             return Result.Success();
         }
 
-        await repository.AddMissingAsync(command.CharacterId, command.Killmails, cancellationToken);
+        var added = await repository.AddMissingAsync(command.CharacterId, command.Killmails, cancellationToken);
         await eventBus.PublishAsync(
-            new KillmailsChangedEvent(command.CharacterId, KillmailsChangeKind.Imported), EventTarget.Local, cancellationToken);
+            new KillmailsChangedEvent(command.CharacterId, KillmailsChangeKind.Imported, [.. added.Select(killmail => killmail.KillmailId)]),
+            EventTarget.Local, cancellationToken);
         return Result.Success();
     }
 }
