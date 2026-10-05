@@ -35,7 +35,7 @@ internal sealed class GetRunningRunQueryHandler(IDbContextFactory<ClientDbContex
         List<RunParameterDto> parameters = await db.Set<RunParameter>().AsNoTracking()
             .Where(parameter => parameter.RunId == run.Id)
             .Select(parameter => new RunParameterDto(parameter.RunId, parameter.ParameterKey, parameter.TypedValue,
-                parameter.Amount, parameter.ItemTypeId, parameter.BonusWindowSeconds, parameter.ObservedAtUtc))
+                parameter.Amount, parameter.ItemTypeId, parameter.BonusWindowSeconds, parameter.ObservedAtUtc, parameter.EntryId))
             .ToListAsync(cancellationToken);
 
         return Result<RunningRunDto>.Success(new RunningRunDto(

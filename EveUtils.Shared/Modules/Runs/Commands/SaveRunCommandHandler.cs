@@ -83,6 +83,7 @@ internal sealed class SaveRunCommandHandler(IDbContextFactory<ClientDbContext> c
                 Amount = parameter.Amount,
                 ItemTypeId = parameter.ItemTypeId,
                 BonusWindowSeconds = parameter.BonusWindowSeconds,
+                EntryId = parameter.EntryId,
                 ObservedAtUtc = parameter.ObservedAtUtc
             });
 
@@ -122,6 +123,21 @@ internal sealed class SaveRunCommandHandler(IDbContextFactory<ClientDbContext> c
             await dispatcher.Send(new RebuildActivitySummariesCommand(command.RunId), cancellationToken);
         await eventBus.PublishAsync(new RunSavedEvent(command.RunId), EventTarget.Local, cancellationToken);
         await eventBus.PublishAsync(new RunsChangedEvent(run.Id, run.GroupCode), EventTarget.Local, cancellationToken);
+        await _CompleteSourceEscalationAsync(db, run.Id, cancellationToken);
         return Result.Success();
+    }
+
+    /// <summary>A saved escalation run ticks its escalation off at the run it was started from (ET-451). A source run
+    /// this client does not hold — a fleetmate's — answers NotFound, and stays open until its own client says so.</summary>
+    private async Task _CompleteSourceEscalationAsync(ClientDbContext db, Guid runId, CancellationToken cancellationToken)
+    {
+        List<RunParameterDto> sourceLink = await db.Set<RunParameter>().AsNoTracking()
+            .Where(parameter => parameter.RunId == runId && parameter.ParameterKey == RunParameterKey.EscalationSourceRunId)
+            .Select(parameter => new RunParameterDto(parameter.RunId, parameter.ParameterKey, parameter.TypedValue,
+                parameter.Amount, parameter.ItemTypeId, parameter.BonusWindowSeconds, parameter.ObservedAtUtc, parameter.EntryId))
+            .ToListAsync(cancellationToken);
+        if (RunEscalations.SourceOf(sourceLink) is { } source)
+            await dispatcher.Send(new SetEscalationOutcomeCommand(
+                source.SourceRunId, source.EntryId, EscalationOutcome.Completed, runId), cancellationToken);
     }
 }

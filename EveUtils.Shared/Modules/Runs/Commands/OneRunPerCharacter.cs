@@ -44,7 +44,8 @@ internal static class OneRunPerCharacter
                      .Where(capture => capture.ContentHash is null || survivor.LootCaptures.All(kept => kept.ContentHash != capture.ContentHash)))
             _Move(capture, survivor.LootCaptures, duplicate.LootCaptures, survivor.Id, (entry, runId) => entry.RunId = runId);
         foreach (RunParameter parameter in duplicate.Parameters.ToList()
-                     .Where(parameter => !survivor.Parameters.Any(kept => kept.ParameterKey == parameter.ParameterKey && kept.ItemTypeId == parameter.ItemTypeId)))
+                     .Where(parameter => !survivor.Parameters.Any(kept => kept.ParameterKey == parameter.ParameterKey
+                         && kept.ItemTypeId == parameter.ItemTypeId && kept.EntryId == parameter.EntryId)))
             _Move(parameter, survivor.Parameters, duplicate.Parameters, survivor.Id, (entry, runId) => entry.RunId = runId);
         _MergeEnemies(survivor, duplicate);
         _MergeMining(survivor, duplicate);

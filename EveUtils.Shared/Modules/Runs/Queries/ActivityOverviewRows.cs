@@ -62,7 +62,9 @@ internal static class ActivityOverviewRows
         RunParameter[] rewards = [.. all.Where(parameter => parameter.ParameterKey is not (
             RunParameterKey.AbyssalFilament or RunParameterKey.AbyssalFilamentTypeId or RunParameterKey.AbyssalFilamentCount
             or RunParameterKey.EscalationDungeonId or RunParameterKey.EscalationSystem or RunParameterKey.EscalationSolarSystemId
-            or RunParameterKey.EscalationExpiresAtUtc or RunParameterKey.MissionLocation))
+            or RunParameterKey.EscalationExpiresAtUtc or RunParameterKey.MissionLocation
+            or RunParameterKey.EscalationSourceRunId or RunParameterKey.EscalationOutcome
+            or RunParameterKey.EscalationCompletedByRunId))
             .DistinctBy(parameter => (parameter.ParameterKey, parameter.TypedValue, parameter.Amount, parameter.BonusWindowSeconds, parameter.ObservedAtUtc))];
         DateTime? escalationExpiresAtUtc = all
             .FirstOrDefault(parameter => parameter.ParameterKey == RunParameterKey.EscalationExpiresAtUtc)?.TypedValue is { } expiresAt

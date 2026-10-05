@@ -24,10 +24,22 @@ namespace EveUtils.Client.ViewModels.Runs;
 public sealed partial class EscalationDialogViewModel : ObservableObject
 {
     private readonly ISdeAccessor _sde;
+    private readonly List<int> _previouslyRegistered;
+    private readonly int? _sourceFactionId;
 
-    public EscalationDialogViewModel(ISdeAccessor sde)
+    /// <param name="sde">The site catalogue.</param>
+    /// <param name="sourceSites">What the source run's site matched in the catalogue — its faction, when every match
+    /// agrees on one, ranks that faction's escalations next (ET-451).</param>
+    /// <param name="previouslyRegistered">Escalation dungeon ids registered before from the same source site, most
+    /// often first — ranked on top (ET-451). The SDE carries no source→escalation mapping of its own.</param>
+    public EscalationDialogViewModel(
+        ISdeAccessor sde, IReadOnlyList<SdeSite>? sourceSites = null, IReadOnlyList<int>? previouslyRegistered = null)
     {
         _sde = sde;
+        _previouslyRegistered = [.. previouslyRegistered ?? []];
+        _sourceFactionId = (sourceSites ?? []).Select(site => site.FactionId).Distinct().ToList() is [{ } faction]
+            ? faction
+            : null;
     }
 
     [ObservableProperty]
@@ -39,17 +51,19 @@ public sealed partial class EscalationDialogViewModel : ObservableObject
     private string _siteQuery = string.Empty;
 
     /// <summary>
-    /// Escalation sites matching what is typed so far, narrowed to the Escalation archetype in code — not trusted
-    /// to <see cref="ISdeAccessor.SearchSites"/>'s own archetype filter, which a test double is free to ignore.
+    /// Escalation sites only — every one of them before anything is typed, narrowed by what is typed after (ET-451).
+    /// Narrowed to the Escalation archetype in code, not trusted to <see cref="ISdeAccessor.SearchSites"/>'s own
+    /// archetype filter, which a test double is free to ignore. Ranked: what this store registered from the same
+    /// source site before, then the source site's own faction, then by name.
     ///
     /// Built through <see cref="SdeSitePickerOption.From"/> — the one presentation this picker shares with
     /// <see cref="ManualRunStartViewModel"/>'s, so two rows sharing a name (of the 384 Escalation sites, only 64
     /// have a catalogue-wide unique one) are never two unpickable, identical-looking duplicates.
     /// </summary>
-    public IReadOnlyList<SdeSitePickerOption> SiteResults => string.IsNullOrWhiteSpace(SiteQuery)
-        ? []
-        : SdeSitePickerOption.From(
-            [.. _sde.SearchSites(SiteQuery).Where(site => site.ArchetypeName == EscalationArchetypeName)]);
+    public IReadOnlyList<SdeSitePickerOption> SiteResults =>
+        [.. SdeSitePickerOption.From(_EscalationSites(string.IsNullOrWhiteSpace(SiteQuery) ? null : SiteQuery))
+            .OrderBy(option => _HistoryRank(option.Site))
+            .ThenBy(option => option.Site.FactionId == _sourceFactionId && _sourceFactionId is not null ? 0 : 1)];
 
     public bool HasSiteResults => SiteResults.Count > 0;
 
@@ -67,6 +81,7 @@ public sealed partial class EscalationDialogViewModel : ObservableObject
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(SelectedSite))]
     [NotifyPropertyChangedFor(nameof(HasSelectedSite))]
+    [NotifyCanExecuteChangedFor(nameof(RegisterCommand))]
     private SdeSitePickerOption? _selectedOption;
 
     /// <summary>The site behind the picked option, or null when nothing was picked — what <see cref="Register"/>
@@ -102,29 +117,41 @@ public sealed partial class EscalationDialogViewModel : ObservableObject
     /// <summary>Raised on Register (true) or Cancel (false) — the dialog's cue to close.</summary>
     public event Action<bool>? CloseRequested;
 
-    private bool CanRegister => !string.IsNullOrWhiteSpace(SiteQuery) && _ParseRemaining() is not null;
+    private bool CanRegister => _ResolvedSite() is not null && _ParseRemaining() is not null;
 
     [RelayCommand(CanExecute = nameof(CanRegister))]
     private void Register()
     {
-        if (_ParseRemaining() is not { } remaining)
+        if (_ResolvedSite() is not { } site || _ParseRemaining() is not { } remaining)
             return;
 
-        // The pick from SiteResults wins when there is one (ET-125). Otherwise, a typed name that resolves to
-        // exactly one site after canonicalising twins (SdeSiteCanonicalization) is unambiguous enough to carry
-        // (ET-126 AC-1) — but never a guess among genuinely different sites (ET-126 AC-2): CatalogMatches is left
-        // unfiltered by archetype on purpose, so a Sansha's Command Relay Outpost never silently resolves to
-        // whichever of its two archetypes came back first.
-        int? dungeonId = SelectedSite?.DungeonId
-            ?? (SdeSiteCanonicalization.Canonicalize(CatalogMatches) is [{ } only] ? only.DungeonId : null);
         Result = new EscalationRegistration(
-            SelectedSite?.Name ?? SiteQuery.Trim(),
-            dungeonId,
+            site.Name,
+            site.DungeonId,
             DestinationSystem.Trim(),
             DestinationResolvedSystem?.SolarSystemId,
             DateTime.UtcNow + remaining);
         CloseRequested?.Invoke(true);
     }
+
+    /// <summary>
+    /// The escalation site Register carries — never free text (ET-451). The pick from <see cref="SiteResults"/> wins
+    /// when there is one (ET-125). Otherwise a typed name counts only when, among Escalation sites, it resolves to
+    /// exactly one site after canonicalising twins (ET-126 AC-1) — never a guess among genuinely different sites
+    /// (AC-2), and never a site of another archetype sharing the name.
+    /// </summary>
+    private SdeSite? _ResolvedSite() =>
+        SelectedSite
+        ?? (SdeSiteCanonicalization.Canonicalize(
+                [.. CatalogMatches.Where(site => site.ArchetypeName == EscalationArchetypeName)]) is [{ } only]
+            ? only
+            : null);
+
+    private IReadOnlyList<SdeSite> _EscalationSites(string? query) =>
+        [.. _sde.SearchSites(query).Where(site => site.ArchetypeName == EscalationArchetypeName)];
+
+    private int _HistoryRank(SdeSite site) =>
+        _previouslyRegistered.IndexOf(site.DungeonId) is >= 0 and var rank ? rank : int.MaxValue;
 
     [RelayCommand]
     private void Cancel() => CloseRequested?.Invoke(false);

@@ -90,6 +90,9 @@ public sealed class OpsecCoverageTests
         ["Views/Runs/Sections/EscalationDetailSectionView.axaml|EscalationText"] = "EscalationRegistrationTests.RegisteringAnEscalation_StoresSiteSystemAndDeadline_VisibleOnTheDetailScreen",
         ["Views/Runs/Sections/EscalationDetailSectionView.axaml|EscalationSystemText"] = "EscalationRegistrationTests.RegisteringAnEscalation_StoresSiteSystemAndDeadline_VisibleOnTheDetailScreen",
         ["Views/Runs/Sections/EscalationDetailSectionView.axaml|EscalationJumpsText"] = "EscalationJumpDistanceTests.JumpsNameTheirAnchor_AndStayVisibleAsAnEmptyStateWhenTheyCannotBeRead",
+        ["Views/RunsWindow.axaml|EscalationSiteText"] = "OpsecSourceMarkingTests.OpenEscalationRow_MarksSiteSystemAndSourceSite",
+        ["Views/RunsWindow.axaml|EscalationSystemText"] = "OpsecSourceMarkingTests.OpenEscalationRow_MarksSiteSystemAndSourceSite",
+        ["Views/RunsWindow.axaml|SourceSiteText"] = "OpsecSourceMarkingTests.OpenEscalationRow_MarksSiteSystemAndSourceSite",
         ["Views/Runs/Sections/MissionDetailSectionView.axaml|MissionLocationText"] = "OpsecSourceMarkingTests.MissionSections_MarkTheMissionLocation",
         ["Views/Runs/Sections/MissionWindowSectionView.axaml|MissionLocationText"] = "OpsecSourceMarkingTests.MissionSections_MarkTheMissionLocation",
         ["ViewModels/Runs/LinkedLossViewModel.cs|LinkedLossRunChoice"] = "OpsecSourceMarkingTests.LinkedLossChoices_MarkTheSiteName",
@@ -149,6 +152,7 @@ public sealed class OpsecCoverageTests
     private static readonly IReadOnlyDictionary<string, string> Exempt = new Dictionary<string, string>
     {
         ["Views/FitDetailWindow.axaml|Signature"] = "a ship's signature radius, a fitting stat, not a scanned signature",
+        ["Views/RunsWindow.axaml|OpenEscalations"] = "the list of open-escalation rows; each row's own site, system and source text is masked",
         ["Views/Widgets/WidgetManagerWindow.axaml|LocationNote"] = "fixed help text about the \"Include my location\" setting, never a system name",
         ["Views/FleetRosterWindow.axaml|EsiAutoApplyStructure"] = "whether the in-game wing and squad structure is applied, a fleet setting",
         ["Views/EscalationDialogWindow.axaml|SiteQuery"] = "the text the pilot is typing into a search box: masking an input makes it unusable",

@@ -4,30 +4,65 @@
              x:Class="EveUtils.Client.Views.Runs.Sections.EscalationDetailSectionView"
              x:DataType="vs:EscalationDetailSectionViewModel">
     <StackPanel>
-        <Grid Classes="kv" ColumnDefinitions="Auto,*"
-              IsVisible="{Binding EscalationText, Converter={x:Static ObjectConverters.IsNotNull}}">
-            <TextBlock Text="SITE"/>
-            <TextBlock Grid.Column="1" Text="{Binding EscalationText}"/>
-        </Grid>
-        <Grid Classes="kv" ColumnDefinitions="Auto,*"
-              IsVisible="{Binding EscalationSystemText, Converter={x:Static ObjectConverters.IsNotNull}}">
-            <TextBlock Text="SYSTEM"/>
-            <TextBlock Grid.Column="1" Text="{Binding EscalationSystemText}"/>
-        </Grid>
-        <Grid Classes="kv" ColumnDefinitions="Auto,*"
-              IsVisible="{Binding EscalationJumpsText, Converter={x:Static ObjectConverters.IsNotNull}}">
-            <TextBlock Text="JUMPS"/>
-            <TextBlock Grid.Column="1" Text="{Binding EscalationJumpsText}"/>
-        </Grid>
-        <TextBlock Classes="hint" TextWrapping="Wrap" Margin="0"
-                   IsVisible="{Binding EscalationJumpsEmptyText, Converter={x:Static ObjectConverters.IsNotNull}}"
-                   Text="{Binding EscalationJumpsEmptyText}"/>
-        <TextBlock Classes="hint" Margin="0"
-                   IsVisible="{Binding EscalationExpiresAtText, Converter={x:Static ObjectConverters.IsNotNull}}"
-                   Text="{Binding EscalationExpiresAtText}"/>
-        <TextBlock Classes="hint" Margin="0"
-                   IsVisible="{Binding EscalationObservedText, Converter={x:Static ObjectConverters.IsNotNull}}"
-                   Text="{Binding EscalationObservedText}"/>
+        <!-- ET-451: a site can lead to more than one escalation; each is its own block with its own actions. -->
+        <ItemsControl ItemsSource="{Binding Entries}">
+            <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <StackPanel Spacing="10"/>
+                </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vs:EscalationEntryViewModel">
+                    <StackPanel>
+                        <Grid Classes="kv" ColumnDefinitions="Auto,*">
+                            <TextBlock Text="SITE"/>
+                            <TextBlock Grid.Column="1" Text="{Binding EscalationText}"/>
+                        </Grid>
+                        <Grid Classes="kv" ColumnDefinitions="Auto,*"
+                              IsVisible="{Binding EscalationSystemText, Converter={x:Static ObjectConverters.IsNotNull}}">
+                            <TextBlock Text="SYSTEM"/>
+                            <TextBlock Grid.Column="1" Text="{Binding EscalationSystemText}"/>
+                        </Grid>
+                        <Grid Classes="kv" ColumnDefinitions="Auto,*"
+                              IsVisible="{Binding EscalationJumpsText, Converter={x:Static ObjectConverters.IsNotNull}}">
+                            <TextBlock Text="JUMPS"/>
+                            <TextBlock Grid.Column="1" Text="{Binding EscalationJumpsText}"/>
+                        </Grid>
+                        <Grid Classes="kv" ColumnDefinitions="Auto,*">
+                            <TextBlock Text="STATUS"/>
+                            <TextBlock Grid.Column="1" Text="{Binding StatusText}"/>
+                        </Grid>
+                        <TextBlock Classes="hint" TextWrapping="Wrap" Margin="0"
+                                   IsVisible="{Binding EscalationJumpsEmptyText, Converter={x:Static ObjectConverters.IsNotNull}}"
+                                   Text="{Binding EscalationJumpsEmptyText}"/>
+                        <TextBlock Classes="hint" Margin="0"
+                                   IsVisible="{Binding EscalationExpiresAtText, Converter={x:Static ObjectConverters.IsNotNull}}"
+                                   Text="{Binding EscalationExpiresAtText}"/>
+                        <TextBlock Classes="hint" Margin="0" Text="{Binding EscalationObservedText}"/>
+                        <WrapPanel Margin="0,4,0,0">
+                            <Button Classes="link" Content="start escalation run" Margin="0,0,12,0"
+                                    IsVisible="{Binding CanStart}"
+                                    Command="{Binding StartEscalationRunCommand}"/>
+                            <Button Classes="link" Content="open escalation run" Margin="0,0,12,0"
+                                    IsVisible="{Binding HasCompletedRun}"
+                                    Command="{Binding OpenCompletedRunCommand}"/>
+                            <Button Classes="link" Content="mark done" Margin="0,0,12,0"
+                                    IsVisible="{Binding CanMarkDone}"
+                                    Command="{Binding MarkDoneCommand}"/>
+                            <Button Classes="link" Content="mark expired" Margin="0,0,12,0"
+                                    IsVisible="{Binding CanMarkDone}"
+                                    Command="{Binding MarkExpiredCommand}"/>
+                            <Button Classes="link" Content="reopen" Margin="0,0,12,0"
+                                    IsVisible="{Binding CanReopen}"
+                                    Command="{Binding ReopenCommand}"/>
+                        </WrapPanel>
+                        <TextBlock Classes="hint" TextWrapping="Wrap" Margin="0"
+                                   IsVisible="{Binding ActionMessage, Converter={x:Static ObjectConverters.IsNotNull}}"
+                                   Text="{Binding ActionMessage}"/>
+                    </StackPanel>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
         <TextBlock x:Name="EscalationEmpty" Classes="hint" TextWrapping="Wrap"
                    IsVisible="{Binding EscalationEmptyText, Converter={x:Static ObjectConverters.IsNotNull}}"
                    Text="{Binding EscalationEmptyText}"/>

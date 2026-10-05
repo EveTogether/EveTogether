@@ -24,6 +24,11 @@ public sealed class RunParameter
     /// the bonus was earned, and "did I make it" is the run's duration against this number.</summary>
     public int? BonusWindowSeconds { get; set; }
 
+    /// <summary>Ties together the rows that describe one entry of a repeatable observation — a run can lead to more
+    /// than one escalation, each written as its own set of <c>Escalation*</c> rows (ET-451). Null on every other
+    /// row, and on an escalation registered before this column existed, which reads as the run's one escalation.</summary>
+    public Guid? EntryId { get; set; }
+
     public DateTime ObservedAtUtc { get; set; }
     public Run? Run { get; set; }
 }

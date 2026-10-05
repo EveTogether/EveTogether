@@ -255,6 +255,25 @@ public sealed class RunsChangedSignalCoverageTests
         {
             Guid runId = await _StartAsync(dispatcher, cancellationToken);
             return new Act(() => dispatcher.Send(new SetHomefrontPayoutCommand(runId, 15_000_000m), cancellationToken), runId);
+        },
+
+        [typeof(SetEscalationOutcomeCommand)] = async (dispatcher, cancellationToken) =>
+        {
+            Guid entryId = Guid.NewGuid();
+            Result<Guid> started = await dispatcher.Send(_Start() with
+            {
+                Parameters =
+                [
+                    new RunParameterInput
+                    {
+                        ParameterKey = RunParameterKey.Escalation, TypedValue = "Command Relay Outpost",
+                        EntryId = entryId, ObservedAtUtc = StartedAtUtc
+                    }
+                ]
+            }, cancellationToken);
+            Guid runId = started.Value;
+            return new Act(() => dispatcher.Send(new SetEscalationOutcomeCommand(runId, entryId, EscalationOutcome.Expired),
+                cancellationToken), runId);
         }
     };
 

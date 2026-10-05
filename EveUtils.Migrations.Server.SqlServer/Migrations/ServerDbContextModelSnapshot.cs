@@ -17,7 +17,7 @@ namespace EveUtils.Migrations.Server.SqlServer.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.11")
+                .HasAnnotation("ProductVersion", "10.0.12")
                 .HasAnnotation("Relational:MaxIdentifierLength", 128);
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
@@ -1130,6 +1130,9 @@ namespace EveUtils.Migrations.Server.SqlServer.Migrations
 
                     b.Property<int?>("BonusWindowSeconds")
                         .HasColumnType("int");
+
+                    b.Property<Guid?>("EntryId")
+                        .HasColumnType("uniqueidentifier");
 
                     b.Property<int?>("ItemTypeId")
                         .HasColumnType("int");

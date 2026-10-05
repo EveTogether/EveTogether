@@ -166,6 +166,7 @@ internal sealed class StartRunCommandHandler(IDbContextFactory<ClientDbContext> 
                 Amount = parameter.Amount,
                 ItemTypeId = parameter.ItemTypeId,
                 BonusWindowSeconds = parameter.BonusWindowSeconds,
+                EntryId = parameter.EntryId,
                 ObservedAtUtc = parameter.ObservedAtUtc
             });
     }

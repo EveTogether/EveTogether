@@ -3,6 +3,7 @@ using EveUtils.Client.Dialogs;
 using EveUtils.Client.Opsec;
 using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Client.ViewModels.Runs;
+using EveUtils.Client.ViewModels.Runs.Sections;
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Data;
 using EveUtils.Shared.Messaging;
@@ -32,7 +33,9 @@ public sealed class EscalationRegistrationTests
     [AvaloniaFact]
     public async Task RegisteringAnEscalation_StoresSiteSystemAndDeadline_VisibleOnTheDetailScreen()
     {
-        using var harness = await ActivityWindowHarness.CreateAsync();
+        var sde = new FakeSdeAccessor().AddSite(new SdeSite(2406, "Command Relay Outpost", null, "Escalation", null, "Sansha's Nation", null, 3, false, []));
+        using var harness = await ActivityWindowHarness.CreateAsync(
+            configure: services => services.AddSingleton<ISdeAccessor>(sde));
         ActivityWindowViewModel model = await harness.OpenAsync(ActivityKind.Site);
         model.SignatureName = "Sansha Refuge";
         await model.StartRunCommand.ExecuteAsync(null);
@@ -58,9 +61,10 @@ public sealed class EscalationRegistrationTests
         var detail = new ActivityDetailViewModel(dispatcher, row.ActivitySummaryId);
         await detail.LoadAsync();
 
-        Assert.Equal(OpsecText.Mark("Command Relay Outpost"), detail.Escalation().EscalationText);
-        Assert.Equal(OpsecText.Mark("Amamake"), detail.Escalation().EscalationSystemText);
-        Assert.NotNull(detail.Escalation().EscalationExpiresAtText);
+        EscalationEntryViewModel escalation = Assert.Single(detail.Escalation().Entries);
+        Assert.Equal(OpsecText.Mark("Command Relay Outpost"), escalation.EscalationText);
+        Assert.Equal(OpsecText.Mark("Amamake"), escalation.EscalationSystemText);
+        Assert.NotNull(escalation.EscalationExpiresAtText);
 
         await using ClientDbContext db = await harness.Services
             .GetRequiredService<IDbContextFactory<ClientDbContext>>().CreateDbContextAsync();
