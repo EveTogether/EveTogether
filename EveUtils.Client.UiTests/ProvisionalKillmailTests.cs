@@ -282,6 +282,7 @@ public sealed class ProvisionalKillmailTests : IDisposable
     [Fact]
     public async Task Import_TextWithNoOwnCharacter_IsRefusedAndStoresNothing()
     {
+        await _instance.Services.GetRequiredService<ICharacterRegistry>().AddOrUpdateAsync(new Character("Own Pilot", 500), Ct);
         ProvisionalKillmailImportResult result =
             await _instance.Services.GetRequiredService<ProvisionalKillmailImporter>().ImportAsync(Fixture1, Ct);
 
