@@ -515,8 +515,11 @@ public sealed class DialogService : IDialogService, ISingletonService
     public void ShowSettingsBackups(SettingsBackupsViewModel viewModel) =>
         Route(new SettingsBackupsWindow(viewModel), "SETTINGS BACKUPS", "tools", "settings-backups", MaterialIconKind.BackupRestore);
 
-    public void ShowAppraisal(AppraisalViewModel viewModel) =>
+    public void ShowAppraisal(AppraisalViewModel viewModel)
+    {
+        _Observe(viewModel.LoadAsync(), "the appraisal tool could not read its price source");
         Route(new AppraisalWindow(viewModel), "APPRAISAL", "tools", "appraisal", MaterialIconKind.CurrencyUsd);
+    }
 
     public void ShowActivityDetail(ActivityDetailViewModel viewModel, Guid activitySummaryId)
     {

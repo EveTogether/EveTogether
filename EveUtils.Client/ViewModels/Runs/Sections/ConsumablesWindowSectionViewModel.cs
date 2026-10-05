@@ -156,11 +156,12 @@ public sealed partial class ConsumablesWindowSectionViewModel(IRunWindowContext 
         RefreshSummary();
 
         if (typeId is null || typeId == _pricedForTypeId
-            || Context.Services.GetService<IAppraisalProvider>() is not { } appraisal)
+            || Context.Services.GetService<IAppraisalProviderSelector>() is not { } appraisalSelector)
             return;
 
         _pricedForTypeId = typeId;
-        Result<AppraisalOutcome> valued = await appraisal.AppraiseAsync([new AppraisalLine(typeId.Value, string.Empty, 1)]);
+        Result<AppraisalOutcome> valued = await appraisalSelector.AppraiseWithFallbackAsync(
+            [new AppraisalLine(typeId.Value, string.Empty, 1)]);
         UnitPrice = valued.IsSuccess
             ? valued.Value!.Rows.FirstOrDefault(row => row.Line.TypeId == typeId)?.Price?.Estimate is { } estimate
                 ? (decimal)estimate

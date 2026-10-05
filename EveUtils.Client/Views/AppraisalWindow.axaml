@@ -64,16 +64,40 @@
             <!-- Hidden while one price source is installed: with a single entry a picker is a question without an answer. -->
             <StackPanel Grid.Column="1" Spacing="3" IsVisible="{Binding ShowProviderPicker}" VerticalAlignment="Top">
                 <TextBlock Classes="label" Text="PRICE SOURCE"/>
-                <ComboBox MinWidth="180" FontSize="11" ItemsSource="{Binding Providers}"
-                          SelectedItem="{Binding SelectedProvider}">
-                    <ComboBox.ItemTemplate>
-                        <DataTemplate x:DataType="market:IAppraisalProvider">
-                            <TextBlock Text="{Binding DisplayName}"/>
-                        </DataTemplate>
-                    </ComboBox.ItemTemplate>
-                </ComboBox>
+                <Grid ColumnDefinitions="Auto,Auto" ColumnSpacing="6">
+                    <ComboBox Grid.Column="0" MinWidth="180" FontSize="11" ItemsSource="{Binding Providers}"
+                              SelectedItem="{Binding SelectedProvider}">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate x:DataType="market:IAppraisalProvider">
+                                <TextBlock Text="{Binding DisplayName}"/>
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+                    <!-- The picker above is a session-only override (as it always was); this is the explicit,
+                         awaited action that makes a pick the default every other screen reads too (ET-364). -->
+                    <Button Grid.Column="1" Content="MAKE DEFAULT" FontSize="10"
+                            Command="{Binding MakeSelectionDefaultCommand}"/>
+                </Grid>
+                <TextBlock FontSize="10" Opacity="0.6" TextWrapping="Wrap" Text="{Binding DefaultProviderStatus}"/>
             </StackPanel>
         </Grid>
+
+        <!-- The EVE Workbench personal access token (ET-364): offered only once that provider is installed. The box
+             never shows the saved token back — it is write-only, and clears itself the moment SAVE succeeds. -->
+        <Border DockPanel.Dock="Top" Classes="panel" Padding="11,9" Margin="0,0,0,10" IsVisible="{Binding ShowEveWorkbenchToken}">
+            <StackPanel Spacing="4">
+                <TextBlock Classes="label" Text="EVE WORKBENCH TOKEN"/>
+                <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
+                    <TextBox Grid.Column="0" FontSize="11" PasswordChar="•" PlaceholderText="Paste a personal access token"
+                              Text="{Binding EveWorkbenchTokenInput}"/>
+                    <Button Grid.Column="1" Content="SAVE" FontSize="10" Command="{Binding SaveEveWorkbenchTokenCommand}"/>
+                    <Button Grid.Column="2" Content="CLEAR" FontSize="10" Command="{Binding ClearEveWorkbenchTokenCommand}"/>
+                </Grid>
+                <TextBlock FontSize="10" Opacity="0.6" TextWrapping="Wrap" Text="{Binding EveWorkbenchTokenStatus}"/>
+                <TextBlock FontSize="10" Opacity="0.55" TextWrapping="Wrap"
+                           Text="Created on EVE Workbench under My Account → Personal Access Tokens. Stored encrypted on this machine and never shown again once saved."/>
+            </StackPanel>
+        </Border>
 
         <Grid DockPanel.Dock="Bottom" ColumnDefinitions="*,Auto" ColumnSpacing="10" Margin="0,10,0,0">
             <Border Grid.Column="0" Padding="11,7" Classes="statusline"
