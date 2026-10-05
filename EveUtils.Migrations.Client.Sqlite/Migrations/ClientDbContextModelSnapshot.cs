@@ -15,7 +15,7 @@ namespace EveUtils.Migrations.Client.Sqlite.Migrations
         protected override void BuildModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
-            modelBuilder.HasAnnotation("ProductVersion", "10.0.11");
+            modelBuilder.HasAnnotation("ProductVersion", "10.0.12");
 
             modelBuilder.Entity("EveUtils.Shared.Identity.LocalCharacter", b =>
                 {
@@ -1429,6 +1429,9 @@ namespace EveUtils.Migrations.Client.Sqlite.Migrations
                     b.Property<int>("Perception")
                         .HasColumnType("INTEGER");
 
+                    b.Property<DateTimeOffset?>("SkillsRefreshedAt")
+                        .HasColumnType("TEXT");
+
                     b.Property<long>("TotalSp")
                         .HasColumnType("INTEGER");
 
@@ -1545,6 +1548,39 @@ namespace EveUtils.Migrations.Client.Sqlite.Migrations
                         .IsUnique();
 
                     b.ToTable("SkillPlanRow");
+                });
+
+            modelBuilder.Entity("EveUtils.Shared.Modules.Skills.Plans.Entities.SkillPlanSource", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("DroppedLevels")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Label")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("PlanId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Source")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("SourceRef")
+                        .HasMaxLength(255)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PlanId");
+
+                    b.ToTable("SkillPlanSource");
                 });
 
             modelBuilder.Entity("EveUtils.Shared.Transport.ClientServerSession", b =>

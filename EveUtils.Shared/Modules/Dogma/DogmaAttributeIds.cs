@@ -30,6 +30,7 @@ public static class DogmaAttributeIds
     public const int MemoryBonus = 177;
     public const int PerceptionBonus = 178;
     public const int WillpowerBonus = 179;
+    public const int Implantness = 331; // the implant slot, 1-10; slots 1-5 hold the attribute enhancers
 
     public const int SkillPrimaryAttribute = 180;   // points at the character attribute (164-168) a skill trains on first
     public const int SkillSecondaryAttribute = 181; // ...and second

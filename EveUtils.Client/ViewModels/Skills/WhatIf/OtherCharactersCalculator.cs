@@ -25,9 +25,12 @@ public static class OtherCharactersCalculator
 
         int flyItToday = 0;
         TimeSpan? soonest = null;
+        string? soonestName = null;
+        int considered = 0;
 
         foreach (var character in otherCharacters)
         {
+            considered++;
             if (!character.HasSkillsScope)
             {
                 continue;
@@ -50,9 +53,14 @@ public static class OtherCharactersCalculator
             if (soonest is null || time < soonest)
             {
                 soonest = time;
+                soonestName = character.Name;
             }
         }
 
-        return new OtherCharactersSummary(flyItToday, soonest, soonest is null ? null : now + soonest);
+        return new OtherCharactersSummary(flyItToday, soonest, soonest is null ? null : now + soonest)
+        {
+            SoonestName = soonestName,
+            OtherCount = considered,
+        };
     }
 }

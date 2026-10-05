@@ -17,7 +17,8 @@ public sealed record SkillsCharacterSnapshot(
     IReadOnlyList<CharacterSkillQueueEntry> Queue,
     CharacterAttributes? Attributes,
     DateTimeOffset Now,
-    IReadOnlyList<int>? ImplantTypeIds = null)
+    IReadOnlyList<int>? ImplantTypeIds = null,
+    string ImplantNote = "")
 {
     public IReadOnlyList<int> ImplantTypeIds { get; } = ImplantTypeIds ?? [];
 

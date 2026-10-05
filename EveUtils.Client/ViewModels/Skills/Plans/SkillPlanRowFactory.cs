@@ -44,10 +44,15 @@ public static class SkillPlanRowFactory
     {
         IReadOnlyList<SkillGap> gaps = validator.SkillRequirements(seedTypeIds, extra, trained);
         var rows = _ExpandGaps(gaps).Select(pair => new SkillPlanRowDraft(pair.SkillTypeId, pair.Level, sourceLabel)).ToList();
+        // What the source asked for by name that is already trained — PLANS says so under "Dropped on purpose".
+        var dropped = (extra ?? [])
+            .Where(minimum => trained.TryGetValue(minimum.SkillTypeId, out var level) && level >= minimum.Level)
+            .Select(minimum => new SkillPlanRowDraft(minimum.SkillTypeId, minimum.Level, sourceLabel))
+            .ToList();
 
         return rows.Count == 0
-            ? new SkillPlanBuildResult(rows, $"Nothing to add for {sourceLabel} — every required skill is already trained.")
-            : new SkillPlanBuildResult(rows, null);
+            ? new SkillPlanBuildResult(rows, $"Nothing to add for {sourceLabel} — every required skill is already trained.", sourceLabel, dropped)
+            : new SkillPlanBuildResult(rows, null, sourceLabel, dropped);
     }
 
     private static IEnumerable<(int SkillTypeId, int Level)> _ExpandGaps(IReadOnlyList<SkillGap> gaps) =>
@@ -56,4 +61,7 @@ public static class SkillPlanRowFactory
 
 /// <param name="Message">Set instead of an empty <paramref name="Rows"/> silently doing nothing (ET-355 AC2) —
 /// null when <paramref name="Rows"/> is non-empty.</param>
-public sealed record SkillPlanBuildResult(IReadOnlyList<SkillPlanRowDraft> Rows, string? Message);
+/// <param name="Label">The source's own name, recorded with the plan even when it adds nothing.</param>
+/// <param name="Dropped">The levels the source named that are already trained.</param>
+public sealed record SkillPlanBuildResult(IReadOnlyList<SkillPlanRowDraft> Rows, string? Message, string Label = "",
+    IReadOnlyList<SkillPlanRowDraft>? Dropped = null);

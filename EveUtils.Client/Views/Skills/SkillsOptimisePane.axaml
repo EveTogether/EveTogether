@@ -5,90 +5,348 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d" d:DesignWidth="1200" d:DesignHeight="700"
              x:Class="EveUtils.Client.Views.Skills.SkillsOptimisePane"
-             x:DataType="vs:SkillsOptimiseViewModel">
+             x:DataType="vs:SkillsOptimiseViewModel"
+             x:Name="OptimiseRoot">
 
+    <!-- OPTIMISE (ET-354), laid out as mockup v5 screen d: the OPTIMISE FOR choice, four cards (remap for the queue,
+         remap for a plan, implants, where the time goes) and a 400 px pane that says how it is computed. -->
     <UserControl.Styles>
-        <Style Selector="TextBlock.ostatlabel">
-            <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
-            <Setter Property="FontSize" Value="10"/>
-            <Setter Property="LetterSpacing" Value="1.2"/>
-        </Style>
-        <Style Selector="TextBlock.ostatvalue">
-            <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
-            <Setter Property="FontSize" Value="13"/>
-            <Setter Property="FontWeight" Value="SemiBold"/>
-        </Style>
-        <Style Selector="Border.osection">
-            <Setter Property="Padding" Value="14,10"/>
-            <Setter Property="BorderThickness" Value="0,0,0,1"/>
+        <Style Selector="Border.ocard">
             <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="12,10"/>
+            <Setter Property="Background" Value="#26000000"/>
+        </Style>
+        <Style Selector="TextBlock.clabel">
+            <Setter Property="Foreground" Value="{DynamicResource TextAccentBrush}"/>
+            <Setter Property="FontSize" Value="10"/>
+            <Setter Property="LetterSpacing" Value="1.8"/>
+            <Setter Property="Margin" Value="0,0,0,8"/>
+        </Style>
+        <Style Selector="TextBlock.th">
+            <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+            <Setter Property="FontSize" Value="9.5"/>
+            <Setter Property="LetterSpacing" Value="1"/>
+            <Setter Property="HorizontalAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="Border.td">
+            <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}"/>
+            <Setter Property="BorderThickness" Value="0,1,0,0"/>
+            <Setter Property="Padding" Value="3"/>
+        </Style>
+        <Style Selector="Border.td.up">
+            <Setter Property="Background" Value="#124ADE80"/>
+        </Style>
+        <Style Selector="TextBlock.cell">
+            <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+            <Setter Property="HorizontalAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="TextBlock.cell.up">
+            <Setter Property="Foreground" Value="{StaticResource GreenBrush}"/>
+        </Style>
+        <Style Selector="TextBlock.cell.down">
+            <Setter Property="Foreground" Value="{StaticResource WarnBrush}"/>
+        </Style>
+        <Style Selector="TextBlock.kvk">
+            <Setter Property="FontSize" Value="11.5"/>
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+        </Style>
+        <Style Selector="TextBlock.kvv">
+            <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+        </Style>
+        <Style Selector="TextBlock.kvv.ac">
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+        </Style>
+        <Style Selector="TextBlock.ohint">
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+            <Setter Property="Margin" Value="0,6,0,0"/>
+        </Style>
+        <Style Selector="Border.dsec">
+            <Setter Property="Padding" Value="16,10,16,12"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}"/>
+            <Setter Property="BorderThickness" Value="0,0,0,1"/>
+        </Style>
+        <Style Selector="Border.dsec TextBlock.dl">
+            <Setter Property="Foreground" Value="{DynamicResource TextAccentBrush}"/>
+            <Setter Property="FontSize" Value="10"/>
+            <Setter Property="LetterSpacing" Value="1.8"/>
+            <Setter Property="Margin" Value="0,0,0,6"/>
+        </Style>
+        <Style Selector="Border.dsec TextBlock.dp">
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="LineHeight" Value="18"/>
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+        </Style>
+        <Style Selector="ProgressBar.pairbar">
+            <Setter Property="Height" Value="8"/>
+            <Setter Property="MinHeight" Value="8"/>
+            <Setter Property="Minimum" Value="0"/>
+            <Setter Property="Maximum" Value="1"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+            <Setter Property="Opacity" Value="0.55"/>
+            <Setter Property="CornerRadius" Value="0"/>
         </Style>
     </UserControl.Styles>
 
-    <ScrollViewer>
-        <StackPanel>
-            <TextBlock Classes="hint" Margin="14,10" TextWrapping="Wrap"
-                       Text="No queue to advise on yet — import this character's skills and skill queue first."
+    <Grid ColumnDefinitions="*,400">
+
+        <!-- Main column: OPTIMISE FOR + the four cards. -->
+        <DockPanel Grid.Column="0">
+            <Border DockPanel.Dock="Top" Padding="14,10" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource BorderBrush}"
+                    IsVisible="{Binding HasData}">
+                <Grid ColumnDefinitions="Auto,Auto,*,Auto" ColumnSpacing="8">
+                    <TextBlock Grid.Column="0" Classes="label" VerticalAlignment="Center" Text="OPTIMISE FOR"/>
+                    <ItemsControl Grid.Column="1" ItemsSource="{Binding Targets}" VerticalAlignment="Center">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <StackPanel Orientation="Horizontal" Margin="1,0,0,0"/>
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vs:OptimiseTargetViewModel">
+                                <Button Classes="seg" Classes.on="{Binding IsSelected}" Padding="8,2" Content="{Binding Label}"
+                                        Command="{Binding #OptimiseRoot.((vs:SkillsOptimiseViewModel)DataContext).SelectCommand}"
+                                        CommandParameter="{Binding}"/>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <Border Grid.Column="3" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1" Padding="9,3"
+                            Background="#33000000" VerticalAlignment="Center">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <Ellipse Width="7" Height="7" VerticalAlignment="Center"
+                                     Fill="{StaticResource WarnBrush}" IsVisible="{Binding !IsRemapAvailable}"/>
+                            <Ellipse Width="7" Height="7" VerticalAlignment="Center"
+                                     Fill="{StaticResource GreenBrush}" IsVisible="{Binding IsRemapAvailable}"/>
+                            <TextBlock FontSize="10.5" VerticalAlignment="Center">
+                                <Run Text="next remap "/><Run FontFamily="{StaticResource MonoFont}" FontWeight="SemiBold"
+                                     Foreground="{StaticResource TextBrightBrush}" Text="{Binding NextRemapText}"/>
+                            </TextBlock>
+                        </StackPanel>
+                    </Border>
+                </Grid>
+            </Border>
+
+            <TextBlock DockPanel.Dock="Top" Classes="hint" Margin="14,12" FontSize="11" Text="{Binding EmptyText}"
                        IsVisible="{Binding !HasData}"/>
 
-            <StackPanel IsVisible="{Binding HasData}">
-                <Border Classes="osection">
-                    <Grid ColumnDefinitions="*,*,*">
-                        <StackPanel Grid.Column="0" Spacing="2">
-                            <TextBlock Classes="ostatlabel" Text="REMAP FOR QUEUE"/>
-                            <TextBlock Classes="ostatvalue" Text="{Binding BestSplitText}"/>
-                            <TextBlock Classes="hint" Text="{Binding QueueSavingsText}"/>
+            <ScrollViewer IsVisible="{Binding HasData}" HorizontalScrollBarVisibility="Disabled">
+                <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto" ColumnSpacing="12" RowSpacing="12" Margin="14,12">
+
+                    <!-- Remap for the queue. -->
+                    <ContentControl Grid.Row="0" Grid.Column="0" Content="{Binding QueueCard}"
+                                    IsVisible="{Binding QueueCard, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+
+                    <!-- Remap for a plan. -->
+                    <Panel Grid.Row="0" Grid.Column="1">
+                        <ContentControl Content="{Binding PlanCard}"
+                                        IsVisible="{Binding PlanCard, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+                        <Border Classes="ocard" IsVisible="{Binding PlanCard, Converter={x:Static ObjectConverters.IsNull}}">
+                            <StackPanel>
+                                <TextBlock Classes="clabel" Text="REMAP · PLAN"/>
+                                <TextBlock Classes="ohint" Margin="0" Text="{Binding PlanCardHint}"/>
+                            </StackPanel>
+                        </Border>
+                    </Panel>
+
+                    <!-- Implants per slot, and what a +4/+5 set would do. -->
+                    <Border Grid.Row="1" Grid.Column="0" Classes="ocard">
+                        <StackPanel>
+                            <TextBlock Classes="clabel" Text="IMPLANTS"/>
+                            <ItemsControl ItemsSource="{Binding ImplantSlots}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <UniformGrid Columns="5"/>
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vs:ImplantSlotViewModel">
+                                        <Panel Margin="0,0,4,0">
+                                            <Rectangle Stroke="{DynamicResource BorderBrush}" StrokeThickness="1" StrokeDashArray="3,2"/>
+                                            <StackPanel Margin="6,4">
+                                                <TextBlock FontSize="9.5" Foreground="{StaticResource TextDimBrush}" Text="{Binding SlotText}"/>
+                                                <TextBlock FontFamily="{StaticResource MonoFont}" FontSize="9.5" TextTrimming="CharacterEllipsis"
+                                                           Foreground="{StaticResource TextBrightBrush}" Text="{Binding ImplantText}"
+                                                           ToolTip.Tip="{Binding ImplantText}"/>
+                                                <TextBlock FontSize="9" Foreground="{StaticResource TextDimBrush}" Text="{Binding AttributeName}"/>
+                                            </StackPanel>
+                                        </Panel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <TextBlock Classes="ohint" Text="{Binding ImplantsHint}"/>
+                            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10" Margin="0,10,0,0">
+                                <TextBlock Grid.Column="0" Classes="kvk" Text="{Binding Plus4Label}"/>
+                                <TextBlock Grid.Column="1" Classes="kvv ac" Text="{Binding Plus4Text}"/>
+                                <TextBlock Grid.Column="2" Classes="kvv" Foreground="{StaticResource TextDimBrush}" MinWidth="64"
+                                           TextAlignment="Right" Text="{Binding Plus4SavingText}"/>
+                            </Grid>
+                            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10" Margin="0,6,0,0">
+                                <TextBlock Grid.Column="0" Classes="kvk" Text="{Binding Plus5Label}"/>
+                                <TextBlock Grid.Column="1" Classes="kvv ac" Text="{Binding Plus5Text}"/>
+                                <TextBlock Grid.Column="2" Classes="kvv" Foreground="{StaticResource TextDimBrush}" MinWidth="64"
+                                           TextAlignment="Right" Text="{Binding Plus5SavingText}"/>
+                            </Grid>
+                            <TextBlock Classes="ohint" Text="{Binding ImplantConclusion}"/>
                         </StackPanel>
-                        <StackPanel Grid.Column="1" Spacing="2">
-                            <TextBlock Classes="ostatlabel" Text="+4 IMPLANT SET"/>
-                            <TextBlock Classes="ostatvalue" Text="{Binding Plus4SavingsText}"/>
+                    </Border>
+
+                    <!-- Where the time goes: one bar per primary/secondary pair at today's attributes. -->
+                    <Border Grid.Row="1" Grid.Column="1" Classes="ocard">
+                        <StackPanel>
+                            <TextBlock Classes="clabel" Text="{Binding TimeGoesTitle}"/>
+                            <ItemsControl ItemsSource="{Binding TimePerAttributePair}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vs:AttributePairTimeRowViewModel">
+                                        <Grid ColumnDefinitions="190,*,64" ColumnSpacing="8" Margin="0,3">
+                                            <TextBlock Grid.Column="0" FontSize="11" VerticalAlignment="Center" Text="{Binding AttributePairText}"/>
+                                            <ProgressBar Grid.Column="1" Classes="pairbar" Value="{Binding Share}" VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Column="2" Classes="kvv" TextAlignment="Right" VerticalAlignment="Center"
+                                                       Text="{Binding TimeText}"/>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <TextBlock Classes="ohint" Text="Time per primary/secondary pair at today's attributes. The remap favours the largest bars."/>
                         </StackPanel>
-                        <StackPanel Grid.Column="2" Spacing="2">
-                            <TextBlock Classes="ostatlabel" Text="+5 IMPLANT SET"/>
-                            <TextBlock Classes="ostatvalue" Text="{Binding Plus5SavingsText}"/>
-                        </StackPanel>
+                    </Border>
+                </Grid>
+            </ScrollViewer>
+        </DockPanel>
+
+        <!-- How this is computed. -->
+        <Border Grid.Column="1" BorderThickness="1,0,0,0" BorderBrush="{DynamicResource BorderBrush}"
+                Background="{StaticResource DrawerSurfaceBrush}">
+            <DockPanel>
+                <Border DockPanel.Dock="Bottom" Padding="16,10" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource DividerBrush}">
+                    <TextBlock FontSize="10.5" Foreground="{StaticResource TextDimBrush}" TextWrapping="Wrap"
+                               Text="ET never remaps for you: there is no ESI endpoint for it. It advises; you do it in game."/>
+                </Border>
+                <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel>
+                        <Border Padding="16,14,16,10" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource DividerBrush}">
+                            <StackPanel>
+                                <TextBlock FontSize="16" FontWeight="SemiBold" Foreground="{StaticResource TextBrightBrush}"
+                                           Text="How this is computed"/>
+                                <TextBlock FontSize="11" Margin="0,3,0,0" Text="the same formula as the queue tab, SkillPointMath"/>
+                            </StackPanel>
+                        </Border>
+                        <Border Classes="dsec">
+                            <StackPanel>
+                                <TextBlock Classes="dl" Text="TRAINING TIME"/>
+                                <TextBlock Classes="dp" Text="SP per level = 250 × rank × √32^(level−1) (rank from the SDE, 275).&#x0a;SP/min = primary + secondary ÷ 2 (the attributes from the SDE, 180/181). Alpha: half."/>
+                            </StackPanel>
+                        </Border>
+                        <Border Classes="dsec">
+                            <StackPanel>
+                                <TextBlock Classes="dl" Text="ATTRIBUTES"/>
+                                <TextBlock Classes="dp">
+                                    <Run Text="ESI's /attributes/ values "/><Run FontWeight="Bold" Text="already include"/><Run Text=" the implants: base = ESI − implant bonus. A remap sets the base: 17–27 each, 14 spare points, 99 in total."/>
+                                </TextBlock>
+                            </StackPanel>
+                        </Border>
+                        <Border Classes="dsec">
+                            <StackPanel>
+                                <TextBlock Classes="dl" Text="REMAP"/>
+                                <TextBlock Classes="dp" Text="All 2,885 legal splits are tried against the rows (the queue, or the plan up to the next remap point), with the implants kept, and the fastest wins. EVEMon does the same (AttributesOptimizer, brute force)."/>
+                            </StackPanel>
+                        </Border>
+                        <Border Classes="dsec">
+                            <StackPanel>
+                                <TextBlock Classes="dl" Text="BOOSTERS"/>
+                                <TextBlock Classes="dp" Text="A cerebral accelerator adds the same number to all five attributes for a while. It is not in ESI's implant list, so ET cannot see one; a what-if can add it."/>
+                            </StackPanel>
+                        </Border>
+                        <Border Classes="dsec">
+                            <Button HorizontalAlignment="Left" Padding="10,3" FontSize="10.5" Content="WHAT IF…"
+                                    Command="{Binding OpenWhatIfCommand}"/>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </DockPanel>
+        </Border>
+    </Grid>
+
+    <UserControl.DataTemplates>
+        <DataTemplate x:DataType="vs:OptimiseRemapCardViewModel">
+            <Border Classes="ocard">
+                <StackPanel>
+                    <TextBlock Classes="clabel" Text="{Binding Title}"/>
+                    <Grid ColumnDefinitions="80,*" RowDefinitions="Auto,Auto,Auto" Margin="0,0,0,8">
+                        <ItemsControl Grid.Row="0" Grid.Column="1" ItemsSource="{Binding $parent[UserControl].((vs:SkillsOptimiseViewModel)DataContext).AttributeHeaders}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <UniformGrid Columns="5"/>
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="x:String">
+                                    <TextBlock Classes="th" Margin="0,2" Text="{Binding}"/>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <Border Grid.Row="1" Grid.Column="0" Classes="td">
+                            <TextBlock FontSize="11" Text="now"/>
+                        </Border>
+                        <ItemsControl Grid.Row="1" Grid.Column="1" ItemsSource="{Binding NowCells}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <UniformGrid Columns="5"/>
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vs:AttributeCellViewModel">
+                                    <Border Classes="td">
+                                        <TextBlock Classes="cell" Text="{Binding Text}"/>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <Border Grid.Row="2" Grid.Column="0" Classes="td">
+                            <TextBlock FontSize="11" Text="remap to"/>
+                        </Border>
+                        <ItemsControl Grid.Row="2" Grid.Column="1" ItemsSource="{Binding RemapCells}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <UniformGrid Columns="5"/>
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vs:AttributeCellViewModel">
+                                    <Border Classes="td" Classes.up="{Binding IsUp}">
+                                        <TextBlock Classes="cell" Classes.up="{Binding IsUp}" Classes.down="{Binding IsDown}" Text="{Binding Text}"/>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
                     </Grid>
-                </Border>
-
-                <Border Classes="osection">
-                    <StackPanel Spacing="2">
-                        <TextBlock Classes="ostatlabel" Text="NEXT REMAP"/>
-                        <TextBlock Classes="ostatvalue" Text="{Binding NextRemapText}"/>
-                    </StackPanel>
-                </Border>
-
-                <Border Classes="osection">
-                    <StackPanel Spacing="6">
-                        <TextBlock Classes="ostatlabel" Text="IMPLANTS"/>
-                        <ItemsControl ItemsSource="{Binding Implants}">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate x:DataType="vs:ImplantAttributeRowViewModel">
-                                    <Grid ColumnDefinitions="140,*" Margin="0,2">
-                                        <TextBlock Grid.Column="0" Classes="hint" Text="{Binding AttributeName}"/>
-                                        <TextBlock Grid.Column="1" FontSize="11.5" Text="{Binding BonusText}"/>
-                                    </Grid>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                    </StackPanel>
-                </Border>
-
-                <Border Classes="osection" BorderThickness="0">
-                    <StackPanel Spacing="6">
-                        <TextBlock Classes="ostatlabel" Text="TIME PER ATTRIBUTE PAIR"/>
-                        <ItemsControl ItemsSource="{Binding TimePerAttributePair}">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate x:DataType="vs:AttributePairTimeRowViewModel">
-                                    <Grid ColumnDefinitions="200,*" Margin="0,2">
-                                        <TextBlock Grid.Column="0" Classes="hint" Text="{Binding AttributePairText}"/>
-                                        <TextBlock Grid.Column="1" FontSize="11.5" Text="{Binding TimeText}"/>
-                                    </Grid>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                    </StackPanel>
-                </Border>
-            </StackPanel>
-        </StackPanel>
-    </ScrollViewer>
+                    <Grid ColumnDefinitions="*,Auto" Margin="0,3">
+                        <TextBlock Classes="kvk" Text="{Binding NowLabel}"/>
+                        <TextBlock Grid.Column="1" Classes="kvv" Text="{Binding NowText}"/>
+                    </Grid>
+                    <Grid ColumnDefinitions="*,Auto" Margin="0,3">
+                        <TextBlock Classes="kvk" Text="after this remap"/>
+                        <TextBlock Grid.Column="1" Classes="kvv ac" Text="{Binding AfterText}"/>
+                    </Grid>
+                    <!-- A small gain reads quieter than a real one, as in the mockup. -->
+                    <TextBlock Margin="0,8,0,0" FontSize="13" IsVisible="{Binding !IsSmallGain}">
+                        <Run Text="saves "/><Run FontFamily="{StaticResource MonoFont}" FontWeight="SemiBold" FontSize="18"
+                             Foreground="{StaticResource GreenBrush}" Text="{Binding SavesText}"/><Run Text=" "/><Run Text="{Binding SavesPercentText}"/>
+                    </TextBlock>
+                    <TextBlock Margin="0,8,0,0" FontSize="13" IsVisible="{Binding IsSmallGain}">
+                        <Run Text="saves "/><Run FontFamily="{StaticResource MonoFont}" FontWeight="SemiBold" FontSize="14"
+                             Foreground="{DynamicResource AccentBrightBrush}" Text="{Binding SavesText}"/><Run Text=" "/><Run Text="{Binding SavesPercentText}"/>
+                    </TextBlock>
+                    <TextBlock Classes="ohint" Text="{Binding Explanation}"/>
+                </StackPanel>
+            </Border>
+        </DataTemplate>
+    </UserControl.DataTemplates>
 </UserControl>

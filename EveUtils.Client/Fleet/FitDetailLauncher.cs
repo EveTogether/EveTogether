@@ -5,6 +5,7 @@ using EveUtils.Client.Dialogs;
 using EveUtils.Client.Imaging;
 using EveUtils.Client.Notifications;
 using EveUtils.Client.ViewModels.FitBrowser;
+using EveUtils.Client.ViewModels.Skills;
 using EveUtils.Shared.Modules.Dogma;
 using EveUtils.Shared.Modules.Fittings.Dtos;
 using EveUtils.Shared.Modules.Market.Repositories;
@@ -50,7 +51,8 @@ public static class FitDetailLauncher
             toasts: services.GetService<IToastService>(),
             name: name,
             calculator: services.GetService<IDogmaCalculator>(),   // ET-356: SKILL IMPACT… scan engine
-            onShowSkillImpact: dialogs.ShowSkillImpact);            // ET-356: SKILL IMPACT… entry point
+            onShowSkillImpact: (characterId, impact) =>             // ET-356/D1: SKILL IMPACT… opens SKILLS → PLANS
+                SkillsLauncher.OpenFromFitAsync(services, dialogs, characterId, impact));
 
         await viewModel.InitializeAsync();
         dialogs.ShowFitDetail(viewModel);

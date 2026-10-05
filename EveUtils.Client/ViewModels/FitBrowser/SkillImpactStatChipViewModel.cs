@@ -1,4 +1,7 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
+using CommunityToolkit.Mvvm.Input;
 using EveUtils.Shared.Modules.Skills;
 
 namespace EveUtils.Client.ViewModels.FitBrowser;
@@ -10,22 +13,38 @@ namespace EveUtils.Client.ViewModels.FitBrowser;
 /// </summary>
 public sealed class SkillImpactStatChipViewModel : ViewModelBase
 {
-    // Unselected by default: "OPTIMISE FOR" starts empty so the impact list only ranks what the pilot actually
-    // asked about, rather than an unfiltered dump of every stat the scan happened to find a mover for.
+    // Unselected by default; after the scan the owner selects the fit's own kind (weapons → DPS) when nothing is
+    // chosen yet, so the screen never opens empty.
     private bool _isSelected;
+    private bool _isMatch = true;
     private bool _isAvailable = true;
     private string? _unavailableReason;
 
-    public SkillImpactStatChipViewModel(SkillImpactStat stat, string group, string label)
+    public SkillImpactStatChipViewModel(SkillImpactStats.Meta meta)
     {
-        Stat = stat;
-        Group = group;
-        Label = label;
+        Stat = meta.Stat;
+        Group = meta.Group;
+        Label = meta.Label;
+        MenuLabel = meta.MenuLabel;
+        RuleName = meta.RuleName;
+        RemoveCommand = new RelayCommand(() => IsSelected = false);
     }
 
     public SkillImpactStat Stat { get; }
     public string Group { get; }
     public string Label { get; }
+    public string MenuLabel { get; }
+    public string RuleName { get; }
+
+    /// <summary>The × on an OPTIMISE FOR chip.</summary>
+    public IRelayCommand RemoveCommand { get; }
+
+    /// <summary>False while the stat menu's filter text matches neither label.</summary>
+    public bool IsMatch
+    {
+        get => _isMatch;
+        set => SetProperty(ref _isMatch, value);
+    }
 
     /// <summary>Raised after a toggle actually changes the selection, so the owner recomputes the impact list without
     /// rescanning — the scan's result is cached and only the ranking/filter is redone.</summary>
@@ -67,4 +86,14 @@ public sealed class SkillImpactStatChipViewModel : ViewModelBase
         UnavailableReason = reason;
         IsSelected = false;
     }
+}
+
+/// <summary>One fit-detail section in the "+ stat" menu (OFFENSE, TANK, …), hidden while the filter matches none of it.</summary>
+public sealed class SkillImpactStatGroupViewModel(string name, IReadOnlyList<SkillImpactStatChipViewModel> chips) : ViewModelBase
+{
+    public string Name { get; } = name;
+    public IReadOnlyList<SkillImpactStatChipViewModel> Chips { get; } = chips;
+    public bool IsVisible => Chips.Any(chip => chip.IsMatch);
+
+    public void Refresh() => OnPropertyChanged(nameof(IsVisible));
 }

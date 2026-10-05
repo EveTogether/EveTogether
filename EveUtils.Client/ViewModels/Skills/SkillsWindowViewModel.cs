@@ -7,6 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using EveUtils.Client.Dialogs;
+using EveUtils.Client.Controls.Map;
 using EveUtils.Client.Imaging;
 using EveUtils.Client.Skills;
 using EveUtils.Client.Skills.Plans;
@@ -18,6 +19,7 @@ using EveUtils.Shared.Modules.Settings.Repositories;
 using EveUtils.Shared.Modules.Skills.Entities;
 using EveUtils.Shared.Modules.Skills.Events;
 using EveUtils.Shared.Modules.Skills.Plans.Events;
+using EveUtils.Shared.Modules.Skills.Plans.Repositories;
 using EveUtils.Shared.Modules.Skills.Repositories;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -37,6 +39,12 @@ public sealed partial class SkillsWindowViewModel : ObservableObject, IRefreshab
     /// PLANS, OPTIMISE — used by the TRAINING QUEUE REMAP line's "OPTIMISE ›" jump.</summary>
     public const int OptimiseTabIndex = 3;
 
+    /// <summary>The PLANS tab's index — OPTIMISE's WHAT IF… lands there, where the what-if lives (ET-358).</summary>
+    public const int PlansTabIndex = 2;
+
+    /// <summary>The TRAINING QUEUE tab's index — CATALOGUE's SHOW IN QUEUE lands there.</summary>
+    public const int QueueTabIndex = 1;
+
     private readonly IServiceProvider _services;
     private readonly ICharacterRegistry _registry;
     private readonly ICharacterSkillRepository _skillRepository;
@@ -50,6 +58,7 @@ public sealed partial class SkillsWindowViewModel : ObservableObject, IRefreshab
     private readonly ILogger<SkillsWindowViewModel>? _logger;
     private readonly SkillPlansChangeFeed? _plansFeed;
     private readonly SkillsChangeFeed? _skillsFeed;
+    private readonly ISkillPlanReader? _planReader;
     private readonly int? _startingCharacterId;
     private IDisposable? _plansFeedSubscription;
     private IDisposable? _skillsFeedSubscription;
@@ -57,6 +66,8 @@ public sealed partial class SkillsWindowViewModel : ObservableObject, IRefreshab
     private IReadOnlyList<Character> _characters = [];
     private bool _suppressSelectionApply; // set while _SelectCharacterAsync syncs SelectedCharacterOption back onto itself
     private int _selectionVersion; // bumped on every _SelectCharacterAsync call; a stale call discards its result on completion
+    private (int CharacterId, int PlanId)? _pendingPlan; // COMP's ADD TO PLAN… / WHAT IF…: land on this plan once loaded
+    private (int CharacterId, FitBrowser.SkillImpactViewModel Impact)? _pendingFromFit; // the fit detail's SKILL IMPACT…
 
     [ObservableProperty] private int? _selectedCharacterId;
     [ObservableProperty] private string _selectedCharacterName = "";
@@ -69,6 +80,11 @@ public sealed partial class SkillsWindowViewModel : ObservableObject, IRefreshab
     [ObservableProperty] private SkillsPlansViewModel? _plans;
     [ObservableProperty] private SkillsOptimiseViewModel? _optimise;
     [ObservableProperty] private bool _isLoading;
+    [ObservableProperty] private string _catalogueCountText = "";
+    [ObservableProperty] private string _queueCountText = "";
+    [ObservableProperty] private string _plansCountText = "";
+    [ObservableProperty] private string _refreshedText = "skills not imported yet";
+    [ObservableProperty] private bool _isRefreshRecent;
     [ObservableProperty] private string? _statusMessage;
 
     /// <summary>Every character, for the header ComboBox — the ET-184 row (hex, name, "SP · queue", radio).</summary>
@@ -105,6 +121,7 @@ public sealed partial class SkillsWindowViewModel : ObservableObject, IRefreshab
         _logger = services.GetService<ILogger<SkillsWindowViewModel>>();
         _plansFeed = services.GetService<SkillPlansChangeFeed>();
         _skillsFeed = services.GetService<SkillsChangeFeed>();
+        _planReader = services.GetService<ISkillPlanReader>();
         _startingCharacterId = startingCharacterId;
         _plansFeedSubscription = _plansFeed?.Subscribe(_OnPlansChangedAsync);
         _skillsFeedSubscription = _skillsFeed?.Subscribe(_OnSkillsChangedAsync);
@@ -118,14 +135,15 @@ public sealed partial class SkillsWindowViewModel : ObservableObject, IRefreshab
 
     // A plan changed on this or another window — reload PLANS only when it is about the character showing right now;
     // a change for a different character updates that character's tab next time it is selected instead (LoadAsync).
-    private Task _OnPlansChangedAsync(IReadOnlyList<SkillPlansChangedEvent> events)
+    // OPTIMISE FOR lists the plans too, so it is rebuilt alongside.
+    private async Task _OnPlansChangedAsync(IReadOnlyList<SkillPlansChangedEvent> events)
     {
-        if (Plans is not null && events.Any(e => e.Data.CharacterId == SelectedCharacterId))
+        if (Plans is not null && SelectedCharacterId is { } current && events.Any(e => e.Data.CharacterId == current))
         {
-            return Plans.LoadAsync();
+            await Plans.LoadAsync();
+            await _RebuildQueueAndOptimiseAsync(current);
+            _ApplyTabCounts();
         }
-
-        return Task.CompletedTask;
     }
 
     // A background skill import landed for the character shown: rebuild TRAINING QUEUE, OPTIMISE and the header SP text
@@ -138,19 +156,25 @@ public sealed partial class SkillsWindowViewModel : ObservableObject, IRefreshab
             return;
         }
 
+        await _RebuildQueueAndOptimiseAsync(current);
+    }
+
+    private async Task _RebuildQueueAndOptimiseAsync(int current)
+    {
         var snapshot = await _BuildSnapshotAsync(current, CancellationToken.None);
+        var plans = await _LoadOptimisePlansAsync(current, CancellationToken.None);
         var (queue, optimise) = await Task.Run(() =>
-            (new SkillsQueueViewModel(snapshot), new SkillsOptimiseViewModel(snapshot, _dogma)));
+            (new SkillsQueueViewModel(snapshot), new SkillsOptimiseViewModel(snapshot, _dogma, plans)));
         if (SelectedCharacterId != current)
         {
             return; // the pilot switched characters while this reload was in flight — the new selection covers it
         }
 
-        queue.GoToOptimise = () => SelectedTabIndex = OptimiseTabIndex;
-        queue.RemapLineText = optimise.RemapLineText;
+        _WireTabs(queue, optimise);
         Queue = queue;
         Optimise = optimise;
         _ApplyTotalSp(snapshot);
+        _ApplyTabCounts();
     }
 
     public async Task LoadAsync(CancellationToken cancellationToken = default)
@@ -192,6 +216,14 @@ public sealed partial class SkillsWindowViewModel : ObservableObject, IRefreshab
     /// <summary>Switches to a character on an already-open instance (ET-16 AC2) — the module-reuse counterpart to
     /// the constructor's <c>startingCharacterId</c>, which only applies on a fresh open.</summary>
     public Task GoToCharacterAsync(int characterId) => _SelectCharacterAsync(characterId, CancellationToken.None);
+
+    /// <summary>Opens on <paramref name="characterId"/>'s PLANS tab with <paramref name="planId"/> selected, on the next
+    /// load of that character (a fresh open), or right away through <see cref="GoToCharacterAsync"/> when already open.</summary>
+    public void OpenOnPlan(int characterId, int planId) => _pendingPlan = (characterId, planId);
+
+    /// <summary>Opens on <paramref name="characterId"/>'s PLANS tab showing From a fit for <paramref name="impact"/>
+    /// (decision D1: the fit detail's SKILL IMPACT… lands in SKILLS, not in a window of its own).</summary>
+    public void OpenOnFromFit(int characterId, FitBrowser.SkillImpactViewModel impact) => _pendingFromFit = (characterId, impact);
 
     partial void OnCharacterSearchTextChanged(string value)
     {
@@ -290,15 +322,29 @@ public sealed partial class SkillsWindowViewModel : ObservableObject, IRefreshab
             }
 
             var snapshot = await _BuildSnapshotAsync(characterId, cancellationToken);
+            var optimisePlans = await _LoadOptimisePlansAsync(characterId, cancellationToken);
             // The SDE/dogma reads inside these view-models are synchronous SQLite queries — off the UI thread, the
             // same rule RunsOverviewViewModel and KillmailsOverviewViewModel hold themselves to for their own reads.
             var (catalogue, queue, optimise) = await Task.Run(() =>
                 (new SkillsCatalogueViewModel(snapshot), new SkillsQueueViewModel(snapshot),
-                 new SkillsOptimiseViewModel(snapshot, _dogma)), cancellationToken);
-            queue.GoToOptimise = () => SelectedTabIndex = OptimiseTabIndex;
-            queue.RemapLineText = optimise.RemapLineText;
+                 new SkillsOptimiseViewModel(snapshot, _dogma, optimisePlans)), cancellationToken);
+            _WireTabs(queue, optimise);
+            catalogue.ShowInQueue = skillTypeId =>
+            {
+                SelectedTabIndex = QueueTabIndex;
+                Queue?.SelectSkill(skillTypeId);
+            };
             var plans = new SkillsPlansViewModel(_services, snapshot, characterId, character.Name);
             await plans.LoadAsync(cancellationToken);
+            if (_pendingPlan is { } pending && pending.CharacterId == characterId)
+            {
+                plans.SelectedPlan = plans.Plans.FirstOrDefault(plan => plan.Id == pending.PlanId) ?? plans.SelectedPlan;
+            }
+
+            if (_pendingFromFit is { } fromFit && fromFit.CharacterId == characterId)
+            {
+                plans.ShowFromFit(fromFit.Impact);
+            }
 
             if (version != _selectionVersion)
             {
@@ -323,7 +369,19 @@ public sealed partial class SkillsWindowViewModel : ObservableObject, IRefreshab
             Queue = queue;
             Plans = plans;
             Optimise = optimise;
+            _ApplyTabCounts();
             StatusMessage = null;
+            if (_pendingPlan is { } landed && landed.CharacterId == characterId)
+            {
+                _pendingPlan = null;
+                SelectedTabIndex = PlansTabIndex;
+            }
+
+            if (_pendingFromFit is { } shownFromFit && shownFromFit.CharacterId == characterId)
+            {
+                _pendingFromFit = null;
+                SelectedTabIndex = PlansTabIndex;
+            }
 
             if (_settings is not null)
             {
@@ -344,6 +402,38 @@ public sealed partial class SkillsWindowViewModel : ObservableObject, IRefreshab
         }
     }
 
+    private void _WireTabs(SkillsQueueViewModel queue, SkillsOptimiseViewModel optimise)
+    {
+        queue.GoToOptimise = () => SelectedTabIndex = OptimiseTabIndex;
+        queue.RemapLineText = optimise.RemapLineText;
+        optimise.GoToWhatIf = () => SelectedTabIndex = PlansTabIndex;
+    }
+
+    // OPTIMISE FOR offers each of the character's plans next to the queue; a plan's rows are read once here.
+    private async Task<IReadOnlyList<OptimisePlanInput>> _LoadOptimisePlansAsync(int characterId, CancellationToken cancellationToken)
+    {
+        if (_planReader is null)
+        {
+            return [];
+        }
+
+        var result = new List<OptimisePlanInput>();
+        foreach (var plan in await _planReader.GetForCharacterAsync(characterId, cancellationToken))
+        {
+            result.Add(new OptimisePlanInput(plan.Name, await _planReader.GetRowsAsync(plan.Id, cancellationToken)));
+        }
+
+        return result;
+    }
+
+    // The tab strip's counters (mockup v5): skills injected, queue entries against the 150 cap, and plans.
+    private void _ApplyTabCounts()
+    {
+        CatalogueCountText = Catalogue is { } catalogue ? catalogue.InjectedSkillCount.ToString(CultureInfo.InvariantCulture) : "";
+        QueueCountText = Queue?.SkillCountText.Replace(" ", "") ?? "";
+        PlansCountText = Plans is { } plans ? plans.Plans.Count.ToString(CultureInfo.InvariantCulture) : "";
+    }
+
     // AC6: straight from ESI total_sp/unallocated_sp — never a sum over trained levels. Null only when this
     // character's skills have never been imported — a clear placeholder rather than a blank header.
     private void _ApplyTotalSp(SkillsCharacterSnapshot snapshot)
@@ -351,12 +441,18 @@ public sealed partial class SkillsWindowViewModel : ObservableObject, IRefreshab
         if (snapshot.Attributes is { } attrs)
         {
             TotalSpText = $"{attrs.TotalSp.ToString("N0", CultureInfo.InvariantCulture)} Total Skill Points";
+            RefreshedText = attrs.SkillsRefreshedAt is { } refreshed
+                ? $"skills refreshed {MapFleetBadge.Ago(snapshot.Now - refreshed)}"
+                : "skills refresh time unknown";
+            IsRefreshRecent = attrs.SkillsRefreshedAt is { } at && snapshot.Now - at < TimeSpan.FromMinutes(15);
             UnallocatedSpText = $"{attrs.UnallocatedSp.ToString("N0", CultureInfo.InvariantCulture)} unallocated skill points";
         }
         else
         {
             TotalSpText = "Total Skill Points not imported yet";
             UnallocatedSpText = "";
+            RefreshedText = "skills not imported yet";
+            IsRefreshRecent = false;
         }
     }
 
@@ -368,6 +464,7 @@ public sealed partial class SkillsWindowViewModel : ObservableObject, IRefreshab
         IReadOnlyList<int> implantTypeIds = _implantRepository is null
             ? []
             : await _implantRepository.GetTypeIdsAsync(characterId, cancellationToken);
-        return new SkillsCharacterSnapshot(_sde, levels, queue, attributes, DateTimeOffset.UtcNow, implantTypeIds);
+        string implantNote = _dogma is null ? "" : ImplantSlotReading.Read(implantTypeIds, _dogma).Note;
+        return new SkillsCharacterSnapshot(_sde, levels, queue, attributes, DateTimeOffset.UtcNow, implantTypeIds, implantNote);
     }
 }

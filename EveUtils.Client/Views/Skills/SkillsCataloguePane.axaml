@@ -8,129 +8,144 @@
              x:Class="EveUtils.Client.Views.Skills.SkillsCataloguePane"
              x:DataType="vs:SkillsCatalogueViewModel">
 
+    <!-- CATALOGUE (ET-16), laid out as mockup v5 screen a: filter and search, the 3 × 8 block of groups (a bar for the
+         share of levels trained), the picked group's skills in two columns, and the shared 400 px detail pane. -->
     <UserControl.Styles>
-        <!-- One tile: name left, injected/total right, the accent edge while selected — same shape as RUNS' own
-             filter tiles (Border.tileaccent), so a "pick one of these" grid reads the same everywhere in the app. -->
-        <Style Selector="ListBox.grouplist">
+        <Style Selector="ListBox.tiles, ListBox.skilllist">
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="BorderThickness" Value="0"/>
-        </Style>
-        <Style Selector="ListBox.grouplist ListBoxItem">
             <Setter Property="Padding" Value="0"/>
-            <Setter Property="Margin" Value="0,0,10,6"/>
         </Style>
-        <Style Selector="ListBox.grouplist ListBoxItem:selected /template/ ContentPresenter">
-            <Setter Property="Background" Value="Transparent"/>
-        </Style>
-        <Style Selector="Border.grouptile">
-            <Setter Property="Background" Value="{StaticResource BgRowBrush}"/>
-            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="Padding" Value="10,7"/>
-        </Style>
-        <Style Selector="Border.grouptile.selected">
-            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
-            <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
-        </Style>
-        <Style Selector="TextBlock.groupcount">
-            <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
-            <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
-            <Setter Property="FontSize" Value="11"/>
-        </Style>
-
-        <Style Selector="ListBox.skilllist">
-            <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="BorderThickness" Value="0"/>
-        </Style>
-        <Style Selector="ListBox.skilllist ListBoxItem">
+        <Style Selector="ListBox.tiles ListBoxItem, ListBox.skilllist ListBoxItem">
             <Setter Property="Padding" Value="0"/>
+            <Setter Property="MinHeight" Value="0"/>
             <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
         </Style>
-        <Style Selector="ListBox.skilllist ListBoxItem:selected /template/ ContentPresenter">
+        <Style Selector="ListBox.tiles ListBoxItem:selected /template/ ContentPresenter, ListBox.skilllist ListBoxItem:selected /template/ ContentPresenter">
             <Setter Property="Background" Value="Transparent"/>
         </Style>
+        <Style Selector="Border.tile">
+            <Setter Property="Margin" Value="0,0,6,4"/>
+            <Setter Property="Height" Value="22"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="Background" Value="#0DFFFFFF"/>
+        </Style>
+        <Style Selector="Border.tile.selected">
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+        </Style>
+        <Style Selector="Border.tile:pointerover">
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}"/>
+        </Style>
+        <Style Selector="Border.tile.empty TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+        </Style>
         <Style Selector="Border.skillrow">
-            <Setter Property="Padding" Value="8,5"/>
+            <Setter Property="Height" Value="28"/>
+            <Setter Property="Padding" Value="6,0"/>
+            <Setter Property="Margin" Value="0,0,12,0"/>
             <Setter Property="BorderThickness" Value="0,0,0,1"/>
             <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}"/>
+            <Setter Property="Background" Value="Transparent"/>
         </Style>
         <Style Selector="Border.skillrow.selected">
-            <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
+            <Setter Property="Background" Value="{DynamicResource BgRowSelectedBrush}"/>
         </Style>
         <Style Selector="Border.skillrow:pointerover">
             <Setter Property="Background" Value="{DynamicResource BgRowHoverBrush}"/>
         </Style>
-        <Style Selector="TextBlock.pips">
-            <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
-            <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
-            <Setter Property="FontSize" Value="11"/>
+        <Style Selector="Border.queuechip">
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="5,0"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
         </Style>
-        <Style Selector="TextBlock.skillstatus">
-            <Setter Property="FontSize" Value="10.5"/>
-            <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
-            <Setter Property="TextAlignment" Value="Right"/>
-            <Setter Property="VerticalAlignment" Value="Center"/>
+        <Style Selector="Border.queuechip > TextBlock">
+            <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+            <Setter Property="FontSize" Value="9.5"/>
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
         </Style>
     </UserControl.Styles>
 
     <Grid ColumnDefinitions="*,400">
-        <Grid Grid.Column="0" RowDefinitions="Auto,*">
-            <!-- Groups (ET-16: GetGroupsByCategory(16)) -->
-            <Border Grid.Row="0" Padding="14,10" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource BorderBrush}"
-                    MaxHeight="220">
-                <DockPanel>
-                    <TextBlock DockPanel.Dock="Top" Classes="hint" Margin="0,0,0,8" Text="{Binding SummaryText}"/>
-                    <ScrollViewer HorizontalScrollBarVisibility="Disabled">
-                        <ListBox Classes="grouplist" ItemsSource="{Binding Groups}"
-                                 SelectedItem="{Binding SelectedGroup, Mode=TwoWay}">
-                            <ListBox.ItemsPanel>
-                                <ItemsPanelTemplate><WrapPanel Orientation="Horizontal"/></ItemsPanelTemplate>
-                            </ListBox.ItemsPanel>
-                            <ListBox.ItemTemplate>
-                                <DataTemplate x:DataType="vs:SkillGroupTileViewModel">
-                                    <Border Classes="grouptile" Classes.selected="{Binding IsSelected}" Width="240">
-                                        <Grid ColumnDefinitions="*,Auto">
-                                            <TextBlock Grid.Column="0" FontSize="11.5" TextTrimming="CharacterEllipsis"
-                                                       Foreground="{StaticResource TextBrightBrush}" Text="{Binding Name}"/>
-                                            <TextBlock Grid.Column="1" Classes="groupcount" Margin="8,0,0,0" Text="{Binding CountText}"/>
-                                        </Grid>
-                                    </Border>
-                                </DataTemplate>
-                            </ListBox.ItemTemplate>
-                        </ListBox>
-                    </ScrollViewer>
-                </DockPanel>
+        <DockPanel Grid.Column="0">
+            <!-- Filter + search + totals. -->
+            <Grid DockPanel.Dock="Top" ColumnDefinitions="150,260,*" ColumnSpacing="8" Margin="14,10,14,8">
+                <ComboBox Grid.Column="0" FontSize="11" HorizontalAlignment="Stretch" ItemsSource="{Binding FilterOptions}"
+                          SelectedItem="{Binding SelectedFilter, Mode=TwoWay}"/>
+                <TextBox Grid.Column="1" FontSize="11" PlaceholderText="⌕ Search all skills" Text="{Binding SearchText, Mode=TwoWay}"/>
+                <TextBlock Grid.Column="2" FontSize="11" HorizontalAlignment="Right" VerticalAlignment="Center" Text="{Binding SummaryText}"/>
+            </Grid>
+
+            <!-- Every group, 3 columns, no scroll of its own. -->
+            <Border DockPanel.Dock="Top" Padding="14,0,8,8" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource DividerBrush}">
+                <ListBox Classes="tiles" ItemsSource="{Binding Groups}" SelectedItem="{Binding SelectedGroup, Mode=TwoWay}"
+                         ScrollViewer.VerticalScrollBarVisibility="Disabled">
+                    <ListBox.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <UniformGrid Columns="3"/>
+                        </ItemsPanelTemplate>
+                    </ListBox.ItemsPanel>
+                    <ListBox.ItemTemplate>
+                        <DataTemplate x:DataType="vs:SkillGroupTileViewModel">
+                            <Border Classes="tile" Classes.selected="{Binding IsSelected}" Classes.empty="{Binding IsEmpty}">
+                                <Panel>
+                                    <ProgressBar Minimum="0" Maximum="1" Value="{Binding TrainedShare}" Height="20" MinHeight="0"
+                                                 CornerRadius="0" Background="Transparent" Foreground="{DynamicResource AccentBrush}"
+                                                 Opacity="0.35" VerticalAlignment="Stretch"/>
+                                    <Grid ColumnDefinitions="*,Auto" Margin="6,0" VerticalAlignment="Center">
+                                        <TextBlock Grid.Column="0" FontSize="11" Foreground="{StaticResource TextBrightBrush}"
+                                                   TextTrimming="CharacterEllipsis" Text="{Binding Name}"/>
+                                        <TextBlock Grid.Column="1" FontFamily="{StaticResource MonoFont}" FontSize="10"
+                                                   Foreground="{StaticResource TextBrush}" Text="{Binding CountText}"/>
+                                    </Grid>
+                                </Panel>
+                            </Border>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
             </Border>
 
-            <!-- Skills in the selected group -->
-            <Border Grid.Row="1" Padding="14,10">
-                <DockPanel>
-                    <TextBlock DockPanel.Dock="Top" Classes="panel-title" FontSize="12" Margin="0,0,0,8"
-                               Text="{Binding SelectedGroup.Name}"/>
-                    <ScrollViewer HorizontalScrollBarVisibility="Disabled">
-                        <ListBox Classes="skilllist" ItemsSource="{Binding Skills}"
-                                 SelectedItem="{Binding SelectedSkillRow, Mode=TwoWay}">
-                            <ListBox.ItemTemplate>
-                                <DataTemplate x:DataType="vs:SkillRowViewModel">
-                                    <Border Classes="skillrow" Classes.selected="{Binding IsSelected}">
-                                        <Grid ColumnDefinitions="70,*,Auto" ColumnSpacing="8">
-                                            <TextBlock Grid.Column="0" Classes="pips" Text="{Binding PipsText}"/>
-                                            <TextBlock Grid.Column="1" FontSize="11.5" TextTrimming="CharacterEllipsis"
-                                                       Foreground="{StaticResource TextBrush}" Text="{Binding Name}"/>
-                                            <TextBlock Grid.Column="2" Classes="skillstatus" Text="{Binding StatusText}"/>
-                                        </Grid>
-                                    </Border>
-                                </DataTemplate>
-                            </ListBox.ItemTemplate>
-                        </ListBox>
-                    </ScrollViewer>
-                </DockPanel>
-            </Border>
-        </Grid>
+            <!-- The group's (or the search's) skills, two columns. -->
+            <TextBlock DockPanel.Dock="Top" Margin="14,10,14,6" FontSize="10.5">
+                <Run FontSize="10" LetterSpacing="1.8" Foreground="{DynamicResource TextAccentBrush}" Text="{Binding ListTitle}"/><Run Text="   "/><Run Text="{Binding ListSummary}"/>
+            </TextBlock>
+            <!-- The list scrolls itself, so the two-column grid keeps the mockup's 28 px rows instead of being stretched
+                 to fill the height. -->
+            <ListBox Classes="skilllist" Margin="14,0,2,8" ItemsSource="{Binding Skills}" SelectedItem="{Binding SelectedSkillRow, Mode=TwoWay}"
+                     ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                    <ListBox.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <UniformGrid Columns="2" VerticalAlignment="Top"/>
+                        </ItemsPanelTemplate>
+                    </ListBox.ItemsPanel>
+                    <ListBox.ItemTemplate>
+                        <DataTemplate x:DataType="vs:SkillRowViewModel">
+                            <Border Classes="skillrow" Classes.selected="{Binding IsSelected}" ToolTip.Tip="{Binding Description}">
+                                <Grid ColumnDefinitions="56,*,Auto" ColumnSpacing="8">
+                                    <sk:SkillPipsView Grid.Column="0" VerticalAlignment="Center" CurrentLevel="{Binding CurrentLevel}"
+                                                      QueuedLevel="{Binding QueuedLevel}" TrainingLevel="{Binding TrainingLevel}"
+                                                      IsInjected="{Binding IsInjected}"/>
+                                    <TextBlock Grid.Column="1" FontSize="11.5" Foreground="{StaticResource TextBrightBrush}"
+                                               VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Text="{Binding Name}"/>
+                                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                        <TextBlock FontSize="10.5" Foreground="{StaticResource TextDimBrush}" VerticalAlignment="Center"
+                                                   Text="{Binding StatusText}"/>
+                                        <Border Classes="queuechip" IsVisible="{Binding HasQueueChip}">
+                                            <TextBlock Text="{Binding QueueChipText}"/>
+                                        </Border>
+                                        <TextBlock FontFamily="{StaticResource MonoFont}" FontSize="10.5" VerticalAlignment="Center"
+                                                   Foreground="{DynamicResource AccentBrightBrush}" Text="{Binding TimeText}"/>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+            </ListBox>
+        </DockPanel>
 
-        <!-- The 400 px pane, beside the list — the RUNS window's own shape (ET-16). -->
-        <Border Grid.Column="1" BorderThickness="1,0,0,0" BorderBrush="{DynamicResource BorderBrush}">
+        <Border Grid.Column="1" BorderThickness="1,0,0,0" BorderBrush="{DynamicResource BorderBrush}"
+                Background="{StaticResource DrawerSurfaceBrush}">
             <Panel>
                 <TextBlock Classes="hint" Margin="14" TextWrapping="Wrap" HorizontalAlignment="Center"
                            VerticalAlignment="Center" Text="Pick a skill to see its detail."

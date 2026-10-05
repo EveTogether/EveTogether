@@ -22,7 +22,13 @@ internal sealed class AddSkillPlanRowsCommandHandler(ISkillPlanRepository reposi
         }).ToList();
 
         int added = await repository.AddRowsAsync(command.CharacterId, command.PlanId, rows, cancellationToken);
-        if (added == 0)
+        bool sourceSaved = command.SourceLabel is { } label && await repository.SaveSourceAsync(command.CharacterId, command.PlanId,
+            new SkillPlanSource
+            {
+                Source = command.Source, SourceRef = command.SourceRef, Label = label,
+                DroppedLevels = string.Join(',', (command.Dropped ?? []).Select(d => $"{d.SkillTypeId}:{d.Level}"))
+            }, cancellationToken);
+        if (added == 0 && !sourceSaved)
         {
             return Result<int>.Success(0); // every row already in the plan — a no-op write publishes no signal
         }

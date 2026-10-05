@@ -33,4 +33,8 @@ public sealed class CharacterAttributes
 
     /// <summary>Remap tokens banked ahead of the cooldown, from ESI <c>bonus_remaps</c>.</summary>
     public int? BonusRemaps { get; set; }
+
+    /// <summary>When this character's skills were last imported from ESI — the SKILLS header's "skills refreshed n min
+    /// ago" (mockup v5). Null for a row written before this field existed.</summary>
+    public DateTimeOffset? SkillsRefreshedAt { get; set; }
 }

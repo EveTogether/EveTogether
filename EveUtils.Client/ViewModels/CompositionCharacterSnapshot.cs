@@ -10,4 +10,5 @@ public sealed record CompositionCharacterSnapshot(
     bool HasQueueScope,
     IReadOnlyDictionary<int, int> Levels,
     CharacterAttributeSet? Attributes,
-    IReadOnlyList<CharacterSkillQueueEntry> Queue);
+    IReadOnlyList<CharacterSkillQueueEntry> Queue,
+    int CharacterId = 0);

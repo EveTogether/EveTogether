@@ -56,14 +56,8 @@ public sealed record SkillQueueStanding(
     public double BarFraction(DateTimeOffset now) =>
         QueueLeft(now) is { } left ? Math.Min(1, left / FullBar) : 0;
 
-    /// <summary>"56d 13h", or "3h 07m" under a day.</summary>
-    public static string Until(TimeSpan left)
-    {
-        int minutes = (int)Math.Round(left.TotalMinutes);
-        int days = minutes / 1440;
-        int hours = minutes % 1440 / 60;
-        return days > 0 ? $"{days}d {hours}h" : $"{hours}h {minutes % 60:00}m";
-    }
+    /// <summary>"56d 13h", "3h 7m" under a day, "53m" under an hour — the one SKILLS notation.</summary>
+    public static string Until(TimeSpan left) => EveUtils.Shared.Modules.Skills.EveDurationFormatter.Format(left);
 
     private static TimeSpan _NotNegative(TimeSpan span) => span < TimeSpan.Zero ? TimeSpan.Zero : span;
 }

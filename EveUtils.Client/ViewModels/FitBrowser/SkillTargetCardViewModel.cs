@@ -5,47 +5,69 @@ using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Input;
 using CommunityToolkit.Mvvm.Input;
+using EveUtils.Client.Skills;
+using EveUtils.Shared.Modules.Dogma;
 using EveUtils.Shared.Modules.Skills;
 
 namespace EveUtils.Client.ViewModels.FitBrowser;
 
-/// <summary>One stat's share on a target card — the gekozen stat's label and its 0-100% position between can fly and
-/// max (ET-357's <c>StatShare</c>, can-fly-to-max range).</summary>
-public sealed record SkillTargetStatShareViewModel(string Label, double Share)
+/// <summary>One chosen stat on a target card: its value at the card's levels and its 0-100% position between can fly
+/// and max (ET-357's <c>StatShare</c>).</summary>
+public sealed record SkillTargetStatShareViewModel(string Label, string ValueText, double Share)
 {
     public string PercentText => $"{Share * 100:0}%";
+    public bool IsFull => Share >= 0.999;
 }
 
+/// <summary>"✓ CPU fits · 23.4 tf free" / "✗ PG short 480 MW".</summary>
+public sealed record SkillTargetFitLineViewModel(string Text, bool Fits);
+
 /// <summary>
-/// One of the three SKILL IMPACT cards (ET-357): can fly, optimal ±III or max. Training time/date/SP/levels, the
-/// chosen stats' share of the can-fly-to-max range, the fit-check outcome, and ADD TO PLAN — wired only once a target
-/// plan is known (<see cref="SkillImpactViewModel"/>'s <c>addToPlan</c> delegate), disabled otherwise.
+/// One of the three SKILL IMPACT cards (ET-357, mockup v5 "f · from a fit"): can fly + fits, optimal ±III or max ·
+/// V, each with the rule that built it, the training time and finish date, the chosen stats with their value and
+/// share of what skills can add, the CPU/PG fit check, and ADD TO PLAN when a target plan is known.
 /// </summary>
 public sealed class SkillTargetCardViewModel
 {
-    public SkillTargetCardViewModel(SkillTargetGoal goal, IReadOnlyDictionary<SkillImpactStat, string> labels,
-        DateTimeOffset now, Func<Task>? addToPlan)
+    private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
+
+    public SkillTargetCardViewModel(SkillTargetGoal goal, IReadOnlyList<SkillImpactStatChipViewModel> chosen,
+        SkillTargetsResult result, ISdeNameResolver names, DateTimeOffset now, Func<Task>? addToPlan)
     {
-        Title = goal.Kind switch
+        string statList = SkillImpactStats.RuleList(chosen.Select(chip => chip.RuleName).ToList());
+        (Title, RuleText) = goal.Kind switch
         {
-            SkillTargetGoalKind.CanFly => "CAN FLY",
-            SkillTargetGoalKind.Optimal => "OPTIMAL ±III",
-            SkillTargetGoalKind.Max => "MAX",
-            _ => goal.Kind.ToString(),
+            SkillTargetGoalKind.CanFly => ("CAN FLY + FITS", result.FittingSkills.Count == 0
+                ? "the fit's requirements"
+                : "the fit's requirements, plus the fitting skills it needs to fit: " + string.Join(", ",
+                    result.FittingSkills.Select(level => $"{names.TypeName(level.SkillTypeId)} {RomanLevel.Text(level.Level)}"))),
+            SkillTargetGoalKind.Optimal => ("OPTIMAL · ±III", $"the skills that move {statList} at III or more; higher where the fit asks for it"),
+            _ => ("MAX · V", $"the skills that move {statList} at V"),
         };
-        LevelsText = $"{goal.Levels.Count} level{(goal.Levels.Count == 1 ? "" : "s")}";
-        SpText = $"{goal.SkillPoints.ToString("N0", CultureInfo.InvariantCulture)} SP";
-        TimeText = goal.TrainingTime <= TimeSpan.Zero
-            ? "already trained"
-            : $"{(int)goal.TrainingTime.TotalDays}d {goal.TrainingTime.Hours}h";
-        DateText = goal.TrainingTime <= TimeSpan.Zero ? "" : $"done {now.Add(goal.TrainingTime):ddd d MMM HH:mm}";
-        ScorePercentText = $"{goal.Score * 100:0}%";
-        StatShares = goal.StatShares
-            .Select(pair => new SkillTargetStatShareViewModel(labels.GetValueOrDefault(pair.Key, pair.Key.ToString()), pair.Value))
+        IsRecommended = goal.Kind == SkillTargetGoalKind.Optimal;
+
+        bool trained = goal.TrainingTime <= TimeSpan.Zero;
+        TimeText = trained ? "already trained" : EveDurationFormatter.Format(goal.TrainingTime);
+        var done = now.Add(goal.TrainingTime).ToLocalTime();
+        DonePrefix = trained ? "" : "done ";
+        DateText = trained ? "nothing to train" : done.ToString(done.Year == now.ToLocalTime().Year ? "ddd d MMM HH:mm" : "ddd d MMM yyyy HH:mm", Inv);
+        DetailText = $" · {goal.Levels.Count} level{(goal.Levels.Count == 1 ? "" : "s")} · {_Sp(goal.SkillPoints)} SP";
+
+        var afterCanFly = goal.TrainingTime - result.CanFly.TrainingTime;
+        AfterCanFlyText = goal.Kind == SkillTargetGoalKind.CanFly ? null
+            : afterCanFly > TimeSpan.Zero ? $"+{EveDurationFormatter.Format(afterCanFly)} after can fly" : "nothing after can fly";
+
+        StatShares = chosen
+            .Where(chip => goal.Values.ContainsKey(chip.Stat))
+            .Select(chip => new SkillTargetStatShareViewModel(chip.Label, SkillImpactStats.Value(chip.Stat, goal.Values[chip.Stat]),
+                goal.StatShares.GetValueOrDefault(chip.Stat)))
             .ToList();
 
-        Fits = goal.Fits;
-        FitCheckText = goal.Fits ? "Fits" : _ShortfallText(goal.Shortfalls);
+        FitLines =
+        [
+            _FitLine("CPU", SkillImpactStat.FreeCpu, goal.Values[SkillImpactStat.FreeCpu]),
+            _FitLine("PG", SkillImpactStat.FreePg, goal.Values[SkillImpactStat.FreePg]),
+        ];
 
         bool canAdd = addToPlan is not null && goal.Levels.Count > 0;
         CanAddToPlan = canAdd;
@@ -53,21 +75,23 @@ public sealed class SkillTargetCardViewModel
     }
 
     public string Title { get; }
-    public string LevelsText { get; }
-    public string SpText { get; }
+    public string RuleText { get; }
+    public bool IsRecommended { get; }
     public string TimeText { get; }
+    public string DonePrefix { get; }
     public string DateText { get; }
-    public string ScorePercentText { get; }
+    public string DetailText { get; }
+    public string? AfterCanFlyText { get; }
     public IReadOnlyList<SkillTargetStatShareViewModel> StatShares { get; }
-    public bool Fits { get; }
-    public string FitCheckText { get; }
+    public IReadOnlyList<SkillTargetFitLineViewModel> FitLines { get; }
     public bool CanAddToPlan { get; }
     public ICommand AddToPlanCommand { get; }
 
-    private static string _ShortfallText(IReadOnlyList<SkillTargetResourceShortfall> shortfalls)
-    {
-        string resources = string.Join(", ", shortfalls.Select(shortfall =>
-            $"{(shortfall.Resource == SkillImpactStat.FreeCpu ? "CPU" : "PG")} short {shortfall.Shortfall.ToString("0.#", CultureInfo.InvariantCulture)}"));
-        return $"This fit does not fit at any skill level ({resources})";
-    }
+    private static SkillTargetFitLineViewModel _FitLine(string name, SkillImpactStat stat, double free) => free >= 0
+        ? new($"✓ {name} fits · {SkillImpactStats.UnsignedAmount(stat, free)} free", true)
+        : new($"✗ {name} short {SkillImpactStats.UnsignedAmount(stat, free)}", false);
+
+    private static string _Sp(double sp) => sp >= 1_000_000 ? $"{(sp / 1_000_000).ToString("0.00", Inv)}M"
+        : sp >= 1_000 ? $"{(sp / 1_000).ToString("0", Inv)}k"
+        : sp.ToString("0", Inv);
 }
