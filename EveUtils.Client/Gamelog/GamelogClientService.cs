@@ -33,14 +33,9 @@ using EveUtils.Shared.DependencyInjection;
 namespace EveUtils.Client.Gamelog;
 
 /// <summary>
-/// Client-side bridge between combat events and the rest of the system. Owns one DPS tracker <b>per
-/// character</b> (keyed by the gamelog <c>Listener:</c> name, which every parsed line carries), persists each
-/// hit (RecordCombatCommand, owner-stamped, through the gated dispatcher) and delivers a live
-/// <see cref="CombatLoggedEvent"/> to <see cref="EventTarget.Local"/> per hit for the local UI. A steady sampler
-/// (<see cref="RemotePublishLoopAsync"/>) streams the same character's DPS to <see cref="EventTarget.Remote"/>
-/// separately, gated to a character that is an active participant of a server fleet right now — the same rule
-/// <see cref="Fleet.FleetMetricPublisher"/> follows, so solo play never reaches the server. Both the real gamelog
-/// watcher and the synthetic feeder drive <c>AddHitAsync</c>.
+/// Client-side bridge between combat events and the rest of the system: one DPS tracker <b>per character</b>, each
+/// hit persisted and delivered to <see cref="EventTarget.Local"/>. A separate sampler streams DPS to
+/// <see cref="EventTarget.Remote"/> only for an active server-fleet participant, so solo play never reaches the server.
 ///
 /// As the owner of the live DPS trackers it is also the fleet DPS <see cref="IFleetMetricSource"/>: the
 /// <see cref="Fleet.FleetMetricPublisher"/> samples it ~1 Hz, addressing the <b>participating character by id</b>.
@@ -464,15 +459,9 @@ public sealed class GamelogClientService : IFleetMetricSource, ISingletonService
         }
     }
 
-    /// <summary>
-    /// One tick of the remote sampler, extracted so a headless check can drive it deterministically (the same
-    /// pattern <see cref="Fleet.FleetMetricPublisher.PublishTickAsync"/> uses). Samples every active local tracker,
-    /// and publishes to <see cref="EventTarget.Remote"/> only for a character that is an active participant of a
-    /// server fleet right now — <see cref="IsActiveServerParticipant"/> follows the exact same gate
-    /// <see cref="Fleet.FleetMetricPublisher"/> already applies on the same <see cref="IFleetParticipation"/> source,
-    /// including its <see cref="FleetParticipant.ClientOnly"/> rule. A tracker with no known character id never
-    /// publishes remotely: there is nothing to match against participation.
-    /// </summary>
+    /// <summary>One tick of the remote sampler, separate so a test can drive it like
+    /// <see cref="Fleet.FleetMetricPublisher.PublishTickAsync"/>. Publishes only for a character with a known id that
+    /// is an active server-fleet participant, the same gate <see cref="Fleet.FleetMetricPublisher"/> applies.</summary>
     internal async Task PublishRemoteTickAsync(CancellationToken cancellationToken)
     {
         var participation = _services.GetService<IFleetParticipation>()?.Current ?? [];
@@ -480,12 +469,16 @@ public sealed class GamelogClientService : IFleetMetricSource, ISingletonService
         {
             var sample = Tracker(name).Sample(DateTime.UtcNow);
             if (sample.Dealt <= 0 && sample.Received <= 0)
+            {
                 continue;
+            }
 
             Metrics(name).ObservePeakDps(sample.Dealt);
             var id = _idByName.TryGetValue(name, out var cid) ? cid : (int?)null;
             if (id is not { } characterId || !IsActiveServerParticipant(participation, characterId))
+            {
                 continue;
+            }
 
             var dto = new DpsSampleDto(id, name, (long)sample.Dealt, (long)sample.Received, DateTimeOffset.UtcNow);
             await _eventBus.PublishAsync(new CombatLoggedEvent(dto, id), EventTarget.Remote, cancellationToken);
