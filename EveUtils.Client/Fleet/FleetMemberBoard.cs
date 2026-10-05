@@ -16,6 +16,7 @@ namespace EveUtils.Client.Fleet;
 public sealed record FleetMateStatus(
     int CharacterId,
     FleetMemberStatusReason Reason,
+    FleetMemberPresenceState Presence,
     string? System,
     SharedMetrics? Shares,
     bool? IsConnected,
@@ -70,14 +71,34 @@ public sealed class FleetMemberBoard : ISingletonService, IDisposable
             return [.. ids.Select(characterId =>
             {
                 FleetMemberInfo? member = roster.FirstOrDefault(entry => entry.CharacterId == characterId);
-                Heard heard = _heard.GetValueOrDefault((fleetId, characterId)) ?? Heard.Nothing;
-                FleetMemberPresenceState presence = FleetMemberPresence.Read(
-                    null, heard.Presence, FleetMemberPresence.IsSilent(heard.At, now));
-                return new FleetMateStatus(characterId,
-                    FleetMemberStatus.Read(member?.IsConnected, heard.At, presence, heard.Shares, heard.System, now),
-                    heard.System, heard.Shares, member?.IsConnected, heard.At ?? member?.LastSeenAt);
+                return _StatusOf(fleetId, characterId, member?.IsConnected, member?.LastSeenAt, now);
             })];
         }
+    }
+
+    /// <summary>One member's standing for a screen that already holds the roster row (the Fleets screen): the
+    /// server's connection flag and last-seen come from that row.</summary>
+    public FleetMateStatus StatusOf(long fleetId, int characterId, bool? isConnected, DateTimeOffset? rosterLastSeen,
+        DateTimeOffset now)
+    {
+        lock (_gate)
+            return _StatusOf(fleetId, characterId, isConnected, rosterLastSeen, now);
+    }
+
+    private FleetMateStatus _StatusOf(long fleetId, int characterId, bool? isConnected, DateTimeOffset? rosterLastSeen,
+        DateTimeOffset now)
+    {
+        Heard heard = _heard.GetValueOrDefault((fleetId, characterId)) ?? Heard.Nothing;
+        FleetMemberPresenceState presence = FleetMemberPresence.Read(
+            null, heard.Presence, FleetMemberPresence.IsSilent(heard.At ?? rosterLastSeen, now));
+
+        // Nothing of theirs reaches this client, yet the server heard them lately: they report, only not to here.
+        FleetMemberStatusReason reason = heard.At is null && rosterLastSeen is { } seen
+                                         && !FleetMemberPresence.IsSilent(seen, now) && isConnected is not false
+            ? FleetMemberStatusReason.ReportingElsewhere
+            : FleetMemberStatus.Read(isConnected, heard.At, presence, heard.Shares, heard.System, now);
+        return new FleetMateStatus(characterId, reason, presence, heard.System, heard.Shares, isConnected,
+            heard.At ?? rosterLastSeen);
     }
 
     private void _OnMetric(FleetMetricEvent integrationEvent)

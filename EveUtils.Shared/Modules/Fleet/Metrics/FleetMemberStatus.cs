@@ -27,6 +27,10 @@ public enum FleetMemberStatusReason
 
     /// <summary>Reporting, but from a client too old to say what it shares — a missing system cannot be explained.</summary>
     OldClient = 7,
+
+    /// <summary>The server heard their client lately, but none of it reaches this client — a screen reading the roster
+    /// rather than the fleet's own stream.</summary>
+    ReportingElsewhere = 8,
 }
 
 /// <summary>What one member's row says, and from what. Pure, so every screen and the tests read the same verdict.</summary>

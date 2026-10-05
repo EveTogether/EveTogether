@@ -22,7 +22,20 @@ public static class FleetMemberStatusText
         FleetMemberStatusReason.NotConnected => "not connected to the server",
         FleetMemberStatusReason.NeverHeard => "nothing received yet",
         FleetMemberStatusReason.OldClient => "older EVE Together, cannot tell where",
+        FleetMemberStatusReason.ReportingElsewhere => "reporting to the server",
         _ => string.Empty,
+    };
+
+    /// <summary>One or two words for a narrow column — the Fleets screen's presence chip — with <see cref="Line"/> as its
+    /// tooltip. Anything reporting from in game reads "online"; what it shares is the line's business, not the chip's.</summary>
+    public static string Short(FleetMateStatus standing) => standing.Reason switch
+    {
+        FleetMemberStatusReason.InSystem or FleetMemberStatusReason.NoSystemYet or FleetMemberStatusReason.LocationWithheld
+            or FleetMemberStatusReason.OldClient or FleetMemberStatusReason.ReportingElsewhere => "online",
+        FleetMemberStatusReason.NotInGame => "not in game",
+        FleetMemberStatusReason.Silent => "app closed",
+        FleetMemberStatusReason.NotConnected => "no link",
+        _ => "unknown",
     };
 
     /// <summary>The chips beside the line: connection, run, what is shared, when last heard.</summary>

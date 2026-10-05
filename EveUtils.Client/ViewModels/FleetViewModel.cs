@@ -141,14 +141,42 @@ public sealed partial class FleetViewModel : ObservableObject
 
     public string MemberCountText => MemberCount.ToString(CultureInfo.InvariantCulture);
 
-    /// <summary>Under the member count: how many of them are external pilots, or a dash.</summary>
+    /// <summary>Under the member count: who is ready to fly with you — in game and connected — before and while the
+    /// fleet runs (ET-440), "2/3 ready", with the external pilots after it; the full tally is
+    /// <see cref="ReadinessTooltip"/>. A dash when nothing needs saying.</summary>
     public string MemberCountSubText
     {
         get
         {
+            List<string> parts = [];
+            if (_Readiness() is { } readiness)
+                parts.Add(string.Create(CultureInfo.InvariantCulture, $"{readiness.Ready}/{readiness.Pilots} ready"));
             int external = Members.Count(m => m.IsExternal);
-            return external == 0 ? "—" : $"{external.ToString(CultureInfo.InvariantCulture)} external";
+            if (external > 0)
+                parts.Add(Count(external, "external"));
+            return parts.Count == 0 ? "—" : string.Join(" · ", parts);
         }
+    }
+
+    /// <summary>"2 of 3 ready · 1 offline · 0 unknown" in full, for the member count's tooltip.</summary>
+    public string? ReadinessTooltip => _Readiness() is { } readiness
+        ? string.Create(CultureInfo.InvariantCulture,
+            $"{readiness.Ready} of {readiness.Pilots} ready (in game and connected) · {readiness.Offline} offline · {readiness.Pilots - readiness.Ready - readiness.Offline} unknown")
+        : null;
+
+    private (int Pilots, int Ready, int Offline)? _Readiness()
+    {
+        FleetMemberRowViewModel[] pilots = [.. Members.Where(m => !m.IsExternal)];
+        if (pilots.Length < 2 || IsFinished)
+            return null;
+        return (pilots.Length, pilots.Count(m => m.IsOnline && m.IsConnected is not false), pilots.Count(m => m.IsOffline));
+    }
+
+    /// <summary>Re-read the readiness under the member count after a presence sweep (ET-440).</summary>
+    public void RefreshReadiness()
+    {
+        OnPropertyChanged(nameof(MemberCountSubText));
+        OnPropertyChanged(nameof(ReadinessTooltip));
     }
 
     /// <summary>The fleet commander's name, resolved from the roster, falling back to the owner label.</summary>

@@ -930,7 +930,7 @@
                                 <Border Grid.Column="2" Classes="cell members">
                                     <StackPanel>
                                         <TextBlock Classes="who" Text="{Binding MemberCountText}"/>
-                                        <TextBlock Classes="sub" Text="{Binding MemberCountSubText}"/>
+                                        <TextBlock Classes="sub" Text="{Binding MemberCountSubText}" ToolTip.Tip="{Binding ReadinessTooltip}"/>
                                     </StackPanel>
                                 </Border>
                                 <Border Grid.Column="3" Classes="cell fc">
@@ -1056,7 +1056,7 @@
                                                             <TextBlock Classes="mtext" Text="{Binding RoleLabel}"
                                                                        IsVisible="{Binding !#FleetsRoot.((vm:FleetsViewModel)DataContext).IsWide}"/>
                                                             <Border Classes="chip" Classes.good="{Binding IsOnline}" Classes.dim="{Binding !IsOnline}"
-                                                                    HorizontalAlignment="Left"
+                                                                    HorizontalAlignment="Left" ToolTip.Tip="{Binding PresenceTooltip}"
                                                                     IsVisible="{Binding #FleetsRoot.((vm:FleetsViewModel)DataContext).IsWide}">
                                                                 <TextBlock Text="{Binding PresenceText}"/>
                                                             </Border>

@@ -65,6 +65,7 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
     private readonly IRemoteBusConnector _busConnector;
     private readonly ICharacterInfoService? _characterInfo; // resolves owner names for fleets I don't own (best-effort)
     private readonly ILocalCharacterPresence? _presence;   // whether one of MY pilots has an EVE client up (ET-70)
+    private readonly FleetMemberBoard? _board;             // what the fleet stream says about everyone else (ET-440)
     private readonly IDisposable? _presenceSubscription;
 
     /// <param name="runClock">Whether the band and the started rows keep a ticking clock. A test hands it the time
@@ -99,6 +100,7 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
         _busConnector = services.GetRequiredService<IRemoteBusConnector>();
         _busConnector.CouplingChanged += _OnCouplingChanged;
         _presence = services.GetService<ILocalCharacterPresence>();
+        _board = services.GetService<FleetMemberBoard>();
         _presenceSubscription = _presence?.Subscribe(() => _ = RebuildOverviewAsync());
 
         StartClock(runClock);
@@ -490,7 +492,10 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
                 isMine,
                 isFleetCommander: member.WingId < 0 && member.Role == FleetRole.FleetCommander,
                 member.LastSeenAt, member.Availability, member.AvailabilityNote,
-                speedStats: speedStats);
+                speedStats: speedStats)
+            {
+                IsConnected = member.IsConnected
+            };
             row.Members.Add(leaf);
             if (portraits is not null && isMine)
                 _ = leaf.LoadPortraitAsync(portraits);   // B-3 hex portrait, best-effort (opt-in images)
