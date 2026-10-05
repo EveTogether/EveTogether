@@ -26,6 +26,7 @@ public static class FleetMetricCatalog
         [MetricKind.CapOut] = new(MetricKind.CapOut, MetricSemantics.Rate, Aggregatable: true, Unit: "GJ/s"),
         [MetricKind.RepOut] = new(MetricKind.RepOut, MetricSemantics.Rate, Aggregatable: true, Unit: "hp/s"),
         [MetricKind.Application] = new(MetricKind.Application, MetricSemantics.Rate, Aggregatable: false, Unit: "%"),
+        [MetricKind.Shares] = new(MetricKind.Shares, MetricSemantics.State, Aggregatable: false, Unit: string.Empty),
     };
 
     /// <summary>The descriptor for a kind; an unknown kind degrades to a non-aggregatable State descriptor.</summary>

@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using EveUtils.Shared.Messaging;
+using EveUtils.Shared.Modules.Fleet.Dtos;
 using EveUtils.Shared.Modules.Fleet.Events;
 using EveUtils.Shared.Modules.Fleet.Metrics;
 using EveUtils.Shared.DependencyInjection;
@@ -128,6 +129,11 @@ public sealed class FleetMetricPublisher(
 
                 await eventBus.PublishAsync(new FleetMetricEvent(sample, participant.CharacterId), sampleTarget, cancellationToken);
             }
+
+            // Past the share-gate on purpose: it says which figures are offered, never what they are (ET-440).
+            var manifest = new MetricSample(participant.CharacterId, participant.FleetId, MetricKind.Shares,
+                (double)share.SharesFor(participant.FleetId, participant.CharacterId), unixMs);
+            await eventBus.PublishAsync(new FleetMetricEvent(manifest, participant.CharacterId), target, cancellationToken);
         }
     }
 }

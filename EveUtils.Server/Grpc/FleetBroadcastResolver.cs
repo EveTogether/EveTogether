@@ -42,6 +42,10 @@ public sealed class FleetBroadcastResolver(IFleetReader repository, ConnectedCli
     /// (2026-06-04): a member signed up in advance to a fleet that starts while they are still in an earlier active
     /// fleet stays coupled to that earlier fleet and is excluded here. The entry-guard blocks the common cases, so
     /// the per-member lookup below short-circuits whenever a character is in just this one active fleet.</summary>
+    /// <summary>Whether the fleet broadcasts at all: started, not merely formed (ET-440).</summary>
+    public async Task<bool> IsStartedAsync(long fleetId, CancellationToken cancellationToken = default) =>
+        (await repository.GetAsync(fleetId, cancellationToken))?.Activation == FleetActivation.Active;
+
     public async Task<IReadOnlyList<int>> ActiveBroadcastMembersAsync(long fleetId, CancellationToken cancellationToken = default)
     {
         var fleet = await repository.GetAsync(fleetId, cancellationToken);

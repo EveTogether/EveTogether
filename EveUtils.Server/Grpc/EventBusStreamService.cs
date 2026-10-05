@@ -8,6 +8,8 @@ using EveUtils.Shared.Cqrs.Permissions;
 using EveUtils.Shared.Identity;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Messaging.Wire;
+using EveUtils.Shared.Modules.Fleet.Dtos;
+using EveUtils.Shared.Modules.Fleet.Enums;
 using EveUtils.Shared.Modules.Fleet.Events;
 using EveUtils.Shared.Modules.Fleet.Metrics;
 using EveUtils.Shared.Modules.ServerAuth.Services;
@@ -56,6 +58,7 @@ public sealed class EventBusStreamService(
                 .DeliverPendingAsync(responseStream, attachedCharacterId, context.CancellationToken);
 
         connectedClients.Add(new ConnectedClient(key, attachedCharacterId, characterName, responseStream));
+        HashSet<(long FleetId, FleetRelayRefusal Reason)> refusalsSaid = [];
         try
         {
             await foreach (var envelope in requestStream.ReadAllAsync(context.CancellationToken))
@@ -105,7 +108,11 @@ public sealed class EventBusStreamService(
                     // could inject events (e.g. a forged fleet.changed) to every member of a fleet he is not in.
                     if (attachedCharacterId == 0 ||
                         !await broadcast.IsMemberAsync(envelope.Event.FleetId, attachedCharacterId, context.CancellationToken))
+                    {
+                        await _SayRefusedOnceAsync(refusalsSaid, envelope.Event.FleetId, FleetRelayRefusal.NotOnRoster,
+                            attachedCharacterId, characterName, context.CancellationToken);
                         continue;
+                    }
 
                     // Live fleet traffic (the participation metric stream) keeps the fleet's cleanup clock fresh so an
                     // actively-playing fleet is not archived the moment everyone briefly disconnects.
@@ -123,6 +130,9 @@ public sealed class EventBusStreamService(
                     // Only an ACTIVE fleet broadcasts — a Forming fleet (advance sign-up) delivers nothing even if
                     // an old/buggy client publishes to it.
                     var members = await broadcast.ActiveBroadcastMembersAsync(envelope.Event.FleetId, context.CancellationToken);
+                    if (members.Count == 0 && !await broadcast.IsStartedAsync(envelope.Event.FleetId, context.CancellationToken))
+                        await _SayRefusedOnceAsync(refusalsSaid, envelope.Event.FleetId, FleetRelayRefusal.FleetNotStarted,
+                            attachedCharacterId, characterName, context.CancellationToken);
                     await connectedClients.SendToCharactersAsync(members, envelope.Event, context.CancellationToken, exceptKey: key);
                 }
                 else
@@ -140,6 +150,25 @@ public sealed class EventBusStreamService(
         {
             connectedClients.Remove(key);
         }
+    }
+
+    /// <summary>
+    /// Says once per connection, fleet and reason that this client's fleet traffic reaches nobody (ET-440): logged for
+    /// the operator, and told to the client so its fleet screen can show why instead of looking empty.
+    /// </summary>
+    private async Task _SayRefusedOnceAsync(HashSet<(long FleetId, FleetRelayRefusal Reason)> said, long fleetId,
+        FleetRelayRefusal reason, int characterId, string characterName, CancellationToken cancellationToken)
+    {
+        if (!said.Add((fleetId, reason)))
+            return;
+
+        services.GetRequiredService<ILogger<EventBusStreamService>>().LogInformation(
+            "Fleet traffic from {Character} ({CharacterId}) into fleet {FleetId} is not relayed: {Reason}.",
+            characterName, characterId, fleetId, reason);
+        if (characterId != 0)
+            await connectedClients.SendToCharacterAsync(characterId,
+                WireEnvelopeFactory.ToEnvelope(new FleetRelayRefusedEvent(new FleetRelayRefusedPayload(fleetId, reason))),
+                cancellationToken);
     }
 
     /// <summary>
