@@ -424,7 +424,7 @@ public sealed class GamelogClientService : IFleetMetricSource, ISingletonService
         // Local delivery is synchronous (drives the bus + UI immediately). The remote leg is NOT sent per hit —
         // the steady RemotePublishLoopAsync sampler streams it instead, so the server sees the same continuous,
         // decaying curve the local 30fps graph does rather than a few sparse per-hit points.
-        await PublishSampleAsync(name, EventTarget.Local, cancellationToken);
+        await _PublishSampleAsync(name, EventTarget.Local, cancellationToken);
     }
 
     // Steady remote sampler: every RemotePublishInterval, sample each active local tracker against "now"
@@ -490,9 +490,9 @@ public sealed class GamelogClientService : IFleetMetricSource, ISingletonService
     private static bool IsActiveServerParticipant(IReadOnlyList<FleetParticipant> participation, int characterId) =>
         participation.Any(p => p.CharacterId == characterId && !p.ClientOnly);
 
-    /// <summary>Sample + publish to a specific target. <c>AddHitAsync</c> publishes the local leg
-    /// synchronously (bus/UI) and offloads the remote leg, so the slow per-server send never throttles the feed.</summary>
-    public Task PublishSampleAsync(string characterName, EventTarget target, CancellationToken cancellationToken = default)
+    /// <summary>Samples one character's tracker against now and publishes it to <paramref name="target"/>. Private so
+    /// nothing reaches the server past <see cref="PublishRemoteTickAsync"/>'s fleet gate.</summary>
+    private Task _PublishSampleAsync(string characterName, EventTarget target, CancellationToken cancellationToken = default)
     {
         var name = string.IsNullOrWhiteSpace(characterName) ? _localCharacter : characterName;
         var sample = Tracker(name).Sample(DateTime.UtcNow);
