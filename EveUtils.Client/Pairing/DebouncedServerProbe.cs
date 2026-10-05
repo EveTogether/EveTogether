@@ -6,14 +6,12 @@ using Avalonia.Threading;
 namespace EveUtils.Client.Pairing;
 
 /// <summary>
-/// Asks a server address who it is once typing settles: debounced, superseded by a newer address, five seconds per
-/// attempt. Display-only — the probe accepts any certificate; real trust is established via TOFU at pairing. Shared by
-/// the couple dialog and the setup wizard so both answer the same way.
+/// Asks a server address who it is once typing settles: debounced, superseded by a newer address, and given the same
+/// <see cref="ServerPairingService.ContactTimeout"/> as the coupling itself, so "not reachable" means the same in both.
+/// Display-only — the probe accepts any certificate; real trust is established via TOFU at pairing.
 /// </summary>
 public sealed class DebouncedServerProbe<TResult> : IDisposable where TResult : class
 {
-    private static readonly TimeSpan ProbeWindow = TimeSpan.FromSeconds(5);
-
     private readonly Func<string, CancellationToken, Task<TResult?>> _probe;
     private readonly Action _onChecking;
     private readonly Action _onCleared;
@@ -57,7 +55,7 @@ public sealed class DebouncedServerProbe<TResult> : IDisposable where TResult : 
             return;
         }
 
-        _probeCts = new CancellationTokenSource(ProbeWindow);
+        _probeCts = new CancellationTokenSource(ServerPairingService.ContactTimeout);
         var ct = _probeCts.Token;
         _onChecking();
         TResult? result;

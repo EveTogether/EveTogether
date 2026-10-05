@@ -52,9 +52,9 @@ public class RecoupleUsesWhatIsAlreadyKnownTests
         await Task.Yield();
 
         Assert.True(dialogs.CoupleDialogOpened);
-        Assert.NotNull(dialogs.LastCouplePrefill);
-        Assert.Equal(Server, dialogs.LastCouplePrefill!.Address);
-        Assert.Equal("Corp HQ", dialogs.LastCouplePrefill.Label);
+        var restored = Assert.Single(dialogs.LastCouple?.KnownServers.Where(option => option.IsSelected) ?? []);
+        Assert.Equal(Server, restored.Server.Address);
+        Assert.Equal("Corp HQ", restored.Server.DisplayName);
     }
 
     /// <summary>The contrast that keeps the first assertion honest: coupling a server for the first time has nothing
@@ -69,6 +69,7 @@ public class RecoupleUsesWhatIsAlreadyKnownTests
         await owner.RunCoupleAsync();
 
         Assert.True(dialogs.CoupleDialogOpened);
-        Assert.Null(dialogs.LastCouplePrefill);
+        Assert.Empty(dialogs.LastCouple?.KnownServers ?? []);
+        Assert.Equal("", dialogs.LastCouple?.ServerAddress);
     }
 }

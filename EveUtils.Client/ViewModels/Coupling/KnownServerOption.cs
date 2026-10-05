@@ -1,7 +1,7 @@
 using System;
 using CommunityToolkit.Mvvm.ComponentModel;
 
-namespace EveUtils.Client.ViewModels.Setup;
+namespace EveUtils.Client.ViewModels.Coupling;
 
 /// <summary>A known server as a one-click choice on the server step.</summary>
 public sealed partial class KnownServerOption(KnownServer server, Action<KnownServerOption> onSelected) : ObservableObject

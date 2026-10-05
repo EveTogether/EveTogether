@@ -1,0 +1,178 @@
+<!-- Coupling one character to a server (ET-428): the setup wizard's server step and the character screen's
+     "Couple to server" window show this same view over the same ServerCoupleViewModel. -->
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:v="using:EveUtils.Client.Views"
+             xmlns:dlg="using:EveUtils.Client.Dialogs"
+             xmlns:coupling="using:EveUtils.Client.ViewModels.Coupling"
+             x:Class="EveUtils.Client.Views.ServerCoupleView"
+             x:DataType="coupling:ServerCoupleViewModel">
+    <UserControl.Styles>
+        <StyleInclude Source="avares://EveUtils.Client/Views/SetupStyles.axaml"/>
+    </UserControl.Styles>
+    <UserControl.DataTemplates>
+        <DataTemplate DataType="dlg:ScopeChoiceViewModel">
+            <v:ScopeChoiceRow/>
+        </DataTemplate>
+    </UserControl.DataTemplates>
+
+    <StackPanel>
+            <!-- waiting for the server's EVE login -->
+            <StackPanel IsVisible="{Binding IsPairing}">
+                <Border Classes="row" Padding="14">
+                    <Grid ColumnDefinitions="Auto,*">
+                        <Panel Width="26" Height="26" VerticalAlignment="Center">
+                            <Ellipse Stroke="#1AFFFFFF" StrokeThickness="3"/>
+                            <Arc Classes="spin" Stroke="{DynamicResource AccentBrightBrush}" StrokeThickness="3"
+                                 StartAngle="-90" SweepAngle="90"/>
+                        </Panel>
+                        <StackPanel Grid.Column="1" Margin="14,0,0,0" Spacing="2">
+                            <TextBlock Text="{Binding PairingWaitTitle}" FontWeight="SemiBold" Foreground="{StaticResource TextBrightBrush}" Margin="0,0,0,6" TextWrapping="Wrap"/>
+                            <TextBlock Classes.stepNow="{Binding IsContacting}" Classes.stepDone="{Binding IsContacted}" FontSize="11"
+                                       Text="{Binding ContactingText, StringFormat='1.  {0}'}" TextWrapping="Wrap"/>
+                            <TextBlock Classes.stepDone="{Binding IsContacted}" FontSize="11" Text="2.  Opening browser for EVE SSO…"/>
+                            <TextBlock Classes.stepNow="{Binding IsContacted}" FontSize="11" Text="{Binding PickAgainText, StringFormat='3.  {0}'}"/>
+                            <TextBlock FontSize="11" Text="4.  Waiting for the server to complete pairing…"/>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+                <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,8,0,0">
+                    <Button Content="Cancel" Command="{Binding CancelPairingCommand}"/>
+                    <Button Classes="link" Content="Browser didn't open? Copy the login link" Command="{Binding CopyLoginLinkCommand}"
+                            IsVisible="{Binding IsContacted}"/>
+                </StackPanel>
+                <TextBlock Classes="small" Margin="0,10,0,0" Text="The server signs the character in itself, so this is a second EVE login, for this server only."/>
+            </StackPanel>
+
+            <!-- coupled -->
+            <StackPanel IsVisible="{Binding IsCoupled}">
+                <Border Classes="callout ok">
+                    <DockPanel>
+                        <Border Classes="calloutEdge ok" DockPanel.Dock="Left"/>
+                        <StackPanel>
+                            <TextBlock Classes="calloutTitle" Text="{Binding CoupledTitle}"/>
+                            <TextBlock Classes="small" Foreground="{StaticResource TextBrush}" Text="{Binding CoupledCertificateText}"/>
+                        </StackPanel>
+                    </DockPanel>
+                </Border>
+                <StackPanel IsVisible="{Binding ShowFingerprint}">
+                    <TextBlock Classes="label" Text="CERT FINGERPRINT (SHA-256)"/>
+                    <SelectableTextBlock Text="{Binding Fingerprint}" FontFamily="{StaticResource MonoFont}" FontSize="11"
+                                         TextWrapping="Wrap" Foreground="{StaticResource TextBrightBrush}"/>
+                    <TextBlock Classes="small" Margin="0,4,0,0" Text="Compare it with what the server admin gives you (Server trust, TOFU)."/>
+                </StackPanel>
+            </StackPanel>
+
+            <!-- choose / test a server, and the errors that send you back here -->
+            <StackPanel IsVisible="{Binding ShowServerForm}">
+                <Border Classes="callout err" IsVisible="{Binding IsUnreachable}">
+                    <DockPanel>
+                        <Border Classes="calloutEdge err" DockPanel.Dock="Left"/>
+                        <StackPanel>
+                            <TextBlock Classes="calloutTitle" Text="Could not reach the server"/>
+                            <TextBlock TextWrapping="Wrap" Text="{Binding UnreachableText}"/>
+                            <TextBlock Classes="small" Foreground="{StaticResource TextBrush}" Margin="0,6,0,0" Text="• Is the address and port exactly what the server admin gave you?"/>
+                            <TextBlock Classes="small" Foreground="{StaticResource TextBrush}" Text="• Is the server running, and allowed through a firewall or VPN?"/>
+                            <WrapPanel Margin="0,10,0,0">
+                                <Button Classes="accent" Content="{Binding UnreachableRetryText}" Command="{Binding RetryUnreachableCommand}" Margin="0,0,8,0"/>
+                                <Button Content="Not now" Command="{Binding NotNowCommand}"/>
+                            </WrapPanel>
+                        </StackPanel>
+                    </DockPanel>
+                </Border>
+                <Border Classes="callout err" IsVisible="{Binding IsPairingCancelled}">
+                    <DockPanel>
+                        <Border Classes="calloutEdge err" DockPanel.Dock="Left"/>
+                        <StackPanel>
+                            <TextBlock Classes="calloutTitle" Text="Coupling was cancelled"/>
+                            <TextBlock TextWrapping="Wrap" Text="{Binding PairingCancelledText}"/>
+                            <WrapPanel Margin="0,10,0,0">
+                                <Button Classes="accent" Content="Try again" Command="{Binding CoupleCommand}" Margin="0,0,8,0"/>
+                                <Button Content="Not now" Command="{Binding NotNowCommand}"/>
+                            </WrapPanel>
+                        </StackPanel>
+                    </DockPanel>
+                </Border>
+                <Border Classes="callout err" IsVisible="{Binding IsOtherCharacter}">
+                    <DockPanel>
+                        <Border Classes="calloutEdge err" DockPanel.Dock="Left"/>
+                        <StackPanel>
+                            <TextBlock Classes="calloutTitle" Text="That was a different character"/>
+                            <TextBlock TextWrapping="Wrap" Text="{Binding OtherCharacterText}"/>
+                            <WrapPanel Margin="0,10,0,0">
+                                <Button Classes="accent" Content="Try again" Command="{Binding CoupleCommand}" Margin="0,0,8,0"/>
+                                <Button Content="Not now" Command="{Binding NotNowCommand}"/>
+                            </WrapPanel>
+                        </StackPanel>
+                    </DockPanel>
+                </Border>
+                <Border Classes="callout err" IsVisible="{Binding IsPairingFailed}">
+                    <DockPanel>
+                        <Border Classes="calloutEdge err" DockPanel.Dock="Left"/>
+                        <StackPanel>
+                            <TextBlock Classes="calloutTitle" Text="Coupling failed"/>
+                            <TextBlock TextWrapping="Wrap" Text="{Binding PairingError}"/>
+                            <WrapPanel Margin="0,10,0,0">
+                                <Button Classes="accent" Content="Try again" Command="{Binding CoupleCommand}" Margin="0,0,8,0"/>
+                                <Button Content="Not now" Command="{Binding NotNowCommand}"/>
+                            </WrapPanel>
+                        </StackPanel>
+                    </DockPanel>
+                </Border>
+
+                <StackPanel IsVisible="{Binding HasKnownServers}" Margin="0,0,0,10">
+                    <TextBlock Classes="label" Text="SERVER"/>
+                    <ItemsControl ItemsSource="{Binding KnownServers}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="coupling:KnownServerOption">
+                                <Border Classes="row" Padding="8,6" Margin="0,0,0,4">
+                                    <RadioButton GroupName="couple-server" IsChecked="{Binding IsSelected}">
+                                        <StackPanel>
+                                            <TextBlock>
+                                                <Run Text="{Binding Server.DisplayName}" FontWeight="SemiBold" Foreground="{StaticResource TextBrightBrush}"/><Run Text="  "/><Run Text="{Binding Server.Address}" FontFamily="{StaticResource MonoFont}" FontSize="10" Foreground="{DynamicResource TextAccentBrush}"/>
+                                            </TextBlock>
+                                            <TextBlock Classes="small" Text="{Binding CoupledText}"/>
+                                        </StackPanel>
+                                    </RadioButton>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <Border Classes="row" Padding="8,6">
+                        <RadioButton GroupName="couple-server" IsChecked="{Binding IsAnotherServer}" Content="Another server…"/>
+                    </Border>
+                </StackPanel>
+
+                <StackPanel IsVisible="{Binding ShowNewServerFields}" Spacing="12">
+                    <StackPanel>
+                        <TextBlock Classes="label" Text="SERVER ADDRESS"/>
+                        <Grid ColumnDefinitions="*,Auto">
+                            <TextBox Text="{Binding ServerAddress}" FontFamily="{StaticResource MonoFont}"
+                                     PlaceholderText="https://… — from your server admin" VerticalContentAlignment="Center"/>
+                            <Button Grid.Column="1" Content="Test connection" Command="{Binding TestConnectionCommand}" Margin="8,0,0,0"/>
+                        </Grid>
+                        <TextBlock Text="{Binding ProbeText}" FontSize="10" Margin="0,4,0,0"
+                                   Foreground="{DynamicResource TextAccentBrush}" IsVisible="{Binding IsChecking}"/>
+                        <TextBlock Text="{Binding ProbeText}" FontSize="10" Margin="0,4,0,0"
+                                   Foreground="{StaticResource GreenBrush}" IsVisible="{Binding ShowProbeOk}"/>
+                        <TextBlock Text="{Binding ProbeText}" FontSize="10" Margin="0,4,0,0"
+                                   Foreground="{StaticResource RedBrush}" IsVisible="{Binding ShowProbeBad}"/>
+                    </StackPanel>
+                    <StackPanel IsVisible="{Binding ShowLabelAndScopes}">
+                        <TextBlock Classes="label" Text="LABEL (OPTIONAL)"/>
+                        <TextBox Text="{Binding ServerLabel}" VerticalContentAlignment="Center"/>
+                        <TextBlock Classes="small" Margin="0,3,0,0" Text="The name the server gives itself. Change it if you like; left empty, the server's own name is used."/>
+                    </StackPanel>
+                </StackPanel>
+
+                <StackPanel Margin="0,12,0,0" IsVisible="{Binding IsServerReady}">
+                    <StackPanel IsVisible="{Binding HasServerScopes}">
+                        <TextBlock Classes="label" Text="THIS SERVER ALSO ASKS FOR · OPTIONAL"/>
+                        <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Background="{StaticResource BgPanelBrush}" Padding="6">
+                            <ItemsControl ItemsSource="{Binding ServerScopeChoices}"/>
+                        </Border>
+                    </StackPanel>
+                </StackPanel>
+            </StackPanel>
+    </StackPanel>
+</UserControl>

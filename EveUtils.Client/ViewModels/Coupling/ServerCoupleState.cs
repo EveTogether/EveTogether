@@ -1,4 +1,4 @@
-namespace EveUtils.Client.ViewModels.Setup;
+namespace EveUtils.Client.ViewModels.Coupling;
 
 /// <summary>Where the optional server coupling of the server step stands.</summary>
 public enum ServerCoupleState

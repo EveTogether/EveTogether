@@ -11,6 +11,7 @@ using EveUtils.Client.ViewModels.Runs;
 using EveUtils.Shared.Modules.Esi;
 using EveUtils.Shared.Modules.Fittings.Dtos;
 using EveUtils.Shared.Modules.Fleet.Entities;
+using EveUtils.Client.ViewModels.Coupling;
 using EveUtils.Client.ViewModels.Setup;
 
 namespace EveUtils.Client.Dialogs;
@@ -60,23 +61,12 @@ public interface IDialogService
     Task<IReadOnlyList<int>?> PickCharactersAsync(string prompt, IReadOnlyList<CharacterPickOption> options,
         IReadOnlyList<int>? preselectedCharacterIds = null);
 
-    /// <summary>
-    /// Couple-server dialog: asks for a server address + optional label. Returns the result,
-    /// or null if cancelled. <paramref name="probeServerName"/> is called on open and (debounced) on every
-    /// address change to show the server's own name before pairing — an unauthenticated, accept-any-
-    /// cert probe; null/throw means "not reachable". Real trust is still established via TOFU at pairing.
-    /// </summary>
-    /// <param name="prefill">
-    /// What is already known about the coupling being restored, filling the fields in so the user only has to
-    /// connect and sign in (ET-123). Null for a fresh coupling, where nothing is known yet. Only offered where the
-    /// address is not in question — never after a refused certificate, which is exactly the case where the user has
-    /// to check the address is still answered by their own server.
-    /// </param>
     /// <summary>The setup wizard (ET-425), modal over the main window until it is done, skipped or closed.</summary>
     Task ShowSetupWizardAsync(SetupWizardViewModel viewModel);
 
-    Task<CoupleServerResult?> CoupleServerAsync(
-        Func<string, CancellationToken, Task<string?>> probeServerName, CoupleServerResult? prefill = null);
+    /// <summary>"Couple to server" for one character (ET-428): the wizard's server step in a window of its own, modal
+    /// until it is closed. Whether it coupled is on the view-model.</summary>
+    Task CoupleServerAsync(ServerCoupleViewModel viewModel);
 
     /// <summary>
     /// Server-picker dialog: choose which coupled server to share a fit to. Returns the chosen

@@ -14,6 +14,7 @@ using EveUtils.Client.ViewModels.Map;
 using EveUtils.Client.ViewModels.Runs;
 using EveUtils.Shared.Modules.Esi;
 using EveUtils.Shared.Modules.Fittings.Dtos;
+using EveUtils.Client.ViewModels.Coupling;
 using EveUtils.Client.ViewModels.Setup;
 
 namespace EveUtils.Client.UiTests;
@@ -105,19 +106,17 @@ public sealed class RecordingDialogService : IDialogService
         LastFittingsOffered = fits;
         return OnSelectFittings(fits);
     }
-    /// <summary>What the couple dialog was opened with, so a test can see whether it would have asked the user to
+    /// <summary>What the couple window was opened on, so a test can see whether it would have asked the user to
     /// retype something the client already knows (ET-123). Null means it has not been opened.</summary>
-    public CoupleServerResult? LastCouplePrefill { get; private set; }
-    public bool CoupleDialogOpened { get; private set; }
+    public ServerCoupleViewModel? LastCouple { get; private set; }
+    public bool CoupleDialogOpened => LastCouple is not null;
 
     public Task ShowSetupWizardAsync(SetupWizardViewModel viewModel) => throw NotUsed();
 
-    public Task<CoupleServerResult?> CoupleServerAsync(
-        Func<string, CancellationToken, Task<string?>> probeServerName, CoupleServerResult? prefill = null)
+    public Task CoupleServerAsync(ServerCoupleViewModel viewModel)
     {
-        CoupleDialogOpened = true;
-        LastCouplePrefill = prefill;
-        return Task.FromResult<CoupleServerResult?>(null); // cancelled — the pairing round-trip is not what is under test
+        LastCouple = viewModel;
+        return Task.CompletedTask; // closed without coupling — the pairing round-trip is not what is under test
     }
 
     public Task<string?> SelectServerAsync(string prompt, IReadOnlyList<ServerPickOption> options) => throw NotUsed();
