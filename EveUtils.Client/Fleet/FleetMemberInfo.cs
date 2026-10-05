@@ -13,7 +13,9 @@ namespace EveUtils.Client.Fleet;
 /// <paramref name="Availability"/> is this member's self-reported availability for the fleet's next start (ET-169),
 /// set and cleared by the member only; <paramref name="AvailabilityNote"/> is the optional short note that came with it.
 /// <paramref name="IsConnected"/> is whether the server holds a connection for this character right now, or null from a
-/// server too old to say (ET-440).</summary>
+/// server too old to say (ET-440).
+/// <paramref name="InGameFleet"/> is whether the pilot's own client confirmed they sit in the coupled in-game fleet, or
+/// null from a server too old to say (ET-444).</summary>
 public sealed record FleetMemberInfo(
     long Id,
     int CharacterId,
@@ -27,4 +29,5 @@ public sealed record FleetMemberInfo(
     DateTimeOffset? LastSeenAt = null,
     FleetMemberAvailability Availability = FleetMemberAvailability.NotSet,
     string? AvailabilityNote = null,
-    bool? IsConnected = null);
+    bool? IsConnected = null,
+    bool? InGameFleet = null);

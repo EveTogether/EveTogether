@@ -19,6 +19,8 @@ public sealed class ServerFleetClient(IFleetTransportClient fleets, string serve
     public IFleetCompositionClient CreateCompositionClient(System.IServiceProvider services) =>
         new ServerFleetCompositionClient(fleets, serverAddress, actingCharacterId);
 
+    public string ServerAddress => serverAddress;
+
     public Task<FleetInfo?> GetFleetAsync(long fleetId) =>
         fleets.GetFleetAsync(serverAddress, fleetId, actingCharacterId);
 

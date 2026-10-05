@@ -40,6 +40,9 @@ public sealed class RosterEntryViewModel : IFleetMemberMenuHost
     /// <summary>True for a pending join-request row — only these show the owner's Accept/Decline buttons.</summary>
     public bool IsJoinRequest => JoinRequestId is not null;
 
+    /// <summary>The badge names a command role — an accent chip, as the Fleets screen marks its FC.</summary>
+    public bool IsCommander => Member?.Role is FleetRole.FleetCommander or FleetRole.WingCommander or FleetRole.SquadCommander;
+
     /// <summary>The full member node behind an accepted row, so the left list offers the same manage menu as the
     /// tree. An unplaced member has no structure node — this is their only manage surface.</summary>
     public MemberNodeViewModel? Node { get; }

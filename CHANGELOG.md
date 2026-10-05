@@ -17,6 +17,7 @@ entries under `[Unreleased]` below that were not there yet at the previous night
 
 ## [Unreleased]
 
+- **Fixed: the fleet roster no longer says "NO REPLY" next to everyone.** That chip meant a pilot had not answered whether they would be there for the next start, which every start resets, so a running fleet showed it on every member. The roster now shows the same online, not in game, app closed and no link as the Fleets screen, with the full reason on hover. Once the fleet is coupled to your in-game fleet it also shows who is in it. This part needs the updated server.
 - **Added: join a fleet run that is already going.** Joined the fleet late, missed the offer, or had your run cut loose when the fleet commander discarded theirs? While the commander's run goes, your run window says that your run is not part of it and offers JOIN FLEET RUN. You choose to add the run you have, keeping everything on it, or to stop it and start a new one that joins. Without a run window open, the same button sits on your character's card in Fleets. This needs the updated server.
 - **Changed: the FLEET section counts who is ready to fly.** Before and during a run its header reads, for example, "2 of 3 ready · 1 offline", and your own characters show their status too.
 - **Changed: every SKILLS screen now looks like the approved mockup, and says what each number means.** The SKILLS

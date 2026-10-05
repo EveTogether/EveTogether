@@ -19,6 +19,9 @@ public interface IFleetClient
     /// so a viewer's roster can reflect a remote couple/unlink pushed as fleet.changed. Null if it's gone.</summary>
     Task<FleetInfo?> GetFleetAsync(long fleetId);
 
+    /// <summary>The server the fleet lives on; null for a client-only fleet.</summary>
+    string? ServerAddress => null;
+
     Task<IReadOnlyList<FleetMemberInfo>> ListMembersAsync(long fleetId);
     Task<IReadOnlyList<FleetInviteInfo>> ListPendingFleetInvitesAsync(long fleetId);
     Task<IReadOnlyList<FleetJoinRequestInfo>> ListPendingJoinRequestsAsync(long fleetId);
