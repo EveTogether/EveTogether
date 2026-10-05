@@ -84,8 +84,37 @@ public sealed class ServerTokenRefreshReleasedCharacterTests : IDisposable
         Assert.Equal(["rotated"], _revoker.Revoked);
     }
 
-    private ServerTokenRefreshService _NewService(IEsiAuthClient authClient) =>
-        new(_services.GetRequiredService<IServiceScopeFactory>(), authClient, new FixedJwtValidator(),
+    [Fact]
+    public async Task RefreshAllAsync_ValidationFailsAfterTheSsoRotatedTheToken_KeepsTheRotatedToken()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await _SeedAsync(withSession: true, ct);
+        var jwksDown = new ThrowingJwtValidator(new HttpRequestException("No such host is known. (login.eveonline.com:443)"));
+
+        await _NewService(new RotatingAuthClient(), jwksDown).RefreshAllAsync(ct);
+
+        var stored = Assert.Single(await _repository.ListSyncedAsync(ct));
+        Assert.Equal("rotated", _StoredRefreshToken(stored)); // "original" is spent at EVE; offering it again is invalid_grant
+        Assert.Equal(1, stored.FailureCount); // still a failed refresh: backed off, not marked as refreshed
+        Assert.Empty(_revoker.Revoked);
+    }
+
+    [Fact]
+    public async Task RefreshAllAsync_SsoAnswersWithoutARefreshToken_KeepsTheCurrentOne()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await _SeedAsync(withSession: true, ct);
+
+        await _NewService(new RotatingAuthClient { Rotated = null }).RefreshAllAsync(ct);
+
+        Assert.Equal("original", _StoredRefreshToken(Assert.Single(await _repository.ListSyncedAsync(ct))));
+    }
+
+    private static string _StoredRefreshToken(SyncedCharacter stored) =>
+        new PlainTokenProtector().Unprotect(new EncryptedToken(stored.RefreshTokenCipher, stored.RefreshTokenNonce, stored.RefreshTokenTag));
+
+    private ServerTokenRefreshService _NewService(IEsiAuthClient authClient, IEsiJwtValidator? validator = null) =>
+        new(_services.GetRequiredService<IServiceScopeFactory>(), authClient, validator ?? new FixedJwtValidator(),
             new EsiOptions { ClientId = "app", ClientSecret = "secret" }, TimeProvider.System,
             NullLogger<ServerTokenRefreshService>.Instance);
 
@@ -126,13 +155,14 @@ public sealed class ServerTokenRefreshReleasedCharacterTests : IDisposable
     {
         public int RefreshCalls { get; private set; }
         public Func<Task>? WhileRefreshing { get; init; }
+        public string? Rotated { get; init; } = "rotated";
 
         public async Task<EsiTokenSet> RefreshAsync(string refreshToken, string clientId, string? clientSecret = null, CancellationToken cancellationToken = default)
         {
             RefreshCalls++;
             if (WhileRefreshing is not null)
                 await WhileRefreshing();
-            return new EsiTokenSet("access-token", "rotated", DateTimeOffset.UtcNow.AddMinutes(20));
+            return new EsiTokenSet("access-token", Rotated, DateTimeOffset.UtcNow.AddMinutes(20));
         }
 
         public Task<EsiTokenSet> ExchangePublicAsync(string code, Pkce pkce, string clientId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
@@ -144,6 +174,12 @@ public sealed class ServerTokenRefreshReleasedCharacterTests : IDisposable
     {
         public Task<EsiIdentity> ValidateAsync(string accessToken, string clientId, CancellationToken cancellationToken = default) =>
             Task.FromResult(new EsiIdentity(EsiCharacterId, "Abnoba Auscent", ["esi-skills.read_skills.v1"]));
+    }
+
+    private sealed class ThrowingJwtValidator(Exception inner) : IEsiJwtValidator
+    {
+        public Task<EsiIdentity> ValidateAsync(string accessToken, string clientId, CancellationToken cancellationToken = default) =>
+            Task.FromException<EsiIdentity>(new InvalidOperationException("ESI access token failed validation.", inner));
     }
 
     private sealed class RecordingRevoker : IEsiTokenRevoker

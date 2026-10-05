@@ -55,6 +55,55 @@ public sealed class ServerTokenRefreshServiceTests
         Assert.True(harness.Logger.ErrorCount < 10);
     }
 
+    public static TheoryData<string, Exception, bool> Failures => new()
+    {
+        // name, exception, revoked
+        { "invalid_grant", new EsiTokenExchangeException(400, """{"error":"invalid_grant","error_description":"Invalid refresh token."}"""), true },
+        { "invalid_grant on a 401", new EsiTokenExchangeException(401, """{"error":"invalid_grant"}"""), true },
+        { "invalid_client is the app's fault, not the grant's", new EsiTokenExchangeException(401, """{"error":"invalid_client"}"""), false },
+        { "HTML 401 from a proxy", new EsiTokenExchangeException(401, "<html>Unauthorized</html>"), false },
+        { "SSO 503", new EsiTokenExchangeException(503, "<html>Service Unavailable</html>"), false },
+        { "transport error mentioning 401", new HttpRequestException("Connection to 10.0.0.401 refused"), false },
+    };
+
+    [Theory]
+    [MemberData(nameof(Failures))]
+    public void IsRevoked_OnlyForTheSsosOwnInvalidGrant(string name, Exception failure, bool revoked)
+    {
+        Assert.True(revoked == ServerTokenRefreshService.IsRevoked(failure), name);
+    }
+
+    [Fact]
+    public async Task RefreshAllAsync_Html401FromAProxy_IsRetriedAfterTheBackOff()
+    {
+        using var harness = await TokenRefreshHarness.CreateAsync(new EsiTokenExchangeException(401, "<html>Unauthorized</html>"));
+
+        await harness.Service.RefreshAllAsync(TestContext.Current.CancellationToken);
+        harness.Time.Advance(TimeSpan.FromHours(2));
+        await harness.Service.RefreshAllAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(2, harness.AuthClient.RefreshCalls); // a revoked verdict would never refresh again until re-paired
+    }
+
+    [Theory]
+    [InlineData(1, 4.5, 5.5)]
+    [InlineData(2, 9, 11)]
+    [InlineData(3, 18, 22)]
+    [InlineData(4, 36, 44)]
+    [InlineData(30, 54, 66)]
+    public void FailureBackoff_DoublesPerFailure_UpToAnHour_WithJitter(int failureCount, double minMinutes, double maxMinutes)
+    {
+        Assert.InRange(ServerTokenRefreshService.FailureBackoff(90382598, failureCount).TotalMinutes, minMinutes, maxMinutes);
+    }
+
+    [Fact]
+    public void FailureBackoff_IsStableForOneCharacterAndAttempt_AndSpreadsCharactersApart()
+    {
+        Assert.Equal(ServerTokenRefreshService.FailureBackoff(90382598, 3), ServerTokenRefreshService.FailureBackoff(90382598, 3));
+        var spread = Enumerable.Range(90000000, 20).Select(id => ServerTokenRefreshService.FailureBackoff(id, 3)).Distinct().Count();
+        Assert.True(spread > 1, "every character retries at the same moment");
+    }
+
     private sealed class TokenRefreshHarness : IDisposable
     {
         private readonly ServiceProvider _services;
