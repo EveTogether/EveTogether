@@ -65,59 +65,59 @@
                                         <TextBlock Text="COMBAT" Classes="label" FontSize="9" Margin="0,0,0,2"/>
                                         <!-- Hit rate and Quality count YOUR shots only since ET-277; they used to mix in
                                              the rats' shots at you. -->
-                                        <Grid ColumnDefinitions="92,*">
+                                        <Grid ColumnDefinitions="112,*">
                                             <TextBlock Grid.Column="0" Text="Hit rate" Foreground="{DynamicResource TextAccentBrush}" FontSize="11"/>
                                             <TextBlock Grid.Column="1" Text="{Binding HitRate}" FontSize="11"
                                                        ToolTip.Tip="Your own shots that landed, of all your shots this session"/>
                                         </Grid>
-                                        <Grid ColumnDefinitions="92,*">
+                                        <Grid ColumnDefinitions="112,*">
                                             <TextBlock Grid.Column="0" Text="Damage" Foreground="{DynamicResource TextAccentBrush}" FontSize="11"/>
                                             <TextBlock Grid.Column="1" Text="{Binding Damage}" FontSize="11"/>
                                         </Grid>
-                                        <Grid ColumnDefinitions="92,*">
+                                        <Grid ColumnDefinitions="112,*">
                                             <TextBlock Grid.Column="0" Text="Quality" Foreground="{DynamicResource TextAccentBrush}" FontSize="11"/>
                                             <TextBlock Grid.Column="1" Text="{Binding Qualities}" FontSize="11" TextWrapping="Wrap"
                                                        ToolTip.Tip="How your own hits landed this session, by the word the game log gives each one"/>
                                         </Grid>
-                                        <Grid ColumnDefinitions="92,*">
+                                        <Grid ColumnDefinitions="112,*">
                                             <TextBlock Grid.Column="0" Text="Application" Foreground="{DynamicResource TextAccentBrush}" FontSize="11"/>
                                             <TextBlock Grid.Column="1" Text="{Binding Application}" FontSize="11" TextWrapping="Wrap"
                                                        ToolTip.Tip="{Binding Dps.ApplicationTip}"/>
                                         </Grid>
-                                        <Grid ColumnDefinitions="92,*" IsVisible="{Binding HasReps}">
+                                        <Grid ColumnDefinitions="112,*" IsVisible="{Binding HasReps}">
                                             <TextBlock Grid.Column="0" Text="Reps" Foreground="{DynamicResource TextAccentBrush}" FontSize="11"/>
                                             <TextBlock Grid.Column="1" Text="{Binding Reps}" FontSize="11"/>
                                         </Grid>
-                                        <Grid ColumnDefinitions="92,*" IsVisible="{Binding HasNeut}">
+                                        <Grid ColumnDefinitions="112,*" IsVisible="{Binding HasNeut}">
                                             <TextBlock Grid.Column="0" Text="Neut" Foreground="{DynamicResource TextAccentBrush}" FontSize="11"/>
                                             <TextBlock Grid.Column="1" Text="{Binding Neut}" FontSize="11"/>
                                         </Grid>
 
                                         <TextBlock Text="ECONOMY" Classes="label" FontSize="9" Margin="0,8,0,2"/>
-                                        <Grid ColumnDefinitions="92,*">
+                                        <Grid ColumnDefinitions="112,*">
                                             <TextBlock Grid.Column="0" Text="Bounty" Foreground="{DynamicResource TextAccentBrush}" FontSize="11"/>
                                             <TextBlock Grid.Column="1" Text="{Binding Bounty}" Classes="mono"
                                                        Foreground="{DynamicResource AccentBrightBrush}" FontSize="12"/>
                                         </Grid>
-                                        <Grid ColumnDefinitions="92,*">
-                                            <TextBlock Grid.Column="0" Text="Kills · ISK/h" Foreground="{DynamicResource TextAccentBrush}" FontSize="11"/>
+                                        <Grid ColumnDefinitions="112,*">
+                                            <TextBlock Grid.Column="0" Text="Total kills · ISK/h" Foreground="{DynamicResource TextAccentBrush}" FontSize="11"/>
                                             <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10">
                                                 <TextBlock Text="{Binding Kills}" Classes="mono" FontSize="11"/>
                                                 <TextBlock Text="{Binding IskPerHour}" Foreground="{DynamicResource TextAccentBrush}" FontSize="11"/>
                                             </StackPanel>
                                         </Grid>
-                                        <Grid ColumnDefinitions="92,*" IsVisible="{Binding HasMining}">
+                                        <Grid ColumnDefinitions="112,*" IsVisible="{Binding HasMining}">
                                             <TextBlock Grid.Column="0" Text="Mined" Foreground="{DynamicResource TextAccentBrush}" FontSize="11"/>
                                             <TextBlock Grid.Column="1" Text="{Binding Mined}" FontSize="11" TextWrapping="Wrap"/>
                                         </Grid>
 
                                         <TextBlock Text="ACTIVITY" Classes="label" FontSize="9" Margin="0,8,0,2"/>
-                                        <Grid ColumnDefinitions="92,*">
+                                        <Grid ColumnDefinitions="112,*">
                                             <TextBlock Grid.Column="0" Text="Location" Foreground="{DynamicResource TextAccentBrush}" FontSize="11"/>
                                             <TextBlock Grid.Column="1" Text="{Binding LocationDisplay}" FontSize="11"
                                                        Classes.offline="{Binding Dps.IsOffline}"/>
                                         </Grid>
-                                        <Grid ColumnDefinitions="92,*">
+                                        <Grid ColumnDefinitions="112,*">
                                             <TextBlock Grid.Column="0" Text="Enemies" Foreground="{DynamicResource TextAccentBrush}" FontSize="11"/>
                                             <TextBlock Grid.Column="1" Text="{Binding Enemies}" FontSize="11" TextWrapping="Wrap"/>
                                         </Grid>

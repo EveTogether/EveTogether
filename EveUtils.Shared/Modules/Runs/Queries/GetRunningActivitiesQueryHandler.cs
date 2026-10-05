@@ -56,6 +56,7 @@ internal sealed class GetRunningActivitiesQueryHandler(
                     activity.Key,
                     activity.MinBy(run => run.StartedAtUtc)?.SolarSystemId,
                     facts.Sum(run => run.BountyIsk),
+                    activity.Sum(run => run.BountyEntries.Count),
                     loot.Length == 0 ? null : loot.Sum(),
                     IskContributors.Breakdown(facts, nowUtc));
             })];

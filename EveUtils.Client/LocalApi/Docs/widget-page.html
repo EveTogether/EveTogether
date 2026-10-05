@@ -429,10 +429,7 @@ function currentRun() {
   }
   if (has('loot')) c.stat('Loot', isk(run.lootIsk), 'acc');
   if (has('bounty')) c.stat('Bounty', isk(run.bountyIsk));
-  if (has('kills')) {
-    const crew = new Set(run.crew.map(member => member.characterId));
-    c.stat('Kills', n0(data.metrics.filter(m => crew.has(m.characterId)).reduce((sum, m) => sum + m.kills, 0)));
-  }
+  if (has('kills')) c.stat('Kills', n0(run.kills));
   if (has('total')) c.hero('Run total', isk(run.totalIsk) + ' ISK', 'acc', 'mid');
   if (has('crew')) c.note('Crew: ' + run.crew.map(member => member.name || 'Pilot').join(' · '));
   return c;
