@@ -8,6 +8,7 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using EveUtils.Client.LocalApi.Widgets;
 using EveUtils.Shared.App;
 using EveUtils.Shared.Modules.Settings.Repositories;
 using Microsoft.AspNetCore.Builder;
@@ -110,6 +111,7 @@ public sealed class LocalApiServer(
         builder.Services.AddOpenApi(); // self-documenting: /openapi/v1.json + Scalar UI below
         builder.Services.AddSingleton(privacy);
         builder.Services.AddSingleton(queries); // reads the existing client services
+        builder.Services.AddSingleton(_ => _rootServices.GetRequiredService<WidgetStore>()); // resolved on the first widget request
         builder.Services.AddSingleton(runs);
         // Widgets are served by this host itself, so same-origin is enough; any other site has to be allowlisted
         // (localapi.allowedorigins), otherwise every page open in the browser could read the API.
@@ -134,6 +136,8 @@ public sealed class LocalApiServer(
             .ExcludeFromDescription();
         app.MapGet("/widget", () => Results.Content(LocalApiDocs.Render(LocalApiDocs.WidgetResource, baseUrl), "text/html"))
             .ExcludeFromDescription();
+
+        app.MapWidgetEndpoints(baseUrl, apiKey);
 
         app.MapGet("/api/v1/health", () => new HealthResponse("ok", _AppVersion(), ApiVersion));
         app.MapGet("/api/v1/metrics", (LocalApiQueries queries, CancellationToken ct) => queries.GetMetricsAsync(ct))
@@ -290,7 +294,8 @@ public sealed class LocalApiServer(
         || allowedOrigins.Contains(origin, StringComparer.OrdinalIgnoreCase);
 
     private static bool _NeedsKey(PathString path) =>
-        path.StartsWithSegments("/api") || path.StartsWithSegments("/ws") || path.StartsWithSegments("/hub");
+        path.StartsWithSegments("/api") || path.StartsWithSegments("/ws") || path.StartsWithSegments("/hub")
+        || path.StartsWithSegments("/w");
 
     private static bool _KeyMatches(HttpRequest request, byte[] expected)
     {

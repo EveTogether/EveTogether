@@ -7,6 +7,7 @@ using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
 using EveUtils.Client.LocalApi.Dtos;
+using EveUtils.Client.LocalApi.Widgets;
 using EveUtils.Client.Runs;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Fleet.Events;
@@ -51,6 +52,7 @@ public sealed class LocalApiBroadcaster
     private readonly CancellationTokenSource _cts = new();
     private readonly List<IDisposable> _subscriptions = [];
     private Task? _metricsLoop;
+    private WidgetStore? _widgets;
     private Task? _runsLoop;
     private IHubContext<FleetHub>? _hub;
     private int _signalRCount;
@@ -100,12 +102,18 @@ public sealed class LocalApiBroadcaster
             pockets.Changed += _OnRunsChanged;
             _subscriptions.Add(new Unsubscriber(() => pockets.Changed -= _OnRunsChanged));
         }
+        if (_rootServices.GetService<WidgetStore>() is { } widgets)
+        {
+            _widgets = widgets;
+            widgets.Changed += _OnWidgetChanged;
+        }
         _metricsLoop = Task.Run(() => _MetricsLoopAsync(_cts.Token));
         _runsLoop = Task.Run(() => _RunsLoopAsync(_cts.Token));
     }
 
     public async Task StopAsync()
     {
+        if (_widgets is not null) _widgets.Changed -= _OnWidgetChanged;
         _cts.Cancel();
         foreach (var subscription in _subscriptions) subscription.Dispose();
         _subscriptions.Clear();
@@ -250,6 +258,9 @@ public sealed class LocalApiBroadcaster
         }
         finally { _sendGate.Release(); }
     }
+
+    // The store raises this inside the save; the send must not hold the save up, and _BroadcastAsync never throws.
+    private void _OnWidgetChanged(WidgetConfigChangedDto change) => _ = _BroadcastAsync("widget.config", change, _NowMs());
 
     private static async Task _SendRawAsync(WebSocket socket, string json, CancellationToken cancellationToken)
     {

@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>EVE Together widget</title>
+<link rel="icon" href="data:,"/>
+<style>
+  /* Loaded by an OBS browser source: transparent, pinned top-left, nothing on screen but the widget itself. */
+  html, body { margin:0; background:transparent; overflow:hidden; }
+  body { font:15px/1.4 system-ui,Segoe UI,Roboto,sans-serif; color:#e6edf3; }
+  #widget { display:inline-block; padding:10px 14px; border-radius:8px; --accent:#4fc3f7; }
+  #widget[hidden] { display:none; }
+  #widget .name { font-weight:600; color:var(--accent); text-shadow:0 1px 2px rgba(0,0,0,.8); }
+  #widget .fields { display:flex; flex-wrap:wrap; gap:4px 12px; margin-top:4px; }
+  #widget .field { font-variant-numeric:tabular-nums; text-shadow:0 1px 2px rgba(0,0,0,.8); }
+  #widget .field span { color:#8b949e; margin-right:4px; }
+  #widget.theme-together { border-left:3px solid var(--accent); }
+  #widget.theme-minimal .fields { margin-top:0; }
+  #widget.theme-ticker { display:inline-flex; gap:16px; align-items:center; border-radius:0; }
+  #widget.theme-ticker .fields { margin-top:0; flex-wrap:nowrap; }
+</style>
+</head>
+<body>
+<div id="widget" hidden><div class="name"></div><div class="fields"></div></div>
+<script>
+  // Placeholder shell: applies the saved config (theme, accent, background, scale) and follows widget.config live.
+  // The presets fill in their own content later. Every piece of text goes in through textContent.
+  const widgetId = decodeURIComponent(location.pathname.split('/').pop());
+  const key = new URLSearchParams(location.search).get('key');
+  const keyQuery = key ? '?key=' + encodeURIComponent(key) : '';
+  const root = document.getElementById('widget');
+
+  function apply(config) {
+    root.className = 'theme-' + config.theme;
+    root.dataset.preset = config.preset;
+    if (/^#[0-9a-fA-F]{6}$/.test(config.accent)) root.style.setProperty('--accent', config.accent);
+    root.style.background = config.background === 'panel'
+      ? 'rgba(13,17,23,' + (config.panelOpacity / 100) + ')'
+      : 'transparent';
+    root.style.zoom = config.scale / 100;
+    root.querySelector('.name').textContent = config.name;
+    const fields = root.querySelector('.fields');
+    fields.replaceChildren(...config.fields.map(field => {
+      const cell = document.createElement('div');
+      cell.className = 'field';
+      const label = document.createElement('span');
+      label.textContent = field;
+      cell.append(label, '—');
+      return cell;
+    }));
+    root.hidden = false;
+  }
+
+  async function load() {
+    try {
+      const response = await fetch('/api/v1/widgets/' + encodeURIComponent(widgetId) + keyQuery);
+      if (response.ok) apply((await response.json()).config);
+    } catch { /* stays empty: no error on stream */ }
+  }
+
+  function connect() {
+    const socket = new WebSocket('ws://' + location.host + '/ws' + keyQuery);
+    socket.onopen = load; // also picks up a change made while the socket was down
+    socket.onmessage = event => {
+      const message = JSON.parse(event.data);
+      if (message.type !== 'widget.config' || message.data.id !== widgetId) return;
+      if (message.data.change === 'deleted') root.hidden = true;
+      else apply(message.data.config);
+    };
+    socket.onclose = () => setTimeout(connect, 3000);
+  }
+
+  load();
+  connect();
+</script>
+</body>
+</html>
