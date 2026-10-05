@@ -338,18 +338,17 @@ public sealed class ClipboardLootCaptureTests
             + "Mutaplasmids\t10.000,00 ISK\tGravid Mutaplasmid\t0,01 m3\t2\t\r\n"
             + "Mutaplasmids\t10.000,00 ISK\tGravid Mutaplasmid\t0,01 m3\t3\t";
 
-        using var env = await Env.StartAsync(
-            sde: new FakeSdeAccessor()
-                .Add(28668, "Nanite Repair Paste", 285, 7)
-                .Add(33999, "Tripped Power Circuit", 448, 25)
-                .Add(47740, "Gravid Mutaplasmid", 1945, 35),
-            prices: new Dictionary<int, double> { [47740] = 3_000_000 });
+        FakeSdeAccessor sde = new FakeSdeAccessor()
+            .Add(28668, "Nanite Repair Paste", 285, 7)
+            .Add(33999, "Tripped Power Circuit", 448, 25)
+            .Add(47740, "Gravid Mutaplasmid", 1945, 35);
+        using var env = await Env.StartAsync(sde: sde, prices: new Dictionary<int, double> { [47740] = 3_000_000 });
         await env.StartRunAsync();
         env.Dialogs.ActivityWindowRunId = env.RunId;
 
         var section = new RunLootViewModel(env.Instance.Services.GetRequiredService<CqrsDispatcher>(),
             env.Instance.Services.GetRequiredService<IAppraisalProvider>(),
-            env.Instance.Services.GetRequiredService<ISdeAccessor>())
+            sde)
         {
             RunId = env.RunId,
             IsCargoDiffShown = true
