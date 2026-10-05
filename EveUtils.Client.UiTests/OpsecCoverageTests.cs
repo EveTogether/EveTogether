@@ -149,6 +149,7 @@ public sealed class OpsecCoverageTests
     private static readonly IReadOnlyDictionary<string, string> Exempt = new Dictionary<string, string>
     {
         ["Views/FitDetailWindow.axaml|Signature"] = "a ship's signature radius, a fitting stat, not a scanned signature",
+        ["Views/Widgets/WidgetManagerWindow.axaml|LocationNote"] = "fixed help text about the \"Include my location\" setting, never a system name",
         ["Views/FleetRosterWindow.axaml|EsiAutoApplyStructure"] = "whether the in-game wing and squad structure is applied, a fleet setting",
         ["Views/EscalationDialogWindow.axaml|SiteQuery"] = "the text the pilot is typing into a search box: masking an input makes it unusable",
         ["Views/ManualRunStartWindow.axaml|SiteQuery"] = "the text the pilot is typing into a search box: masking an input makes it unusable",

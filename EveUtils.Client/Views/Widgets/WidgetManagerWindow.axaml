@@ -1,0 +1,369 @@
+<v:ChromedWindow xmlns="https://github.com/avaloniaui" xmlns:v="using:EveUtils.Client.Views"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vw="using:EveUtils.Client.ViewModels.Widgets"
+        xmlns:wv="using:EveUtils.Client.Views.Widgets"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="1180" d:DesignHeight="760"
+        x:Class="EveUtils.Client.Views.Widgets.WidgetManagerWindow"
+        x:DataType="vw:WidgetManagerViewModel"
+        Width="1180" Height="780" MinWidth="820" MinHeight="520"
+        WindowStartupLocation="CenterOwner"
+        Title="Widget manager">
+
+    <!-- WIDGET MANAGER (ET-434): the preset library and My widgets, the editor with a live preview, and what OBS needs
+         (URL, size, the four steps). A hosted module like GAME LOGS (DialogService.ShowWidgetManager). -->
+    <Grid x:Name="ManagerRoot">
+        <Grid.Resources>
+            <!-- A dark game-like backdrop, so a transparent widget is judged against what it will sit on. -->
+            <LinearGradientBrush x:Key="WidgetBackdrop" StartPoint="0%,0%" EndPoint="100%,100%">
+                <GradientStop Color="#0B1220" Offset="0"/>
+                <GradientStop Color="#141B2A" Offset="0.55"/>
+                <GradientStop Color="#2A1518" Offset="1"/>
+            </LinearGradientBrush>
+        </Grid.Resources>
+        <Grid.Styles>
+            <Style Selector="Border.tile">
+                <Setter Property="Width" Value="300"/>
+                <Setter Property="Margin" Value="0,0,12,12"/>
+                <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+                <Setter Property="Background" Value="{StaticResource BgPanelBrush}"/>
+            </Style>
+            <Style Selector="TextBlock.section">
+                <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+                <Setter Property="FontSize" Value="10"/>
+                <Setter Property="LetterSpacing" Value="1.8"/>
+                <Setter Property="Margin" Value="0,14,0,6"/>
+            </Style>
+            <Style Selector="TextBlock.warning">
+                <Setter Property="Foreground" Value="{StaticResource WarnBrush}"/>
+                <Setter Property="FontSize" Value="11"/>
+                <Setter Property="TextWrapping" Value="Wrap"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+            </Style>
+            <Style Selector="TextBlock.status.error">
+                <Setter Property="Foreground" Value="{StaticResource RedBrush}"/>
+            </Style>
+            <Style Selector="Button.swatch">
+                <Setter Property="Padding" Value="2"/>
+                <Setter Property="Margin" Value="0,0,8,0"/>
+                <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+                <Setter Property="Cursor" Value="Hand"/>
+            </Style>
+            <Style Selector="Button.swatch.on">
+                <Setter Property="BorderThickness" Value="2"/>
+                <Setter Property="BorderBrush" Value="{StaticResource TextBrightBrush}"/>
+            </Style>
+        </Grid.Styles>
+
+        <Grid.DataTemplates>
+            <DataTemplate DataType="vw:WidgetTileViewModel">
+                <Border Classes="tile">
+                    <StackPanel>
+                        <Border Height="130" Background="{StaticResource WidgetBackdrop}" ClipToBounds="True">
+                            <Viewbox Stretch="Uniform" StretchDirection="DownOnly" Margin="12">
+                                <wv:WidgetPreview DataContext="{Binding Preview}"/>
+                            </Viewbox>
+                        </Border>
+                        <StackPanel Margin="12,10,12,12" Spacing="6">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <TextBlock FontWeight="SemiBold" FontSize="13" Foreground="{StaticResource TextBrightBrush}"
+                                           VerticalAlignment="Center" Text="{Binding Title}"/>
+                                <Border Classes="chip dim"><TextBlock Text="{Binding GroupLabel}"/></Border>
+                            </StackPanel>
+                            <TextBlock FontSize="11" Foreground="{StaticResource TextBrush}" TextWrapping="Wrap" Height="32"
+                                       Text="{Binding Description}"/>
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <Button Classes="accent" Content="{Binding OpenLabel}" Command="{Binding OpenCommand}"/>
+                                <Button Content="Copy URL" Click="OnCopyUrl"/>
+                                <Button Content="Open" Click="OnOpenUrl"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+            </DataTemplate>
+        </Grid.DataTemplates>
+
+        <DockPanel>
+            <!-- ══ Header ══ -->
+            <Border DockPanel.Dock="Top" Padding="14,12" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource BorderBrush}">
+                <StackPanel Orientation="Horizontal" Spacing="10">
+                    <TextBlock Classes="panel-title" FontSize="13" Text="WIDGET MANAGER" VerticalAlignment="Center"/>
+                    <Border Classes="chip dim"><TextBlock Text="PRESETS · OBS OVERLAYS"/></Border>
+                </StackPanel>
+            </Border>
+
+            <!-- ══ Local API state and the API key ══ -->
+            <Border DockPanel.Dock="Top" Padding="14,8" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource BorderBrush}">
+                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="16">
+                    <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8">
+                        <Ellipse Width="9" Height="9" VerticalAlignment="Center" Fill="#6B7280" IsVisible="{Binding !IsApiRunning}"/>
+                        <Ellipse Width="9" Height="9" VerticalAlignment="Center" Fill="#4EC79E" IsVisible="{Binding IsApiRunning}"/>
+                        <TextBlock x:Name="ApiStatus" VerticalAlignment="Center" FontSize="11" Text="{Binding ApiStatusText}"/>
+                        <Button x:Name="StartApiButton" Classes="accent" Content="Start Local API" Command="{Binding StartApiCommand}"
+                                IsVisible="{Binding !IsApiRunning}"/>
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" IsVisible="{Binding HasApiKey}">
+                        <TextBlock Classes="label" Text="API KEY" VerticalAlignment="Center"/>
+                        <TextBlock x:Name="ApiKeyBlock" FontFamily="{StaticResource MonoFont}" FontSize="11" VerticalAlignment="Center"
+                                   Text="{Binding ApiKeyText}"/>
+                        <Button Content="{Binding RevealLabel}" Command="{Binding RevealKeyCommand}"/>
+                        <Button Content="Copy" Click="OnCopyApiKey"/>
+                        <Button x:Name="RenewKeyButton" Content="Renew…" Command="{Binding RenewKeyCommand}"
+                                ToolTip.Tip="Makes a new key. OBS sources and tools that use the old key stop working until they get the new URL."/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" IsVisible="{Binding !HasApiKey}">
+                        <TextBlock Classes="hint" Margin="0" VerticalAlignment="Center"
+                                   Text="No API key: any program on this PC can read the Local API."/>
+                        <Button Content="Create key" Command="{Binding RenewKeyCommand}"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <Panel>
+                <!-- ══ Library ══ -->
+                <ScrollViewer IsVisible="{Binding IsLibrary}" HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel Margin="16,8,4,16">
+                        <TextBlock Classes="section" Text="PRESET LIBRARY"/>
+                        <TextBlock Classes="hint" Margin="0,0,0,10"
+                                   Text="Ready-made overlays. Copy a URL straight into OBS, or customize one first: that saves your own copy under My widgets."/>
+                        <ItemsControl x:Name="PresetList" ItemsSource="{Binding Presets}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                        </ItemsControl>
+
+                        <TextBlock Classes="section" Text="MY WIDGETS"/>
+                        <TextBlock Classes="hint" Margin="0,0,0,10" IsVisible="{Binding !HasMyWidgets}"
+                                   Text="Nothing saved yet. Customize a preset and save it to get a widget with its own URL."/>
+                        <ItemsControl x:Name="MyWidgetList" ItemsSource="{Binding MyWidgets}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                        </ItemsControl>
+                    </StackPanel>
+                </ScrollViewer>
+
+                <!-- ══ Editor ══ -->
+                <Panel IsVisible="{Binding !IsLibrary}">
+                    <DockPanel DataContext="{Binding Editor}" x:DataType="vw:WidgetEditorViewModel">
+                        <Border DockPanel.Dock="Top" Padding="14,8" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource BorderBrush}">
+                            <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto" ColumnSpacing="10">
+                                <Button Grid.Column="0" Classes="navlink" Content="← Library" Command="{Binding BackCommand}"/>
+                                <TextBlock Grid.Column="1" Classes="panel-title" VerticalAlignment="Center" Text="{Binding Title}"/>
+                                <TextBlock Grid.Column="2" x:Name="EditorStatus" Classes="status" Classes.error="{Binding IsError}"
+                                           FontSize="11" VerticalAlignment="Center" HorizontalAlignment="Right"
+                                           TextTrimming="CharacterEllipsis" Text="{Binding StatusText}"/>
+                                <Button Grid.Column="3" Classes="danger" Content="Delete" Command="{Binding DeleteCommand}"
+                                        IsVisible="{Binding !IsBuiltIn}"/>
+                                <Button Grid.Column="4" x:Name="SaveButton" Classes="accent" Content="{Binding SaveLabel}"
+                                        Command="{Binding SaveCommand}"/>
+                            </Grid>
+                        </Border>
+
+                        <!-- Left: the form -->
+                        <Border DockPanel.Dock="Left" Width="370" BorderThickness="0,0,1,0" BorderBrush="{DynamicResource BorderBrush}">
+                            <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+                                <StackPanel Margin="14,0,14,16">
+                                    <TextBlock Classes="section" Text="NAME"/>
+                                    <TextBox x:Name="NameBox" Text="{Binding Name}" MaxLength="64"/>
+
+                                    <TextBlock Classes="section" Text="CHARACTERS"/>
+                                    <WrapPanel>
+                                        <Button Classes="seg" Classes.on="{Binding IsAllCharacters}" Margin="0,0,6,6"
+                                                Content="All my characters" Command="{Binding AllCharactersCommand}"/>
+                                        <ItemsControl ItemsSource="{Binding Characters}">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate x:DataType="vw:WidgetCharacterChipViewModel">
+                                                    <Button Classes="seg" Classes.on="{Binding IsOn}" Margin="0,0,6,6"
+                                                            Content="{Binding Name}" Command="{Binding ToggleCommand}"/>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </WrapPanel>
+                                    <TextBlock Classes="hint" Margin="0"
+                                               Text="Saved with the widget. All my characters means whoever is in game."/>
+
+                                    <StackPanel IsVisible="{Binding HasOptions}">
+                                        <TextBlock Classes="section" Text="OPTIONS"/>
+                                        <ItemsControl ItemsSource="{Binding Options}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate x:DataType="vw:WidgetOptionViewModel">
+                                                    <Grid ColumnDefinitions="96,*" Margin="0,0,0,6">
+                                                        <TextBlock Grid.Column="0" FontSize="11" VerticalAlignment="Center" Text="{Binding Label}"/>
+                                                        <ItemsControl Grid.Column="1" ItemsSource="{Binding Choices}" IsVisible="{Binding !IsNumber}">
+                                                            <ItemsControl.ItemsPanel>
+                                                                <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                                                            </ItemsControl.ItemsPanel>
+                                                            <ItemsControl.ItemTemplate>
+                                                                <DataTemplate x:DataType="vw:WidgetChoiceViewModel">
+                                                                    <Button Classes="seg" Classes.on="{Binding IsOn}" Content="{Binding Label}"
+                                                                            Command="{Binding PickCommand}"/>
+                                                                </DataTemplate>
+                                                            </ItemsControl.ItemTemplate>
+                                                        </ItemsControl>
+                                                        <TextBox Grid.Column="1" IsVisible="{Binding IsNumber}" Width="140" HorizontalAlignment="Left"
+                                                                 Text="{Binding Text}"/>
+                                                    </Grid>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                        <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding ShowsSessionReset}">
+                                            <Button x:Name="ResetSessionButton" Content="Reset session" Command="{Binding ResetSessionCommand}"
+                                                    IsEnabled="{Binding CanResetSession}"/>
+                                            <TextBlock Classes="hint" Margin="0" VerticalAlignment="Center" Width="230"
+                                                       Text="A session counts from app start until you reset it."/>
+                                        </StackPanel>
+                                    </StackPanel>
+
+                                    <Grid ColumnDefinitions="*,Auto">
+                                        <TextBlock Grid.Column="0" Classes="section" Text="FIELDS"/>
+                                        <TextBlock Grid.Column="1" Classes="hint" Margin="0,14,0,6"
+                                                   Text="API = served today · APP = not served yet"/>
+                                    </Grid>
+                                    <ItemsControl x:Name="FieldList" ItemsSource="{Binding Fields}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="vw:WidgetFieldViewModel">
+                                                <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6" Margin="0,0,0,2">
+                                                    <CheckBox Grid.Column="0" IsChecked="{Binding IsOn}" IsEnabled="{Binding CanChoose}"
+                                                              Content="{Binding Label}" FontSize="12"/>
+                                                    <Border Grid.Column="1" Classes="chip warn" IsVisible="{Binding IsLocation}">
+                                                        <TextBlock Text="LOCATION"/>
+                                                    </Border>
+                                                    <Border Grid.Column="2" Classes="chip" Classes.ok="{Binding IsServed}"
+                                                            Classes.warn="{Binding !IsServed}" ToolTip.Tip="{Binding SourceTip}">
+                                                        <TextBlock Text="{Binding SourceLabel}"/>
+                                                    </Border>
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+
+                                    <TextBlock Classes="section" Text="THEME"/>
+                                    <ItemsControl ItemsSource="{Binding Themes}">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="vw:WidgetChoiceViewModel">
+                                                <Button Classes="seg" Classes.on="{Binding IsOn}" MinWidth="90" Content="{Binding Label}"
+                                                        Command="{Binding PickCommand}"/>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+
+                                    <TextBlock Classes="section" Text="ACCENT"/>
+                                    <ItemsControl ItemsSource="{Binding Accents}">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="vw:WidgetChoiceViewModel">
+                                                <Button Classes="swatch" Classes.on="{Binding IsOn}"
+                                                        ToolTip.Tip="{Binding Label}" Command="{Binding PickCommand}">
+                                                    <Border Width="20" Height="20" Background="{Binding Swatch}"/>
+                                                </Button>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+
+                                    <TextBlock Classes="section" Text="BACKGROUND"/>
+                                    <ItemsControl ItemsSource="{Binding Backgrounds}">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="vw:WidgetChoiceViewModel">
+                                                <Button Classes="seg" Classes.on="{Binding IsOn}" MinWidth="120" Content="{Binding Label}"
+                                                        Command="{Binding PickCommand}"/>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                    <Grid ColumnDefinitions="*,48" IsEnabled="{Binding IsPanel}" Margin="0,4,0,0">
+                                        <Slider Grid.Column="0" Minimum="0" Maximum="100" TickFrequency="5" IsSnapToTickEnabled="True"
+                                                Value="{Binding PanelOpacity}"/>
+                                        <TextBlock Grid.Column="1" FontSize="11" VerticalAlignment="Center" HorizontalAlignment="Right">
+                                            <Run Text="{Binding PanelOpacity}"/><Run Text=" %"/>
+                                        </TextBlock>
+                                    </Grid>
+
+                                    <TextBlock Classes="section" Text="SIZE"/>
+                                    <Grid ColumnDefinitions="*,48">
+                                        <Slider Grid.Column="0" Minimum="50" Maximum="300" TickFrequency="10" IsSnapToTickEnabled="True"
+                                                Value="{Binding Scale}"/>
+                                        <TextBlock Grid.Column="1" FontSize="11" VerticalAlignment="Center" HorizontalAlignment="Right">
+                                            <Run Text="{Binding Scale}"/><Run Text=" %"/>
+                                        </TextBlock>
+                                    </Grid>
+                                    <TextBlock Classes="hint" Margin="0">
+                                        <Run Text="In OBS: "/><Run Text="{Binding Width}"/><Run Text=" × "/><Run Text="{Binding Height}"/><Run Text=" px"/>
+                                    </TextBlock>
+
+                                    <TextBlock Classes="section" Text="PRIVACY"/>
+                                    <TextBlock Classes="hint" Margin="0" Text="{Binding LocationNote}"/>
+                                    <TextBlock Classes="hint" Text="OPSEC mode also hides the location in every widget while it is on."/>
+                                </StackPanel>
+                            </ScrollViewer>
+                        </Border>
+
+                        <!-- Right, bottom: URL, warnings and the OBS steps -->
+                        <Border DockPanel.Dock="Bottom" Padding="14,10" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource BorderBrush}">
+                            <StackPanel Spacing="8">
+                                <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto" ColumnSpacing="8">
+                                    <TextBlock Grid.Column="0" Classes="label" Text="URL" VerticalAlignment="Center"/>
+                                    <TextBox Grid.Column="1" x:Name="UrlBox" IsReadOnly="True" FontFamily="{StaticResource MonoFont}"
+                                             FontSize="11" Text="{Binding Url}"/>
+                                    <Button Grid.Column="2" Content="Copy URL" Click="OnCopyUrl"/>
+                                    <Button Grid.Column="3" Content="Open widget" Click="OnOpenUrl"/>
+                                    <Button Grid.Column="4" Content="Add to OBS" Command="{Binding ToggleObsGuideCommand}"/>
+                                </Grid>
+                                <TextBlock Classes="warning" IsVisible="{Binding UrlHasKey}"
+                                           Text="⚠ This URL contains your API key. Keep it off stream: don't show it, the OBS properties or this window."/>
+                                <StackPanel Orientation="Horizontal" Spacing="8"
+                                            IsVisible="{Binding !#ManagerRoot.((vw:WidgetManagerViewModel)DataContext).IsApiRunning}">
+                                    <TextBlock Classes="warning" Text="⚠ The Local API is not running, so OBS cannot load this widget."/>
+                                    <Button Classes="accent" Content="Start Local API"
+                                            Command="{Binding #ManagerRoot.((vw:WidgetManagerViewModel)DataContext).StartApiCommand}"/>
+                                </StackPanel>
+                                <StackPanel x:Name="ObsGuide" Spacing="3" IsVisible="{Binding IsObsGuideOpen}">
+                                    <TextBlock FontSize="11" TextWrapping="Wrap">
+                                        <Run Text="1. In OBS, under "/><Run Text="Sources" FontWeight="Bold"/><Run Text=", click + and pick "/><Run Text="Browser" FontWeight="Bold"/><Run Text=". Name it &quot;"/><Run Text="{Binding Name}"/><Run Text="&quot;."/>
+                                    </TextBlock>
+                                    <TextBlock FontSize="11" TextWrapping="Wrap">
+                                        <Run Text="2. Paste the URL into "/><Run Text="URL" FontWeight="Bold"/><Run Text=" (Copy URL puts it on your clipboard)."/>
+                                    </TextBlock>
+                                    <TextBlock FontSize="11" TextWrapping="Wrap">
+                                        <Run Text="3. Set "/><Run Text="Width" FontWeight="Bold"/><Run Text=" to "/><Run Text="{Binding Width}" FontWeight="Bold"/><Run Text=" and "/><Run Text="Height" FontWeight="Bold"/><Run Text=" to "/><Run Text="{Binding Height}" FontWeight="Bold"/><Run Text=". Leave Custom CSS as it is: the background is set here."/>
+                                    </TextBlock>
+                                    <TextBlock FontSize="11" TextWrapping="Wrap">
+                                        <Run Text="4. Click "/><Run Text="OK" FontWeight="Bold"/><Run Text=" and drag the widget where you want it. Changes you save here show up in OBS by themselves."/>
+                                    </TextBlock>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Right: the live preview at its real size, top-left as in OBS -->
+                        <Grid RowDefinitions="Auto,*">
+                            <Border Grid.Row="0" Padding="14,8">
+                                <TextBlock Classes="label">
+                                    <Run Text="LIVE PREVIEW · "/><Run Text="{Binding Width}"/><Run Text=" × "/><Run Text="{Binding Height}"/>
+                                </TextBlock>
+                            </Border>
+                            <Border Grid.Row="1" Background="{StaticResource WidgetBackdrop}" ClipToBounds="True">
+                                <ScrollViewer HorizontalScrollBarVisibility="Auto">
+                                    <wv:WidgetPreview x:Name="EditorPreview" DataContext="{Binding Preview}" Margin="0"/>
+                                </ScrollViewer>
+                            </Border>
+                        </Grid>
+                    </DockPanel>
+                </Panel>
+            </Panel>
+        </DockPanel>
+    </Grid>
+</v:ChromedWindow>
