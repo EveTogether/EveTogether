@@ -9,11 +9,14 @@ using EveUtils.Shared.Modules.Skills.Plans.Entities;
 namespace EveUtils.Client.ViewModels.Skills.WhatIf;
 
 /// <summary>
-/// ET-358: the five what-if scenarios for one plan and character, pure over data the caller already holds; scenarios 3-5 are each at least as fast as the one before
-/// (the remap search covers the current split and implant sets only raise bonuses).
+/// ET-358: the five what-if scenarios for one plan and character, pure over data the caller already holds; scenarios
+/// 3-5 are each at least as fast as the one before (the remap search covers the current split and implant sets only
+/// raise bonuses).
 /// <list type="number">
-/// <item>As the queue stands: a queued plan row lands on its own ESI <c>FinishDate</c>, every other row trains after the queue ends (or "now" while paused), back to back</item>
-/// <item>Plan first: every row trains now in the given order, ignoring the queue's order, except the skill training right now keeps its ESI <c>FinishDate</c> progress</item>
+/// <item>As the queue stands: a queued plan row lands on its own ESI <c>FinishDate</c>, every other row trains after
+/// the queue ends (or "now" while paused), back to back</item>
+/// <item>Plan first: every row trains now in the given order, ignoring the queue's order, except the skill training
+/// right now keeps its ESI <c>FinishDate</c> progress</item>
 /// <item>Plan first + remap: <see cref="AttributeRemapOptimizer.Best"/> over the plan rows, implants unchanged</item>
 /// <item>+ a matched +4 implant set, on top of the remap</item>
 /// <item>+ a matched +5 implant set, on top of the remap</item>
@@ -55,9 +58,9 @@ public static class WhatIfCalculator
         ];
     }
 
-    // Scenario 2 ignores the queue's ORDER but credits the progress banked on the skill training right now (position 0):
-    // its remaining time is ESI's own FinishDate, else starting immediately would look slower than "plan first" can be.
-    // Every other row has not started, so the full level-to-level estimate applies.
+    // Scenario 2 ignores the queue's ORDER but credits the progress banked on the skill training right now (position
+    // 0): its remaining time is ESI's own FinishDate, else starting immediately would look slower than "plan first" can
+    // be. Every other row has not started, so the full level-to-level estimate applies.
     private static DateTimeOffset _PlanFirst(IReadOnlyList<SkillPlanRow> rows, IReadOnlyList<CharacterSkillQueueEntry> queue,
         SkillTrainingEstimator estimator, CharacterAttributeSet attributes, DateTimeOffset now)
     {
@@ -73,9 +76,9 @@ public static class WhatIfCalculator
         return cumulative;
     }
 
-    // A plan row queued right now (same skill and level, a real FinishDate) lands on that ESI date; every other row queues
-    // back to back after the queue's end ("now" for a paused queue). The plan's date is the latest row date; a queued row
-    // never pushes it past QueueEndsAt.
+    // A plan row queued right now (same skill and level, a real FinishDate) lands on that ESI date; every other row
+    // queues back to back after the queue's end ("now" for a paused queue). The plan's date is the latest row date; a
+    // queued row never pushes it past QueueEndsAt.
     private static DateTimeOffset _AsQueueStands(IReadOnlyList<SkillPlanRow> rows, IReadOnlyList<CharacterSkillQueueEntry> queue,
         SkillTrainingEstimator estimator, CharacterAttributeSet attributes, DateTimeOffset now)
     {

@@ -4,8 +4,8 @@ using EveUtils.Shared.Modules.Skills.Plans.Enums;
 namespace EveUtils.Shared.Modules.Skills.Plans.Events;
 
 /// <summary>
-/// A character's skill plan changed (created, renamed, deleted or its rows changed, ET-355), published on the local bus after the write so the PLANS tab re-reads.
-/// Never on the wire: a plan is local-only data (D-179).
+/// A character's skill plan changed (created, renamed, deleted or its rows changed, ET-355), published on the local bus
+/// after the write so the PLANS tab re-reads. Never on the wire: a plan is local-only data (D-179).
 /// </summary>
 public sealed class SkillPlansChangedEvent(int characterId, SkillPlansChangeKind kind, int planId)
     : IntegrationEvent<SkillPlansChangedData>(new SkillPlansChangedData(characterId, kind, planId))

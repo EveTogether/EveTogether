@@ -9,8 +9,10 @@ using EveUtils.Shared.Modules.Sde;
 namespace EveUtils.Shared.Modules.Skills;
 
 /// <summary>
-/// Prices every SDE skill against a fit (ET-356): a base calculation with the fit-detail's own module states, then one at level V per candidate skill still below V.
-/// A skill "moves" the fit when one of the fifteen <see cref="SkillImpactStat"/> values changes beyond a small epsilon, and a mover is priced again at its current level + 1; pure, so the caller decides the thread.
+/// Prices every SDE skill against a fit (ET-356): a base calculation with the fit-detail's own module states, then one
+/// at level V per candidate skill still below V. A skill "moves" the fit when one of the fifteen <see
+/// cref="SkillImpactStat"/> values changes beyond a small epsilon, and a mover is priced again at its current level +
+/// 1; pure, so the caller decides the thread.
 /// </summary>
 public sealed class SkillImpactScanner(IDogmaCalculator calculator, IDogmaDataAccessor data)
 {
@@ -58,9 +60,9 @@ public sealed class SkillImpactScanner(IDogmaCalculator calculator, IDogmaDataAc
         return new SkillImpactResult(baseValues, entries, maxedMovers);
     }
 
-    // A stat with no untrained mover is either touched by no skill or only by skills already at V; telling them apart means
-    // testing the already-maxed skills at level 0, but only for stats still without a mover and only over the handful of
-    // skills this character has at V (not the whole SDE).
+    // A stat with no untrained mover is either touched by no skill or only by skills already at V; telling them apart
+    // means testing the already-maxed skills at level 0, but only for stats still without a mover and only over the
+    // handful of skills this character has at V (not the whole SDE).
     private async Task<IReadOnlySet<SkillImpactStat>> _FindMaxedMoversAsync(FitInput baseInput,
         IReadOnlyDictionary<int, int> trainedLevels, IReadOnlyDictionary<SkillImpactStat, double> baseValues,
         IReadOnlyList<SkillImpactEntry> entries, CancellationToken cancellationToken)

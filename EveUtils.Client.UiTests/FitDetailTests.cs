@@ -1243,9 +1243,9 @@ public class FitDetailTests
         Assert.Equal(5, provider.LastSkills.LevelFor(12345));
     }
 
-    // A5 (ET-356): SKILL IMPACT… is enabled only once a character (not an All I–V baseline) is selected, and opens with that
-    // character. characterId 0 matches no mode so the fallback picks All V; 42 selects the coupled character. The command
-    // no-ops while disabled, so expectedName covers both "stayed off" and "opened with the right character".
+    // A5 (ET-356): SKILL IMPACT… is enabled only once a character (not an All I–V baseline) is selected, and opens with
+    // that character. characterId 0 matches no mode so the fallback picks All V; 42 selects the coupled character. The
+    // command no-ops while disabled, so expectedName covers both "stayed off" and "opened with the right character".
     [Theory]
     [InlineData(0, null)]
     [InlineData(42, "Sin Krah")]

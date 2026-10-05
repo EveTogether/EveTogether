@@ -516,9 +516,9 @@ public sealed class FitDetailWindowViewModel : ViewModelBase
             return Task.CompletedTask;
         }
 
-        // Keyed on the character too: another character's SKILL IMPACT tab must open its own tab, not refocus a stale one
-        // (ModuleHostService.Open drops a re-used module id). ET-357: the target cards need the validator/estimator/attributes;
-        // addToPlan stays null here (no selected PLANS plan), PLANS' own + FROM FIT supplies it.
+        // Keyed on the character too: another character's SKILL IMPACT tab must open its own tab, not refocus a stale
+        // one (ModuleHostService.Open drops a re-used module id). addToPlan stays null here, as there is no selected
+        // PLANS plan; PLANS' own + FROM FIT supplies it (ET-357).
         SkillTargetsCalculator? targetsCalculator = _calculator is not null && _validator is not null
             && _trainingEstimator is not null && _effectiveAttributes is not null
             ? new SkillTargetsCalculator(_calculator, _validator, _trainingEstimator, _effectiveAttributes)

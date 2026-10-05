@@ -112,8 +112,9 @@ public sealed class SkillsWindowViewModelTests
     }
 
     /// <summary>
-    /// Re-opening SKILLS while it is open (ET-48 "route to existing") calls RefreshModule on the running instance, which must
-    /// keep the pilot's current selection rather than snap back to the first character. LoadAsync keeps it on any call after the first.
+    /// Re-opening SKILLS while it is open (ET-48 "route to existing") calls RefreshModule on the running instance,
+    /// which must keep the pilot's current selection rather than snap back to the first character. LoadAsync keeps it
+    /// on any call after the first.
     /// </summary>
     [Fact]
     public async Task RefreshModule_KeepsTheCharacterOnScreen_NeverTheOneItFirstOpenedOn()

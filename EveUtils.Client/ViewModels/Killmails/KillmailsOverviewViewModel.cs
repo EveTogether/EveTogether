@@ -205,9 +205,10 @@ public sealed partial class KillmailsOverviewViewModel : ViewModelBase, IRefresh
     [RelayCommand]
     private Task RefreshAsync() => _ReadAsync();
 
-    /// <summary>PASTE LINK (ET-338 + ET-340): reads an ESI killmail link, an in-game <c>killReport:</c> link or the killmail's own
-    /// "Copy" text off the clipboard; a link wins, is imported directly and bypasses the 5-minute cache, while the text becomes a provisional row.
-    /// The opt-in clipboard watch is the alternative to this button.</summary>
+    /// <summary>PASTE LINK (ET-338 + ET-340): reads an ESI killmail link, an in-game <c>killReport:</c> link or the
+    /// killmail's own "Copy" text off the clipboard; a link wins, is imported directly and bypasses the 5-minute cache,
+    /// while the text becomes a provisional row. The opt-in clipboard watch is the alternative to this
+    /// button.</summary>
     [RelayCommand]
     private async Task PasteLinkAsync()
     {

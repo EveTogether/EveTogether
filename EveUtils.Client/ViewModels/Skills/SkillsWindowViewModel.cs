@@ -128,9 +128,9 @@ public sealed partial class SkillsWindowViewModel : ObservableObject, IRefreshab
         return Task.CompletedTask;
     }
 
-    // A background skill import landed for the character shown: rebuild TRAINING QUEUE, OPTIMISE and the header SP text like
-    // a manual F5 (ET-387). Narrower than _SelectCharacterAsync on purpose: the 120s poll would otherwise rebuild CATALOGUE
-    // and PLANS and reset the pilot's selection there.
+    // A background skill import landed for the character shown: rebuild TRAINING QUEUE, OPTIMISE and the header SP text
+    // like a manual F5 (ET-387). Narrower than _SelectCharacterAsync on purpose: the 120s poll would otherwise rebuild
+    // CATALOGUE and PLANS and reset the pilot's selection there.
     private async Task _OnSkillsChangedAsync(IReadOnlyList<SkillsChangedEvent> events)
     {
         if (SelectedCharacterId is not { } current || !events.Any(e => e.Data.CharacterId == current))

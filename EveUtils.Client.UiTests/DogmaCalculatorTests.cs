@@ -1189,8 +1189,8 @@ public class DogmaCalculatorTests
     }
 
     // ── ET-356: SkillImpactScanner + SkillImpactViewModel ──────────────────────────────────────────────
-    // Extends the Ferox fixture above with a propulsion module and a skill that only moves MaxVelocity while that module
-    // is Active, so it exercises "module states matter to the scan" (A1) rather than a state-independent effect.
+    // Extends the Ferox fixture above with a propulsion module and a skill that only moves MaxVelocity while that
+    // module is Active, so it exercises "module states matter to the scan" (A1) rather than a state-independent effect.
     private const int SpeedImpactSkill = 33098;
 
     private static (FakeDogmaDataAccessor Data, FitInput Input) SkillImpactFixture(Dictionary<int, int> levels,
@@ -1323,9 +1323,9 @@ public class DogmaCalculatorTests
         Assert.Equal("all skills that change this are at V", speedChip.UnavailableReason);
     }
 
-    // A6: the scan runs off the calling thread and a scan superseded by a fresher one is discarded on completion. The gate
-    // blocks the stale scan's first engine call until released, so the test proves it started off-thread and that its late
-    // result changes nothing in the applied Rows, without delay-based timing.
+    // A6: the scan runs off the calling thread and a scan superseded by a fresher one is discarded on completion. The
+    // gate blocks the stale scan's first engine call until released, so the test proves it started off-thread and that
+    // its late result changes nothing in the applied Rows, without delay-based timing.
     [Fact]
     public async Task SkillImpactViewModel_LoadAsync_RunsOffTheCallingThread_AndDiscardsAStaleScan()
     {
@@ -1353,8 +1353,9 @@ public class DogmaCalculatorTests
     }
 
     // ── ET-357: SkillTargetsCalculator (can fly / optimal ±III / max / curve) ──────────────────────────
-    // Extends the fixture above with the data-driven align-time chain (DogmaPatches, wired manually like AlignTime_Folds...),
-    // a uniform SP/min rate, a CPU-hungry module and two more movers: AlignSkillId (agility) and CpuManagementSkillId (CPU).
+    // Extends the fixture above with the data-driven align-time chain (DogmaPatches, wired manually like
+    // AlignTime_Folds...), a uniform SP/min rate, a CPU-hungry module and two more movers: AlignSkillId (agility) and
+    // CpuManagementSkillId (CPU).
     private const int CpuHeavyModule = 90003;
     private const int AlignSkillId = 90011;
     private const int CpuManagementSkillId = 90012;

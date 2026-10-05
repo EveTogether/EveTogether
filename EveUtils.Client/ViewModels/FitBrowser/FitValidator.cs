@@ -30,8 +30,9 @@ public sealed class FitValidator(IDogmaDataAccessor data) : IFitValidator, ISing
     public IReadOnlyList<SkillGap> SkillRequirements(
         IEnumerable<int> seedTypeIds, IEnumerable<SkillMinimum>? extra, IReadOnlyDictionary<int, int> trained)
     {
-        // Same recursive prerequisite-closure walk as _SkillGaps below, generalized: seed types and extra minimums expand their
-        // own required skills like a fitted type does, so a candidate skill's prerequisites are priced too.
+        // Same recursive prerequisite-closure walk as _SkillGaps below, generalized: seed types and extra minimums
+        // expand their own required skills like a fitted type does, so a candidate skill's prerequisites are priced
+        // too.
         var required = new Dictionary<int, int>();
         var toExpand = new Queue<int>();
 
@@ -93,8 +94,9 @@ public sealed class FitValidator(IDogmaDataAccessor data) : IFitValidator, ISing
         return overloads;
     }
 
-    // Every fitted type (ship, modules, charges, drones) seeds SkillRequirements' recursive required-skill walk, keeping the
-    // highest level each skill is needed at. This matches EVE's in-game "Skills Required": the whole prerequisite closure.
+    // Every fitted type (ship, modules, charges, drones) seeds SkillRequirements' recursive required-skill walk,
+    // keeping the highest level each skill is needed at. This matches EVE's in-game "Skills Required": the whole
+    // prerequisite closure.
     private IReadOnlyList<SkillGap> _SkillGaps(EsiFitting fit, IReadOnlyDictionary<int, int> trainedSkills)
     {
         var fittedTypes = new HashSet<int> { fit.ShipTypeId };

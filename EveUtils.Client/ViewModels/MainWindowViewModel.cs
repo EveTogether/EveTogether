@@ -701,8 +701,9 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         _dialogs.ShowCompositions(new CompositionsViewModel(_services));
     }
 
-    /// <summary>Opens the SKILLS module (ET-16) as a hosted module, like RUNS, from the rail (last used character) or a HOME pilot row
-    /// (that character, AC2). When SKILLS is already open <paramref name="startingCharacterId"/> is applied to the running instance (ET-48 pattern).</summary>
+    /// <summary>Opens the SKILLS module (ET-16) as a hosted module, like RUNS, from the rail (last used character) or a
+    /// HOME pilot row (that character, AC2). When SKILLS is already open <paramref name="startingCharacterId"/> is
+    /// applied to the running instance (ET-48 pattern).</summary>
     private async Task OpenSkillsAsync(int? startingCharacterId = null)
     {
         if (_services is null || _dialogs is null)
