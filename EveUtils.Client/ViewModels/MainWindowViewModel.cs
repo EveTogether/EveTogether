@@ -67,6 +67,7 @@ using EveUtils.Shared.Modules.Gamelog.Events;
 using EveUtils.Shared.Modules.Gamelog.Models;
 using EveUtils.Shared.Modules.Gamelog.Reading;
 using EveUtils.Shared.Modules.Sde;
+using EveUtils.Shared.Modules.Sde.Dtos;
 using EveUtils.Shared.Modules.Sde.Import;
 using EveUtils.Shared.Modules.Settings.Commands;
 using EveUtils.Shared.Modules.Settings.Dtos;
@@ -2594,16 +2595,54 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
     // The version the toast was last shown for: a "Later" must not bring the same build back on the next check.
     private string? _offeredVersion;
 
+    // Same once-per-build rule for the SDE: the modal startup prompt and the toast share it, so declining at startup
+    // does not bring the same build back an hour later.
+    private long? _offeredSdeBuild;
+
     // The startup check, then the same check on a timer while the app runs (ET-430). Only the startup one reports
-    // to the status bar; a recheck that fails is not worth interrupting anyone for.
+    // to the status bar; a recheck that fails is not worth interrupting anyone for. The SDE rides the same timer
+    // (ET-431); its startup check is the modal one in CheckSdeUpdateAsync, so only its rechecks run here.
     internal async Task RunUpdateChecksAsync(TimeSpan interval)
     {
         await RunUpdateCheckResilientAsync(isStartup: true);
 
         using var timer = new PeriodicTimer(interval);
         while (await timer.WaitForNextTickAsync())
+        {
             await RunUpdateCheckResilientAsync(isStartup: false);
+            await RecheckSdeUpdateAsync();
+        }
     }
+
+    private async Task RecheckSdeUpdateAsync()
+    {
+        if (_services is null) return;
+
+        try
+        {
+            var check = await _services.GetRequiredService<ISdeImporter>().CheckForUpdateAsync();
+            if (check.UpdateAvailable && check.Remote.BuildNumber != _offeredSdeBuild)
+            {
+                _offeredSdeBuild = check.Remote.BuildNumber;
+                OfferSdeUpdate(check.Remote);
+            }
+        }
+        catch (Exception)
+        {
+            // Deliberately silent, like the app recheck: CCP unreachable, the next tick tries again.
+        }
+    }
+
+    private void OfferSdeUpdate(SdeVersion remote) =>
+        _services?.GetService<IToastService>()?.Show(
+            "EVE static data update",
+            $"A newer EVE static data build ({remote.BuildNumber}) is available (~80 MB).",
+            ToastKind.Information,
+            [
+                new ToastAction("Later", () => { }),
+                new ToastAction("Update", () => _ = RunSdeImportPopupAsync(), ToastActionStyle.Affirmative),
+            ],
+            ToastPosition.BottomRight);
 
     private async Task RunUpdateCheckResilientAsync(bool isStartup)
     {
@@ -2727,6 +2766,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
 
         if (!check.UpdateAvailable) return;
 
+        _offeredSdeBuild = check.Remote.BuildNumber;
         var message = check.Local is null
             ? $"EVE static data (build {check.Remote.BuildNumber}) is needed for item names and fittings. " +
               "Download it now? (~80 MB)"
