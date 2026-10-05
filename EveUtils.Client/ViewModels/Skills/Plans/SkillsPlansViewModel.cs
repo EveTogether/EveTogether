@@ -93,9 +93,22 @@ public sealed partial class SkillsPlansViewModel : ObservableObject
         await _LoadRowsAsync(cancellationToken);
     }
 
-    partial void OnSelectedPlanChanged(SkillPlan? value) => _ = _LoadRowsAsync(CancellationToken.None);
+    partial void OnSelectedPlanChanged(SkillPlan? value) => _ = _LoadRowsObservedAsync();
 
-    partial void OnOrderModeChanged(SkillPlanOrderMode value) => _ = _LoadRowsAsync(CancellationToken.None);
+    partial void OnOrderModeChanged(SkillPlanOrderMode value) => _ = _LoadRowsObservedAsync();
+
+    // The two property hooks above cannot await, so a failed read has to land in StatusMessage, never go unobserved.
+    private async Task _LoadRowsObservedAsync()
+    {
+        try
+        {
+            await _LoadRowsAsync(CancellationToken.None);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            StatusMessage = $"This plan could not be read: {exception.Message}";
+        }
+    }
 
     [RelayCommand]
     private void SetOrderMode(SkillPlanOrderMode mode) => OrderMode = mode;

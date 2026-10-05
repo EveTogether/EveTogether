@@ -155,6 +155,19 @@ public sealed partial class SkillsWindowViewModel : ObservableObject, IRefreshab
 
     public async Task LoadAsync(CancellationToken cancellationToken = default)
     {
+        // RefreshModule fires this without awaiting it; _SelectCharacterAsync catches its own, the reads before it not.
+        try
+        {
+            await _LoadCharactersAndSelectAsync(cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            StatusMessage = $"The characters could not be read: {exception.Message}";
+        }
+    }
+
+    private async Task _LoadCharactersAndSelectAsync(CancellationToken cancellationToken)
+    {
         _characters = await _registry.GetAllAsync(cancellationToken); // already in the character column's SortOrder
         if (_characters.Count == 0)
         {

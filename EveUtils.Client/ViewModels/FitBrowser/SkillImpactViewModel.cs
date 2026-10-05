@@ -129,8 +129,23 @@ public sealed class SkillImpactViewModel : ViewModelBase, IRefreshableModule
     {
         var version = ++_scanVersion;
         IsLoading = true;
-        var result = await Task.Run(
-            () => _scanner.ScanAsync(_baseInput, _trainedLevels, cancellationToken), cancellationToken);
+        SkillImpactResult result;
+        // RefreshModule fires this without awaiting it, so a failed scan has to land on screen, never go unobserved.
+        try
+        {
+            result = await Task.Run(() => _scanner.ScanAsync(_baseInput, _trainedLevels, cancellationToken), cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            if (version == _scanVersion)
+            {
+                IsLoading = false;
+                TargetsErrorMessage = $"The skill impact scan could not be run: {exception.Message}";
+            }
+
+            return;
+        }
+
         if (version != _scanVersion)
         {
             return;   // a newer scan started (e.g. the character changed) while this one ran — its result is stale
