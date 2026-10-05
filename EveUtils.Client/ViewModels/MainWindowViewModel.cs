@@ -1039,7 +1039,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
             _refreshServerFitBrowserTab,                              // refresh the browser's server tab after a share (null if the browser was never opened this session)
             metadata?.Name,                                           // fit-metadata: the stored name, which RawJson does not carry after a rename
             _services.GetService<IDogmaCalculator>(),                 // ET-356: SKILL IMPACT… scan engine
-            _dialogs.ShowSkillImpact);                                // ET-356: SKILL IMPACT… entry point
+            (characterId, impact) => SkillsLauncher.OpenFromFitAsync(_services, _dialogs, characterId, impact)); // ET-356/D1: SKILLS → PLANS
         await viewModel.InitializeAsync();
         _dialogs.ShowFitDetail(viewModel);
         _ = viewModel.LoadImagesAsync();   // opt-in CCP images pop in after the window shows

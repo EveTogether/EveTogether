@@ -70,6 +70,24 @@ public sealed partial class SkillsPlansViewModel : ObservableObject
     private int? _itemTypeId;
 
     public ObservableCollection<PlanSourceRow> InThisPlan { get; } = [];
+
+    /// <summary>From a fit (mockup v5 screen f, decision D1): shown in this tab in place of the plan until ‹ PLAN.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasFromFit), nameof(HasNoFromFit))]
+    private SkillImpactViewModel? _fromFit;
+
+    public bool HasFromFit => FromFit is not null;
+    public bool HasNoFromFit => FromFit is null;
+
+    /// <summary>Shows a From a fit screen built elsewhere (the fit detail's SKILL IMPACT…) in this tab: the fit switch,
+    /// ‹ PLAN and ADD TO PLAN into the selected plan come from here.</summary>
+    public void ShowFromFit(SkillImpactViewModel impact)
+    {
+        impact.PickFit ??= _PickImpactFitAsync;
+        impact.Close = () => FromFit = null;
+        impact.UseAddToPlan((rows, label) => _AddPlanRowsAsync(SkillPlanRowSource.Fit, $"fit:{label}", rows, label));
+        FromFit = impact;
+    }
     public ObservableCollection<PlanItemRequirementRow> ItemRequirements { get; } = [];
     public bool IsFlyFirst => OrderMode == SkillPlanOrderMode.FlyFirst;
     public bool IsShortestFirst => OrderMode == SkillPlanOrderMode.ShortestFirst;
@@ -349,7 +367,8 @@ public sealed partial class SkillsPlansViewModel : ObservableObject
         {
             PickFit = _PickImpactFitAsync,   // FROM A FIT: switching the fit keeps this character and this plan
         };
-        _dialogs.ShowSkillImpact(viewModel);
+        viewModel.Close = () => FromFit = null;
+        FromFit = viewModel;
         await viewModel.LoadAsync();
     }
 

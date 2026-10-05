@@ -1,19 +1,16 @@
-<v:ChromedWindow xmlns="https://github.com/avaloniaui" xmlns:v="using:EveUtils.Client.Views"
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:v="using:EveUtils.Client.Views"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vf="using:EveUtils.Client.ViewModels.FitBrowser"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d" d:DesignWidth="1240" d:DesignHeight="860"
-        x:Class="EveUtils.Client.Views.SkillImpactWindow"
-        x:DataType="vf:SkillImpactViewModel"
-        Width="1240" Height="860" MinWidth="900" MinHeight="520"
-        WindowStartupLocation="CenterOwner"
-        Title="SKILL IMPACT">
+        x:Class="EveUtils.Client.Views.Skills.SkillImpactView"
+        x:DataType="vf:SkillImpactViewModel">
 
-    <!-- SKILL IMPACT (ET-356/ET-357), mockup v5 "f · from a fit": a toolbar (FROM A FIT, OPTIMISE FOR chips and the
-         "+ stat" menu), the main column with the three target cards, the fit warning and the combined-gain curve, and
-         a 400 px right pane with the skills that move the chosen stats — drawn like the SKILLS module's panes. -->
-    <v:ChromedWindow.Styles>
+    <!-- From a fit (ET-356/ET-357), mockup v5 screen f, shown inside SKILLS → PLANS: a toolbar (‹ PLAN, FROM A FIT,
+         OPTIMISE FOR chips and the "+ stat" menu), the three target cards, the fit warning and the combined-gain curve,
+         and a 400 px right pane with the skills that move the chosen stats. -->
+    <UserControl.Styles>
         <Style Selector="TextBlock.tlabel">
             <Setter Property="Foreground" Value="{DynamicResource TextAccentBrush}"/>
             <Setter Property="FontSize" Value="10"/>
@@ -111,9 +108,9 @@
             <Setter Property="HorizontalAlignment" Value="Left"/>
             <Setter Property="Background" Value="{DynamicResource AccentBrightBrush}"/>
         </Style>
-    </v:ChromedWindow.Styles>
+    </UserControl.Styles>
 
-    <v:ChromedWindow.Resources>
+    <UserControl.Resources>
         <DataTemplate x:Key="TargetCardTemplate" x:DataType="vf:SkillTargetCardViewModel">
             <Border Classes="tcard" Classes.rec="{Binding IsRecommended}">
                 <StackPanel Spacing="4">
@@ -170,7 +167,7 @@
                 </StackPanel>
             </Border>
         </DataTemplate>
-    </v:ChromedWindow.Resources>
+    </UserControl.Resources>
 
     <Grid ColumnDefinitions="*,400">
 
@@ -178,7 +175,11 @@
         <DockPanel Grid.Column="0">
             <Border DockPanel.Dock="Top" Padding="14,10" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource BorderBrush}">
                 <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto" ColumnSpacing="8">
-                    <TextBlock Classes="label" VerticalAlignment="Center" Text="FROM A FIT"/>
+                    <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                        <Button Classes="fitsel" Content="‹ PLAN" Command="{Binding CloseCommand}" IsVisible="{Binding CanClose}"
+                                ToolTip.Tip="Back to the plan"/>
+                        <TextBlock Classes="label" VerticalAlignment="Center" Text="FROM A FIT"/>
+                    </StackPanel>
                     <Button Grid.Column="1" Classes="fitsel" VerticalAlignment="Center" Command="{Binding ChangeFitCommand}"
                             IsEnabled="{Binding CanChangeFit}" ToolTip.Tip="Pick another fit from the library; the character stays">
                         <StackPanel Orientation="Horizontal" Spacing="8">
@@ -329,4 +330,4 @@
             </DockPanel>
         </Border>
     </Grid>
-</v:ChromedWindow>
+</UserControl>

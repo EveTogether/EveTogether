@@ -675,8 +675,6 @@ public sealed class DialogService : IDialogService, ISingletonService
     // Not _Observe(viewModel.LoadAsync()): the fit-detail command already awaits the scan itself (ET-356) and returns
     // that task, so calling LoadAsync here too would run the ~500-calculation scan twice. The window shows its loading
     // state on open; the command's own await fills it in.
-    public void ShowSkillImpact(SkillImpactViewModel viewModel) =>
-        Route(new SkillImpactWindow(viewModel), "SKILL IMPACT", "fits", viewModel.ModuleId, MaterialIconKind.ChartLine);
 
     public void ShowTypeInfo(TypeInfoWindowViewModel viewModel)
     {

@@ -85,6 +85,37 @@ public sealed class SkillImpactViewModel : ViewModelBase, IRefreshableModule
         MenuLeft = [Group("OFFENSE"), Group("TANK"), Group("CAPACITOR")];
         MenuRight = [Group("NAVIGATION"), Group("TARGETING"), Group("FITTING")];
         ChangeFitCommand = new AsyncRelayCommand(_ChangeFitAsync);
+        CloseCommand = new RelayCommand(() => Close?.Invoke());
+    }
+
+    /// <summary>‹ PLAN: set by SKILLS → PLANS, which shows this view in place of the plan until it is closed.</summary>
+    public Action? Close
+    {
+        get => _close;
+        set
+        {
+            _close = value;
+            OnPropertyChanged(nameof(CanClose));
+        }
+    }
+
+    private Action? _close;
+
+    public bool CanClose => Close is not null;
+
+    public IRelayCommand CloseCommand { get; }
+
+    /// <summary>Gives a screen opened without a plan (the fit detail's SKILL IMPACT…) the PLANS tab's plan write once it
+    /// lands there; the cards are rebuilt so ADD TO PLAN appears.</summary>
+    public void UseAddToPlan(Func<IReadOnlyList<SkillPlanRowDraft>, string, Task> addToPlan)
+    {
+        if (_addToPlan is not null)
+        {
+            return;
+        }
+
+        _addToPlan = addToPlan;
+        RefreshModule();
     }
 
     public string ModuleId { get; }

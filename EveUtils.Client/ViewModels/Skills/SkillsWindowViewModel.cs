@@ -67,6 +67,7 @@ public sealed partial class SkillsWindowViewModel : ObservableObject, IRefreshab
     private bool _suppressSelectionApply; // set while _SelectCharacterAsync syncs SelectedCharacterOption back onto itself
     private int _selectionVersion; // bumped on every _SelectCharacterAsync call; a stale call discards its result on completion
     private (int CharacterId, int PlanId)? _pendingPlan; // COMP's ADD TO PLAN… / WHAT IF…: land on this plan once loaded
+    private (int CharacterId, FitBrowser.SkillImpactViewModel Impact)? _pendingFromFit; // the fit detail's SKILL IMPACT…
 
     [ObservableProperty] private int? _selectedCharacterId;
     [ObservableProperty] private string _selectedCharacterName = "";
@@ -220,6 +221,10 @@ public sealed partial class SkillsWindowViewModel : ObservableObject, IRefreshab
     /// load of that character (a fresh open), or right away through <see cref="GoToCharacterAsync"/> when already open.</summary>
     public void OpenOnPlan(int characterId, int planId) => _pendingPlan = (characterId, planId);
 
+    /// <summary>Opens on <paramref name="characterId"/>'s PLANS tab showing From a fit for <paramref name="impact"/>
+    /// (decision D1: the fit detail's SKILL IMPACT… lands in SKILLS, not in a window of its own).</summary>
+    public void OpenOnFromFit(int characterId, FitBrowser.SkillImpactViewModel impact) => _pendingFromFit = (characterId, impact);
+
     partial void OnCharacterSearchTextChanged(string value)
     {
         FilteredCharacterOptions.Clear();
@@ -336,6 +341,11 @@ public sealed partial class SkillsWindowViewModel : ObservableObject, IRefreshab
                 plans.SelectedPlan = plans.Plans.FirstOrDefault(plan => plan.Id == pending.PlanId) ?? plans.SelectedPlan;
             }
 
+            if (_pendingFromFit is { } fromFit && fromFit.CharacterId == characterId)
+            {
+                plans.ShowFromFit(fromFit.Impact);
+            }
+
             if (version != _selectionVersion)
             {
                 return; // superseded while reading — the newer call's result is what the screen should show
@@ -364,6 +374,12 @@ public sealed partial class SkillsWindowViewModel : ObservableObject, IRefreshab
             if (_pendingPlan is { } landed && landed.CharacterId == characterId)
             {
                 _pendingPlan = null;
+                SelectedTabIndex = PlansTabIndex;
+            }
+
+            if (_pendingFromFit is { } shownFromFit && shownFromFit.CharacterId == characterId)
+            {
+                _pendingFromFit = null;
                 SelectedTabIndex = PlansTabIndex;
             }
 

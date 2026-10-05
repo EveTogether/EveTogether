@@ -144,7 +144,7 @@ public sealed class FitDetailWindowViewModel : ViewModelBase
     // current selection, never a second source of truth.
     private readonly SkillImpactScanner? _skillImpactScanner;
     private readonly IDogmaCalculator? _calculator;
-    private readonly Action<SkillImpactViewModel>? _onShowSkillImpact;
+    private readonly Func<int, SkillImpactViewModel, Task>? _onShowSkillImpact;
 
     // Skill-gap SP + Omega training-time estimate: the selected character's effective attributes (base + the
     // attribute implants) drive the per-skill rate, so the estimate shortens with +stat implants.
@@ -371,7 +371,7 @@ public sealed class FitDetailWindowViewModel : ViewModelBase
         string? description = null, string? tags = null,
         ICharacterAttributesRepository? attributesRepository = null, IToastService? toasts = null,
         Func<int, Task<FitMetadataDraft?>>? onEditMetadata = null, Func<string, Task>? onSharedToServer = null,
-        string? name = null, IDogmaCalculator? calculator = null, Action<SkillImpactViewModel>? onShowSkillImpact = null)
+        string? name = null, IDogmaCalculator? calculator = null, Func<int, SkillImpactViewModel, Task>? onShowSkillImpact = null)
     {
         _fit = fit;
         _onEditMetadata = onEditMetadata;
@@ -508,12 +508,12 @@ public sealed class FitDetailWindowViewModel : ViewModelBase
 
     public ICommand ShowSkillImpactCommand { get; }
 
-    private Task _ShowSkillImpactAsync()
+    private async Task _ShowSkillImpactAsync()
     {
         if (!CanShowSkillImpact || _skillImpactScanner is null || _trainedSkills is null || _onShowSkillImpact is null
             || SelectedSkillMode is not { CharacterId: { } characterId } skillMode)
         {
-            return Task.CompletedTask;
+            return;
         }
 
         // Keyed on the character too: another character's SKILL IMPACT tab must open its own tab, not refocus a stale
@@ -526,8 +526,8 @@ public sealed class FitDetailWindowViewModel : ViewModelBase
         var viewModel = new SkillImpactViewModel(_skillImpactScanner, _validator, _trainingEstimator, _effectiveAttributes,
             _names, $"skill-impact:{ModuleId}:{characterId}", skillMode.Label, ShipName, _BuildBaseFitInput(),
             _trainedSkills, targetsCalculator);
-        _onShowSkillImpact(viewModel);
-        return viewModel.LoadAsync();
+        await _onShowSkillImpact(characterId, viewModel);
+        await viewModel.LoadAsync();
     }
 
     // The same module states, drones, implants and skills RecomputeAsync feeds the stats provider — one source of

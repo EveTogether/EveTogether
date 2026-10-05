@@ -125,7 +125,8 @@
         </Style>
     </UserControl.Styles>
 
-    <Grid ColumnDefinitions="*,400">
+    <Panel>
+    <Grid ColumnDefinitions="*,400" IsVisible="{Binding HasNoFromFit}">
         <DockPanel Grid.Column="0">
             <!-- PLAN + its menu + the + actions. -->
             <Border DockPanel.Dock="Top" Padding="14,8" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource BorderBrush}">
@@ -364,4 +365,9 @@
             </DockPanel>
         </Border>
     </Grid>
+        <!-- From a fit (D1): + FROM FIT… and the fit detail's SKILL IMPACT… land here, in place of the plan. -->
+        <Panel IsVisible="{Binding HasFromFit}">
+            <sk:SkillImpactView DataContext="{Binding FromFit}"/>
+        </Panel>
+    </Panel>
 </UserControl>
