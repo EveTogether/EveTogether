@@ -1,0 +1,74 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vf="using:EveUtils.Client.ViewModels.FitBrowser"
+             x:Class="EveUtils.Client.Views.SkillImpactStatMenu"
+             x:DataType="vf:SkillImpactViewModel">
+
+    <!-- The "+ stat ▾" menu (mockup v5 f-stat-menu): a filter, the fifteen stats in two columns grouped by fit-detail
+         section, a check per chosen stat, and a dimmed stat with the reason nothing can move it for this character. -->
+    <UserControl.Styles>
+        <Style Selector="TextBlock.smg">
+            <Setter Property="Foreground" Value="{DynamicResource TextAccentBrush}"/>
+            <Setter Property="FontSize" Value="10"/>
+            <Setter Property="LetterSpacing" Value="1.8"/>
+            <Setter Property="Margin" Value="4,6,0,2"/>
+        </Style>
+        <Style Selector="CheckBox.smi">
+            <Setter Property="FontSize" Value="11.5"/>
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+            <Setter Property="MinHeight" Value="0"/>
+            <Setter Property="Padding" Value="6,0,0,0"/>
+        </Style>
+        <Style Selector="CheckBox.smi:checked">
+            <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+        </Style>
+        <Style Selector="CheckBox.smi:disabled">
+            <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+        </Style>
+        <Style Selector="Border.smirow">
+            <Setter Property="Padding" Value="4,1"/>
+        </Style>
+        <Style Selector="Border.smirow.on">
+            <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
+        </Style>
+    </UserControl.Styles>
+
+    <UserControl.Resources>
+        <DataTemplate x:Key="StatGroup" x:DataType="vf:SkillImpactStatGroupViewModel">
+            <StackPanel IsVisible="{Binding IsVisible}" Margin="0,0,0,4">
+                <TextBlock Classes="smg" Text="{Binding Name}"/>
+                <ItemsControl ItemsSource="{Binding Chips}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vf:SkillImpactStatChipViewModel">
+                            <Border Classes="smirow" Classes.on="{Binding IsSelected}" IsVisible="{Binding IsMatch}">
+                                <StackPanel>
+                                    <CheckBox Classes="smi" Content="{Binding MenuLabel}"
+                                              IsChecked="{Binding IsSelected, Mode=TwoWay}" IsEnabled="{Binding IsAvailable}"/>
+                                    <TextBlock Margin="26,-2,0,2" FontSize="10" Foreground="{StaticResource TextDimBrush}"
+                                               Text="{Binding UnavailableReason}"
+                                               IsVisible="{Binding UnavailableReason, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <Border Width="560" Background="{DynamicResource DrawerSurfaceBrush}" BorderThickness="1"
+            BorderBrush="{DynamicResource BorderStrongBrush}">
+        <DockPanel>
+            <TextBox DockPanel.Dock="Top" Margin="8" FontSize="11.5" Watermark="{Binding StatFilterWatermark}"
+                     Text="{Binding StatFilter, Mode=TwoWay}"/>
+            <Border DockPanel.Dock="Bottom" Padding="10,6" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource DividerBrush}">
+                <TextBlock FontSize="10" Foreground="{StaticResource TextDimBrush}" TextWrapping="Wrap"
+                           Text="A dimmed stat has nothing this character can train that moves it on this fit; the line under it says why."/>
+            </Border>
+            <Grid ColumnDefinitions="*,*" ColumnSpacing="14" Margin="10,0,10,8">
+                <ItemsControl Grid.Column="0" ItemsSource="{Binding MenuLeft}" ItemTemplate="{StaticResource StatGroup}"/>
+                <ItemsControl Grid.Column="1" ItemsSource="{Binding MenuRight}" ItemTemplate="{StaticResource StatGroup}"/>
+            </Grid>
+        </DockPanel>
+    </Border>
+</UserControl>

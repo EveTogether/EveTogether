@@ -50,7 +50,11 @@ public static class FitDetailLauncher
             toasts: services.GetService<IToastService>(),
             name: name,
             calculator: services.GetService<IDogmaCalculator>(),   // ET-356: SKILL IMPACT… scan engine
-            onShowSkillImpact: dialogs.ShowSkillImpact);            // ET-356: SKILL IMPACT… entry point
+            onShowSkillImpact: impact =>                            // ET-356: SKILL IMPACT… entry point
+            {
+                impact.PickFit = levels => SkillImpactFitPicker.PickAsync(services, dialogs, levels, addToPlanFor: null);
+                dialogs.ShowSkillImpact(impact);
+            });
 
         await viewModel.InitializeAsync();
         dialogs.ShowFitDetail(viewModel);
