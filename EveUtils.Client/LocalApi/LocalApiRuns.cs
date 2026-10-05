@@ -181,6 +181,7 @@ public sealed class LocalApiRuns(IServiceProvider rootServices, LocalApiPrivacy 
             pocket?.Weather,
             first.StartedAtUtc,
             earned?.BountyIsk ?? 0m,
+            earned?.Kills ?? 0,
             earned?.LootIskNet,
             earned is { Isk.HasFigure: true } ? earned.Isk.Total : null,
             [.. runs.Select(run => run.CharacterId).Distinct().Select(id => new CurrentRunCrewDto(id, names.GetValueOrDefault(id)))],

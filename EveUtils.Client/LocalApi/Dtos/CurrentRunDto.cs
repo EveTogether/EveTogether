@@ -8,6 +8,7 @@ namespace EveUtils.Client.LocalApi.Dtos;
 /// <param name="Kind">abyssal, site, mission or mining.</param>
 /// <param name="Type">The TYPE the app shows, e.g. "Combat Site" or "Abyssal".</param>
 /// <param name="StartedAtUtc">The clock's anchor: a widget counts up (or an abyssal down) from here itself.</param>
+/// <param name="Kills">The bounty lines of the activity so far, one per NPC kill; a kill that paid no bounty is not counted.</param>
 /// <param name="TotalIsk">Null while nothing of it can be valued yet.</param>
 public sealed record CurrentRunDto(
     Guid RunId,
@@ -20,6 +21,7 @@ public sealed record CurrentRunDto(
     string? AbyssalWeather,
     DateTime StartedAtUtc,
     decimal BountyIsk,
+    int Kills,
     decimal? LootIsk,
     decimal? TotalIsk,
     IReadOnlyList<CurrentRunCrewDto> Crew,

@@ -96,7 +96,7 @@ const metrics = await res.json();
     <tr><th>Preset</th><th>Fields</th><th>Options</th></tr>
     <tr><td><code>live-dps</code></td><td>name, dpsOut, dpsIn, peak; reps, bounty, application, system</td><td>—</td></tr>
     <tr><td><code>dps-graph</code></td><td>name, dpsOut, dpsIn, reps, numbers; neut, cap, system</td><td><code>span</code>: 60 | 120 | 300 (seconds)</td></tr>
-    <tr><td><code>current-run</code></td><td>type, site, tier, clock, loot, bounty, total, kills; crew, signature, system</td><td>—</td></tr>
+    <tr><td><code>current-run</code></td><td>type, site, tier, clock, loot, bounty, total, kills (bounty lines of the run, one per NPC kill; a kill without bounty is not counted); crew, signature, system</td><td>—</td></tr>
     <tr><td><code>run-totals</code></td><td>runs, isk, iskPerHour, flownTime, bestDrop; averagePerRun, perCharacter</td><td><code>period</code>: session | today | week | month · <code>kind</code>: all | abyssal | combat | mission | mining</td></tr>
     <tr><td><code>abyssal-totals</code></td><td>runs, isk, iskPerHour, averageClear, byTier; shipsLost</td><td><code>period</code></td></tr>
     <tr><td><code>last-killmail</code></td><td>badge, ship, isk, attackers, ago, run, victim; corporation, finalBlow, system</td><td><code>show</code>: both | kills | losses</td></tr>
