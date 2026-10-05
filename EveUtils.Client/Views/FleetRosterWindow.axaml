@@ -265,24 +265,29 @@
                                     <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6">
                                         <TextBlock Text="{Binding Name}" VerticalAlignment="Center"
                                                    Foreground="{StaticResource TextBrightBrush}"/>
-                                        <!-- The same offline mark as the tree leaf: one pilot, one reading, whichever
-                                             half of this window you are looking at (ET-70). -->
-                                        <TextBlock Classes="offline" FontSize="10" VerticalAlignment="Center" Text="◉ offline"
-                                                   IsVisible="{Binding Node.IsOffline, FallbackValue=False}"
-                                                   ToolTip.Tip="Not in game — their EVE client is closed, or their EVE Together has stopped reporting."/>
+                                        <!-- The Fleets screen's chips, from the same board (ET-444): one pilot, one
+                                             reading, whichever screen or half of this window you are looking at. -->
+                                        <Border Classes="chip" Classes.good="{Binding Node.IsOnline, FallbackValue=False}"
+                                                Classes.dim="{Binding !Node.IsOnline, FallbackValue=True}"
+                                                IsVisible="{Binding Node, Converter={x:Static ObjectConverters.IsNotNull}}"
+                                                ToolTip.Tip="{Binding Node.PresenceTooltip, FallbackValue={x:Null}}">
+                                            <TextBlock Text="{Binding Node.PresenceText, FallbackValue={x:Null}}"/>
+                                        </Border>
+                                        <Border Classes="chip ok" IsVisible="{Binding Node.ShowsInGameFleet, FallbackValue=False}"
+                                                ToolTip.Tip="In the coupled in-game fleet."><TextBlock Text="in EVE fleet"/></Border>
+                                        <Border Classes="chip warn" IsVisible="{Binding Node.ShowsNotInGameFleet, FallbackValue=False}"
+                                                ToolTip.Tip="Not in the coupled in-game fleet, by the fleet boss's own read of it."><TextBlock Text="not in EVE fleet"/></Border>
                                         <!-- Availability for the fleet's next start (ET-169) — set by the member only. This is the
                                              roster's complete member list (an unplaced member has no tree leaf at all), so this is
                                              where "who is signed off" has to be visible, not just in the tree. -->
-                                        <Border Classes="chip good" IsVisible="{Binding Node.ShowsAvailable, FallbackValue=False}"><TextBlock Text="AVAILABLE"/></Border>
-                                        <Border Classes="chip dim" IsVisible="{Binding Node.ShowsNoReply, FallbackValue=False}"><TextBlock Text="NO REPLY"/></Border>
+                                        <Border Classes="chip good" IsVisible="{Binding Node.ShowsAvailable, FallbackValue=False}"><TextBlock Text="available"/></Border>
                                         <Border Classes="chip warn" IsVisible="{Binding Node.ShowsSignedOff, FallbackValue=False}" ToolTip.Tip="{Binding Node.AvailabilityTooltip}">
                                             <TextBlock Text="SIGNED OFF"/>
                                         </Border>
                                     </StackPanel>
-                                    <Border Grid.Column="1" Background="{DynamicResource AccentSoftBrush}"
-                                            CornerRadius="3" Padding="5,1" VerticalAlignment="Center">
-                                        <TextBlock Text="{Binding Badge}" FontSize="9"
-                                                   Foreground="{DynamicResource TextAccentBrush}"/>
+                                    <Border Grid.Column="1" Classes="chip" Classes.ok="{Binding IsCommander}"
+                                            Classes.dim="{Binding !IsCommander}" VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding Badge}"/>
                                     </Border>
                                     <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4"
                                                 Margin="6,0,0,0" VerticalAlignment="Center"
@@ -476,19 +481,17 @@
                                             </ContextMenu>
                                         </TextBlock.ContextMenu>
                                     </TextBlock>
-                                    <!-- Not here at all (ET-70). Its own mark rather than a dimmed name: an FC scanning
-                                         the tree has to be able to tell "gone" from "we know nothing about them", and
-                                         nothing is what a member with no mark says. After the name, as on the left
-                                         list, so the two halves of this window read in the same order. -->
-                                    <TextBlock Classes="offline" FontSize="10" VerticalAlignment="Center" Text="◉ offline"
-                                               IsVisible="{Binding IsOffline}"
-                                               ToolTip.Tip="Not in game — their EVE client is closed, or their EVE Together has stopped reporting."/>
-                                    <!-- Availability for the fleet's next start (ET-169) — set by the member only. Shown for every
-                                         non-external member so "nobody has said anything" reads the same as an explicit yes, not as
-                                         a gap in the roster. -->
-                                    <Border Classes="chip good" IsVisible="{Binding ShowsAvailable}"><TextBlock Text="AVAILABLE"/></Border>
-                                    <Border Classes="chip dim" IsVisible="{Binding ShowsNoReply}"><TextBlock Text="NO REPLY"/></Border>
-                                    <Border Classes="chip warn" IsVisible="{Binding ShowsSignedOff}" ToolTip.Tip="{Binding AvailabilityTooltip}">
+                                    <!-- The same chips as the member list and the Fleets screen (ET-444). -->
+                                    <Border Classes="chip" Classes.good="{Binding IsOnline}" Classes.dim="{Binding !IsOnline}"
+                                            VerticalAlignment="Center" ToolTip.Tip="{Binding PresenceTooltip}">
+                                        <TextBlock Text="{Binding PresenceText}"/>
+                                    </Border>
+                                    <Border Classes="chip ok" IsVisible="{Binding ShowsInGameFleet}" VerticalAlignment="Center"
+                                            ToolTip.Tip="In the coupled in-game fleet."><TextBlock Text="in EVE fleet"/></Border>
+                                    <Border Classes="chip warn" IsVisible="{Binding ShowsNotInGameFleet}" VerticalAlignment="Center"
+                                            ToolTip.Tip="Not in the coupled in-game fleet, by the fleet boss's own read of it."><TextBlock Text="not in EVE fleet"/></Border>
+                                    <Border Classes="chip good" IsVisible="{Binding ShowsAvailable}" VerticalAlignment="Center"><TextBlock Text="available"/></Border>
+                                    <Border Classes="chip warn" IsVisible="{Binding ShowsSignedOff}" VerticalAlignment="Center" ToolTip.Tip="{Binding AvailabilityTooltip}">
                                         <TextBlock Text="SIGNED OFF"/>
                                     </Border>
                                     <TextBlock Text="{Binding AssignedFitLabel}" Classes="label" FontSize="10" VerticalAlignment="Center"/>

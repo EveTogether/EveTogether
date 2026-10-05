@@ -383,7 +383,8 @@ public sealed class FleetClient(
                     m.HasLastSeenMs ? DateTimeOffset.FromUnixTimeMilliseconds(m.LastSeenMs) : null,
                     (FleetMemberAvailability)m.Availability,
                     m.HasAvailabilityNote ? m.AvailabilityNote : null,
-                    m.HasIsConnected ? m.IsConnected : null)).ToList()
+                    m.HasIsConnected ? m.IsConnected : null,
+                    m.HasInGameFleet ? m.InGameFleet : null)).ToList()
                 : [], cancellationToken);
 
     public Task<IReadOnlyList<FleetInviteInfo>> ListPendingInvitesAsync(string serverAddress, int actingCharacterId = 0, CancellationToken cancellationToken = default) =>

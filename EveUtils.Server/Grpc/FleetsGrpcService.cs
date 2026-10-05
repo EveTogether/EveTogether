@@ -369,7 +369,10 @@ public sealed class FleetsGrpcService(
                 FitSkillVerdict = (int)member.FitSkillVerdict,
                 Availability = (int)member.Availability,
                 // Set always, so a client can tell "not connected" from a server too old to say (ET-440).
-                IsConnected = connectedClients.IsConnected(member.CharacterId)
+                IsConnected = connectedClients.IsConnected(member.CharacterId),
+                // The pilot's own client confirmed they sit in the coupled in-game fleet (ET-444); set always, so a
+                // client can tell "not confirmed" from a server too old to say.
+                InGameFleet = member.EsiMemberId is not null
             };
             if (member.AssignedCompositionEntryId is long entryId)
                 dto.AssignedCompositionEntryId = entryId;

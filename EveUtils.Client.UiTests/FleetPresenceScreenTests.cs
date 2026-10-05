@@ -322,14 +322,54 @@ public class FleetPresenceScreenTests
         window.UpdateLayout();
         OverlayShots.Capture(window, "et70-fleet-roster");
 
-        // One mark for the tree leaf and one for the left-list row — the same pilot, both halves of the window.
-        var marks = window.GetVisualDescendants().OfType<TextBlock>()
-            .Where(t => t.IsVisible && t.Text == "◉ offline")
-            .ToList();
+        // One chip for the tree leaf and one for the left-list row — the same pilot, both halves of the window.
+        var marks = VisibleChips(window, "not in game");
         Assert.Equal(2, marks.Count);
-        Assert.All(marks, m => Assert.Contains("offline", m.Classes));
-        Assert.All(marks, m => Assert.Equal(DimColour(), Assert.IsAssignableFrom<ISolidColorBrush>(m.Foreground).Color));
+        Assert.All(marks, m => Assert.Contains("dim", m.Classes));
     }
+
+    /// <summary>
+    /// ET-444: the roster used to put "NO REPLY" on every member of a running fleet — the unanswered availability ask
+    /// for the next start, which a start resets for everyone — while the Fleets screen said "online" and "no link".
+    /// It now reads the same board in the same words, and says whether a pilot is in the in-game fleet only once that
+    /// fleet is coupled.
+    /// </summary>
+    [AvaloniaTheory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task TheRoster_ReadsLikeTheFleetsScreen_AndShowsTheInGameFleetOnlyWhenCoupled(bool coupled)
+    {
+        using var harness = await StartAsync(members:
+        [
+            new FleetMemberInfo(1, Commander, -1, -1, FleetRole.FleetCommander, false, IsConnected: true),
+            new FleetMemberInfo(2, Mate, 1, 1, FleetRole.SquadMember, false, IsConnected: true, InGameFleet: true),
+            new FleetMemberInfo(3, Quiet, 1, 1, FleetRole.SquadMember, false, IsConnected: false),
+        ]);
+        FleetInfo fleet = coupled ? Op with { EsiFleetId = 1_046_000_001, EsiFleetBossId = Commander } : Op;
+        using var roster = new FleetRosterViewModel(harness.Services, harness.Fleets, fleet, isOwner: true, Commander);
+        for (var i = 0; i < 200 && roster.Entries.Count < 3; i++)
+            await Task.Delay(20);
+
+        await harness.SayPresenceAsync(Mate, PresenceState.InGame, waitForRow: false);
+        roster.RefreshPresence(DateTimeOffset.UtcNow);
+
+        var window = new FleetRosterWindow(roster) { Width = 1100, Height = 520 };
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+        window.UpdateLayout();
+        OverlayShots.Capture(window, coupled ? "et444-roster-coupled" : "et444-roster-not-coupled");
+
+        Assert.Empty(VisibleChips(window, "NO REPLY"));
+        // The commander in the list (the tree names them in the fleet's header), the mate in the list and the tree.
+        Assert.Equal(3, VisibleChips(window, "online").Count);
+        Assert.Equal(2, VisibleChips(window, "no link").Count);
+        Assert.Equal(coupled ? 3 : 0, VisibleChips(window, "in EVE fleet").Count);
+        Assert.Empty(VisibleChips(window, "not in EVE fleet"));     // only the boss's own ESI read may say so
+    }
+
+    private static List<Border> VisibleChips(Window window, string text) =>
+        [.. window.GetVisualDescendants().OfType<Border>()
+            .Where(b => b.IsEffectivelyVisible && b.Classes.Contains("chip") && b.Child is TextBlock { Text: var t } && t == text)];
 
     /// <summary>And the roster reads the silence too, off the server's record, for a member who was gone before it
     /// opened.</summary>
@@ -397,7 +437,7 @@ public class FleetPresenceScreenTests
             Avalonia.Application.Current?.FindResource("TextDimBrush")
             ?? throw new InvalidOperationException("no TextDimBrush")).Color;
 
-    private static async Task<Harness> StartAsync(int? seenLongAgo = null)
+    private static async Task<Harness> StartAsync(int? seenLongAgo = null, IReadOnlyList<FleetMemberInfo>? members = null)
     {
         var probe = new StubProbe();
         var instance = TestClientInstance.Create(services =>
@@ -419,7 +459,7 @@ public class FleetPresenceScreenTests
         DateTimeOffset? longAgo = DateTimeOffset.UtcNow - TimeSpan.FromHours(1);
         var fleets = new FakeFleetClient
         {
-            Members =
+            Members = members ??
             [
                 new FleetMemberInfo(1, Commander, -1, -1, FleetRole.FleetCommander, false),
                 new FleetMemberInfo(2, Mate, 1, 1, FleetRole.SquadMember, false,

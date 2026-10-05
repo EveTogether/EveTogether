@@ -52,9 +52,10 @@ public sealed partial class FleetRosterViewModel : ObservableObject, IDisposable
     private readonly ISdeNameResolver _shipNames;
     private readonly IFleetRosterWatch _rosterWatch;
     private readonly IDisposable _rosterSubscription;
-    private readonly IDisposable? _metricSubscription;
     private readonly IDisposable? _presenceSubscription;
     private readonly ILocalCharacterPresence? _presence;
+    private readonly FleetMemberBoard? _board;            // the Fleets screen's reading of every fleet mate (ET-444)
+    private readonly InGameFleetRosters? _inGameRosters;  // the boss's own ESI read of the in-game fleet
     private readonly DispatcherTimer _presenceSweep;
 
     // Every member node this window is showing, so the presence sweep can reach them without walking the tree. A list
@@ -62,12 +63,6 @@ public sealed partial class FleetRosterViewModel : ObservableObject, IDisposable
     // in the left list, and a sweep that reached only the last one built would leave the other surface reading the
     // verdict from whenever the roster last reloaded.
     private readonly Dictionary<int, List<MemberNodeViewModel>> _nodesByCharacter = [];
-
-    // What each member's own client last said about their game. This window is not a metrics screen and shows no
-    // figures, but it subscribes to the one stream that carries the answer: a pilot whose EVE is closed while their
-    // EVE Together runs goes on publishing, so their LastSeenAt stays fresh and silence alone would call them
-    // present. The reported half is the only thing that can tell the roster otherwise (ET-70).
-    private readonly Dictionary<int, (PresenceState State, DateTimeOffset At)> _reportedPresence = [];
 
     // The announcements this window made for its own mutations, so it does not reload a second time for news it is
     // already showing. Matched on identity, never on value: two changes that describe the same pilot are still two
@@ -131,36 +126,17 @@ public sealed partial class FleetRosterViewModel : ObservableObject, IDisposable
         _rosterWatch = services.GetRequiredService<IFleetRosterWatch>();
         _rosterSubscription = _rosterWatch.Subscribe(_OnRosterChanged);
 
-        // Who is actually here (ET-70). Two evidence paths, and this window needs both: our own pilots' EVE clients,
-        // which the local sweep sees directly, and everyone else's, which only reaches us over the fleet's metric
-        // stream — or, when their client is gone, by not reaching us at all.
+        // Who is actually here (ET-70). Our own pilots' EVE clients the local sweep sees directly; everyone else is
+        // read off the same board the Fleets screen uses (ET-444), so the two screens never tell a pilot apart.
         _presence = services.GetService<ILocalCharacterPresence>();
         _presenceSubscription = _presence?.Subscribe(() => _RefreshPresence(DateTimeOffset.UtcNow));
-        _metricSubscription = services.GetService<IEventBus>()?.Subscribe<FleetMetricEvent>(_OnFleetMetric);
+        _board = services.GetService<FleetMemberBoard>();
+        _inGameRosters = services.GetService<InGameFleetRosters>();
         _presenceSweep = new DispatcherTimer { Interval = FleetMetricsViewModel.PresenceSweepInterval };
         _presenceSweep.Tick += (_, _) => _RefreshPresence(DateTimeOffset.UtcNow);
         _presenceSweep.Start();
 
         _ = ReloadAsync();
-    }
-
-    private void _OnFleetMetric(FleetMetricEvent integrationEvent)
-    {
-        var sample = integrationEvent.Data;
-        if (sample.FleetId != _fleet.Id || sample.Kind is not MetricKind.Presence)
-            return;
-
-        // Onto the UI thread before it touches the dictionary the sweep reads and the nodes it writes.
-        Dispatcher.UIThread.Post(() =>
-        {
-            var now = DateTimeOffset.UtcNow;
-            // An out-of-range value is a newer client's state we have no reading for; claiming nothing is the safe
-            // answer, and the sample still counts as contact.
-            _reportedPresence[sample.CharacterId] = (
-                Enum.IsDefined((PresenceState)(int)sample.Value) ? (PresenceState)(int)sample.Value : PresenceState.Unknown,
-                now);
-            _RefreshPresence(now);
-        });
     }
 
     /// <summary>
@@ -176,27 +152,42 @@ public sealed partial class FleetRosterViewModel : ObservableObject, IDisposable
             if (!_nodesByCharacter.TryGetValue(member.CharacterId, out var nodes))
                 continue;
 
-            // The later of the two accounts of contact. The roster read's LastSeenAt is written at most every
-            // SeenWriteThrottle and was taken whenever this window last reloaded; a live sample is exact but only
-            // covers pilots who have published since it opened. Neither alone answers for every member.
-            var reported = _reportedPresence.TryGetValue(member.CharacterId, out var last)
-                ? last
-                : (State: PresenceState.Unknown, At: (DateTimeOffset?)null);
-            var heardAt = (reported.At, member.LastSeenAt) switch
+            bool? inGameFleet = _InGameFleetOf(member);
+            bool? localInGame = _presence?.IsInGame(member.CharacterId, NameFor(member.CharacterId));
+            if (localInGame is not null || _board is null || member.IsExternal)
             {
-                ({ } live, { } stored) => live > stored ? live : stored,
-                ({ } live, null) => live,
-                (null, { } stored) => stored,
-                _ => (DateTimeOffset?)null,
-            };
+                var verdict = FleetMemberPresence.Read(localInGame, PresenceState.Unknown,
+                    FleetMemberPresence.IsSilent(member.LastSeenAt, now));
+                foreach (var node in nodes)
+                    node.ShowStanding(verdict, null, null, inGameFleet);
+                continue;
+            }
 
-            var verdict = FleetMemberPresence.Read(
-                _presence?.IsInGame(member.CharacterId, NameFor(member.CharacterId)),
-                reported.State,
-                FleetMemberPresence.IsSilent(heardAt, now));
+            // Worded exactly as the Fleets screen words it (FleetsViewModel._ApplyPresence).
+            FleetMateStatus status = _board.StatusOf(_fleet.Id, member.CharacterId, member.IsConnected, member.LastSeenAt, now);
+            var presence = status.Reason is FleetMemberStatusReason.NotConnected ? FleetMemberPresenceState.Offline : status.Presence;
+            string text = FleetMemberStatusText.Short(status), tooltip = FleetMemberStatusText.Line(status, null, now);
             foreach (var node in nodes)
-                node.Presence = verdict;
+                node.ShowStanding(presence, text, tooltip, inGameFleet);
         }
+    }
+
+    /// <summary>
+    /// Whether a member sits in the coupled in-game fleet (ET-444); null while the fleet is not coupled or nothing
+    /// vouches either way. The boss's own ESI poll is the whole truth on the boss's client; elsewhere only the pilot's
+    /// own client can confirm it, and a missing confirmation may be a missing scope as easily as an absent pilot.
+    /// </summary>
+    private bool? _InGameFleetOf(FleetMemberInfo member)
+    {
+        if (_esiFleetId is null)
+            return null;
+        if (member.CharacterId == _esiFleetBossId)
+            return true;
+
+        IReadOnlyCollection<int> polled = _inGameRosters?.MembersOf(_fleets.ServerAddress, _fleet.Id) ?? [];
+        if (polled.Count > 0)
+            return polled.Contains(member.CharacterId);
+        return member.InGameFleet is true ? true : null;
     }
 
     private void _OnRosterChanged(FleetRosterChange change)
@@ -217,7 +208,6 @@ public sealed partial class FleetRosterViewModel : ObservableObject, IDisposable
     {
         _presenceSweep.Stop();
         _presenceSubscription?.Dispose();
-        _metricSubscription?.Dispose();
         _rosterSubscription.Dispose();
     }
 
@@ -1485,15 +1475,22 @@ public sealed partial class FleetRosterViewModel : ObservableObject, IDisposable
             .OfType<int>()
             .ToHashSet();
 
+        // The same presence the tree shows, read fresh rather than from the last sweep.
+        _RefreshPresence(DateTimeOffset.UtcNow);
         var rows = members
-            .Select(m => new FleetStartMember(
-                m.CharacterId,
-                NameFor(m.CharacterId),
-                mine.Contains(m.CharacterId),
-                m.CharacterId == _fleet.CreatorCharacterId,
-                m.IsExternal,
-                m.IsExternal ? null : elsewhere.GetValueOrDefault(m.CharacterId),
-                m.Availability == FleetMemberAvailability.SignedOff))
+            .Select(m => (Member: m, Node: _nodesByCharacter.GetValueOrDefault(m.CharacterId)?.FirstOrDefault()))
+            .Select(entry => new FleetStartMember(
+                entry.Member.CharacterId,
+                NameFor(entry.Member.CharacterId),
+                mine.Contains(entry.Member.CharacterId),
+                entry.Member.CharacterId == _fleet.CreatorCharacterId,
+                entry.Member.IsExternal,
+                entry.Member.IsExternal ? null : elsewhere.GetValueOrDefault(entry.Member.CharacterId),
+                entry.Member.Availability == FleetMemberAvailability.SignedOff,
+                entry.Node?.Presence ?? FleetMemberPresenceState.Unknown,
+                entry.Node?.StatusText,
+                entry.Node?.PresenceTooltip,
+                entry.Member.IsConnected))
             .ToList();
 
         // A client-only fleet's roster is the owner's own pilots and externals: nobody there has an inbox to ask.

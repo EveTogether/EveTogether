@@ -947,7 +947,8 @@ public sealed partial class FleetsViewModel
         var members = row.Members
             .Select(m => new FleetStartMember(
                 m.CharacterId, m.CharacterName, m.IsMine, m.IsFleetCommander, m.IsExternal,
-                m.IsExternal ? null : ElsewhereFleetNameFor(m.CharacterId, row) ?? Reported(m.CharacterId)))
+                m.IsExternal ? null : ElsewhereFleetNameFor(m.CharacterId, row) ?? Reported(m.CharacterId),
+                m.IsSignedOff, m.Presence, m.StatusText, m.PresenceTooltip, m.IsConnected))
             .ToList();
 
         // A client-only fleet's roster is your own pilots and external ones: there is no inbox to send a request to.

@@ -71,11 +71,45 @@ public sealed partial class MemberNodeViewModel : ObservableObject, IFleetMember
     /// is otherwise only rebuilt when the roster itself changes.
     /// </summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsOffline))]
+    [NotifyPropertyChangedFor(nameof(IsOffline), nameof(IsOnline), nameof(PresenceText))]
     private FleetMemberPresenceState _presence = FleetMemberPresenceState.Unknown;
 
     /// <summary>Known not to be here — an own category, distinct from a pilot nothing is known about.</summary>
     public bool IsOffline => Presence is FleetMemberPresenceState.Offline;
+
+    public bool IsOnline => Presence is FleetMemberPresenceState.Online;
+
+    /// <summary>The Fleets screen's word for a fleet mate (ET-444) — "online", "not in game", "no link", "app closed";
+    /// null for an own character, whose presence this client sees directly.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(PresenceText))]
+    private string? _statusText;
+
+    [ObservableProperty] private string? _presenceTooltip;
+
+    public string PresenceText => StatusText ?? Presence switch
+    {
+        FleetMemberPresenceState.Online => "online",
+        FleetMemberPresenceState.Offline => "not in game",
+        _ => "unknown",
+    };
+
+    /// <summary>Whether the pilot sits in the coupled in-game fleet; null while the fleet is not coupled or nothing
+    /// vouches either way (ET-444).</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowsInGameFleet), nameof(ShowsNotInGameFleet))]
+    private bool? _inGameFleet;
+
+    public bool ShowsInGameFleet => InGameFleet is true;
+    public bool ShowsNotInGameFleet => InGameFleet is false;
+
+    public void ShowStanding(FleetMemberPresenceState presence, string? statusText, string? presenceTooltip, bool? inGameFleet)
+    {
+        Presence = presence;
+        StatusText = statusText;
+        PresenceTooltip = presenceTooltip;
+        InGameFleet = inGameFleet;
+    }
 
     // The menu carries the presence line, so it is rebuilt when the verdict moves rather than showing the reading
     // from whenever the tree happened to be built.
@@ -134,10 +168,10 @@ public sealed partial class MemberNodeViewModel : ObservableObject, IFleetMember
     public string SkillBadgeTooltip => _skillBadge?.Tooltip ?? string.Empty;
 
     // --- availability for the fleet's next start (ET-169): set by the member only, never by this window. An
-    // external member has no client to set it from, so none of the three chips apply to them. ---
+    // external member has no client to set it from. No chip for "not set": it counts as available, and every member
+    // is reset to it when the fleet starts, so it read "NO REPLY" on everyone in a running fleet (ET-444). ---
 
     public bool ShowsAvailable => !Member.IsExternal && Member.Availability == FleetMemberAvailability.Available;
-    public bool ShowsNoReply => !Member.IsExternal && Member.Availability == FleetMemberAvailability.NotSet;
     public bool ShowsSignedOff => !Member.IsExternal && Member.Availability == FleetMemberAvailability.SignedOff;
 
     /// <summary>The note the member gave when signing off, or a placeholder when they gave none.</summary>

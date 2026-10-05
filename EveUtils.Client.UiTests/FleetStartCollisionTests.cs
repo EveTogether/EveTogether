@@ -1,15 +1,20 @@
 using System;
 using System.Linq;
 using System.Threading.Tasks;
+using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
+using Avalonia.Threading;
+using Avalonia.VisualTree;
 using EveUtils.Client.Dialogs;
 using EveUtils.Client.Fleet;
 using EveUtils.Client.Platform;
 using EveUtils.Client.Transport;
 using EveUtils.Client.ViewModels;
+using EveUtils.Client.Views;
 using EveUtils.Shared.Identity;
 using EveUtils.Shared.Modules.Fleet.Dtos;
 using EveUtils.Shared.Modules.Fleet.Entities;
+using EveUtils.Shared.Modules.Fleet.Metrics;
 using EveUtils.Shared.Transport;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -331,5 +336,40 @@ public class FleetStartCollisionTests
             Assert.False(commander.PrimaryIsWarn);
             vm.Dispose();
         }
+    }
+
+    /// <summary>
+    /// ET-444: the dialog listed every member as "free · will be linked" under "3 with a client", while the Fleets
+    /// screen said one of them had no link. It now shows the Fleets screen's chip per member and counts who is ready.
+    /// </summary>
+    [AvaloniaFact]
+    public void TheStartDialog_ShowsEachMembersStatus_AndCountsWhoIsReady()
+    {
+        var prompt = new FleetStartPrompt("Sikrah misc",
+        [
+            new FleetStartMember(Me, "Jithran", IsMine: true, IsCommander: true, IsExternal: false, null,
+                Presence: FleetMemberPresenceState.Online),
+            new FleetStartMember(Aurel, "RaymondKrah", IsMine: false, IsCommander: false, IsExternal: false, null,
+                Presence: FleetMemberPresenceState.Offline, StatusText: "no link",
+                StatusTooltip: "not connected to the server", IsConnected: false),
+            new FleetStartMember(Tessa, "Moso Itonula", IsMine: false, IsCommander: false, IsExternal: false, null,
+                Presence: FleetMemberPresenceState.Online, StatusText: "online", StatusTooltip: "Amarr", IsConnected: true),
+        ], CanAskThemAll: true);
+
+        var window = new StartFleetWindow(prompt) { Width = 560, Height = 420 };
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+        window.UpdateLayout();
+        OverlayShots.Capture(window, "et444-start-fleet");
+
+        Assert.Equal("MEMBERS — 2 of 3 ready · 1 no link · 1 yours", window.FindControl<TextBlock>("MembersLabel")?.Text);
+        var chips = window.GetVisualDescendants().OfType<Border>()
+            .Where(b => b.IsEffectivelyVisible && b.Classes.Contains("chip") && b.Child is TextBlock)
+            .ToList();
+        Border noLink = Assert.Single(chips, b => b.Child is TextBlock { Text: "no link" });
+        Assert.Contains("dim", noLink.Classes);
+        Assert.Equal("not connected to the server", ToolTip.GetTip(noLink));
+        Assert.All(chips.Where(b => b.Child is TextBlock { Text: "online" }), b => Assert.Contains("good", b.Classes));
+        Assert.Equal(2, chips.Count(b => b.Child is TextBlock { Text: "online" }));
     }
 }

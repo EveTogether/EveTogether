@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Linq;
@@ -62,7 +63,7 @@ public partial class StartFleetWindow : ChromedWindow
             ? "1 member is already in another active fleet"
             : string.Create(CultureInfo.InvariantCulture, $"{prompt.ElsewhereCount} members are already in another active fleet");
         this.FindControl<TextBlock>("CollisionOfChip")!.Text =
-            string.Create(CultureInfo.InvariantCulture, $"of the {prompt.AvailableCount} with a client");
+            string.Create(CultureInfo.InvariantCulture, $"of the {prompt.AvailableCount} with EVE Together");
 
         // Your own alt is the one case this dialog does not ask about: moving your own character is owning it, not
         // commanding the fleet, so it is pointed at the member row rather than folded into the ask.
@@ -88,15 +89,21 @@ public partial class StartFleetWindow : ChromedWindow
         }
     }
 
-    /// <summary>"6 on the roster · 5 with a client · 3 yours · 1 signed off" — the header over the member list.
-    /// The signed-off tail only appears when it applies — most fleets have never had one.</summary>
+    /// <summary>"MEMBERS — 2 of 3 ready · 1 no link · 1 yours · 1 external · 1 signed off" — the header over the member
+    /// list, counted as the Fleets screen counts "ready" (ET-444). Each tail only appears when it applies.</summary>
     private static string DescribeRoster(FleetStartPrompt prompt)
     {
-        var head = string.Create(CultureInfo.InvariantCulture,
-            $"MEMBERS — {prompt.RosterCount} on the roster · {prompt.AvailableCount} with a client · {prompt.MineCount} yours");
-        return prompt.SignedOffCount == 0
-            ? head
-            : head + string.Create(CultureInfo.InvariantCulture, $" · {prompt.SignedOffCount} signed off");
+        List<string> parts =
+        [
+            string.Create(CultureInfo.InvariantCulture, $"{prompt.ReadyCount} of {prompt.AvailableCount} ready"),
+            .. prompt.NotReady,
+            string.Create(CultureInfo.InvariantCulture, $"{prompt.MineCount} yours"),
+        ];
+        if (prompt.ExternalCount > 0)
+            parts.Add(string.Create(CultureInfo.InvariantCulture, $"{prompt.ExternalCount} external"));
+        if (prompt.SignedOffCount > 0)
+            parts.Add(string.Create(CultureInfo.InvariantCulture, $"{prompt.SignedOffCount} signed off"));
+        return "MEMBERS — " + string.Join(" · ", parts);
     }
 
     /// <summary>What pressing START actually achieves, in members rather than in states.</summary>
