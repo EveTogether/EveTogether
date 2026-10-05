@@ -77,6 +77,7 @@ const metrics = await res.json();
     <tr><td><code>GET /api/v1/compositions</code></td><td>Your doctrine/composition library (local + each coupled server).</td></tr>
     <tr><td><code>GET /api/v1/compositions/{id}</code></td><td>One composition's roles + fit-entries. Add <code>?server=&lt;address&gt;</code> for a server composition (omit for the local library).</td></tr>
     <tr><td><code>GET /api/v1/types/{id}</code></td><td>Resolve a type id to its name, group and a public icon URL — so a widget can show ship/module names + icons without its own SDE.</td></tr>
+    <tr><td><code>GET /api/v1/killmails/latest</code></td><td>Your newest kills and losses, newest first. <code>?kind=all|kills|losses</code> (default all), <code>?limit=1-25</code> (default 1). Each row: kill/loss, ship, ISK, attacker count, time, linked run, final blow, and the ESI-resolved (cached) names of victim and corporation. The solar system is only filled in when "Include my location" is on.</td></tr>
   </table>
   <div class="note">Live per-member fleet <em>metrics</em> are a streamed signal, not a readable snapshot — they arrive over the WebSocket stream (M3), not as a REST endpoint.</div>
   <p>The full, interactive reference — request/response schemas and a live "try it" — is the
@@ -90,7 +91,8 @@ const metrics = await res.json();
                                      "history": [ /* the last 5 minutes per toon, see below */ ] },               "ts": ... }
 { "type": "metrics",       "data": [ /* your running toon(s), every second — always, fleet or not */ ],            "ts": ... }
 { "type": "fleet.metrics", "data": { "characterId":…, "fleetId":…, "kind":"Dps", "value":…, "unixMs":… },           "ts": ... }
-{ "type": "fleet.changed", "data": { "fleetId":…, "kind":"…", "serverAddress":… },                                  "ts": ... }</code></pre>
+{ "type": "fleet.changed", "data": { "fleetId":…, "kind":"…", "serverAddress":… },                                  "ts": ... }
+{ "type": "killmail.added", "data": { /* one row of /killmails/latest */ },                                       "ts": ... }</code></pre>
   <h3>Combat metrics</h3>
   <p>Each row of <code>metrics</code> (and of <code>GET /api/v1/metrics</code>) carries, per second:</p>
   <table>
@@ -117,7 +119,7 @@ const metrics = await res.json();
 ws.onmessage = (e) => { const evt = JSON.parse(e.data); /* evt.type, evt.data — update your overlay */ };</code></pre>
   <div class="note"><code>metrics</code> streams your own running character(s) every second, fleet or not.
      <code>fleet.metrics</code> (one sample per member per tick) and <code>fleet.changed</code> only arrive while you
-     are in a fleet. There is no <code>fit.changed</code> event yet.</div>
+     are in a fleet. <code>killmail.added</code> fires for a newly imported kill or loss only, never for a backfill of old mails. There is no <code>fit.changed</code> event yet.</div>
 
   <h2>Realtime: SignalR <span class="pill">available</span></h2>
   <p>A SignalR hub at <code>{{BASE_URL}}/hub/fleet</code> for richer .NET/JS clients
