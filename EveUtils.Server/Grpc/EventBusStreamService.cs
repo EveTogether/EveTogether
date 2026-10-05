@@ -38,6 +38,10 @@ public sealed class EventBusStreamService(
         if (session is null)
             throw new RpcException(new Status(StatusCode.Unauthenticated, "A valid session token is required to attach the event bus."));
 
+        // Answer the attach straight away: the client counts itself connected only once the server has responded,
+        // and without these headers the first thing it would hear is a keepalive, up to 15 s later.
+        await context.WriteResponseHeadersAsync([]);
+
         var key = TokenSecurity.Hash(token!);
         var characterName = session.SyncedCharacter?.CharacterName ?? "unknown";
         var attachedCharacterId = session.SyncedCharacter?.EsiCharacterId ?? 0;
