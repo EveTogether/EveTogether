@@ -32,8 +32,11 @@ public sealed class SkillTargetsCalculator(
         var fittingMovers = scan.Entries
             .Where(entry => entry.AtFive.ContainsKey(SkillImpactStat.FreeCpu) || entry.AtFive.ContainsKey(SkillImpactStat.FreePg))
             .Select(entry => entry.SkillTypeId).ToList();
-        var (canFlyLevels, shortfalls) =
+        var (canFlyLevels, shortfalls, fittingAtFive) =
             await _ResolveFitCheckAsync(baseInput, canFlyBase, fittingMovers, cancellationToken);
+        var fittingSkills = canFlyLevels
+            .Where(pair => pair.Value > canFlyBase.GetValueOrDefault(pair.Key))
+            .Select(pair => new SkillTargetLevel(pair.Key, pair.Value)).ToList();
 
         var statMovers = scan.Entries.Where(entry => selectedStats.Any(entry.AtFive.ContainsKey))
             .Select(entry => entry.SkillTypeId).ToList();
@@ -66,20 +69,31 @@ public sealed class SkillTargetsCalculator(
 
         var curve = await _BuildCurveAsync(baseInput, canFlyLevels, optimalLevels, statMovers, Score,
             canFlyValues, maxValues, selectedStats, cancellationToken);
-        return new SkillTargetsResult(canFlyGoal, optimalGoal, maxGoal, curve);
+        return new SkillTargetsResult(canFlyGoal, optimalGoal, maxGoal, curve, scan.BaseValues, fittingSkills, fittingAtFive);
     }
 
     // Greedy: resolve any CPU/PG overload by repeatedly training the fitting-mover level (prerequisites bundled)
-    // with the highest freed capacity per hour, until nothing is left short or every mover is at V.
-    private async Task<(Dictionary<int, int> Levels, IReadOnlyList<SkillTargetResourceShortfall> Shortfalls)> _ResolveFitCheckAsync(
+    // with the highest freed capacity per hour. A resource still short with every fitting mover at V cannot be
+    // fixed by skills, so it is left out of the greedy score instead of dragging every fitting skill to V.
+    private async Task<(Dictionary<int, int> Levels, IReadOnlyList<SkillTargetResourceShortfall> Shortfalls,
+        IReadOnlyDictionary<SkillImpactStat, double> FittingAtFive)> _ResolveFitCheckAsync(
         FitInput baseInput, IReadOnlyDictionary<int, int> startLevels, IReadOnlyList<int> fittingMovers,
         CancellationToken cancellationToken)
     {
         var levels = new Dictionary<int, int>(startLevels);
         var stats = await _StatsAtAsync(baseInput, levels, cancellationToken);
-        while (_ShortfallScore(stats) < 0)
+        var allAtFive = _Merge(levels, validator.SkillRequirements([],
+            fittingMovers.Select(skillTypeId => new SkillMinimum(skillTypeId, MaxLevel)).ToList(), levels));
+        var fittingAtFive = await _StatsAtAsync(baseInput, allAtFive, cancellationToken);
+        bool cpuFixable = fittingAtFive[SkillImpactStat.FreeCpu] >= 0;
+        bool pgFixable = fittingAtFive[SkillImpactStat.FreePg] >= 0;
+        double FixableShortfall(IReadOnlyDictionary<SkillImpactStat, double> values) =>
+            (cpuFixable ? Math.Min(0, values[SkillImpactStat.FreeCpu]) : 0)
+            + (pgFixable ? Math.Min(0, values[SkillImpactStat.FreePg]) : 0);
+
+        while (FixableShortfall(stats) < 0)
         {
-            var step = await _BestStepAsync(baseInput, levels, fittingMovers, _ShortfallScore, _ShortfallScore(stats), cancellationToken);
+            var step = await _BestStepAsync(baseInput, levels, fittingMovers, FixableShortfall, FixableShortfall(stats), cancellationToken);
             if (step is null)
             {
                 break;   // every fitting mover already at V, and still short
@@ -98,7 +112,7 @@ public sealed class SkillTargetsCalculator(
         {
             shortfalls.Add(new SkillTargetResourceShortfall(SkillImpactStat.FreePg, -stats[SkillImpactStat.FreePg]));
         }
-        return (levels, shortfalls);
+        return (levels, shortfalls, fittingAtFive);
     }
 
     // D10: greedy from can fly, one level at a time (prerequisites bundled), always taking the candidate with the
@@ -228,9 +242,6 @@ public sealed class SkillTargetsCalculator(
     private static bool _Satisfies(IReadOnlyDictionary<int, int> levels, IReadOnlyDictionary<int, int> targets) =>
         targets.All(target => levels.GetValueOrDefault(target.Key) >= target.Value);
 
-    private static double _ShortfallScore(IReadOnlyDictionary<SkillImpactStat, double> stats) =>
-        Math.Min(0, stats[SkillImpactStat.FreeCpu]) + Math.Min(0, stats[SkillImpactStat.FreePg]);
-
     private static IReadOnlyList<int> _SeedTypeIds(FitInput input)
     {
         var ids = new List<int> { input.ShipTypeId };
@@ -276,7 +287,7 @@ public sealed class SkillTargetsCalculator(
             stat => StatShare.Compute(canFlyValues[stat], values[stat], maxValues[stat], LowerIsBetter.Contains(stat)));
         double score = qualifyingStats.Count == 0 ? 0 : qualifyingStats.Average(stat => shares[stat]);
 
-        return new SkillTargetGoal(kind, levels, skillPoints, trainingTime, shares, score, shortfalls);
+        return new SkillTargetGoal(kind, levels, skillPoints, trainingTime, shares, score, shortfalls, values);
     }
 }
 
@@ -295,7 +306,8 @@ public sealed record SkillTargetGoal(
     TimeSpan TrainingTime,
     IReadOnlyDictionary<SkillImpactStat, double> StatShares,
     double Score,
-    IReadOnlyList<SkillTargetResourceShortfall> Shortfalls)
+    IReadOnlyList<SkillTargetResourceShortfall> Shortfalls,
+    IReadOnlyDictionary<SkillImpactStat, double> Values)
 {
     public bool Fits => Shortfalls.Count == 0;
 }
@@ -307,4 +319,9 @@ public sealed record SkillTargetCurvePoint(int SkillTypeId, int Level, double Sk
 public sealed record SkillTargetCurve(
     IReadOnlyList<SkillTargetCurvePoint> Points, int OptimalPointIndex, int MaxPointIndex);
 
-public sealed record SkillTargetsResult(SkillTargetGoal CanFly, SkillTargetGoal Optimal, SkillTargetGoal Max, SkillTargetCurve Curve);
+/// <param name="NowValues">The stats at the character's trained levels (the scan's own base values).</param>
+/// <param name="FittingSkills">The levels can fly adds beyond the fit's requirements so the fit fits.</param>
+/// <param name="FittingAtFive">The stats from can fly's start with every CPU/PG mover at V.</param>
+public sealed record SkillTargetsResult(SkillTargetGoal CanFly, SkillTargetGoal Optimal, SkillTargetGoal Max, SkillTargetCurve Curve,
+    IReadOnlyDictionary<SkillImpactStat, double> NowValues, IReadOnlyList<SkillTargetLevel> FittingSkills,
+    IReadOnlyDictionary<SkillImpactStat, double> FittingAtFive);

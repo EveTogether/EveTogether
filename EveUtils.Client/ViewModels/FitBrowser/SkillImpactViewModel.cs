@@ -4,7 +4,9 @@ using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using CommunityToolkit.Mvvm.Input;
 using EveUtils.Client.Dialogs;
+using EveUtils.Client.Skills;
 using EveUtils.Client.ViewModels.Skills.Plans;
 using EveUtils.Shared.Modules.Dogma;
 using EveUtils.Shared.Modules.Skills;
@@ -28,10 +30,17 @@ public sealed class SkillImpactViewModel : ViewModelBase, IRefreshableModule
     private readonly SkillTrainingEstimator? _trainingEstimator;
     private readonly CharacterAttributeSet? _attributes;
     private readonly SkillTargetsCalculator? _targetsCalculator;
-    private readonly Func<IReadOnlyList<SkillPlanRowDraft>, string, Task>? _addToPlan;
-    private readonly string _planSourceLabel;
+    private Func<IReadOnlyList<SkillPlanRowDraft>, string, Task>? _addToPlan;
+    private string _planSourceLabel;
     private readonly ISdeNameResolver _names;
-    private readonly FitInput _baseInput;
+    private FitInput _baseInput;
+    private string _shipName;
+    private string _statFilter = "";
+    private string _paneSubText = "";
+    private string _chosenStatsLabel = "";
+    private string? _notInListText;
+    private string? _footerText;
+    private string? _fitWarningText;
     private readonly IReadOnlyDictionary<int, int> _trainedLevels;
     private readonly IReadOnlyDictionary<SkillImpactStat, string> _labels;
     private int _scanVersion;
@@ -63,20 +72,98 @@ public sealed class SkillImpactViewModel : ViewModelBase, IRefreshableModule
         _trainedLevels = trainedLevels;
         ModuleId = moduleId;
         CharacterName = characterName;
-        ShipName = shipName;
-        Chips = _BuildChips();
+        _shipName = shipName;
+        Chips = SkillImpactStats.All.Select(meta => new SkillImpactStatChipViewModel(meta)).ToList();
         _labels = Chips.ToDictionary(chip => chip.Stat, chip => chip.Label);
         foreach (var chip in Chips)
         {
             chip.SelectionChanged += _OnStatSelectionChanged;
         }
+
+        // The stat menu's two columns, grouped by fit-detail section as in mockup v5's "+ stat" menu.
+        SkillImpactStatGroupViewModel Group(string name) => new(name, Chips.Where(chip => chip.Group == name).ToList());
+        MenuLeft = [Group("OFFENSE"), Group("TANK"), Group("CAPACITOR")];
+        MenuRight = [Group("NAVIGATION"), Group("TARGETING"), Group("FITTING")];
+        ChangeFitCommand = new AsyncRelayCommand(_ChangeFitAsync);
     }
 
     public string ModuleId { get; }
     public string CharacterName { get; }
-    public string ShipName { get; }
     public IReadOnlyList<SkillImpactStatChipViewModel> Chips { get; }
+    public IReadOnlyList<SkillImpactStatGroupViewModel> MenuLeft { get; }
+    public IReadOnlyList<SkillImpactStatGroupViewModel> MenuRight { get; }
+    public ObservableCollection<SkillImpactStatChipViewModel> ChosenChips { get; } = [];
     public ObservableCollection<SkillImpactRowViewModel> Rows { get; } = [];
+
+    /// <summary>The fit's name, the FROM A FIT selector's text.</summary>
+    public string ShipName
+    {
+        get => _shipName;
+        private set => SetProperty(ref _shipName, value);
+    }
+
+    /// <summary>Opens the library fit picker for this character's levels; set by whoever opens the screen, before it
+    /// is shown. Null leaves the FROM A FIT selector showing the fit without a way to switch.</summary>
+    public Func<IReadOnlyDictionary<int, int>, Task<SkillImpactFit?>>? PickFit { get; set; }
+
+    public bool CanChangeFit => PickFit is not null;
+
+    public IAsyncRelayCommand ChangeFitCommand { get; }
+
+    public string StatFilterWatermark => $"Filter {Chips.Count} stats…";
+
+    public string StatFilter
+    {
+        get => _statFilter;
+        set
+        {
+            if (SetProperty(ref _statFilter, value))
+            {
+                foreach (var chip in Chips)
+                {
+                    chip.IsMatch = string.IsNullOrWhiteSpace(value)
+                        || chip.MenuLabel.Contains(value.Trim(), StringComparison.OrdinalIgnoreCase);
+                }
+                foreach (var group in MenuLeft.Concat(MenuRight))
+                {
+                    group.Refresh();
+                }
+            }
+        }
+    }
+
+    /// <summary>"8 skills · Catbank".</summary>
+    public string PaneSubText
+    {
+        get => _paneSubText;
+        private set => SetProperty(ref _paneSubText, value);
+    }
+
+    /// <summary>"DPS · ALIGN TIME · CPU FREE", the pane's section label.</summary>
+    public string ChosenStatsLabel
+    {
+        get => _chosenStatsLabel;
+        private set => SetProperty(ref _chosenStatsLabel, value);
+    }
+
+    public string? NotInListText
+    {
+        get => _notInListText;
+        private set => SetProperty(ref _notInListText, value);
+    }
+
+    public string? FooterText
+    {
+        get => _footerText;
+        private set => SetProperty(ref _footerText, value);
+    }
+
+    /// <summary>The sentence after "This fit does not fit at any skill level."; null when skills can make it fit.</summary>
+    public string? FitWarningText
+    {
+        get => _fitWarningText;
+        private set => SetProperty(ref _fitWarningText, value);
+    }
 
     public bool IsLoading
     {
@@ -168,6 +255,7 @@ public sealed class SkillImpactViewModel : ViewModelBase, IRefreshableModule
 
         _result = result;
         _ApplyAvailability(result);
+        _SelectDefaultStat();
         _Recompute();
         IsLoading = false;
         await _RecomputeTargetsAsync(cancellationToken);
@@ -184,13 +272,16 @@ public sealed class SkillImpactViewModel : ViewModelBase, IRefreshableModule
 
     private async Task _RecomputeTargetsAsync(CancellationToken cancellationToken)
     {
-        var selected = Chips.Where(chip => chip.IsSelected && chip.IsAvailable).Select(chip => chip.Stat).ToList();
+        var chosen = Chips.Where(chip => chip.IsSelected && chip.IsAvailable).ToList();
+        var selected = chosen.Select(chip => chip.Stat).ToList();
         var scan = _result;
+        var baseInput = _baseInput;
         if (_targetsCalculator is not { } calculator || scan is null || selected.Count == 0)
         {
             ++_targetsVersion;   // discard any recompute already in flight for a since-cleared selection
             CanFlyCard = OptimalCard = MaxCard = null;
             Curve = null;
+            FitWarningText = null;
             TargetsErrorMessage = null;
             return;
         }
@@ -201,7 +292,7 @@ public sealed class SkillImpactViewModel : ViewModelBase, IRefreshableModule
         try
         {
             result = await Task.Run(
-                () => calculator.CalculateAsync(_baseInput, _trainedLevels, scan, selected, cancellationToken),
+                () => calculator.CalculateAsync(baseInput, _trainedLevels, scan, selected, cancellationToken),
                 cancellationToken);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
@@ -220,19 +311,100 @@ public sealed class SkillImpactViewModel : ViewModelBase, IRefreshableModule
         }
 
         TargetsErrorMessage = null;
-        CanFlyCard = _BuildCard(result.CanFly);
-        OptimalCard = _BuildCard(result.Optimal);
-        MaxCard = _BuildCard(result.Max);
-        Curve = new SkillTargetCurveViewModel(result.Curve);
+        var now = DateTimeOffset.UtcNow;
+        CanFlyCard = _BuildCard(result.CanFly, chosen, result, now);
+        OptimalCard = _BuildCard(result.Optimal, chosen, result, now);
+        MaxCard = _BuildCard(result.Max, chosen, result, now);
+        Curve = new SkillTargetCurveViewModel(result.Curve, chosen);
+        FitWarningText = _FitWarning(result);
         IsLoadingTargets = false;
     }
 
-    private SkillTargetCardViewModel _BuildCard(SkillTargetGoal goal)
+    private SkillTargetCardViewModel _BuildCard(SkillTargetGoal goal, IReadOnlyList<SkillImpactStatChipViewModel> chosen,
+        SkillTargetsResult result, DateTimeOffset now)
     {
+        string source = _planSourceLabel;
         Func<Task>? addToPlan = _addToPlan is not { } add ? null : () => add(
-            goal.Levels.Select(level => new SkillPlanRowDraft(level.SkillTypeId, level.Level, _planSourceLabel)).ToList(),
-            _planSourceLabel);
-        return new SkillTargetCardViewModel(goal, _labels, DateTimeOffset.UtcNow, addToPlan);
+            goal.Levels.Select(level => new SkillPlanRowDraft(level.SkillTypeId, level.Level, source)).ToList(), source);
+        return new SkillTargetCardViewModel(goal, chosen, result, _names, now, addToPlan);
+    }
+
+    // f5: a resource still short with every fitting skill at V cannot be trained away. The sentence says how short
+    // it is now, at can fly and at V, and which short resource can fly's fitting skills do fix.
+    private string? _FitWarning(SkillTargetsResult result)
+    {
+        var unfixable = new List<string>();
+        var fixable = new List<string>();
+        foreach (var (stat, name) in new[] { (SkillImpactStat.FreePg, "Power grid"), (SkillImpactStat.FreeCpu, "CPU") })
+        {
+            double now = result.NowValues.GetValueOrDefault(stat);
+            double canFly = result.CanFly.Values[stat];
+            double atFive = result.FittingAtFive[stat];
+            string Short(double value) => value < 0 ? SkillImpactStats.UnsignedAmount(stat, value) : "nothing";
+            if (atFive < 0)
+            {
+                unfixable.Add($"{name} is {Short(now)} short now, {Short(canFly)} at can fly, and still "
+                    + $"{Short(atFive)} with every fitting skill at V.");
+            }
+            else if (now < 0 && result.FittingSkills.Count > 0)
+            {
+                string skills = string.Join(", ", result.FittingSkills.Select(level =>
+                    $"{_names.TypeName(level.SkillTypeId)} {RomanLevel.Text(level.Level)}"));
+                fixable.Add($"{name} is fixable: {skills} (part of can fly) takes free {(stat == SkillImpactStat.FreeCpu ? "CPU" : "power grid")} "
+                    + $"from {SkillImpactStats.Value(stat, now)} to {SkillImpactStats.Value(stat, canFly)}.");
+            }
+        }
+
+        return unfixable.Count == 0 ? null
+            : string.Join(" ", unfixable.Concat(fixable)) + " Change the fit, or train anyway: the plan still holds for the skills.";
+    }
+
+    private async Task _ChangeFitAsync()
+    {
+        if (PickFit is not { } pick)
+        {
+            return;
+        }
+
+        try
+        {
+            if (await pick(_trainedLevels) is not { } fit)
+            {
+                return;
+            }
+
+            _baseInput = fit.Input;
+            _addToPlan = fit.AddToPlan ?? _addToPlan;
+            _planSourceLabel = fit.FitName;
+            ShipName = fit.FitName;
+            Rows.Clear();
+            CanFlyCard = OptimalCard = MaxCard = null;
+            Curve = null;
+            FitWarningText = null;
+            await LoadAsync();
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            TargetsErrorMessage = $"The fit could not be switched: {exception.Message}";
+        }
+    }
+
+    // The screen never opens empty: with nothing chosen yet, pick the stat the fit is built for.
+    private void _SelectDefaultStat()
+    {
+        if (Chips.Any(chip => chip.IsSelected))
+        {
+            return;
+        }
+
+        var pick = new[] { SkillImpactStat.Dps, SkillImpactStat.DroneDps, SkillImpactStat.Ehp }
+            .Select(stat => Chips.First(chip => chip.Stat == stat))
+            .FirstOrDefault(chip => chip.IsAvailable)
+            ?? Chips.FirstOrDefault(chip => chip.IsAvailable);
+        if (pick is not null)
+        {
+            pick.IsSelected = true;
+        }
     }
 
     private void _ApplyAvailability(SkillImpactResult result)
@@ -261,12 +433,24 @@ public sealed class SkillImpactViewModel : ViewModelBase, IRefreshableModule
     private void _Recompute()
     {
         Rows.Clear();
+        var chosenChips = Chips.Where(chip => chip.IsSelected && chip.IsAvailable).ToList();
+        ChosenChips.Clear();
+        foreach (var chip in chosenChips)
+        {
+            ChosenChips.Add(chip);
+        }
+        ChosenStatsLabel = string.Join(" · ", chosenChips.Select(chip => chip.Label.ToUpperInvariant()));
+        var left = Chips.Where(chip => chip.IsAvailable && !chip.IsSelected).Select(chip => chip.RuleName).ToList();
+        NotInListText = left.Count == 0 ? null
+            : $"Skills that only move stats you did not choose ({string.Join(", ", left)}). Add a stat and they come back.";
+        PaneSubText = $"0 skills · {CharacterName}";
+        FooterText = null;
         if (_result is null)
         {
             return;
         }
 
-        var selected = Chips.Where(chip => chip.IsSelected && chip.IsAvailable).Select(chip => chip.Stat).ToList();
+        var selected = chosenChips.Select(chip => chip.Stat).ToList();
         if (selected.Count == 0)
         {
             return;
@@ -292,22 +476,33 @@ public sealed class SkillImpactViewModel : ViewModelBase, IRefreshableModule
                 continue;
             }
 
-            var score = movedSelected.Average(stat => StatShare.Compute(
-                _result.BaseValues[stat], entry.AtFive[stat], best[stat], LowerIsBetter.Contains(stat)));
-            var trainingTime = _TimeToFive(entry.SkillTypeId);
-            var scorePerHour = trainingTime.TotalHours > 0 ? score / trainingTime.TotalHours : score;
+            // Ranked on the next level, the step the row offers: its combined share of what skills can add, per hour.
+            var score = movedSelected.Average(stat => StatShare.Compute(_result.BaseValues[stat],
+                entry.AtNextLevel.GetValueOrDefault(stat, _result.BaseValues[stat]), best[stat], LowerIsBetter.Contains(stat)));
+            var nextTime = _TimeTo(entry.SkillTypeId, entry.CurrentLevel + 1);
+            var trainingTime = _TimeTo(entry.SkillTypeId, 5);
+            var scorePerHour = nextTime.TotalHours > 0 ? score / nextTime.TotalHours : score;
 
-            var gains = movedSelected.Select(stat => new SkillImpactStatGain(stat, _labels[stat],
+            var gains = movedSelected.Select(stat => new SkillImpactStatGain(stat, _labels[stat], _result.BaseValues[stat],
                 entry.AtNextLevel.GetValueOrDefault(stat, _result.BaseValues[stat]), entry.AtFive[stat])).ToList();
 
             string skillName = _names.TypeName(entry.SkillTypeId);
-            rows.Add(new SkillImpactRowViewModel(entry.SkillTypeId, skillName, entry.CurrentLevel, gains, trainingTime,
+            rows.Add(new SkillImpactRowViewModel(entry.SkillTypeId, skillName, entry.CurrentLevel, gains, nextTime, trainingTime,
                 scorePerHour, _RowAddToPlan(entry.SkillTypeId, skillName)));
         }
 
         foreach (var row in rows.OrderByDescending(row => row.ScorePerHour))
         {
             Rows.Add(row);
+        }
+
+        PaneSubText = $"{Rows.Count} skill{(Rows.Count == 1 ? "" : "s")} · {CharacterName}";
+        if (Rows.FirstOrDefault() is { } top)
+        {
+            top.IsFirst = true;
+            FooterText = $"{top.SkillName} comes first: {top.NextTimeText} for "
+                + $"{string.Join(" and ", top.Gains.Select(gain => gain.NextSentenceText))}, "
+                + "the most combined gain per hour of training of every skill in the list.";
         }
     }
 
@@ -324,14 +519,14 @@ public sealed class SkillImpactViewModel : ViewModelBase, IRefreshableModule
 
     // Prerequisites included: the same recursive closure the "Skills Required" panel runs, seeded with just this one
     // candidate skill at V instead of a whole fit — ET-356 point 5's reason for making SkillRequirements public.
-    private TimeSpan _TimeToFive(int skillTypeId)
+    private TimeSpan _TimeTo(int skillTypeId, int level)
     {
         if (_validator is null || _trainingEstimator is null || _attributes is null)
         {
             return TimeSpan.Zero;
         }
 
-        var gaps = _validator.SkillRequirements([], [new SkillMinimum(skillTypeId, 5)], _trainedLevels);
+        var gaps = _validator.SkillRequirements([], [new SkillMinimum(skillTypeId, level)], _trainedLevels);
         var total = TimeSpan.Zero;
         foreach (var gap in gaps)
         {
@@ -339,23 +534,4 @@ public sealed class SkillImpactViewModel : ViewModelBase, IRefreshableModule
         }
         return total;
     }
-
-    private static IReadOnlyList<SkillImpactStatChipViewModel> _BuildChips() =>
-    [
-        new(SkillImpactStat.Dps, "OFFENSE", "DPS"),
-        new(SkillImpactStat.DroneDps, "OFFENSE", "Drone DPS"),
-        new(SkillImpactStat.Optimal, "OFFENSE", "Optimal"),
-        new(SkillImpactStat.Falloff, "OFFENSE", "Falloff"),
-        new(SkillImpactStat.Tracking, "OFFENSE", "Tracking"),
-        new(SkillImpactStat.Ehp, "TANK", "EHP"),
-        new(SkillImpactStat.Capacitor, "CAPACITOR", "Cap"),
-        new(SkillImpactStat.Speed, "NAVIGATION", "Speed"),
-        new(SkillImpactStat.AlignTime, "NAVIGATION", "Align time"),
-        new(SkillImpactStat.Signature, "NAVIGATION", "Signature"),
-        new(SkillImpactStat.LockRange, "TARGETING", "Lock range"),
-        new(SkillImpactStat.ScanResolution, "TARGETING", "Scan resolution"),
-        new(SkillImpactStat.SensorStrength, "TARGETING", "Sensor strength"),
-        new(SkillImpactStat.FreeCpu, "FITTING", "Free CPU"),
-        new(SkillImpactStat.FreePg, "FITTING", "Free PG"),
-    ];
 }

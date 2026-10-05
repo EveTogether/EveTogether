@@ -151,9 +151,10 @@ public sealed class Et341MockupRenderHarness
         var estimator = new SkillTrainingEstimator(dogma);
         var impact = new SkillImpactViewModel(new SkillImpactScanner(calculator, dogma), validator, estimator, attributeSet,
             FitNameResolverFactory.For(services), "skill-impact:et341", "Catbank", feroxFit.FitName, input, levels,
-            new SkillTargetsCalculator(calculator, validator, estimator, attributeSet));
+            new SkillTargetsCalculator(calculator, validator, estimator, attributeSet), (_, _) => Task.CompletedTask);
+        impact.PickFit = _ => Task.FromResult<SkillImpactFit?>(null);
         await impact.LoadAsync();
-        foreach (var chip in impact.Chips.Where(c => c.IsAvailable && c.Label is "DPS" or "Align time" or "Free CPU"))
+        foreach (var chip in impact.Chips.Where(c => c.IsAvailable && c.Label is "DPS" or "Align time" or "CPU free"))
         {
             chip.IsSelected = true;
         }
@@ -161,6 +162,18 @@ public sealed class Et341MockupRenderHarness
         var impactWindow = new SkillImpactWindow(impact) { Width = 1240, Height = 860 };
         impactWindow.Show();
         _Shoot(impactWindow, "f-from-fit");
+        // A headless frame has no popup host, so the "+ stat" flyout's content is laid over the screen where it opens.
+        if (impactWindow.Content is Grid impactGrid)
+        {
+            var menu = new SkillImpactStatMenu
+            {
+                DataContext = impact, HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right,
+                VerticalAlignment = Avalonia.Layout.VerticalAlignment.Top, Margin = new Avalonia.Thickness(0, 40, 14, 0)
+            };
+            impactGrid.Children.Add(menu);
+            _Shoot(impactWindow, "f-stat-menu");
+            impactGrid.Children.Remove(menu);
+        }
         impactWindow.Close();
     }
 

@@ -227,41 +227,39 @@ public sealed partial class SkillsPlansViewModel : ObservableObject
             return;
         }
 
-        var picker = new FitPickerViewModel(_services, FitPickerMode.Single, alreadyAdded: null, composition: null, currentFitHash: null);
-        var fit = await _dialogs.PickFitAsync(picker);
+        SkillImpactFit? fit;
+        try
+        {
+            fit = await _PickImpactFitAsync(_snapshot.Levels);
+        }
+        catch (InvalidOperationException exception)
+        {
+            StatusMessage = exception.Message;
+            return;
+        }
+
         if (fit is null)
         {
             return;
         }
 
-        EsiFitting? esiFitting;
-        try
-        {
-            esiFitting = JsonSerializer.Deserialize<EsiFitting>(fit.RawJson);
-        }
-        catch (JsonException)
-        {
-            esiFitting = null;
-        }
-
-        if (esiFitting is null)
-        {
-            StatusMessage = "This fit could not be read.";
-            return;
-        }
-
-        var modules = FitInputMapper.BuildModules(esiFitting, _snapshot.Sde, _dogma);
-        var baseInput = new FitInput(esiFitting.ShipTypeId, modules, SkillSource.From(_snapshot.Levels), FitInputMapper.BuildDrones(esiFitting));
         var scanner = new SkillImpactScanner(_calculator, _dogma);
         var estimator = new SkillTrainingEstimator(_dogma);
         var targetsCalculator = new SkillTargetsCalculator(_calculator, _validator, estimator, _attributes);
 
         var viewModel = new SkillImpactViewModel(scanner, _validator, estimator, _attributes,
-            FitNameResolverFactory.For(_services), $"skill-impact:plan-fit:{fit.ContentHash}", _characterName, fit.FitName,
-            baseInput, _snapshot.Levels, targetsCalculator, (rows, sourceLabel) => _AddPlanRowsAsync(SkillPlanRowSource.Fit, fit.ContentHash, rows, sourceLabel));
+            FitNameResolverFactory.For(_services), $"skill-impact:plan-fit:{_characterId}", _characterName, fit.FitName,
+            fit.Input, _snapshot.Levels, targetsCalculator, fit.AddToPlan)
+        {
+            PickFit = _PickImpactFitAsync,   // FROM A FIT: switching the fit keeps this character and this plan
+        };
         _dialogs.ShowSkillImpact(viewModel);
         await viewModel.LoadAsync();
     }
+
+    private Task<SkillImpactFit?> _PickImpactFitAsync(IReadOnlyDictionary<int, int> levels) =>
+        SkillImpactFitPicker.PickAsync(_services, _dialogs, levels, fit =>
+            (rows, sourceLabel) => _AddPlanRowsAsync(SkillPlanRowSource.Fit, fit.ContentHash, rows, sourceLabel));
 
     // The write both ET-357's per-card ADD TO PLAN and its per-row "+" call into — same command as every other
     // + action on this tab, so a plan edited from the SKILL IMPACT window follows the same reload/message path.
