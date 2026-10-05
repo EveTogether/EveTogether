@@ -186,6 +186,7 @@ builder.Services.AddHostedService<SdeImportHostedService>(); // autonomous, sile
 // Remote event bus: wire-event registry + connected-clients presence.
 builder.Services.AddWireEvents();
 builder.Services.AddSingleton<ConnectedClients>();
+builder.Services.AddSingleton<FleetPresenceSourceGuard>(); // one fleet-metric source per character (ET-440)
 builder.Services.AddHostedService<EventBusKeepaliveService>(); // liveness ping → clients detect a vanished server (tunnel half-open), ghosts get evicted
 builder.Services.AddScoped<FleetBroadcastResolver>();       // Live broadcast set = roster members ∩ presence
 builder.Services.AddHostedService<FleetChangeAnnouncer>();  // fleet signal relay: listed lifecycle → every connected client, else the fleet's own audience

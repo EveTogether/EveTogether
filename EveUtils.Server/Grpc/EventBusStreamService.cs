@@ -8,6 +8,7 @@ using EveUtils.Shared.Cqrs.Permissions;
 using EveUtils.Shared.Identity;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Messaging.Wire;
+using EveUtils.Shared.Modules.Fleet.Events;
 using EveUtils.Shared.Modules.Fleet.Metrics;
 using EveUtils.Shared.Modules.ServerAuth.Services;
 using Grpc.Core;
@@ -26,6 +27,7 @@ public sealed class EventBusStreamService(
     ServerSessionService sessions,
     IEventTypeRegistry registry,
     ConnectedClients connectedClients,
+    FleetPresenceSourceGuard presenceGuard,
     IServiceProvider services) : EventBusStream.EventBusStreamBase
 {
     public override async Task Attach(
@@ -78,6 +80,10 @@ public sealed class EventBusStreamService(
                 // check it BEFORE both local delivery and reroute, so a disabled permission (e.g.
                 // fit.sync off) blocks the whole path — not just storage.
                 if (!await IsEventAllowedAsync(evt, context.CancellationToken))
+                    continue;
+
+                // A character coupled on two machines publishes twice; only the one playing it is relayed (ET-440).
+                if (evt is FleetMetricEvent metric && !presenceGuard.Admit(key, metric.Data, DateTimeOffset.UtcNow))
                     continue;
 
                 // Server local bus: server handlers + the SignalR bridge pick it up.
