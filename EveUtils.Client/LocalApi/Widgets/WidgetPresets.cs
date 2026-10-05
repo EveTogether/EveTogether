@@ -21,7 +21,7 @@ public static class WidgetPresets
 
     public static IReadOnlyList<WidgetPresetDefinition> Definitions { get; } =
     [
-        _Define(WidgetPreset.LiveDps, "Live DPS", WidgetGroup.Combat, 320, 120,
+        _Define(WidgetPreset.LiveDps, "Live DPS", WidgetGroup.Combat, 320, 200,
             "Your DPS out and in with the peak, live while you fight.",
             [
                 new("name", "Character name", WidgetFieldSource.Api), new("dpsOut", "DPS out", WidgetFieldSource.Api),
@@ -31,7 +31,7 @@ public static class WidgetPresets
                 new("bounty", "Bounty this session", WidgetFieldSource.Api), CurrentSystem
             ],
             ["name", "dpsOut", "dpsIn", "peak"], []),
-        _Define(WidgetPreset.DpsGraph, "DPS graph", WidgetGroup.Combat, 480, 200,
+        _Define(WidgetPreset.DpsGraph, "DPS graph", WidgetGroup.Combat, 480, 210,
             "The scrolling graph of the DPS pop-out: out, in and reps, optionally neut and cap.",
             [
                 new("name", "Character name", WidgetFieldSource.Api), new("dpsOut", "DPS out line", WidgetFieldSource.Api),
@@ -41,7 +41,7 @@ public static class WidgetPresets
             ],
             ["name", "dpsOut", "dpsIn", "reps", "numbers"],
             [new("span", "Time span", [new("60", "60 s"), new("120", "2 min"), new("300", "5 min")])]),
-        _Define(WidgetPreset.CurrentRun, "Current run", WidgetGroup.Runs, 360, 180,
+        _Define(WidgetPreset.CurrentRun, "Current run", WidgetGroup.Runs, 360, 210,
             "The run you are flying now: what it is, the clock and what it has made so far.",
             [
                 new("type", "Run type", WidgetFieldSource.Api), new("site", "Site name", WidgetFieldSource.Api),
@@ -52,7 +52,7 @@ public static class WidgetPresets
                 new("signature", "Signature id", WidgetFieldSource.Api, IsLocation: true), CurrentSystem
             ],
             ["type", "site", "tier", "clock", "loot", "bounty", "total", "kills"], []),
-        _Define(WidgetPreset.RunTotals, "Run totals", WidgetGroup.Runs, 360, 160,
+        _Define(WidgetPreset.RunTotals, "Run totals", WidgetGroup.Runs, 360, 230,
             "Runs, ISK and ISK per hour for this session, today, this week or this month.",
             [
                 new("runs", "Runs", WidgetFieldSource.Api), new("isk", "Total ISK", WidgetFieldSource.Api),
@@ -68,7 +68,7 @@ public static class WidgetPresets
                     new("mission", "Missions"), new("mining", "Mining")
                 ])
             ]),
-        _Define(WidgetPreset.AbyssalTotals, "Abyssal totals", WidgetGroup.Runs, 360, 200,
+        _Define(WidgetPreset.AbyssalTotals, "Abyssal totals", WidgetGroup.Runs, 360, 230,
             "Abyssal clears, ISK per hour, average clear time and a split per tier and weather.",
             [
                 new("runs", "Clears", WidgetFieldSource.Api), new("isk", "Total ISK", WidgetFieldSource.Api),
@@ -89,7 +89,7 @@ public static class WidgetPresets
             ],
             ["badge", "ship", "isk", "attackers", "ago", "run", "victim"],
             [new("show", "Show", [new("both", "Kills and losses"), new("kills", "Kills only"), new("losses", "Losses only")])]),
-        _Define(WidgetPreset.KillAlert, "Kill alert", WidgetGroup.Killmails, 480, 140,
+        _Define(WidgetPreset.KillAlert, "Kill alert", WidgetGroup.Killmails, 480, 120,
             "Pops up for a few seconds on a new kill or loss, never for old mails.",
             [
                 new("ship", "Ship", WidgetFieldSource.Api), new("victim", "Victim name", WidgetFieldSource.Api),
@@ -123,12 +123,17 @@ public static class WidgetPresets
         Definitions.FirstOrDefault(definition => definition.Defaults.Preset == preset)
         ?? throw new ArgumentOutOfRangeException(nameof(preset), preset, null);
 
-    /// <summary>Width × height in pixels at 100 % scale — what OBS's browser source needs.</summary>
+    /// <summary>Width × height in pixels at 100 % scale — what OBS's browser source needs. Measured on the widget page
+    /// with every field on, so OBS never crops one; the page draws at this width.</summary>
     public static (int Width, int Height) BaseSize(WidgetPreset preset)
     {
         var definition = Definition(preset);
         return (definition.BaseWidth, definition.BaseHeight);
     }
+
+    /// <summary>The widget's width × height at 100 % scale: its preset's size, or the bottom bar for the ticker theme.</summary>
+    public static (int Width, int Height) Size(WidgetConfig config) =>
+        config.Theme == WidgetTheme.Ticker ? (900, 40) : BaseSize(config.Preset);
 
     private static WidgetPresetDefinition _Define(WidgetPreset preset, string name, WidgetGroup group, int width, int height,
         string description, WidgetFieldDefinition[] fields, string[] defaultFields, WidgetOptionDefinition[] options) =>

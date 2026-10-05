@@ -4,31 +4,170 @@
              x:Class="EveUtils.Client.Views.Widgets.WidgetPreview"
              x:DataType="vw:WidgetPreviewModel">
 
-    <!-- Draws what widget-page.html draws for this config (the placeholder until the presets fill in), so the preview
-         in the manager is what OBS shows: the name in the accent, the field keys, theme, background and scale. -->
-    <LayoutTransformControl HorizontalAlignment="Left" VerticalAlignment="Top">
-        <LayoutTransformControl.LayoutTransform>
-            <ScaleTransform ScaleX="{Binding Scale}" ScaleY="{Binding Scale}"/>
-        </LayoutTransformControl.LayoutTransform>
-        <Border Background="{Binding Background}" BorderBrush="{Binding Accent}" BorderThickness="{Binding Edge}"
-                CornerRadius="{Binding Corner}" Padding="14,10">
-            <StackPanel Orientation="{Binding Orientation}" Spacing="6">
-                <TextBlock Text="{Binding Name}" Foreground="{Binding Accent}" FontWeight="SemiBold" FontSize="15"
-                           VerticalAlignment="Center"/>
-                <ItemsControl ItemsSource="{Binding Fields}" VerticalAlignment="Center">
+    <!-- Draws what widget-page.html draws for this config, on sample figures: the same parts per preset, the together
+         and minimal themes as a panel, the ticker as one bar. Kept in step with the page by hand. -->
+    <UserControl.Styles>
+        <Style Selector="TextBlock.k">
+            <Setter Property="FontSize" Value="9"/>
+            <Setter Property="LetterSpacing" Value="1.6"/>
+            <Setter Property="Foreground" Value="#A0958A"/>
+        </Style>
+        <Style Selector="TextBlock.v">
+            <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+    </UserControl.Styles>
+
+    <UserControl.DataTemplates>
+        <DataTemplate DataType="vw:WidgetPreviewFigure">
+            <DockPanel Margin="0,3,0,0">
+                <TextBlock Classes="k" Text="{Binding Label}" VerticalAlignment="Bottom" Margin="0,0,0,3"/>
+                <TextBlock Classes="v" Text="{Binding Value}" Foreground="{Binding Brush}" FontSize="{Binding FontSize}"
+                           FontWeight="Bold" HorizontalAlignment="Right"/>
+            </DockPanel>
+        </DataTemplate>
+        <DataTemplate DataType="vw:WidgetPreviewStats">
+            <ItemsControl ItemsSource="{Binding Figures}" Margin="0,6,0,0">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate><UniformGrid Columns="3"/></ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vw:WidgetPreviewFigure">
+                        <StackPanel Margin="0,0,10,6">
+                            <TextBlock Classes="k" Text="{Binding Label}"/>
+                            <TextBlock Classes="v" Text="{Binding Value}" Foreground="{Binding Brush}" FontSize="{Binding FontSize}"/>
+                        </StackPanel>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </DataTemplate>
+        <DataTemplate DataType="vw:WidgetPreviewRow">
+            <Panel>
+                <DockPanel Margin="0,3,0,0" IsVisible="{Binding LeftIsLabel}">
+                    <TextBlock DockPanel.Dock="Left" Classes="k" Text="{Binding Left}" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                    <TextBlock Classes="v" Text="{Binding Right}" Foreground="{Binding RightBrush}" FontSize="{Binding RightFontSize}"
+                               TextTrimming="CharacterEllipsis" HorizontalAlignment="Right"/>
+                </DockPanel>
+                <DockPanel Margin="0,3,0,0" IsVisible="{Binding !LeftIsLabel}">
+                    <Border DockPanel.Dock="Left" IsVisible="{Binding HasBadge}" BorderBrush="{Binding BadgeBrush}" BorderThickness="1"
+                            Padding="6,1" Margin="0,0,8,0" VerticalAlignment="Center">
+                        <TextBlock Classes="v" Text="{Binding Badge}" Foreground="{Binding BadgeBrush}" FontSize="9" LetterSpacing="1.4"/>
+                    </Border>
+                    <TextBlock DockPanel.Dock="Right" Classes="v" Text="{Binding Right}" Foreground="{Binding RightBrush}"
+                               FontSize="{Binding RightFontSize}" VerticalAlignment="Bottom" Margin="10,0,0,0"/>
+                    <TextBlock Text="{Binding Left}" Foreground="{Binding LeftBrush}" FontSize="{Binding LeftFontSize}" FontWeight="SemiBold"
+                               TextTrimming="CharacterEllipsis" VerticalAlignment="Bottom"/>
+                </DockPanel>
+            </Panel>
+        </DataTemplate>
+        <DataTemplate DataType="vw:WidgetPreviewNote">
+            <TextBlock Text="{Binding Text}" Foreground="{Binding Brush}" FontSize="10.5" Margin="0,3,0,0" TextTrimming="CharacterEllipsis"/>
+        </DataTemplate>
+        <DataTemplate DataType="vw:WidgetPreviewBar">
+            <ItemsControl ItemsSource="{Binding Segments}" Height="{Binding Height}" Margin="0,4,0,0">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vw:WidgetPreviewSegment">
+                        <Border Width="{Binding Width}" Background="{Binding Brush}" Margin="0,0,4,0"/>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </DataTemplate>
+        <DataTemplate DataType="vw:WidgetPreviewGraph">
+            <StackPanel>
+                <Panel Width="{Binding Width}" Height="{Binding Height}" HorizontalAlignment="Left">
+                    <ItemsControl ItemsSource="{Binding Lines}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate><Canvas/></ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vw:WidgetPreviewLine">
+                                <Polyline Points="{Binding Points}" Stroke="{Binding Brush}" StrokeThickness="{Binding Thickness}"
+                                          StrokeDashArray="{Binding Dashes}"/>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <Canvas>
+                        <TextBlock Canvas.Left="2" Canvas.Top="0" Text="{Binding HitPointsLabel}" FontFamily="{StaticResource MonoFont}"
+                                   FontSize="9" Foreground="#A0958A"/>
+                        <TextBlock Canvas.Left="2" Canvas.Top="{Binding CapacitorTop}" Text="{Binding CapacitorLabel}"
+                                   FontFamily="{StaticResource MonoFont}" FontSize="9" Foreground="#A0958A"/>
+                    </Canvas>
+                </Panel>
+                <ItemsControl ItemsSource="{Binding Legend}" Margin="0,4,0,0">
                     <ItemsControl.ItemsPanel>
-                        <ItemsPanelTemplate><WrapPanel MaxWidth="460"/></ItemsPanelTemplate>
+                        <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
                     </ItemsControl.ItemsPanel>
                     <ItemsControl.ItemTemplate>
-                        <DataTemplate x:DataType="x:String">
-                            <StackPanel Orientation="Horizontal" Spacing="4" Margin="0,0,12,2">
-                                <TextBlock Text="{Binding}" Foreground="#8B949E" FontSize="15"/>
-                                <TextBlock Text="—" Foreground="#E6EDF3" FontSize="15"/>
+                        <DataTemplate x:DataType="vw:WidgetPreviewNote">
+                            <StackPanel Orientation="Horizontal" Spacing="4" Margin="0,0,10,0">
+                                <Border Width="10" Height="2" Background="{Binding Brush}" VerticalAlignment="Center"/>
+                                <TextBlock Text="{Binding Text}" Foreground="{Binding Brush}" FontFamily="{StaticResource MonoFont}" FontSize="10"/>
                             </StackPanel>
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
             </StackPanel>
+        </DataTemplate>
+    </UserControl.DataTemplates>
+
+    <LayoutTransformControl HorizontalAlignment="Left" VerticalAlignment="Top">
+        <LayoutTransformControl.LayoutTransform>
+            <ScaleTransform ScaleX="{Binding Scale}" ScaleY="{Binding Scale}"/>
+        </LayoutTransformControl.LayoutTransform>
+        <Border Width="{Binding Width}" Background="{Binding Background}" BorderBrush="{Binding Frame}"
+                BorderThickness="{Binding FrameThickness}" TextElement.Foreground="#F3ECE0" TextElement.FontSize="12">
+            <Panel>
+                <StackPanel IsVisible="{Binding IsPanel}">
+                    <Border Background="{Binding HeaderBackground}" BorderBrush="{Binding HeaderRule}" BorderThickness="0,0,0,1" Padding="10,5">
+                        <DockPanel>
+                            <TextBlock DockPanel.Dock="Right" IsVisible="{Binding IsTogether}" Text="{Binding Right}"
+                                       FontFamily="{StaticResource MonoFont}" FontSize="10" LetterSpacing="1" Foreground="{Binding AccentLight}"/>
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <TextBlock IsVisible="{Binding IsTogether}" Text="◆" FontSize="8" Foreground="{Binding Accent}" VerticalAlignment="Center"/>
+                                <TextBlock Text="{Binding Title}" FontSize="10" LetterSpacing="2" Foreground="{Binding HeaderForeground}"/>
+                            </StackPanel>
+                        </DockPanel>
+                    </Border>
+                    <DockPanel Margin="10,5,10,8">
+                        <Border DockPanel.Dock="Left" IsVisible="{Binding HasIcon}" Width="44" Height="44" Margin="0,0,10,0"
+                                BorderBrush="#22FFFFFF" BorderThickness="1" VerticalAlignment="Center">
+                            <Border.Background>
+                                <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
+                                    <GradientStop Color="#2B3A4A" Offset="0"/>
+                                    <GradientStop Color="#0D141C" Offset="1"/>
+                                </LinearGradientBrush>
+                            </Border.Background>
+                            <TextBlock Text="{Binding Icon}" FontFamily="{StaticResource MonoFont}" FontWeight="Bold" FontSize="10"
+                                       Foreground="#8FC6F0" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ItemsControl ItemsSource="{Binding Items}"/>
+                    </DockPanel>
+                </StackPanel>
+
+                <DockPanel IsVisible="{Binding IsTicker}" Height="38">
+                    <Border DockPanel.Dock="Left" Background="{Binding Accent}" Padding="12,0">
+                        <TextBlock Text="{Binding TickerTitle}" Foreground="#06070A" FontWeight="Bold" FontSize="11" LetterSpacing="1.6"
+                                   VerticalAlignment="Center"/>
+                    </Border>
+                    <ItemsControl ItemsSource="{Binding TickerItems}" Margin="16,0" ClipToBounds="True" VerticalAlignment="Center">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate><StackPanel Orientation="Horizontal" Spacing="22"/></ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vw:WidgetPreviewFigure">
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <TextBlock Classes="k" Text="{Binding Label}" FontSize="10" VerticalAlignment="Center"/>
+                                    <TextBlock Classes="v" Text="{Binding Value}" Foreground="{Binding Brush}" FontSize="{Binding FontSize}"
+                                               VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </DockPanel>
+            </Panel>
         </Border>
     </LayoutTransformControl>
 </UserControl>
