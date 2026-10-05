@@ -96,7 +96,7 @@ public sealed class RemoteBusConnectionManager(
             StartConnection(serverAddress, characterId);
 
         if (coupled.Count == 0)
-            StateChanged(serverAddress, ServerConnectionState.Disconnected); // not paired anymore
+            StateChanged(serverAddress, ServerConnectionState.NotCoupled);
     }
 
     private void StartConnection(string serverAddress, int characterId)
@@ -160,8 +160,8 @@ public sealed class RemoteBusConnectionManager(
         // Say it per character as well: a chip follows its own character now, so without this the links of a
         // decoupled server would keep showing whatever they last were.
         foreach (var characterId in detached)
-            CharacterStateChanged(serverAddress, characterId, ServerConnectionState.Disconnected);
-        StateChanged(serverAddress, ServerConnectionState.Disconnected);
+            CharacterStateChanged(serverAddress, characterId, ServerConnectionState.NotCoupled);
+        StateChanged(serverAddress, ServerConnectionState.NotCoupled);
         return Task.CompletedTask;
     }
 
@@ -214,7 +214,9 @@ public sealed class RemoteBusConnectionManager(
     private static ServerConnectionState Aggregate(IEnumerable<ServerConnectionState> states)
     {
         var list = states.ToList();
-        if (list.Count == 0) return ServerConnectionState.Disconnected;
+        // No connection at all means no coupled character, not a server that is down: a connection stopped by a
+        // decouple reports in after it has been removed, and must not bring the server back as unreachable (ET-427).
+        if (list.Count == 0) return ServerConnectionState.NotCoupled;
         if (list.Contains(ServerConnectionState.Connected)) return ServerConnectionState.Connected;
         if (list.Contains(ServerConnectionState.Connecting)) return ServerConnectionState.Connecting;
         if (list.Contains(ServerConnectionState.Reconnecting)) return ServerConnectionState.Reconnecting;

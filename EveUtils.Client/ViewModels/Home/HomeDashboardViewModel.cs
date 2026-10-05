@@ -356,7 +356,14 @@ public sealed partial class HomeDashboardViewModel : ObservableObject, IDisposab
 
     private void _OnServerStatusChanged(EveServerStatusSnapshot snapshot) => Dispatcher.UIThread.Post(_ShowTranquility);
 
-    private void _OnBusStateChanged(string address, ServerConnectionState state) => Dispatcher.UIThread.Post(_ShowServer);
+    private void _OnBusStateChanged(string address, ServerConnectionState state) => Dispatcher.UIThread.Post(() =>
+    {
+        _ShowServer();
+        // Everything on show was read while the server was still coupled — its fits, fleets, publish targets. Every
+        // read takes its servers from the coupled ones only, so reading again is what drops it (ET-427).
+        if (state is ServerConnectionState.NotCoupled)
+            _ = LoadAsync();
+    });
 
     private void _ShowTranquility()
     {

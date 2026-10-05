@@ -150,7 +150,8 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
 
     private void _OnServerConnectionStateChanged(string serverAddress, ServerConnectionState state)
     {
-        if (state == ServerConnectionState.Connected)
+        // NotCoupled too: the server's fleets have to go, and the list is only ever read from the coupled servers.
+        if (state is ServerConnectionState.Connected or ServerConnectionState.NotCoupled)
             Avalonia.Threading.Dispatcher.UIThread.Post(() => _ = ReloadAsync());
     }
 

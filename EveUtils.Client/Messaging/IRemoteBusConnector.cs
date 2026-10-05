@@ -24,7 +24,8 @@ public interface IRemoteBusConnector
     /// <summary>Live connection state per server address.</summary>
     IReadOnlyDictionary<string, ServerConnectionState> States { get; }
 
-    /// <summary>Live connection state for one server (Disconnected if not attached). This is the roll-up across the
+    /// <summary>Live connection state for one server (<see cref="ServerConnectionState.NotCoupled"/> if no character
+    /// is attached to it). This is the roll-up across the
     /// characters coupled to it — "is this server usable at all" — so it is the wrong thing to paint a per-character
     /// indicator with; use the overload below for that.</summary>
     ServerConnectionState StateFor(string serverAddress);
@@ -39,7 +40,8 @@ public interface IRemoteBusConnector
     ServerConnectionState StateFor(string serverAddress, int characterId);
 
     /// <summary>Raised whenever a server's roll-up state changes: (serverAddress, newState). For consumers that care
-    /// about the server as a whole — reloading its lists, the home dashboard's summary.</summary>
+    /// about the server as a whole — reloading its lists, the home dashboard's summary. A decouple of the last character
+    /// raises <see cref="ServerConnectionState.NotCoupled"/>, the cue to drop that server from whatever is shown.</summary>
     event Action<string, ServerConnectionState> StateChanged;
 
     /// <summary>Raised whenever ONE character's connection changes: (serverAddress, characterId, newState). What the
