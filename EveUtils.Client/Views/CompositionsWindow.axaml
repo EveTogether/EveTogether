@@ -40,7 +40,7 @@
                 <TextBlock Text="◆" Foreground="{DynamicResource AccentBrush}" FontSize="9" VerticalAlignment="Center"/>
                 <TextBlock Text="FLEET COMPOSITIONS" FontWeight="Bold" FontSize="13" LetterSpacing="2.2"
                            Foreground="{StaticResource TextBrightBrush}"/>
-                <TextBlock Text="LIBRARY" FontSize="10" LetterSpacing="2" VerticalAlignment="Center"
+                <TextBlock Text="LIBRARY" FontSize="10" LetterSpacing="2" VerticalAlignment="Center" IsVisible="{Binding HasNoReadiness}"
                            Foreground="{DynamicResource TextAccentBrush}"/>
             </StackPanel>
         </Border>
@@ -55,7 +55,7 @@
         <Grid Margin="12" RowDefinitions="Auto,10,*">
 
             <!-- Tools: search + refresh + new -->
-            <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto">
+            <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto" IsVisible="{Binding HasNoReadiness}">
                 <TextBox Grid.Column="0" Text="{Binding SearchText}" PlaceholderText="Search compositions…"
                          MaxWidth="320" HorizontalAlignment="Left" FontSize="11"/>
                 <Button Grid.Column="1" Content="REFRESH" FontSize="9" Margin="0,0,6,0" Command="{Binding RefreshCommand}" ToolTip.Tip="F5 / Ctrl+R"/>
@@ -215,135 +215,555 @@
                 </TabControl.ContentTemplate>
             </TabControl>
 
-            <Grid Grid.Row="2" ColumnDefinitions="*,350" Margin="0,10,0,0" IsVisible="{Binding HasReadiness}">
-                <Grid Grid.Column="0" RowDefinitions="Auto,*" Margin="0,0,10,0">
-                    <Border Grid.Row="0" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1" Padding="8,7">
-                        <Grid ColumnDefinitions="Auto,*,Auto">
-                            <Button Grid.Column="0" Content="‹ LIBRARY" FontSize="10" Command="{Binding CloseReadinessCommand}"/>
-                            <TextBlock Grid.Column="1" Text="{Binding SelectedComposition.Name}" FontWeight="SemiBold"
-                                       FontSize="14" Margin="12,0" VerticalAlignment="Center"/>
-                            <TextBlock Grid.Column="2" Text="FIT READINESS" Classes="label" FontSize="10"
-                                       VerticalAlignment="Center"/>
+            <!-- ET-341 mockup "b · doctrine": the doctrine's roles and fit entries on the left, the selected entry's
+                 readiness (or its skill minimum editor) in the 400 px pane on the right, edge to edge. -->
+            <Grid Grid.Row="0" Grid.RowSpan="3" Margin="-12" ColumnDefinitions="*,400" IsVisible="{Binding HasReadiness}">
+                <Grid.Styles>
+                    <Style Selector="TextBlock.sec">
+                        <Setter Property="Foreground" Value="{DynamicResource TextAccentBrush}"/>
+                        <Setter Property="FontSize" Value="10"/>
+                        <Setter Property="LetterSpacing" Value="1.8"/>
+                        <Setter Property="Margin" Value="0,0,0,6"/>
+                    </Style>
+                    <Style Selector="TextBlock.colh">
+                        <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+                        <Setter Property="FontSize" Value="9"/>
+                        <Setter Property="LetterSpacing" Value="1.1"/>
+                    </Style>
+                    <Style Selector="Border.dsec">
+                        <Setter Property="Padding" Value="16,10,16,12"/>
+                        <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}"/>
+                        <Setter Property="BorderThickness" Value="0,0,0,1"/>
+                    </Style>
+                    <Style Selector="Border.mchip">
+                        <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+                        <Setter Property="BorderThickness" Value="1"/>
+                        <Setter Property="Padding" Value="6,1"/>
+                        <Setter Property="Margin" Value="0,0,4,4"/>
+                    </Style>
+                    <Style Selector="Border.mchip > TextBlock">
+                        <Setter Property="FontSize" Value="10.5"/>
+                        <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+                    </Style>
+                    <Style Selector="Border.cnt">
+                        <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}"/>
+                        <Setter Property="BorderThickness" Value="1"/>
+                        <Setter Property="Padding" Value="7,1"/>
+                        <Setter Property="Margin" Value="0,0,4,4"/>
+                    </Style>
+                    <Style Selector="Border.cnt > TextBlock">
+                        <Setter Property="FontSize" Value="10.5"/>
+                        <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+                    </Style>
+                    <Style Selector="Border.cnt.ok">
+                        <Setter Property="BorderBrush" Value="#664ADE80"/>
+                    </Style>
+                    <Style Selector="Border.cnt.ok > TextBlock">
+                        <Setter Property="Foreground" Value="{StaticResource GreenBrush}"/>
+                    </Style>
+                    <Style Selector="Border.cnt.part">
+                        <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}"/>
+                    </Style>
+                    <Style Selector="Border.cnt.part > TextBlock">
+                        <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+                    </Style>
+                    <Style Selector="Border.cnt.no">
+                        <Setter Property="BorderBrush" Value="#73E0B341"/>
+                    </Style>
+                    <Style Selector="Border.cnt.no > TextBlock">
+                        <Setter Property="Foreground" Value="{StaticResource WarnBrush}"/>
+                    </Style>
+                    <Style Selector="Button.mk">
+                        <Setter Property="Background" Value="Transparent"/>
+                        <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+                        <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+                        <Setter Property="Padding" Value="10,3"/>
+                        <Setter Property="MinHeight" Value="24"/>
+                        <Setter Property="FontSize" Value="10.5"/>
+                        <Setter Property="VerticalContentAlignment" Value="Center"/>
+                    </Style>
+                    <Style Selector="Button.mk.pri">
+                        <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
+                        <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}"/>
+                        <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+                    </Style>
+                    <Style Selector="Button.all">
+                        <Setter Property="Background" Value="Transparent"/>
+                        <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+                        <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+                        <Setter Property="Padding" Value="7,1"/>
+                        <Setter Property="MinHeight" Value="0"/>
+                        <Setter Property="FontSize" Value="9.5"/>
+                    </Style>
+                    <Style Selector="Button.ent">
+                        <Setter Property="Background" Value="Transparent"/>
+                        <Setter Property="BorderThickness" Value="0"/>
+                        <Setter Property="Padding" Value="0"/>
+                        <Setter Property="HorizontalAlignment" Value="Stretch"/>
+                        <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                        <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+                    </Style>
+                    <Style Selector="Button.ent:pointerover /template/ ContentPresenter">
+                        <Setter Property="Background" Value="{DynamicResource BgRowHoverBrush}"/>
+                    </Style>
+                    <Style Selector="Button.ent.on /template/ ContentPresenter">
+                        <Setter Property="Background" Value="{DynamicResource BgRowSelectedBrush}"/>
+                    </Style>
+                    <Style Selector="TextBlock.st">
+                        <Setter Property="FontSize" Value="10"/>
+                        <Setter Property="VerticalAlignment" Value="Center"/>
+                    </Style>
+                    <Style Selector="TextBlock.st.ok">
+                        <Setter Property="Foreground" Value="{StaticResource GreenBrush}"/>
+                    </Style>
+                    <Style Selector="TextBlock.st.part">
+                        <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+                    </Style>
+                    <Style Selector="TextBlock.st.no">
+                        <Setter Property="Foreground" Value="{StaticResource WarnBrush}"/>
+                    </Style>
+                    <Style Selector="TextBlock.t">
+                        <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+                        <Setter Property="FontSize" Value="10.5"/>
+                        <Setter Property="TextAlignment" Value="Right"/>
+                        <Setter Property="VerticalAlignment" Value="Center"/>
+                        <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+                    </Style>
+                    <Style Selector="Grid.kvr">
+                        <Setter Property="Margin" Value="0,3"/>
+                    </Style>
+                    <Style Selector="Grid.kvr > TextBlock:nth-child(1)">
+                        <Setter Property="FontSize" Value="11.5"/>
+                        <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+                    </Style>
+                    <Style Selector="Grid.kvr > TextBlock:nth-child(2)">
+                        <Setter Property="FontSize" Value="11"/>
+                        <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+                        <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+                        <Setter Property="TextAlignment" Value="Right"/>
+                    </Style>
+                    <Style Selector="TextBlock.note">
+                        <Setter Property="FontSize" Value="11"/>
+                        <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+                        <Setter Property="TextWrapping" Value="Wrap"/>
+                        <Setter Property="LineHeight" Value="16"/>
+                        <Setter Property="Margin" Value="0,6,0,0"/>
+                    </Style>
+                    <Style Selector="Border.pfoot">
+                        <Setter Property="Padding" Value="16,10"/>
+                        <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}"/>
+                        <Setter Property="BorderThickness" Value="0,1,0,0"/>
+                    </Style>
+                    <Style Selector="Border.pfoot > TextBlock">
+                        <Setter Property="FontSize" Value="10.5"/>
+                        <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+                        <Setter Property="TextWrapping" Value="Wrap"/>
+                    </Style>
+                    <Style Selector="ListBox.rl ListBoxItem">
+                        <Setter Property="Padding" Value="0"/>
+                        <Setter Property="MinHeight" Value="0"/>
+                    </Style>
+                    <Style Selector="Button.seg.lvb">
+                        <Setter Property="Width" Value="18"/>
+                        <Setter Property="Padding" Value="0,0"/>
+                        <Setter Property="MinHeight" Value="0"/>
+                        <Setter Property="FontSize" Value="9.5"/>
+                        <Setter Property="Margin" Value="0,0,2,0"/>
+                        <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+                        <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}"/>
+                    </Style>
+                    <Style Selector="Button.x">
+                        <Setter Property="Background" Value="Transparent"/>
+                        <Setter Property="BorderThickness" Value="0"/>
+                        <Setter Property="Padding" Value="6,0,0,0"/>
+                        <Setter Property="MinHeight" Value="0"/>
+                        <Setter Property="FontSize" Value="11"/>
+                        <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+                    </Style>
+                </Grid.Styles>
+
+                <!-- Left: the doctrine -->
+                <DockPanel Grid.Column="0">
+                    <Border DockPanel.Dock="Top" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="14,12">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <StackPanel VerticalAlignment="Center">
+                                <TextBlock Text="{Binding SelectedComposition.Name}" FontSize="16" FontWeight="SemiBold"
+                                           Foreground="{StaticResource TextBrightBrush}"/>
+                                <TextBlock Text="{Binding DoctrineLine}" FontSize="11" Foreground="{StaticResource TextBrush}"
+                                           TextTrimming="CharacterEllipsis"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                <Border BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1" Padding="9,3" Background="#33000000">
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <Ellipse Width="7" Height="7" Fill="{StaticResource GreenBrush}" VerticalAlignment="Center"/>
+                                        <TextBlock Text="{Binding SourceLabel}" FontSize="10.5" VerticalAlignment="Center"
+                                                   Foreground="{StaticResource TextBrush}"/>
+                                    </StackPanel>
+                                </Border>
+                                <Button Classes="mk" Content="‹ LIBRARY" Command="{Binding CloseReadinessCommand}"
+                                        ToolTip.Tip="Back to the composition library"/>
+                                <Button Classes="mk" Content="EDIT" Command="{Binding EditDoctrineCommand}"
+                                        IsVisible="{Binding SelectedComposition.CanEdit}"
+                                        ToolTip.Tip="Edit the whole composition: roles, fits, minimums"/>
+                            </StackPanel>
                         </Grid>
                     </Border>
-                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
-                        <ItemsControl ItemsSource="{Binding ReadinessEntries}" Margin="8,12,0,0">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <ItemsControl ItemsSource="{Binding ReadinessEntries}" Margin="14,4,14,14">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate x:DataType="vm:CompositionReadinessEntry">
-                                    <Border Background="#FF242A28" BorderBrush="{DynamicResource BorderBrush}"
-                                            BorderThickness="1" Padding="12" Margin="0,0,0,10">
-                                        <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto,Auto,Auto">
-                                            <TextBlock Grid.Row="0" Grid.ColumnSpan="2" Text="{Binding RoleName}"
-                                                       Classes="label" FontSize="10" LetterSpacing="1.2"/>
-                                            <StackPanel Grid.Row="1" Grid.ColumnSpan="2" Orientation="Horizontal" Spacing="8" Margin="0,6,0,10">
-                                                <TextBlock Text="{Binding HullName}" FontSize="12" FontWeight="SemiBold"/>
-                                                <TextBlock Text="{Binding FitName}" FontSize="12"/>
+                                    <StackPanel>
+                                        <Border IsVisible="{Binding IsFirstInRole}" Margin="0,10,0,0" Padding="0,4"
+                                                BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1">
+                                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                                <TextBlock Text="{Binding RoleHeader}" FontSize="10.5" LetterSpacing="1.8"
+                                                           Foreground="{DynamicResource TextAccentBrush}"/>
+                                                <TextBlock Text="{Binding RoleMinLabel}" FontSize="10.5" FontFamily="{StaticResource MonoFont}"
+                                                           Foreground="{StaticResource TextBrush}"/>
                                             </StackPanel>
-                                            <TextBlock Grid.Row="2" Grid.ColumnSpan="2" Text="{Binding CharactersLabel}"
-                                                       Classes="label" FontSize="10" LetterSpacing="1.2"/>
-                                            <StackPanel Grid.Row="3" Grid.ColumnSpan="2" Orientation="Horizontal" Spacing="6" Margin="0,5,0,0">
-                                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
-                                                        Background="{DynamicResource AccentSoftBrush}" CornerRadius="4" Padding="7,3">
-                                                    <TextBlock Text="{Binding ReadyLabel}" FontSize="9" Foreground="{DynamicResource GreenBrush}"/>
-                                                </Border>
-                                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
-                                                        Background="{DynamicResource AccentSoftBrush}" CornerRadius="4" Padding="7,3">
-                                                    <TextBlock Text="{Binding FliesLabel}" FontSize="9" Foreground="{DynamicResource AccentBrightBrush}"/>
-                                                </Border>
-                                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
-                                                        Background="{DynamicResource AccentSoftBrush}" CornerRadius="4" Padding="7,3">
-                                                    <TextBlock Text="{Binding NotYetLabel}" FontSize="9" Foreground="{DynamicResource WarnBrush}"/>
-                                                </Border>
-                                                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
-                                                        Background="{DynamicResource AccentSoftBrush}" CornerRadius="4" Padding="7,3"
-                                                        IsVisible="{Binding HasUnknown}">
-                                                    <TextBlock Text="{Binding UnknownLabel}" FontSize="9" Foreground="{DynamicResource TextDimBrush}"/>
-                                                </Border>
-                                            </StackPanel>
-                                            <TextBlock Grid.Row="4" Text="{Binding NextToFlyLabel}" FontSize="10"
-                                                       Foreground="{DynamicResource TextAccentBrush}" Margin="0,6,0,0"/>
-                                            <Button Grid.Row="4" Grid.Column="1" Content="{Binding AllLabel}" FontSize="9"
+                                        </Border>
+                                        <Border BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1">
+                                            <Button Classes="ent" Classes.on="{Binding IsSelected}"
                                                     Command="{Binding #CompositionsRoot.((vm:CompositionsViewModel)DataContext).SelectReadinessEntryCommand}"
-                                                    CommandParameter="{Binding}"/>
-                                        </Grid>
-                                    </Border>
+                                                    CommandParameter="{Binding}">
+                                                <Grid ColumnDefinitions="2,*">
+                                                    <Border Grid.Column="0" Background="{DynamicResource AccentBrightBrush}"
+                                                            IsVisible="{Binding IsSelected}"/>
+                                                    <Grid Grid.Column="1" ColumnDefinitions="242,14,*,14,1.1*" Margin="6,10,8,10">
+                                                        <StackPanel Grid.Column="0" Spacing="2">
+                                                            <TextBlock Text="{Binding HullLabel}" FontSize="10" LetterSpacing="1.2"
+                                                                       Foreground="{StaticResource TextDimBrush}"/>
+                                                            <TextBlock Text="{Binding FitName}" FontSize="12.5" TextTrimming="CharacterEllipsis"
+                                                                       Foreground="{StaticResource TextBrightBrush}"/>
+                                                            <TextBlock Text="{Binding RequiredSkillsLabel}" FontSize="10.5"
+                                                                       Foreground="{StaticResource TextBrush}"/>
+                                                        </StackPanel>
+                                                        <StackPanel Grid.Column="2">
+                                                            <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,4">
+                                                                <TextBlock Text="SKILL MINIMUM" Classes="label" VerticalAlignment="Center"/>
+                                                                <Button Grid.Column="1" Classes="all" Content="EDIT"
+                                                                        IsVisible="{Binding CanEdit}"
+                                                                        ToolTip.Tip="Edit this fit's doctrine skill minimum in the pane"
+                                                                        Command="{Binding #CompositionsRoot.((vm:CompositionsViewModel)DataContext).EditMinimumCommand}"
+                                                                        CommandParameter="{Binding}"/>
+                                                            </Grid>
+                                                            <ItemsControl ItemsSource="{Binding MinimumChips}">
+                                                                <ItemsControl.ItemsPanel>
+                                                                    <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                                                                </ItemsControl.ItemsPanel>
+                                                                <ItemsControl.ItemTemplate>
+                                                                    <DataTemplate x:DataType="x:String">
+                                                                        <Border Classes="mchip"><TextBlock Text="{Binding}"/></Border>
+                                                                    </DataTemplate>
+                                                                </ItemsControl.ItemTemplate>
+                                                            </ItemsControl>
+                                                            <TextBlock Text="none: the fit's own skills are the bar" FontSize="10.5"
+                                                                       Foreground="{StaticResource TextDimBrush}" IsVisible="{Binding HasNoMinimum}"/>
+                                                        </StackPanel>
+                                                        <StackPanel Grid.Column="4">
+                                                            <TextBlock Text="{Binding CharactersLabel}" Classes="label" Margin="0,0,0,4"/>
+                                                            <WrapPanel>
+                                                                <Border Classes="cnt ok"><TextBlock Text="{Binding ReadyLabel}"/></Border>
+                                                                <Border Classes="cnt part"><TextBlock Text="{Binding FliesLabel}"/></Border>
+                                                                <Border Classes="cnt no"><TextBlock Text="{Binding NotYetLabel}"/></Border>
+                                                                <Border Classes="cnt" IsVisible="{Binding HasUnknown}"><TextBlock Text="{Binding UnknownLabel}"/></Border>
+                                                            </WrapPanel>
+                                                            <TextBlock FontSize="10.5" Foreground="{StaticResource TextBrush}" Margin="0,2,0,0"
+                                                                       IsVisible="{Binding HasNextToFly}">
+                                                                <Run Text="next to fly: "/><Run Text="{Binding NextToFlyName}" Foreground="{StaticResource TextBrightBrush}"/><Run Text=" in "/><Run Text="{Binding NextToFlyTime}" Foreground="{StaticResource TextBrightBrush}"/>
+                                                            </TextBlock>
+                                                            <Button Classes="all" Content="{Binding AllLabel}" HorizontalAlignment="Right" Margin="0,8,0,0"
+                                                                    ToolTip.Tip="Every character against this fit, in the pane"
+                                                                    Command="{Binding #CompositionsRoot.((vm:CompositionsViewModel)DataContext).SelectReadinessEntryCommand}"
+                                                                    CommandParameter="{Binding}"/>
+                                                        </StackPanel>
+                                                    </Grid>
+                                                </Grid>
+                                            </Button>
+                                        </Border>
+                                    </StackPanel>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
                     </ScrollViewer>
-                </Grid>
+                </DockPanel>
 
-                <Border Grid.Column="1" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
-                        Background="{DynamicResource BgPanelBrush}" Padding="12">
-                    <ContentControl Content="{Binding SelectedReadinessEntry}">
-                        <ContentControl.ContentTemplate>
-                            <DataTemplate x:DataType="vm:CompositionReadinessEntry">
-                                <Grid RowDefinitions="Auto,Auto,Auto,260,Auto,*">
-                                    <TextBlock Grid.Row="0" Text="{Binding FitName}" FontWeight="SemiBold" FontSize="13"/>
-                                    <TextBlock Grid.Row="1" Text="{Binding DetailCharactersLabel}" Classes="label"
-                                               FontSize="10" LetterSpacing="1.2" Margin="0,10,0,5"/>
-                                    <TextBox Grid.Row="2" Text="{Binding SearchText}" PlaceholderText="{Binding SearchPlaceholder}"
-                                             IsVisible="{Binding HasSearch}" FontSize="10" Margin="0,0,0,7"/>
-                                    <Grid Grid.Row="3" RowDefinitions="Auto,*">
-                                        <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto" Margin="0,3,0,5">
-                                            <TextBlock Text="CHARACTER" Classes="label" FontSize="9"/>
-                                            <TextBlock Grid.Column="1" Text="TO FLY" Classes="label" FontSize="9"/>
-                                            <TextBlock Grid.Column="2" Text="TO MIN" Classes="label" FontSize="9" Width="64"
-                                                       TextAlignment="Right" IsVisible="{Binding HasSkillMinimums}"
-                                                       ToolTip.Tip="Training to the fit plus the doctrine skill minimum"/>
-                                        </Grid>
-                                        <ListBox Grid.Row="1" ItemsSource="{Binding VisibleCharacters}"
-                                                 SelectedItem="{Binding SelectedCharacter}" ScrollViewer.VerticalScrollBarVisibility="Auto">
-                                            <ListBox.ItemTemplate>
-                                                <DataTemplate x:DataType="vm:CompositionCharacterReadiness">
-                                                    <Grid ColumnDefinitions="*,Auto,Auto" Margin="2,4">
-                                                        <StackPanel Orientation="Horizontal" Spacing="7">
-                                                            <TextBlock Text="{Binding Name}" FontSize="11"/>
-                                                            <TextBlock Text="{Binding StatusLabel}" Classes="label" FontSize="9"/>
+                <!-- Right: the pane (readiness, or the skill minimum editor after EDIT on an entry) -->
+                <Border Grid.Column="1" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1,0,0,0"
+                        Background="{DynamicResource BgPanelBrush}">
+                    <Panel>
+                        <ContentControl Content="{Binding SelectedReadinessEntry}" IsVisible="{Binding HasNoMinimumEditor}">
+                            <ContentControl.ContentTemplate>
+                                <DataTemplate x:DataType="vm:CompositionReadinessEntry">
+                                    <DockPanel>
+                                        <Border DockPanel.Dock="Bottom" Classes="pfoot">
+                                            <TextBlock Text="MIN = asked by the doctrine, not by the fit. Times at the character's attributes today."/>
+                                        </Border>
+                                        <Border DockPanel.Dock="Top" Padding="16,14,16,10" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1">
+                                            <StackPanel>
+                                                <TextBlock Text="{Binding FitName}" FontSize="16" FontWeight="SemiBold"
+                                                           Foreground="{StaticResource TextBrightBrush}"/>
+                                                <StackPanel Orientation="Horizontal" Spacing="12" Margin="0,3,0,0">
+                                                    <TextBlock Text="{Binding RoleName}" FontSize="11" Foreground="{StaticResource TextBrush}"/>
+                                                    <TextBlock Text="{Binding CompositionName}" FontSize="11" Foreground="{StaticResource TextBrush}"/>
+                                                </StackPanel>
+                                            </StackPanel>
+                                        </Border>
+                                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                            <StackPanel>
+                                                <Border Classes="dsec">
+                                                    <StackPanel>
+                                                        <TextBlock Classes="sec" Text="{Binding DetailCharactersLabel}"/>
+                                                        <TextBox Text="{Binding SearchText}" PlaceholderText="{Binding SearchPlaceholder}"
+                                                                 IsVisible="{Binding HasSearch}" FontSize="11" Margin="0,0,0,4"/>
+                                                        <Grid ColumnDefinitions="*,62,64,64" Margin="6,6,6,3">
+                                                            <TextBlock Classes="colh" Text="CHARACTER"/>
+                                                            <TextBlock Grid.Column="2" Classes="colh" Text="TO FLY" TextAlignment="Right"/>
+                                                            <TextBlock Grid.Column="3" Classes="colh" Text="TO MIN" TextAlignment="Right"
+                                                                       ToolTip.Tip="Training to the fit plus the doctrine skill minimum"/>
+                                                        </Grid>
+                                                        <Border BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,1,0,0">
+                                                            <ListBox Classes="rl" ItemsSource="{Binding VisibleCharacters}" MaxHeight="200"
+                                                                     SelectedItem="{Binding SelectedCharacter}" Background="Transparent"
+                                                                     ScrollViewer.VerticalScrollBarVisibility="Auto">
+                                                                <ListBox.ItemTemplate>
+                                                                    <DataTemplate x:DataType="vm:CompositionCharacterReadiness">
+                                                                        <Border Height="25" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1">
+                                                                            <Grid ColumnDefinitions="*,62,64,64" Margin="6,0">
+                                                                                <TextBlock Text="{Binding Name}" FontSize="11.5" VerticalAlignment="Center"
+                                                                                           TextTrimming="CharacterEllipsis" Foreground="{StaticResource TextBrightBrush}"/>
+                                                                                <TextBlock Grid.Column="1" Classes="st" Classes.ok="{Binding IsReady}"
+                                                                                           Classes.part="{Binding IsFlies}" Classes.no="{Binding IsNotYet}"
+                                                                                           Text="{Binding StatusLabel}"/>
+                                                                                <TextBlock Grid.Column="2" Classes="t" Text="{Binding ToFlyLabel}"/>
+                                                                                <TextBlock Grid.Column="3" Classes="t" Text="{Binding ToMinLabel}"/>
+                                                                            </Grid>
+                                                                        </Border>
+                                                                    </DataTemplate>
+                                                                </ListBox.ItemTemplate>
+                                                            </ListBox>
+                                                        </Border>
+                                                    </StackPanel>
+                                                </Border>
+                                                <StackPanel DataContext="{Binding SelectedCharacter}" x:DataType="vm:CompositionCharacterReadiness"
+                                                            IsVisible="{Binding $self.DataContext, Converter={x:Static ObjectConverters.IsNotNull}}">
+                                                    <Border Classes="dsec" BorderThickness="0" Padding="16,10,16,0">
+                                                        <TextBlock Classes="sec" Text="{Binding SelectedLabel}" Margin="0"/>
+                                                    </Border>
+                                                    <Border Classes="dsec">
+                                                        <StackPanel>
+                                                            <TextBlock Classes="sec" Text="HOW LONG"/>
+                                                            <Grid Classes="kvr" ColumnDefinitions="*,Auto">
+                                                                <TextBlock Text="to fly the fit"/>
+                                                                <TextBlock Grid.Column="1" Text="{Binding FlyHowLong}"/>
+                                                            </Grid>
+                                                            <Grid Classes="kvr" ColumnDefinitions="*,Auto">
+                                                                <TextBlock Text="to the doctrine minimum"/>
+                                                                <TextBlock Grid.Column="1" Text="{Binding MinHowLong}"/>
+                                                            </Grid>
+                                                            <Grid Classes="kvr" ColumnDefinitions="*,Auto">
+                                                                <TextBlock Text="trained first, from now"/>
+                                                                <TextBlock Grid.Column="1" Text="{Binding TrainedFirstLabel}"
+                                                                           Foreground="{DynamicResource AccentBrightBrush}"/>
+                                                            </Grid>
+                                                            <Grid Classes="kvr" ColumnDefinitions="*,Auto">
+                                                                <TextBlock Text="as the queue stands"/>
+                                                                <TextBlock Grid.Column="1" Text="{Binding QueueStandsLabel}"
+                                                                           Foreground="{StaticResource WarnBrush}"
+                                                                           ToolTip.Tip="Queued levels land on their ESI dates; the rest is added after the queue ends"/>
+                                                            </Grid>
+                                                            <TextBlock Classes="note" Text="{Binding HowLongNote}" IsVisible="{Binding HasHowLongNote}"/>
                                                         </StackPanel>
-                                                        <TextBlock Grid.Column="1" Text="{Binding ToFlyLabel}" FontSize="10"
-                                                                   FontFamily="Consolas,monospace"/>
-                                                        <TextBlock Grid.Column="2" Text="{Binding ToMinLabel}" FontSize="10" Width="64"
-                                                                   TextAlignment="Right" FontFamily="Consolas,monospace"
-                                                                   IsVisible="{Binding $parent[ListBox].((vm:CompositionReadinessEntry)DataContext).HasSkillMinimums}"/>
-                                                    </Grid>
-                                                </DataTemplate>
-                                            </ListBox.ItemTemplate>
-                                        </ListBox>
-                                    </Grid>
-                                    <Border Grid.Row="4" BorderBrush="{DynamicResource DividerBrush}"
-                                            BorderThickness="0,1,0,0" Margin="0,12,0,10"/>
-                                    <ContentControl Grid.Row="5" Content="{Binding SelectedCharacter}">
-                                        <ContentControl.ContentTemplate>
-                                            <DataTemplate x:DataType="vm:CompositionCharacterReadiness">
-                                                <ScrollViewer VerticalScrollBarVisibility="Auto">
-                                                    <StackPanel Spacing="6">
-                                                        <TextBlock Text="{Binding Name}" FontSize="12" FontWeight="SemiBold"/>
-                                                        <TextBlock Text="{Binding StatusLabel}" FontSize="10"/>
-                                                        <TextBlock Text="{Binding ToFlyLabel, StringFormat='To fly: {0}'}" FontSize="11"/>
-                                                        <TextBlock Text="{Binding ToMinLabel, StringFormat='To minimum: {0}'}" FontSize="11"
-                                                                   IsVisible="{Binding HasSkillMinimums}"/>
-                                                        <TextBlock Text="{Binding QueueSummary}" Classes="label" FontSize="10" TextWrapping="Wrap"/>
-                                                        <ItemsControl ItemsSource="{Binding MissingSkills}">
+                                                    </Border>
+                                                    <Border Classes="dsec" IsVisible="{Binding HasMissingLevels}">
+                                                        <StackPanel>
+                                                            <TextBlock Classes="sec" Text="MISSING"/>
+                                                            <Grid ColumnDefinitions="*,70,90" Margin="0,0,0,4">
+                                                                <TextBlock Classes="colh" Text="SKILL"/>
+                                                                <TextBlock Grid.Column="1" Classes="colh" Text="TIME" TextAlignment="Right"/>
+                                                                <TextBlock Grid.Column="2" Classes="colh" Text="QUEUE" Margin="14,0,0,0"/>
+                                                            </Grid>
+                                                            <ItemsControl ItemsSource="{Binding MissingLevelsShown}">
+                                                                <ItemsControl.ItemTemplate>
+                                                                    <DataTemplate x:DataType="vm:CompositionMissingLevel">
+                                                                        <Border BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,1,0,0" Padding="0,4">
+                                                                            <Grid ColumnDefinitions="*,70,90">
+                                                                                <TextBlock Text="{Binding SkillLabel}" FontSize="11" Foreground="{StaticResource TextBrush}"
+                                                                                           TextTrimming="CharacterEllipsis"/>
+                                                                                <TextBlock Grid.Column="1" Classes="t" Text="{Binding TimeLabel}" FontSize="11"
+                                                                                           Foreground="{StaticResource TextBrightBrush}"/>
+                                                                                <TextBlock Grid.Column="2" Text="{Binding QueueLabel}" FontSize="11" Margin="14,0,0,0"
+                                                                                           Foreground="{StaticResource TextDimBrush}" IsVisible="{Binding !IsQueued}"/>
+                                                                                <TextBlock Grid.Column="2" Text="{Binding QueueLabel}" FontSize="11" Margin="14,0,0,0"
+                                                                                           Foreground="{DynamicResource AccentBrightBrush}" IsVisible="{Binding IsQueued}"/>
+                                                                            </Grid>
+                                                                        </Border>
+                                                                    </DataTemplate>
+                                                                </ItemsControl.ItemTemplate>
+                                                            </ItemsControl>
+                                                            <Border BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,1,0,0" Padding="0,4"
+                                                                    IsVisible="{Binding HasMoreMissingLevels}">
+                                                                <TextBlock Text="{Binding MoreMissingLevelsLabel}" FontSize="11"
+                                                                           Foreground="{StaticResource TextDimBrush}"/>
+                                                            </Border>
+                                                        </StackPanel>
+                                                    </Border>
+                                                    <Border Classes="dsec">
+                                                        <StackPanel Orientation="Horizontal" Spacing="6">
+                                                            <Button Classes="mk pri" Content="ADD TO PLAN…"
+                                                                    ToolTip.Tip="Put the missing levels in this character's plan for the fit and open it in SKILLS"
+                                                                    Command="{Binding #CompositionsRoot.((vm:CompositionsViewModel)DataContext).AddToPlanCommand}"/>
+                                                            <Button Classes="mk" Content="OPEN FIT"
+                                                                    Command="{Binding #CompositionsRoot.((vm:CompositionsViewModel)DataContext).OpenFitCommand}"/>
+                                                            <Button Classes="mk" Content="WHAT IF…"
+                                                                    ToolTip.Tip="The plan's what-if (remap, implants) on SKILLS · PLANS"
+                                                                    Command="{Binding #CompositionsRoot.((vm:CompositionsViewModel)DataContext).WhatIfCommand}"/>
+                                                        </StackPanel>
+                                                    </Border>
+                                                </StackPanel>
+                                            </StackPanel>
+                                        </ScrollViewer>
+                                    </DockPanel>
+                                </DataTemplate>
+                            </ContentControl.ContentTemplate>
+                        </ContentControl>
+
+                        <ContentControl Content="{Binding MinimumEditor}" IsVisible="{Binding HasMinimumEditor}">
+                            <ContentControl.ContentTemplate>
+                                <DataTemplate x:DataType="vm:CompositionMinimumEditorViewModel">
+                                    <DockPanel>
+                                        <Border DockPanel.Dock="Bottom" Classes="pfoot">
+                                            <TextBlock Text="Edits are tentative until SAVE, like the rest of the composition editor."/>
+                                        </Border>
+                                        <Border DockPanel.Dock="Top" Padding="16,14,16,10" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,0,0,1">
+                                            <StackPanel>
+                                                <TextBlock Text="{Binding Title}" FontSize="16" FontWeight="SemiBold"
+                                                           Foreground="{StaticResource TextBrightBrush}" TextTrimming="CharacterEllipsis"/>
+                                                <StackPanel Orientation="Horizontal" Spacing="12" Margin="0,3,0,0">
+                                                    <TextBlock Text="{Binding RoleName}" FontSize="11" Foreground="{StaticResource TextBrush}"/>
+                                                    <TextBlock Text="{Binding CompositionName}" FontSize="11" Foreground="{StaticResource TextBrush}"/>
+                                                </StackPanel>
+                                            </StackPanel>
+                                        </Border>
+                                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                            <StackPanel>
+                                                <Border Classes="dsec">
+                                                    <StackPanel>
+                                                        <TextBlock Classes="sec" Text="THE FIT ALREADY REQUIRES"/>
+                                                        <TextBlock Text="{Binding FitRequiresText}" FontSize="12" LineHeight="18" TextWrapping="Wrap"
+                                                                   Foreground="{StaticResource TextBrush}"/>
+                                                    </StackPanel>
+                                                </Border>
+                                                <Border Classes="dsec">
+                                                    <StackPanel>
+                                                        <TextBlock Classes="sec" Text="DOCTRINE MINIMUM"/>
+                                                        <Grid ColumnDefinitions="*,Auto,104,Auto" Margin="0,0,0,4">
+                                                            <TextBlock Classes="colh" Text="SKILL"/>
+                                                            <TextBlock Grid.Column="1" Classes="colh" Text="LEVEL" Width="100"/>
+                                                        </Grid>
+                                                        <ItemsControl ItemsSource="{Binding Entry.SkillMinimums}">
                                                             <ItemsControl.ItemTemplate>
-                                                                <DataTemplate x:DataType="fb:SkillGapViewModel">
-                                                                    <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,2">
-                                                                        <TextBlock Text="{Binding Name}" FontSize="10"/>
-                                                                        <TextBlock Text="{Binding RequiredRoman}" Classes="label" FontSize="10"/>
-                                                                        <TextBlock Text="{Binding Estimate}" Classes="label" FontSize="10"/>
-                                                                    </StackPanel>
+                                                                <DataTemplate x:DataType="vm:EditorSkillMinimumViewModel">
+                                                                    <Border BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,1,0,0" Padding="0,3">
+                                                                        <Grid ColumnDefinitions="*,Auto,104,Auto">
+                                                                            <TextBlock Text="{Binding SkillName}" FontSize="11" VerticalAlignment="Center"
+                                                                                       Foreground="{StaticResource TextBrush}" TextTrimming="CharacterEllipsis"/>
+                                                                            <ItemsControl Grid.Column="1" ItemsSource="{Binding LevelChoices}" Width="100"
+                                                                                          VerticalAlignment="Center">
+                                                                                <ItemsControl.ItemsPanel>
+                                                                                    <ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate>
+                                                                                </ItemsControl.ItemsPanel>
+                                                                                <ItemsControl.ItemTemplate>
+                                                                                    <DataTemplate x:DataType="vm:SkillLevelChoice">
+                                                                                        <Button Classes="seg lvb" Classes.on="{Binding IsOn}" Content="{Binding Text}"
+                                                                                                Command="{Binding Owner.SetLevelCommand}" CommandParameter="{Binding Level}"/>
+                                                                                    </DataTemplate>
+                                                                                </ItemsControl.ItemTemplate>
+                                                                            </ItemsControl>
+                                                                            <TextBlock Grid.Column="2" Text="{Binding FitHint}" FontSize="10.5" TextAlignment="Right"
+                                                                                       VerticalAlignment="Center" Foreground="{StaticResource TextDimBrush}"
+                                                                                       IsVisible="{Binding !HasNoEffect}"/>
+                                                                            <TextBlock Grid.Column="2" Text="{Binding FitHint}" FontSize="10.5" TextAlignment="Right"
+                                                                                       VerticalAlignment="Center" Foreground="{StaticResource WarnBrush}"
+                                                                                       IsVisible="{Binding HasNoEffect}"/>
+                                                                            <Button Grid.Column="3" Classes="x" ToolTip.Tip="Remove this minimum"
+                                                                                    Command="{Binding $parent[ItemsControl].((vm:EditorEntryViewModel)DataContext).RemoveSkillMinimumCommand}"
+                                                                                    CommandParameter="{Binding}">
+                                                                                <mi:MaterialIcon Kind="Close" Width="11" Height="11"/>
+                                                                            </Button>
+                                                                        </Grid>
+                                                                    </Border>
                                                                 </DataTemplate>
                                                             </ItemsControl.ItemTemplate>
                                                         </ItemsControl>
+                                                        <Grid ColumnDefinitions="*,6,Auto" Margin="0,8,0,0">
+                                                            <AutoCompleteBox FontSize="11" MinHeight="24" FilterMode="ContainsOrdinal" MinimumPrefixLength="2"
+                                                                             PlaceholderText="+ add a skill…" Text="{Binding Entry.NewSkillText}"
+                                                                             ItemsSource="{Binding SkillNames}"/>
+                                                            <Button Grid.Column="2" Classes="mk" Content="FROM A PLAN…"
+                                                                    ToolTip.Tip="Add a skill plan's levels as minimums">
+                                                                <Button.Flyout>
+                                                                    <Flyout Placement="BottomEdgeAlignedRight">
+                                                                        <StackPanel MinWidth="220" Spacing="2">
+                                                                            <TextBlock Text="No skill plans yet." FontSize="11" Margin="6"
+                                                                                       Foreground="{StaticResource TextDimBrush}" IsVisible="{Binding !HasPlanOptions}"/>
+                                                                            <ItemsControl ItemsSource="{Binding PlanOptions}">
+                                                                                <ItemsControl.ItemTemplate>
+                                                                                    <DataTemplate x:DataType="vm:SkillPlanOption">
+                                                                                        <Button Classes="mk" Content="{Binding Label}" HorizontalAlignment="Stretch"
+                                                                                                HorizontalContentAlignment="Left" BorderThickness="0"
+                                                                                                Command="{Binding $parent[ItemsControl].((vm:CompositionMinimumEditorViewModel)DataContext).FromPlanCommand}"
+                                                                                                CommandParameter="{Binding}"/>
+                                                                                    </DataTemplate>
+                                                                                </ItemsControl.ItemTemplate>
+                                                                            </ItemsControl>
+                                                                        </StackPanel>
+                                                                    </Flyout>
+                                                                </Button.Flyout>
+                                                            </Button>
+                                                        </Grid>
                                                     </StackPanel>
-                                                </ScrollViewer>
-                                            </DataTemplate>
-                                        </ContentControl.ContentTemplate>
-                                    </ContentControl>
-                                </Grid>
-                            </DataTemplate>
-                        </ContentControl.ContentTemplate>
-                    </ContentControl>
+                                                </Border>
+                                                <Border Classes="dsec">
+                                                    <StackPanel>
+                                                        <TextBlock Classes="sec" Text="{Binding EffectLabel}"/>
+                                                        <Grid Classes="kvr" ColumnDefinitions="*,Auto">
+                                                            <TextBlock Text="fly the fit today"/>
+                                                            <TextBlock Grid.Column="1" Text="{Binding FlyToday}"/>
+                                                        </Grid>
+                                                        <Grid Classes="kvr" ColumnDefinitions="*,Auto">
+                                                            <TextBlock Text="meet this minimum today"/>
+                                                            <TextBlock Grid.Column="1" Text="{Binding MeetToday}"/>
+                                                        </Grid>
+                                                        <Grid Classes="kvr" ColumnDefinitions="*,Auto">
+                                                            <TextBlock Text="meet it within 30 days"/>
+                                                            <TextBlock Grid.Column="1" Text="{Binding MeetWithin}" Foreground="{DynamicResource AccentBrightBrush}"/>
+                                                        </Grid>
+                                                        <Grid Classes="kvr" ColumnDefinitions="*,Auto">
+                                                            <TextBlock Text="soonest not there yet"/>
+                                                            <TextBlock Grid.Column="1" Text="{Binding Soonest}"/>
+                                                        </Grid>
+                                                        <TextBlock Classes="note" Text="{Binding EffectHint}"/>
+                                                    </StackPanel>
+                                                </Border>
+                                                <Border Classes="dsec">
+                                                    <StackPanel Spacing="6">
+                                                        <StackPanel Orientation="Horizontal" Spacing="6">
+                                                            <Button Classes="mk pri" Content="SAVE" Command="{Binding SaveCommand}"/>
+                                                            <Button Classes="mk" Content="CANCEL" Command="{Binding CancelCommand}"/>
+                                                        </StackPanel>
+                                                        <TextBlock Text="{Binding Status}" FontSize="11" TextWrapping="Wrap"
+                                                                   Foreground="{StaticResource WarnBrush}"
+                                                                   IsVisible="{Binding Status, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                                                    </StackPanel>
+                                                </Border>
+                                            </StackPanel>
+                                        </ScrollViewer>
+                                    </DockPanel>
+                                </DataTemplate>
+                            </ContentControl.ContentTemplate>
+                        </ContentControl>
+                    </Panel>
                 </Border>
             </Grid>
         </Grid>
