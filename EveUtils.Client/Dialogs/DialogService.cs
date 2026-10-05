@@ -23,6 +23,7 @@ using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.DependencyInjection;
 using Material.Icons;
 using Microsoft.Extensions.DependencyInjection;
+using EveUtils.Client.ViewModels.Setup;
 
 namespace EveUtils.Client.Dialogs;
 
@@ -324,6 +325,12 @@ public sealed class DialogService : IDialogService, ISingletonService
         return await _Over(dialog).ShowDialog<IReadOnlyList<int>?>(_owner);
     }
 
+    public async Task ShowSetupWizardAsync(SetupWizardViewModel viewModel)
+    {
+        if (_owner is null) return;
+        await _Over(new SetupWizardWindow(viewModel)).ShowDialog(_owner);
+    }
+
     public async Task<CoupleServerResult?> CoupleServerAsync(
         Func<string, CancellationToken, Task<string?>> probeServerName, CoupleServerResult? prefill = null)
     {
@@ -418,9 +425,9 @@ public sealed class DialogService : IDialogService, ISingletonService
         Route(new FleetsWindow(viewModel), "FLEETS", "fleet", "fleets", MaterialIconKind.AccountGroupOutline)
             as FleetsViewModel ?? viewModel;
 
-    public void ShowSettings(string currentDirectory, string detectedDefault, bool shareLocation, bool shareBounty, bool shareCombat, bool loadTypeImages, Theming.FactionTheme currentFaction, string sdeVersionLabel, Func<SettingsResult, Task> onApply, bool openFitDetailAfterImport = true, Notifications.ToastPosition toastPosition = Notifications.ToastPosition.TopRight, bool enableLocalApi = false, int localApiPort = LocalApi.LocalApiServer.DefaultPort, string localApiStatusLabel = "", LocalApi.ILocalApiServer? localApiServer = null, bool checkUpdatesOnStartup = true, Clipboard.ClipboardWatchService? clipboardWatch = null, int initialCategory = 0, bool openFleetRunWindowImmediately = false, bool autoPublishFleetRuns = true, bool shareLoot = false, bool shareMining = false, bool autoStartMissions = true, bool autoStartSites = true, DayOfWeek weekStartsOn = DayOfWeek.Monday, bool includeNightlyBuilds = false, Updates.IUpdateService? updates = null, bool offerHomefrontRuns = true)
+    public void ShowSettings(string currentDirectory, string detectedDefault, bool shareLocation, bool shareBounty, bool shareCombat, bool loadTypeImages, Theming.FactionTheme currentFaction, string sdeVersionLabel, Func<SettingsResult, Task> onApply, bool openFitDetailAfterImport = true, Notifications.ToastPosition toastPosition = Notifications.ToastPosition.TopRight, bool enableLocalApi = false, int localApiPort = LocalApi.LocalApiServer.DefaultPort, string localApiStatusLabel = "", LocalApi.ILocalApiServer? localApiServer = null, bool checkUpdatesOnStartup = true, Clipboard.ClipboardWatchService? clipboardWatch = null, int initialCategory = 0, bool openFleetRunWindowImmediately = false, bool autoPublishFleetRuns = true, bool shareLoot = false, bool shareMining = false, bool autoStartMissions = true, bool autoStartSites = true, DayOfWeek weekStartsOn = DayOfWeek.Monday, bool includeNightlyBuilds = false, Updates.IUpdateService? updates = null, bool offerHomefrontRuns = true, Func<Task>? runSetupAgain = null)
     {
-        var window = new SettingsWindow(currentDirectory, detectedDefault, shareLocation, shareBounty, shareCombat, loadTypeImages, currentFaction, sdeVersionLabel, openFitDetailAfterImport, toastPosition, enableLocalApi, localApiPort, localApiStatusLabel, localApiServer, checkUpdatesOnStartup, clipboardWatch, onApply, initialCategory, openFleetRunWindowImmediately, autoPublishFleetRuns, shareLoot, shareMining, autoStartMissions, autoStartSites, weekStartsOn, includeNightlyBuilds, updates, offerHomefrontRuns);
+        var window = new SettingsWindow(currentDirectory, detectedDefault, shareLocation, shareBounty, shareCombat, loadTypeImages, currentFaction, sdeVersionLabel, openFitDetailAfterImport, toastPosition, enableLocalApi, localApiPort, localApiStatusLabel, localApiServer, checkUpdatesOnStartup, clipboardWatch, onApply, initialCategory, openFleetRunWindowImmediately, autoPublishFleetRuns, shareLoot, shareMining, autoStartMissions, autoStartSites, weekStartsOn, includeNightlyBuilds, updates, offerHomefrontRuns, runSetupAgain);
         Route(window, "SETTINGS", "settings", "settings", MaterialIconKind.TuneVariant); // docked tab in docked mode, floating window otherwise
     }
 

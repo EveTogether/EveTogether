@@ -22,6 +22,7 @@ using EveUtils.Client.ViewModels.Home;
 using EveUtils.Client.ViewModels.Killmails;
 using EveUtils.Client.ViewModels.Map;
 using EveUtils.Client.ViewModels.Runs;
+using EveUtils.Client.ViewModels.Setup;
 using EveUtils.Client.Esi;
 using EveUtils.Client.EveSettings;
 using EveUtils.Client.Platform;
@@ -562,7 +563,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         // ~30fps DpsRenderDriver, so the curve scrolls + decays continuously and all graphs share one render path.
         _renderDriver = services.GetRequiredService<DpsRenderDriver>();
 
-        _ = RunStartupResilientAsync();
+        _startupTask = RunStartupResilientAsync();
     }
 
     // Marks every character row whose EVE client is currently running on this machine (matched on the window-title
@@ -1252,7 +1253,93 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
     // ── Character management ──────────────────────────────────────────────────────────────────────
 
     [RelayCommand]
-    private Task AddCharacter() => SignInWithScopeDialogAsync(isNew: true);
+    private Task AddCharacter() => RunSetupWizardAsync(SetupWizardEntry.AddCharacter);
+
+    // ── Setup wizard (ET-425) ─────────────────────────────────────────────────────────────────────
+
+    /// <summary>Set once the first-start wizard has been through to Done, skipped or closed, so it does not come back
+    /// on every start for whoever skipped it without adding a character.</summary>
+    private const string SetupCompletedSettingKey = "ui.setup.completed";
+
+    private Task _startupTask = Task.CompletedTask;
+    private Task _sdeCheckTask = Task.CompletedTask;
+
+    /// <summary>
+    /// Opens the first-start wizard on a fresh install: no characters, no coupled server, and not skipped before. Waits
+    /// for the startup load and the SDE prompt so the wizard is not stacked on top of another modal.
+    /// </summary>
+    public void StartFirstStartSetup() => _ = RunFirstStartSetupAsync();
+
+    private async Task RunFirstStartSetupAsync()
+    {
+        if (_services is null || _registry is null) return;
+
+        await _startupTask;
+        await _sdeCheckTask;
+
+        try
+        {
+            using (var scope = _services.CreateScope())
+            {
+                var settings = await scope.ServiceProvider.GetRequiredService<IDispatcher>().Query(new GetSettingsQuery());
+                if (settings.Any(setting => setting.Key == SetupCompletedSettingKey && setting.Value == "true")) return;
+            }
+
+            if ((await _registry.GetAllAsync()).Count > 0) return;
+            if ((await _services.GetRequiredService<IClientSessionStore>().ListServersAsync()).Count > 0) return;
+
+            await RunSetupWizardAsync(SetupWizardEntry.FirstStart);
+        }
+        catch (Exception ex)
+        {
+            ActivityStatus = $"First-start setup failed: {ex.Message}";
+        }
+    }
+
+    /// <summary>Settings › General › Setup: the first-start variant again, welcome included.</summary>
+    private Task RunSetupAgainAsync() => RunSetupWizardAsync(SetupWizardEntry.FirstStart);
+
+    private async Task RunSetupWizardAsync(SetupWizardEntry entry)
+    {
+        if (_dialogs is null || _services is null) return;
+
+        using var wizard = new SetupWizardViewModel(this, entry);
+        wizard.Initialize();
+        await _dialogs.ShowSetupWizardAsync(wizard);
+
+        // Done, Skip and the window's own close all count: the flag only stops the wizard from opening by itself.
+        if (entry is SetupWizardEntry.FirstStart)
+        {
+            using var scope = _services.CreateScope();
+            await scope.ServiceProvider.GetRequiredService<IDispatcher>().Send(new SetSettingCommand(SetupCompletedSettingKey, "true"));
+        }
+    }
+
+    /// <summary>Every server this PC holds a session for, with the characters coupled to it — the wizard's "already
+    /// coupled" choice.</summary>
+    public async Task<IReadOnlyList<KnownServer>> ListKnownServersAsync()
+    {
+        if (_services is null) return [];
+
+        var sessionStore = _services.GetRequiredService<IClientSessionStore>();
+        var servers = new List<KnownServer>();
+        foreach (var address in await sessionStore.ListServersAsync())
+        {
+            var display = _serverRegistry is null ? address : await _serverRegistry.DisplayNameAsync(address);
+            IReadOnlyList<string> coupled = [.. (await sessionStore.LoadAllAsync(address)).Select(session => session.CharacterName)];
+            servers.Add(new KnownServer(address, display, coupled));
+        }
+        return servers;
+    }
+
+    public Task CopyToClipboardAsync(string text) => _dialogs?.SetClipboardTextAsync(text) ?? Task.CompletedTask;
+
+    /// <summary>The server's own name and scopes, or null when it does not answer — the wizard's "Test connection".</summary>
+    public async Task<ServerScopesResponse?> ProbeServerAsync(string address, CancellationToken cancellationToken)
+    {
+        if (_pairing is null) return null;
+        return await _pairing.GetServerScopesAsync(address, cancellationToken);
+    }
 
     /// <summary>
     /// App settings dialog: configure the gamelog directory. Persists the path via the
@@ -1313,7 +1400,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
             loadImages, _theme?.Current ?? FactionTheme.Gallente, SdeVersionLabel(), ApplySettingsAsync, openDetailAfterImport, toastPosition,
             localApiEnabled, localApiPort, localApiStatusLabel, localApi, checkUpdatesOnStartup, _clipboardWatch, initialCategory, openFleetRunWindow,
             autoPublishFleetRuns, shares.IsShared(MetricKind.Loot), shares.IsShared(MetricKind.MiningYield), autoStartMissions, autoStartSites,
-            _weekStart?.FirstDay ?? Calendar.WeekStartService.SystemDefault(), includeNightlyBuilds, _services.GetService<IUpdateService>(), offerHomefrontRuns);
+            _weekStart?.FirstDay ?? Calendar.WeekStartService.SystemDefault(), includeNightlyBuilds, _services.GetService<IUpdateService>(), offerHomefrontRuns, RunSetupAgainAsync);
     }
 
     /// <summary>Opens the About dialog: app identity + version, creator credits with portraits,
@@ -2277,7 +2364,9 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
     /// caller that passes an address is the link's recouple action, which is gated on
     /// <see cref="ServerLinkViewModel.CanRecouple"/>.</para>
     /// </summary>
-    public async Task<bool> RunCoupleAsync(string? restoreAddress = null)
+    /// <param name="expectedCharacterId">The character being coupled; the server refuses any other one that signs in on
+    /// the EVE page (ET-425).</param>
+    public async Task<bool> RunCoupleAsync(string? restoreAddress = null, int expectedCharacterId = 0)
     {
         if (_pairing is null || _dialogs is null) return false;
 
@@ -2296,10 +2385,6 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
 
         try
         {
-            // Record the user label now so the UI can show it even before pairing fills in the server name.
-            if (_serverRegistry is not null)
-                await _serverRegistry.SetAsync(address, couple.Label, serverName: null);
-
             // ask the server which optional scopes it wants, let the user opt in before pairing.
             var serverScopes = await _pairing.GetServerScopesAsync(address);
             var scopes = new List<string>(serverScopes?.RequiredScopes ?? ["publicData"]);
@@ -2314,20 +2399,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
                 scopes.AddRange(chosen);
             }
 
-            var result = await _pairing.PairAsync(address, scopes, status => ActivityStatus = status);
-            // Remember the server's own name so the UI can show it (or the label) instead of the URL.
-            if (_serverRegistry is not null)
-                await _serverRegistry.SetAsync(address, label: null, serverName: result.ServerName);
-            if (_busConnector is not null)
-                await _busConnector.AttachAsync(address, result.CharacterId); // attach with the just-paired char's session
-
-            var affiliation = string.IsNullOrEmpty(result.AllianceName)
-                ? result.CorporationName
-                : $"{result.CorporationName} · {result.AllianceName}";
-            var suffix = string.IsNullOrWhiteSpace(affiliation) ? "" : $" ({affiliation})"; // no empty "()"
-            ActivityStatus = $"Connected to {result.ServerName} as {result.CharacterName}{suffix}";
-            await RefreshCharactersAsync(); // reflect the cloud-synced state on the paired character(s)
-            await RefreshFittingsTabsAsync(); // add the new server's fits tab
+            await CoupleCharacterAsync(address, couple.Label, scopes, expectedCharacterId);
             return true;
         }
         catch (Exception ex)
@@ -2338,53 +2410,67 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
     }
 
     /// <summary>
-    /// Sign in (= add or update a character): show the scope-selection dialog, then run the
-    /// EVE SSO with exactly the chosen scopes. Every sign-in adds/updates a character in the registry,
-    /// so there is just one action — no separate "add character".
+    /// The one route every coupling takes, from the character dialog and from the setup wizard alike: pair (a second
+    /// EVE login, through the server), remember the server's name, attach the bus and refresh the list and fit tabs.
     /// </summary>
-    private async Task SignInWithScopeDialogAsync(bool isNew)
+    /// <exception cref="PairingFailedException">The server refused, or the EVE login was declined.</exception>
+    public async Task<PairingResult> CoupleCharacterAsync(string address, string? label, IReadOnlyList<string> scopes,
+        int expectedCharacterId, Action<string>? authorizeUrl = null, CancellationToken cancellationToken = default)
     {
-        if (_login is null || _dialogs is null || _scopeRegistry is null) return;
+        if (_pairing is null) throw new InvalidOperationException("Server pairing is not available.");
 
-        // 1. Let the user pick which scopes to request (defaults to all, from the registry).
-        var available = _scopeRegistry.GetRequirements(EsiScopeTarget.Client);
-        var selected = await _dialogs.SelectScopesAsync(available);
-        if (selected is null)
-        {
-            ActivityStatus = "Sign-in cancelled.";
-            return; // user closed the dialog
-        }
+        // Record the user label now so the UI can show it even before pairing fills in the server name.
+        if (_serverRegistry is not null)
+            await _serverRegistry.SetAsync(address, label, serverName: null, cancellationToken);
 
-        // 2. Run the SSO with the chosen scopes.
-        _signInCts = new CancellationTokenSource(TimeSpan.FromMinutes(3));
-        IsSigningIn = true;
+        PairingResult result;
         try
         {
-            ActivityStatus = "Signing in… (cancel to abort)";
-            var identity = await _login.SignInAsync(selected, _signInCts.Token);
-            ActivityStatus =$"Signed in: {identity.CharacterName} ({identity.CharacterId})";
-            _localCharacter = identity.CharacterName;
-            if (_gamelog is not null)
-            {
-                _gamelog.SetCharacter(identity.CharacterName);
-                _gamelog.MapCharacter(identity.CharacterId, identity.CharacterName); // couple id↔name for fleet DPS
-            }
-            await RefreshCharactersAsync();
-        }
-        catch (OperationCanceledException)
-        {
-            ActivityStatus = "Sign-in cancelled.";
+            result = await _pairing.PairAsync(address, scopes, status => ActivityStatus = status,
+                expectedCharacterId, authorizeUrl, cancellationToken);
         }
         catch (Exception ex)
         {
-            ActivityStatus =$"Sign-in failed: {ex.Message}";
+            // The pairing's own progress text would otherwise stay in the status bar as if it were still waiting.
+            ActivityStatus = ex is OperationCanceledException ? "Coupling cancelled." : $"Pairing failed: {ex.Message}";
+            throw;
         }
-        finally
+        // Remember the server's own name so the UI can show it (or the label) instead of the URL.
+        if (_serverRegistry is not null)
+            await _serverRegistry.SetAsync(address, label: null, serverName: result.ServerName, cancellationToken);
+        if (_busConnector is not null)
+            await _busConnector.AttachAsync(address, result.CharacterId); // attach with the just-paired char's session
+
+        var affiliation = string.IsNullOrEmpty(result.AllianceName)
+            ? result.CorporationName
+            : $"{result.CorporationName} · {result.AllianceName}";
+        var suffix = string.IsNullOrWhiteSpace(affiliation) ? "" : $" ({affiliation})"; // no empty "()"
+        ActivityStatus = $"Connected to {result.ServerName} as {result.CharacterName}{suffix}";
+        await RefreshCharactersAsync(); // reflect the cloud-synced state on the paired character(s)
+        await RefreshFittingsTabsAsync(); // add the new server's fits tab
+        return result;
+    }
+
+    /// <summary>
+    /// Sign in (= add or update a character) with exactly the chosen scopes, for the setup wizard. Every sign-in adds
+    /// or updates a character in the registry, so there is just one action — no separate "add character".
+    /// </summary>
+    /// <exception cref="EsiSignInDeniedException">The access was not authorized on the EVE login page.</exception>
+    public async Task<EsiIdentity> SignInCharacterAsync(IReadOnlyList<string> scopes, Action<string>? authorizeUrl,
+        CancellationToken cancellationToken)
+    {
+        if (_login is null) throw new InvalidOperationException("EVE sign-in is not available.");
+
+        var identity = await _login.SignInAsync(scopes, cancellationToken, authorizeUrl);
+        ActivityStatus = $"Signed in: {identity.CharacterName} ({identity.CharacterId})";
+        _localCharacter = identity.CharacterName;
+        if (_gamelog is not null)
         {
-            IsSigningIn = false;
-            _signInCts?.Dispose();
-            _signInCts = null;
+            _gamelog.SetCharacter(identity.CharacterName);
+            _gamelog.MapCharacter(identity.CharacterId, identity.CharacterName); // couple id↔name for fleet DPS
         }
+        await RefreshCharactersAsync();
+        return identity;
     }
 
     [RelayCommand]
@@ -2481,7 +2567,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
     /// it, so the modal has a shown owner). Decoupled on purpose: a slow/failing startup step (e.g. an unreachable
     /// paired server) must never swallow the check, and its own failure is surfaced instead of silently lost.
     /// </summary>
-    public void StartSdeUpdateCheck() => _ = RunSdeUpdateCheckResilientAsync();
+    public void StartSdeUpdateCheck() => _sdeCheckTask = RunSdeUpdateCheckResilientAsync();
 
     /// <summary>Offers back whatever <c>StopRunsLeftRunningCommand</c> stopped at startup (ET-254) — the window's
     /// Opened event drives this too, for the same reason as <see cref="StartSdeUpdateCheck"/>: a toast needs

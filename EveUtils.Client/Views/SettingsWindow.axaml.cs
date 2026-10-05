@@ -39,6 +39,7 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
     private readonly ClipboardWatchService? _clipboardWatch;
     private readonly Func<SettingsResult, Task>? _onApply;
     private readonly IUpdateService? _updates;
+    private readonly Func<Task>? _runSetupAgain;
 
     // The channel actually in force when this window opened (ET-339) — what "Check now" asks about. It follows
     // Save/Cancel's own rule: nothing the operator has not saved yet takes effect, so a pending, unsaved flip of
@@ -117,8 +118,9 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
     }
 
     public SettingsWindow(string currentDirectory, string detectedDefault, bool shareLocation, bool shareBounty, bool shareCombat, bool loadTypeImages, Theming.FactionTheme currentFaction, string sdeVersionLabel, bool openFitDetailAfterImport = true, Notifications.ToastPosition toastPosition = Notifications.ToastPosition.TopRight, bool enableLocalApi = false, int localApiPort = LocalApi.LocalApiServer.DefaultPort, string localApiStatusLabel = "", ILocalApiServer? localApiServer = null, bool checkUpdatesOnStartup = true, ClipboardWatchService? clipboardWatch = null, Func<SettingsResult, Task>? onApply = null,
-        int initialCategory = 0, bool openFleetRunWindowImmediately = false, bool autoPublishFleetRuns = true, bool shareLoot = false, bool shareMining = false, bool autoStartMissions = true, bool autoStartSites = true, DayOfWeek weekStartsOn = DayOfWeek.Monday, bool includeNightlyBuilds = false, IUpdateService? updates = null, bool offerHomefrontRuns = true) : this()
+        int initialCategory = 0, bool openFleetRunWindowImmediately = false, bool autoPublishFleetRuns = true, bool shareLoot = false, bool shareMining = false, bool autoStartMissions = true, bool autoStartSites = true, DayOfWeek weekStartsOn = DayOfWeek.Monday, bool includeNightlyBuilds = false, IUpdateService? updates = null, bool offerHomefrontRuns = true, Func<Task>? runSetupAgain = null) : this()
     {
+        _runSetupAgain = runSetupAgain;
         _detectedDefault = detectedDefault;
         _localApi = localApiServer;
         _clipboardWatch = clipboardWatch;
@@ -470,6 +472,9 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
     }
 
     private void OnCancel(object? sender, RoutedEventArgs e) => RequestClose();
+
+    // Leaves this window as it is: the wizard is modal over the main window, and closing here would drop unsaved edits.
+    private void OnRunSetupAgain(object? sender, RoutedEventArgs e) => _ = _runSetupAgain?.Invoke();
 
     private async void OnSave(object? sender, RoutedEventArgs e) => await ApplyAndCloseAsync(reimportSde: false);
 

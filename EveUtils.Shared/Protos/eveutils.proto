@@ -379,6 +379,9 @@ message PingReply { string message = 1; string server_time = 2; string cert_fing
 message StartPairingRequest {
   string pairing_challenge = 1; // b64url(SHA256(pairing_secret))
   repeated string scopes = 2;
+  // The character this coupling is for (ET-425). The server refuses any other character that signs in on the EVE
+  // page, before it stores a token or issues a session. 0 = any character (clients from before ET-425).
+  int32 expected_character_id = 3;
 }
 message StartPairingReply {
   string pairing_id = 1;
@@ -410,6 +413,15 @@ message ClaimPairingReply {
   // session immediately; without it there is a window in which a refusal cannot be classified (ET-123), and
   // re-coupling is exactly the path a client takes out of "your session is gone".
   int32 session_id = 10;
+  // Why a pairing failed, so the client can say what happened instead of showing the server's text (ET-425).
+  // On OTHER_CHARACTER, character_name carries the character that signed in instead.
+  PairingFailure failure = 11;
+}
+
+enum PairingFailure {
+  PAIRING_FAILURE_UNSPECIFIED = 0;      // not a failure, or one without a specific reason
+  PAIRING_FAILURE_CANCELLED = 1;        // the EVE login page reported the access was not authorized
+  PAIRING_FAILURE_OTHER_CHARACTER = 2;  // a different character signed in than the coupling was started for
 }
 
 // Why a refresh was refused, so the client knows whether trying again could ever come to anything (ET-123).

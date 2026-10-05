@@ -131,7 +131,7 @@ public partial class CharacterDialogViewModel : ObservableObject, IDisposable
             return;
         }
 
-        var ok = await _owner.RunCoupleAsync();
+        var ok = await _owner.RunCoupleAsync(expectedCharacterId: CharacterId);
         if (ok)
         {
             ApplyCharacterSnapshot();
@@ -158,7 +158,7 @@ public partial class CharacterDialogViewModel : ObservableObject, IDisposable
         Status = $"Coupling {link.DisplayName} again…";
         // Hands the address over so the dialog opens filled in: this coupling already exists, it just has no session
         // on the server any more, so there is nothing here for the user to look up or retype (ET-123).
-        var ok = await _owner.RunCoupleAsync(link.Address);
+        var ok = await _owner.RunCoupleAsync(link.Address, CharacterId);
         await ReloadServerLinksAsync();
         Status = ok ? "Coupled." : "Coupling cancelled.";
     }

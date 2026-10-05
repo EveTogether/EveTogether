@@ -14,6 +14,7 @@ using EveUtils.Client.ViewModels.Map;
 using EveUtils.Client.ViewModels.Runs;
 using EveUtils.Shared.Modules.Esi;
 using EveUtils.Shared.Modules.Fittings.Dtos;
+using EveUtils.Client.ViewModels.Setup;
 
 namespace EveUtils.Client.UiTests;
 
@@ -108,6 +109,8 @@ public sealed class RecordingDialogService : IDialogService
     /// retype something the client already knows (ET-123). Null means it has not been opened.</summary>
     public CoupleServerResult? LastCouplePrefill { get; private set; }
     public bool CoupleDialogOpened { get; private set; }
+
+    public Task ShowSetupWizardAsync(SetupWizardViewModel viewModel) => throw NotUsed();
 
     public Task<CoupleServerResult?> CoupleServerAsync(
         Func<string, CancellationToken, Task<string?>> probeServerName, CoupleServerResult? prefill = null)
@@ -267,7 +270,7 @@ public sealed class RecordingDialogService : IDialogService
     /// <summary>Stands in for the real window's Closed handler, since nothing here opens one — a test drives the
     /// "the run window went away" half of <see cref="ActivityWindowChanged"/> with this.</summary>
     public void CloseActivityWindow() => ActivityWindowChanged?.Invoke(null);
-    public void ShowSettings(string currentDirectory, string detectedDefault, bool shareLocation, bool shareBounty, bool shareCombat, bool loadTypeImages, EveUtils.Client.Theming.FactionTheme currentFaction, string sdeVersionLabel, Func<SettingsResult, Task> onApply, bool openFitDetailAfterImport = true, EveUtils.Client.Notifications.ToastPosition toastPosition = EveUtils.Client.Notifications.ToastPosition.TopRight, bool enableLocalApi = false, int localApiPort = EveUtils.Client.LocalApi.LocalApiServer.DefaultPort, string localApiStatusLabel = "", EveUtils.Client.LocalApi.ILocalApiServer? localApiServer = null, bool checkUpdatesOnStartup = true, EveUtils.Client.Clipboard.ClipboardWatchService? clipboardWatch = null, int initialCategory = 0, bool openFleetRunWindowImmediately = false, bool autoPublishFleetRuns = true, bool shareLoot = false, bool shareMining = false, bool autoStartMissions = true, bool autoStartSites = true, DayOfWeek weekStartsOn = DayOfWeek.Monday, bool includeNightlyBuilds = false, Updates.IUpdateService? updates = null, bool offerHomefrontRuns = true) => throw NotUsed();
+    public void ShowSettings(string currentDirectory, string detectedDefault, bool shareLocation, bool shareBounty, bool shareCombat, bool loadTypeImages, EveUtils.Client.Theming.FactionTheme currentFaction, string sdeVersionLabel, Func<SettingsResult, Task> onApply, bool openFitDetailAfterImport = true, EveUtils.Client.Notifications.ToastPosition toastPosition = EveUtils.Client.Notifications.ToastPosition.TopRight, bool enableLocalApi = false, int localApiPort = EveUtils.Client.LocalApi.LocalApiServer.DefaultPort, string localApiStatusLabel = "", EveUtils.Client.LocalApi.ILocalApiServer? localApiServer = null, bool checkUpdatesOnStartup = true, EveUtils.Client.Clipboard.ClipboardWatchService? clipboardWatch = null, int initialCategory = 0, bool openFleetRunWindowImmediately = false, bool autoPublishFleetRuns = true, bool shareLoot = false, bool shareMining = false, bool autoStartMissions = true, bool autoStartSites = true, DayOfWeek weekStartsOn = DayOfWeek.Monday, bool includeNightlyBuilds = false, Updates.IUpdateService? updates = null, bool offerHomefrontRuns = true, Func<Task>? runSetupAgain = null) => throw NotUsed();
 
     /// <summary>
     /// Answers the update offer (true = download and install). Default: Later.

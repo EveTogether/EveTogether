@@ -4,8 +4,8 @@ using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
-using Avalonia.Threading;
 using EveUtils.Client.Dialogs;
+using EveUtils.Client.Pairing;
 
 namespace EveUtils.Client.Views;
 
@@ -16,9 +16,7 @@ namespace EveUtils.Client.Views;
 /// </summary>
 public partial class CoupleServerWindow : ChromedWindow
 {
-    private readonly Func<string, CancellationToken, Task<string?>>? _probeServerName;
-    private readonly DispatcherTimer? _debounce;
-    private CancellationTokenSource? _probeCts;
+    private readonly DebouncedServerProbe<string>? _probe;
 
     public CoupleServerWindow()
     {
@@ -28,7 +26,10 @@ public partial class CoupleServerWindow : ChromedWindow
     public CoupleServerWindow(Func<string, CancellationToken, Task<string?>> probeServerName, CoupleServerResult? prefill = null)
         : this()
     {
-        _probeServerName = probeServerName;
+        _probe = new DebouncedServerProbe<string>(probeServerName,
+            onChecking: () => SetServerNameText("checking…"),
+            onCleared: () => SetServerNameText(""),
+            onResult: (_, name) => SetServerNameText(string.IsNullOrWhiteSpace(name) ? "(server not reachable)" : $"Server: {name}"));
 
         // Restoring a coupling the client already knows: fill in what it knows rather than asking for it again, so
         // the only steps left are connect and sign in (ET-123).
@@ -42,45 +43,13 @@ public partial class CoupleServerWindow : ChromedWindow
         }
 
         this.FindControl<TextBox>("AddressBox")!.TextChanged += OnAddressChanged;
-        _debounce = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
-        _debounce.Tick += (_, _) => { _debounce!.Stop(); _ = ProbeAsync(); };
 
-        Opened += (_, _) => _ = ProbeAsync();      // initial probe with the default address
-        Closed += (_, _) => { _debounce?.Stop(); _probeCts?.Cancel(); };
+        Opened += (_, _) => _ = _probe.ProbeNowAsync(this.FindControl<TextBox>("AddressBox")?.Text);   // initial probe with the default address
+        Closed += (_, _) => _probe.Dispose();
     }
 
-    private void OnAddressChanged(object? sender, TextChangedEventArgs e)
-    {
-        SetServerNameText("checking…");
-        _debounce?.Stop();
-        _debounce?.Start(); // restart the window — only the last keystroke probes
-    }
-
-    private async Task ProbeAsync()
-    {
-        if (_probeServerName is null) return;
-        var address = this.FindControl<TextBox>("AddressBox")?.Text?.Trim();
-        if (string.IsNullOrWhiteSpace(address)) { SetServerNameText(""); return; }
-
-        _probeCts?.Cancel();
-        _probeCts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-        var ct = _probeCts.Token;
-        SetServerNameText("checking…");
-        try
-        {
-            var name = await _probeServerName(address, ct);
-            if (ct.IsCancellationRequested) return; // a newer probe superseded this one
-            SetServerNameText(string.IsNullOrWhiteSpace(name) ? "(server not reachable)" : $"Server: {name}");
-        }
-        catch (OperationCanceledException)
-        {
-            // superseded or timed out — leave whatever the newer probe sets
-        }
-        catch (Exception)
-        {
-            SetServerNameText("(server not reachable)");
-        }
-    }
+    private void OnAddressChanged(object? sender, TextChangedEventArgs e) =>
+        _probe?.AddressChanged(this.FindControl<TextBox>("AddressBox")?.Text);
 
     private void SetServerNameText(string text)
     {

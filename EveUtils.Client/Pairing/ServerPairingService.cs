@@ -53,10 +53,16 @@ public sealed class ServerPairingService(
         }
     }
 
+    /// <param name="expectedCharacterId">The character this coupling is for; the server refuses any other one that signs
+    /// in on the EVE page (ET-425). 0 couples whoever signs in.</param>
+    /// <param name="authorizeUrl">Receives the EVE login link, for a browser that did not open by itself.</param>
+    /// <exception cref="PairingFailedException">The server refused or the EVE login was declined.</exception>
     public async Task<PairingResult> PairAsync(
         string serverAddress,
         IReadOnlyList<string>? scopes = null,
         Action<string>? status = null,
+        int expectedCharacterId = 0,
+        Action<string>? authorizeUrl = null,
         CancellationToken cancellationToken = default)
     {
         var pairingSecret = TokenSecurity.GenerateToken();
@@ -66,7 +72,7 @@ public sealed class ServerPairingService(
         using var pinning = channelFactory.CreateForPairing(serverAddress);
         var client = new GrpcPairing.PairingClient(pinning.Channel);
 
-        var startRequest = new StartPairingRequest { PairingChallenge = pairingChallenge };
+        var startRequest = new StartPairingRequest { PairingChallenge = pairingChallenge, ExpectedCharacterId = expectedCharacterId };
         if (scopes is not null)
             startRequest.Scopes.AddRange(scopes); // server includes these in the authorize URL
 
@@ -78,6 +84,7 @@ public sealed class ServerPairingService(
             trustStore.Pin(serverAddress, fingerprint);
 
         status?.Invoke("Opening browser for EVE SSO…");
+        authorizeUrl?.Invoke(start.AuthorizeUrl);
         OpenBrowser(start.AuthorizeUrl); // redirect lands on the server's own callback; the server completes the exchange
 
         status?.Invoke("Waiting for the server to complete pairing…");
@@ -90,9 +97,15 @@ public sealed class ServerPairingService(
             if (claim.Completed)
                 break;
             if (!string.Equals(claim.Message, "Pairing not completed yet.", StringComparison.Ordinal))
-                throw new InvalidOperationException(claim.Message);
+                throw new PairingFailedException(claim.Failure, claim.CharacterName, claim.Message);
             await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
         }
+
+        // A server from before ET-425 ignores the expected character, so the same rule is held here as well: the session
+        // it issued for someone else is never saved, and nothing on this PC gets coupled.
+        if (expectedCharacterId != 0 && claim.CharacterId != expectedCharacterId)
+            throw new PairingFailedException(PairingFailure.OtherCharacter, claim.CharacterName,
+                $"{claim.CharacterName} signed in, but this coupling is for another character. Nothing was coupled.");
 
         await sessionStore.SaveAsync(
             serverAddress,

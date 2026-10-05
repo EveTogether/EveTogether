@@ -52,6 +52,13 @@
                                Foreground="{StaticResource TextBrightBrush}"/>
 
                     <StackPanel Spacing="3">
+                        <TextBlock Text="SETUP" Classes="label" FontSize="9"/>
+                        <TextBlock Text="Walk through the first-start setup again: add characters, each with an optional server. What you already have stays."
+                                   FontSize="10" TextWrapping="Wrap" Margin="0,0,0,5"/>
+                        <Button Content="Run setup again" Click="OnRunSetupAgain" HorizontalAlignment="Left"/>
+                    </StackPanel>
+
+                    <StackPanel Spacing="3">
                         <TextBlock Text="GAMELOG DIRECTORY" Classes="label" FontSize="9"/>
                         <Grid ColumnDefinitions="*,Auto,Auto">
                             <TextBox x:Name="GamelogDirBox" Grid.Column="0" VerticalContentAlignment="Center"

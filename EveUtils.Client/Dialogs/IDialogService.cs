@@ -11,6 +11,7 @@ using EveUtils.Client.ViewModels.Runs;
 using EveUtils.Shared.Modules.Esi;
 using EveUtils.Shared.Modules.Fittings.Dtos;
 using EveUtils.Shared.Modules.Fleet.Entities;
+using EveUtils.Client.ViewModels.Setup;
 
 namespace EveUtils.Client.Dialogs;
 
@@ -71,6 +72,9 @@ public interface IDialogService
     /// address is not in question — never after a refused certificate, which is exactly the case where the user has
     /// to check the address is still answered by their own server.
     /// </param>
+    /// <summary>The setup wizard (ET-425), modal over the main window until it is done, skipped or closed.</summary>
+    Task ShowSetupWizardAsync(SetupWizardViewModel viewModel);
+
     Task<CoupleServerResult?> CoupleServerAsync(
         Func<string, CancellationToken, Task<string?>> probeServerName, CoupleServerResult? prefill = null);
 
@@ -200,7 +204,7 @@ public interface IDialogService
     /// none), <paramref name="detectedDefault"/> the platform-probed fallback (Auto-detect). On Save the view invokes
     /// <paramref name="onApply"/> with the chosen values (the caller persists + applies live); Cancel/close does nothing.
     /// </summary>
-    void ShowSettings(string currentDirectory, string detectedDefault, bool shareLocation, bool shareBounty, bool shareCombat, bool loadTypeImages, FactionTheme currentFaction, string sdeVersionLabel, Func<SettingsResult, Task> onApply, bool openFitDetailAfterImport = true, Notifications.ToastPosition toastPosition = Notifications.ToastPosition.TopRight, bool enableLocalApi = false, int localApiPort = LocalApi.LocalApiServer.DefaultPort, string localApiStatusLabel = "", LocalApi.ILocalApiServer? localApiServer = null, bool checkUpdatesOnStartup = true, Clipboard.ClipboardWatchService? clipboardWatch = null, int initialCategory = 0, bool openFleetRunWindowImmediately = false, bool autoPublishFleetRuns = true, bool shareLoot = false, bool shareMining = false, bool autoStartMissions = true, bool autoStartSites = true, DayOfWeek weekStartsOn = DayOfWeek.Monday, bool includeNightlyBuilds = false, Updates.IUpdateService? updates = null, bool offerHomefrontRuns = true);
+    void ShowSettings(string currentDirectory, string detectedDefault, bool shareLocation, bool shareBounty, bool shareCombat, bool loadTypeImages, FactionTheme currentFaction, string sdeVersionLabel, Func<SettingsResult, Task> onApply, bool openFitDetailAfterImport = true, Notifications.ToastPosition toastPosition = Notifications.ToastPosition.TopRight, bool enableLocalApi = false, int localApiPort = LocalApi.LocalApiServer.DefaultPort, string localApiStatusLabel = "", LocalApi.ILocalApiServer? localApiServer = null, bool checkUpdatesOnStartup = true, Clipboard.ClipboardWatchService? clipboardWatch = null, int initialCategory = 0, bool openFleetRunWindowImmediately = false, bool autoPublishFleetRuns = true, bool shareLoot = false, bool shareMining = false, bool autoStartMissions = true, bool autoStartSites = true, DayOfWeek weekStartsOn = DayOfWeek.Monday, bool includeNightlyBuilds = false, Updates.IUpdateService? updates = null, bool offerHomefrontRuns = true, Func<Task>? runSetupAgain = null);
 
     /// <summary>Per-fleet sharing dialog: per character a three-way override per metric. Returns true if the user saved.</summary>
     Task<bool> ShowFleetSharingAsync(ViewModels.FleetShareViewModel viewModel);
