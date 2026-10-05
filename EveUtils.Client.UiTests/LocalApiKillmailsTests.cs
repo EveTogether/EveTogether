@@ -34,7 +34,7 @@ public sealed class LocalApiKillmailsTests : IDisposable
         await _StoreAsync(_Killmail(1, isLoss: false, DateTime.UtcNow.AddHours(-3)), _Killmail(2, isLoss: true, DateTime.UtcNow.AddHours(-2)),
             _Killmail(3, isLoss: false, DateTime.UtcNow.AddHours(-1)));
 
-        var latest = await new LocalApiQueries(_instance.Services).GetLatestKillmailsAsync(kind, 25, TestContext.Current.CancellationToken);
+        var latest = await _Queries(includeLocation: false).GetLatestKillmailsAsync(kind, 25, TestContext.Current.CancellationToken);
 
         Assert.Equal(expectedIds, latest.Select(killmail => killmail.KillmailId));
         Assert.All(latest, killmail => Assert.Equal(killmail.KillmailId == 2 ? "Loss" : "Kill", killmail.Kind));
@@ -44,11 +44,9 @@ public sealed class LocalApiKillmailsTests : IDisposable
     public async Task Latest_LocationIsNullUntilIncludeLocationIsOn()
     {
         await _StoreAsync(_Killmail(1, isLoss: false, DateTime.UtcNow.AddMinutes(-5)));
-        var queries = new LocalApiQueries(_instance.Services);
 
-        var hidden = await queries.GetLatestKillmailsAsync(KillmailsLatestKind.All, 1, TestContext.Current.CancellationToken);
-        await _instance.Services.GetRequiredService<ISettingRepository>().UpsertAsync("localapi.includelocation", "true", TestContext.Current.CancellationToken);
-        var shown = await queries.GetLatestKillmailsAsync(KillmailsLatestKind.All, 1, TestContext.Current.CancellationToken);
+        var hidden = await _Queries(includeLocation: false).GetLatestKillmailsAsync(KillmailsLatestKind.All, 1, TestContext.Current.CancellationToken);
+        var shown = await _Queries(includeLocation: true).GetLatestKillmailsAsync(KillmailsLatestKind.All, 1, TestContext.Current.CancellationToken);
 
         Assert.Null(hidden.Single().SolarSystemId);
         Assert.Equal(30000142, shown.Single().SolarSystemId);
@@ -106,6 +104,9 @@ public sealed class LocalApiKillmailsTests : IDisposable
             return announced;
         }
     }
+
+    private LocalApiQueries _Queries(bool includeLocation) =>
+        new(_instance.Services, new LocalApiPrivacy(_instance.Services, includeLocation));
 
     private async Task _StoreAsync(params LocalKillmail[] killmails)
     {

@@ -21,8 +21,6 @@ namespace EveUtils.Client.LocalApi;
 
 public sealed partial class LocalApiQueries
 {
-    // Owned by the "Include my location" setting (ET-432); read here by key so the two do not share a type.
-    private const string IncludeLocationSettingKey = "localapi.includelocation";
     private const int MaxLatestKillmails = 25;
 
     /// <summary>A mail stored this long after it happened is still "new" to a stream overlay; anything older is a
@@ -80,8 +78,6 @@ public sealed partial class LocalApiQueries
         await using var scope = rootServices.CreateAsyncScope();
         var provider = scope.ServiceProvider;
         var settings = provider.GetRequiredService<ISettingRepository>();
-        var includeLocation = (await settings.ListAsync(cancellationToken))
-            .FirstOrDefault(setting => setting.Key == IncludeLocationSettingKey)?.Value == "true";
 
         var own = (await provider.GetRequiredService<ICharacterRegistry>().GetAllAsync(cancellationToken))
             .Where(character => character.EsiCharacterId is > 0)
@@ -117,7 +113,7 @@ public sealed partial class LocalApiQueries
                     blow.ShipTypeId,
                     blow.ShipTypeId is { } blowShip ? types.TypeName(blowShip) : null)
                 : null,
-            includeLocation ? row.SolarSystemId : null,
-            includeLocation ? sde.GetSolarSystem(row.SolarSystemId)?.Name : null)).ToList();
+            privacy.ExposesLocation ? row.SolarSystemId : null,
+            privacy.ExposesLocation ? sde.GetSolarSystem(row.SolarSystemId)?.Name : null)).ToList();
     }
 }
