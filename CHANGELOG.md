@@ -38,8 +38,11 @@ entries under `[Unreleased]` below that were not there yet at the previous night
   - **COMP** shows per doctrine fit the skills it requires, its skill minimums and how many of your characters are
     ready, fly below the minimum or not yet. The pane lists them in columns with how long each needs, what is missing
     and buttons to add it to a plan, open the fit or see the what-if. EDIT on an entry opens the skill-minimum editor
-    in the same pane, with its effect on your characters and FROM A PLAN….
-  - **SKILL IMPACT** lets you switch the fit and picks stats from a grouped menu. Its three target cards show each
+    in the same pane, with its effect on your characters and FROM A PLAN…. START FLEET opens a new fleet in FLEETS;
+    a local doctrine is set on the new local fleet straight away.
+  - **From a fit** now lives in SKILLS → PLANS (+ FROM FIT…, or SKILL IMPACT… in a fit's detail, which opens SKILLS
+    on that character with the fit picked) instead of a window of its own. It lets you switch the fit and pick stats
+    from a grouped menu. Its three target cards show each
     stat's value and share with a fit check, there is a warning when the fit cannot fit at any level, a chart of the
     gain against training time, and a side list of the skills that move the chosen stats.
   - The header shows when the skills were last refreshed. Every duration is written one way ("252d 13h", "1h 13m",
