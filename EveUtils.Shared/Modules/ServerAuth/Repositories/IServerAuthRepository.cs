@@ -13,6 +13,7 @@ public interface IServerAuthRepository
 
     Task<SyncedCharacter> UpsertSyncedAsync(int esiCharacterId, string characterName, EncryptedToken refreshToken, IReadOnlyList<string>? grantedScopes = null, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<SyncedCharacter>> ListSyncedAsync(CancellationToken cancellationToken = default);
+    Task<SyncedCharacter?> FindSyncedAsync(int esiCharacterId, CancellationToken cancellationToken = default);
     /// <summary>The characters that still have at least one session — the only ones whose server token is worth keeping fresh.</summary>
     Task<IReadOnlyList<SyncedCharacter>> ListSyncedWithSessionsAsync(CancellationToken cancellationToken = default);
     /// <summary>

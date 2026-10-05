@@ -97,6 +97,13 @@ internal sealed class ServerAuthRepository(IDbContextFactory<SharedDbContext> co
         return await db.Set<SyncedCharacter>().AsNoTracking().OrderBy(c => c.CharacterName).ToListAsync(cancellationToken);
     }
 
+    public async Task<SyncedCharacter?> FindSyncedAsync(int esiCharacterId, CancellationToken cancellationToken = default)
+    {
+        await using var db = await contextFactory.CreateDbContextAsync(cancellationToken);
+        return await db.Set<SyncedCharacter>().AsNoTracking()
+            .FirstOrDefaultAsync(c => c.EsiCharacterId == esiCharacterId, cancellationToken);
+    }
+
     public async Task<IReadOnlyList<SyncedCharacter>> ListSyncedWithSessionsAsync(CancellationToken cancellationToken = default)
     {
         await using var db = await contextFactory.CreateDbContextAsync(cancellationToken);

@@ -115,7 +115,7 @@ public sealed class ServerTokenRefreshReleasedCharacterTests : IDisposable
 
     private ServerTokenRefreshService _NewService(IEsiAuthClient authClient, IEsiJwtValidator? validator = null) =>
         new(_services.GetRequiredService<IServiceScopeFactory>(), authClient, validator ?? new FixedJwtValidator(),
-            new EsiOptions { ClientId = "app", ClientSecret = "secret" }, TimeProvider.System,
+            new EsiOptions { ClientId = "app", ClientSecret = "secret" }, new ServerTokenRefreshGate(), TimeProvider.System,
             NullLogger<ServerTokenRefreshService>.Instance);
 
     private async Task<SyncedCharacter> _SeedAsync(bool withSession, CancellationToken ct)
