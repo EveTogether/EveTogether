@@ -222,6 +222,8 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     public RunTypeDefinition RunType => RunTypeCatalogue.For(Kind, SignatureGroup, _runSiteTypeId ?? _SiteTypeId(),
         _services.GetService<ISdeAccessor>(), SignatureName);
 
+    public int RunSiteTypeId => _runSiteTypeId ?? _SiteTypeId();
+
     /// <summary>The sections the run's type has, in the order <see cref="RunSectionModules"/> gives them — what the
     /// window draws under its clock.</summary>
     public ObservableCollection<RunWindowSection> Sections { get; } = [];

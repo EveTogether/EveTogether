@@ -70,6 +70,11 @@ public interface IRunWindowContext : INotifyPropertyChanged
 
     IReadOnlyList<SdeSite> MatchedSites { get; }
 
+    /// <summary>The run's own catalogue site, stored or matched — 0 while none is known. Unlike
+    /// <see cref="MatchedSites"/> it survives adopting a run, so a window on an escalation run started from its source
+    /// (ET-451) still knows which site it is flying.</summary>
+    int RunSiteTypeId { get; }
+
     // ── Where ──────────────────────────────────────────────────────────────────────────────────────
 
     string? SolarSystem { get; }

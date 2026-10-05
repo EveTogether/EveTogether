@@ -242,7 +242,8 @@ public sealed partial class ActivityWindowSectionViewModel : RunWindowSection
             || Context.Services.GetService<ISdeAccessor>() is not { } sde)
             return;
 
-        var dialog = new EscalationDialogViewModel(sde, Context.MatchedSites, await _EscalationHistoryAsync());
+        IReadOnlyList<SdeSite> sourceSites = _SourceSites(sde);
+        var dialog = new EscalationDialogViewModel(sde, sourceSites, await _EscalationHistoryAsync(sourceSites));
         if (!await dialogs.ShowEscalationDialogAsync(dialog) || dialog.Result is not { } result)
             return;
 
@@ -268,9 +269,16 @@ public sealed partial class ActivityWindowSectionViewModel : RunWindowSection
 
     /// <summary>The escalations registered before from this run's own catalogue site, for the dialog to rank first —
     /// none while the site matched nothing or matched more than one site.</summary>
-    private async Task<IReadOnlyList<int>> _EscalationHistoryAsync()
+    /// <summary>This run's own site in the catalogue: the live match, or — once a run is adopted and the match is
+    /// cleared, as for an escalation run started from its source — the site the run itself stored.</summary>
+    private IReadOnlyList<SdeSite> _SourceSites(ISdeAccessor sde) =>
+        Context.MatchedSites.Count > 0 || Context.RunSiteTypeId <= 0
+            ? Context.MatchedSites
+            : [.. sde.SearchSites().Where(site => site.DungeonId == Context.RunSiteTypeId)];
+
+    private async Task<IReadOnlyList<int>> _EscalationHistoryAsync(IReadOnlyList<SdeSite> sourceSites)
     {
-        if (SdeSiteCanonicalization.Canonicalize(Context.MatchedSites) is not [{ DungeonId: var sourceDungeonId }])
+        if (SdeSiteCanonicalization.Canonicalize(sourceSites) is not [{ DungeonId: var sourceDungeonId }])
             return [];
 
         using var scope = Context.Services.CreateScope();
