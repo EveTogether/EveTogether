@@ -9,6 +9,7 @@ public static class LocalApiDocs
     public const string IndexResource = "localapi.index.html";
     public const string DocsResource = "localapi.docs.html";
     public const string WidgetResource = "localapi.widget.html";
+    public const string WidgetPageResource = "localapi.widget-page.html";
 
     public static string Render(string logicalName, string baseUrl)
     {

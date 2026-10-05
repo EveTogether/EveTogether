@@ -77,8 +77,14 @@ const metrics = await res.json();
     <tr><td><code>GET /api/v1/compositions</code></td><td>Your doctrine/composition library (local + each coupled server).</td></tr>
     <tr><td><code>GET /api/v1/compositions/{id}</code></td><td>One composition's roles + fit-entries. Add <code>?server=&lt;address&gt;</code> for a server composition (omit for the local library).</td></tr>
     <tr><td><code>GET /api/v1/types/{id}</code></td><td>Resolve a type id to its name, group and a public icon URL — so a widget can show ship/module names + icons without its own SDE.</td></tr>
+    <tr><td><code>GET /api/v1/widgets</code></td><td>The built-in widget presets (fixed ids such as <code>live-dps</code>, read-only) and your saved widgets, each with its config, the URL to load in OBS and its width × height.</td></tr>
+    <tr><td><code>POST /api/v1/widgets</code></td><td>Save a widget config as a new widget. Customizing a preset always makes such a copy under a new id.</td></tr>
+    <tr><td><code>PUT</code> / <code>DELETE /api/v1/widgets/{id}</code></td><td>Change or delete a saved widget. Presets answer <code>409</code> with <code>PRESET_READ_ONLY</code>.</td></tr>
     <tr><td><code>GET /api/v1/killmails/latest</code></td><td>Your newest kills and losses, newest first. <code>?kind=all|kills|losses</code> (default all), <code>?limit=1-25</code> (default 1). Each row: kill/loss, ship, ISK, attacker count, time, linked run, final blow, and the ESI-resolved (cached) names of victim and corporation. The solar system is only filled in when "Include my location" is on.</td></tr>
   </table>
+  <div class="note">Every widget has its own page at <code>{{BASE_URL}}/w/&lt;id&gt;</code>: transparent, pinned top-left, made
+     for an OBS browser source. OBS cannot send headers, so with an API key set the URL carries it as <code>?key=…</code> —
+     keep that URL off stream.</div>
   <div class="note">Live per-member fleet <em>metrics</em> are a streamed signal, not a readable snapshot — they arrive over the WebSocket stream (M3), not as a REST endpoint.</div>
   <p>The full, interactive reference — request/response schemas and a live "try it" — is the
      <a href="/scalar">Scalar API reference</a>, generated from <a href="/openapi/v1.json">/openapi/v1.json</a>.</p>
@@ -92,6 +98,7 @@ const metrics = await res.json();
 { "type": "metrics",       "data": [ /* your running toon(s), every second — always, fleet or not */ ],            "ts": ... }
 { "type": "fleet.metrics", "data": { "characterId":…, "fleetId":…, "kind":"Dps", "value":…, "unixMs":… },           "ts": ... }
 { "type": "fleet.changed", "data": { "fleetId":…, "kind":"…", "serverAddress":… },                                  "ts": ... }
+{ "type": "widget.config", "data": { "id":"…", "change":"created|updated|deleted", "config": { /* or null */ } },  "ts": ... }
 { "type": "killmail.added", "data": { /* one row of /killmails/latest */ },                                       "ts": ... }</code></pre>
   <h3>Combat metrics</h3>
   <p>Each row of <code>metrics</code> (and of <code>GET /api/v1/metrics</code>) carries, per second:</p>
@@ -131,6 +138,7 @@ conn.on("snapshot",      (s)    => { /* { metrics:[…], fleet:…, history:[…
 conn.on("metrics",       (rows) => { /* your toon(s), every second */ });
 conn.on("fleet.metrics", (s)    => { /* one sample per member, in a fleet */ });
 conn.on("fleet.changed", (c)    => { /* roster/state change, in a fleet */ });
+conn.on("widget.config", (w)    => { /* a saved widget was created, changed or deleted */ });
 await conn.start();</code></pre>
   <div class="note">WebSocket (the section above) covers the browser/OBS case on its own with no dependency; SignalR is for
      richer .NET/JS clients that want auto-reconnect and a typed client library.</div>
