@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Headless.XUnit;
@@ -9,6 +10,8 @@ using EveUtils.Client.ViewModels;
 using EveUtils.Shared.App;
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Messaging;
+using EveUtils.Shared.Modules.Sde.Dtos;
+using EveUtils.Shared.Modules.Sde.Import;
 using EveUtils.Shared.Modules.Settings.Commands;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -27,23 +30,26 @@ public class UpdateFlowTests
         TestClientInstance Instance,
         MainWindowViewModel ViewModel,
         FakeUpdateService Updates,
+        FakeSdeImporter Sde,
         RecordingToastService Toasts,
         RecordingDialogService Dialogs);
 
     private static Harness Build()
     {
         var updates = new FakeUpdateService();
+        var sde = new FakeSdeImporter();
         var toasts = new RecordingToastService();
         var dialogs = new RecordingDialogService();
 
         var instance = TestClientInstance.Create(services =>
         {
             services.AddSingleton<IUpdateService>(updates);
+            services.AddSingleton<ISdeImporter>(sde);
             services.AddSingleton<IToastService>(toasts);
             services.AddSingleton<IDialogService>(dialogs);
         });
 
-        return new Harness(instance, new MainWindowViewModel(instance.Services), updates, toasts, dialogs);
+        return new Harness(instance, new MainWindowViewModel(instance.Services), updates, sde, toasts, dialogs);
     }
 
     private static async Task<string?> RunStartupCheckAsync(Harness harness)
@@ -167,6 +173,59 @@ public class UpdateFlowTests
 
         Assert.DoesNotContain("failed", harness.ViewModel.ActivityStatus ?? "");
         Assert.Single(harness.Toasts.ActionToasts);
+    }
+
+    // ET-431: the SDE rides the same timer; one toast per build, and a failing check says nothing.
+    [AvaloniaFact]
+    public async Task Recheck_OffersASdeBuildOnce_AndStaysSilentWhenItFails()
+    {
+        var harness = Build();
+        using var instance = harness.Instance;
+        harness.Sde.OnCheck = () => Task.FromResult(new SdeUpdateCheck(true, Sde(100), Sde(200)));
+
+        _ = harness.ViewModel.RunUpdateChecksAsync(TimeSpan.FromMilliseconds(20));
+        for (var attempt = 0; attempt < 200 && harness.Sde.Checks < 3; attempt++)
+            await Task.Delay(10);
+
+        Assert.True(harness.Sde.Checks >= 3, "the SDE recheck never ran");
+        var offer = Assert.Single(harness.Toasts.ActionToasts);
+        Assert.Equal(["Later", "Update"], offer.Actions.Select(action => action.Label));
+        Assert.Empty(harness.Dialogs.ConfirmPrompts);
+
+        harness.Sde.OnCheck = () => throw new InvalidOperationException("offline");
+        var checksBefore = harness.Sde.Checks;
+        for (var attempt = 0; attempt < 200 && harness.Sde.Checks == checksBefore; attempt++)
+            await Task.Delay(10);
+
+        Assert.DoesNotContain("failed", harness.ViewModel.ActivityStatus ?? "");
+        Assert.Single(harness.Toasts.ActionToasts);
+
+        harness.Sde.OnCheck = () => Task.FromResult(new SdeUpdateCheck(true, Sde(100), Sde(300)));
+        for (var attempt = 0; attempt < 200 && harness.Toasts.ActionToasts.Count < 2; attempt++)
+            await Task.Delay(10);
+
+        Assert.Equal(2, harness.Toasts.ActionToasts.Count);
+    }
+
+    private static SdeVersion Sde(long build) => new(build, DateTimeOffset.UnixEpoch);
+
+    private sealed class FakeSdeImporter : ISdeImporter
+    {
+        public Func<Task<SdeUpdateCheck>> OnCheck { get; set; } = () => Task.FromResult(new SdeUpdateCheck(false, null, new SdeVersion(1, DateTimeOffset.UnixEpoch)));
+
+        public int Checks { get; private set; }
+
+        public Task<SdeUpdateCheck> CheckForUpdateAsync(CancellationToken cancellationToken = default)
+        {
+            Checks++;
+            return OnCheck();
+        }
+
+        public Task<SdeImportResult> EnsureUpToDateAsync(IProgress<SdeImportProgress>? progress = null, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<SdeImportResult> ImportAsync(IProgress<SdeImportProgress>? progress = null, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
     }
 
     // ET-339: nobody has to restart to have a channel switch reach the next check — the setting is read fresh
