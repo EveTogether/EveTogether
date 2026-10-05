@@ -20,6 +20,7 @@ public sealed class ServerTokenRefreshService(
     IEsiAuthClient authClient,
     IEsiJwtValidator jwtValidator,
     EsiOptions esiOptions,
+    ServerTokenRefreshGate refreshGate,
     TimeProvider time,
     ILogger<ServerTokenRefreshService> logger) : BackgroundService
 {
@@ -59,11 +60,17 @@ public sealed class ServerTokenRefreshService(
         // A character without a session has nobody left to serve; keeping its token fresh is what kept a decoupled
         // player's grant alive on the server (ET-344).
         var synced = await repository.ListSyncedWithSessionsAsync(cancellationToken);
-        foreach (var character in synced)
+        foreach (var listed in synced)
         {
-            if (IsDevSeed(character, protector)) continue;
-            if (ShouldRefresh(character))
-                await TryRefreshAsync(character, repository, protector, releaser, cancellationToken);
+            if (IsDevSeed(listed, protector) || !ShouldRefresh(listed)) continue;
+
+            using (await refreshGate.EnterAsync(listed.EsiCharacterId, cancellationToken))
+            {
+                // Read again inside the gate: an ESI call may have rotated the refresh token since the list was taken,
+                // and the listed one is spent by then (ET-448).
+                if (await repository.FindSyncedAsync(listed.EsiCharacterId, cancellationToken) is { } character)
+                    await TryRefreshAsync(character, repository, protector, releaser, cancellationToken);
+            }
         }
     }
 

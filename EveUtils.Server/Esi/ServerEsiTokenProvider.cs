@@ -19,6 +19,7 @@ public sealed class ServerEsiTokenProvider(
     IServiceScopeFactory scopeFactory,
     IEsiAuthClient authClient,
     EsiOptions esiOptions,
+    ServerTokenRefreshGate refreshGate,
     ILogger<ServerEsiTokenProvider> logger) : IEsiTokenProvider, ISingletonService
 {
     private static readonly TimeSpan RefreshSkew = TimeSpan.FromMinutes(1);
@@ -34,8 +35,7 @@ public sealed class ServerEsiTokenProvider(
         var repository = scope.ServiceProvider.GetRequiredService<IServerAuthRepository>();
         var protector = scope.ServiceProvider.GetRequiredService<ITokenProtector>();
 
-        var synced = (await repository.ListSyncedAsync(cancellationToken))
-            .FirstOrDefault(c => c.EsiCharacterId == characterId);
+        var synced = await repository.FindSyncedAsync(characterId, cancellationToken);
         if (synced is null)
             return EsiAuthorization.AuthRequired;
 
@@ -43,26 +43,35 @@ public sealed class ServerEsiTokenProvider(
             if (!synced.GrantedScopes.Contains(requiredScope, StringComparer.OrdinalIgnoreCase))
                 return EsiAuthorization.ScopeMissing(requiredScope);
 
-        if (_accessCache.TryGetValue(characterId, out var cached) &&
-            cached.ExpiresAt - DateTimeOffset.UtcNow > RefreshSkew)
-            return EsiAuthorization.Authorized(cached.AccessToken);
+        if (_CachedAccessToken(characterId) is { } cached)
+            return EsiAuthorization.Authorized(cached);
+
+        using var held = await refreshGate.EnterAsync(characterId, cancellationToken);
+        // Single flight: a caller that waited here usually finds the token the one before it just minted.
+        if (_CachedAccessToken(characterId) is { } minted)
+            return EsiAuthorization.Authorized(minted);
 
         try
         {
+            // Read again inside the gate: the background refresh may have rotated the refresh token meanwhile (ET-448).
+            var current = await repository.FindSyncedAsync(characterId, cancellationToken);
+            if (current is null)
+                return EsiAuthorization.AuthRequired;
+
             var refreshToken = protector.Unprotect(
-                new EncryptedToken(synced.RefreshTokenCipher, synced.RefreshTokenNonce, synced.RefreshTokenTag));
+                new EncryptedToken(current.RefreshTokenCipher, current.RefreshTokenNonce, current.RefreshTokenTag));
 
             var tokens = await authClient
                 .RefreshAsync(refreshToken, esiOptions.ClientId, esiOptions.ClientSecret, cancellationToken);
 
+            // Persist the rotated refresh token so the next mint survives a restart. An update, not an upsert: a
+            // character released while this was in flight must not come back.
+            var latestRefreshToken = tokens.RefreshToken ?? refreshToken;
+            if (latestRefreshToken != refreshToken
+                && !await repository.UpdateSyncedRefreshTokenAsync(characterId, protector.Protect(latestRefreshToken), cancellationToken))
+                return EsiAuthorization.AuthRequired;
+
             _accessCache[characterId] = tokens;
-
-            // Persist the rotated refresh token so the next mint survives a restart.
-            if (!string.IsNullOrEmpty(tokens.RefreshToken))
-                await repository.UpsertSyncedAsync(
-                    synced.EsiCharacterId, synced.CharacterName, protector.Protect(tokens.RefreshToken),
-                    synced.GrantedScopes, cancellationToken);
-
             return EsiAuthorization.Authorized(tokens.AccessToken);
         }
         catch (Exception ex)
@@ -71,4 +80,9 @@ public sealed class ServerEsiTokenProvider(
             return EsiAuthorization.AuthRequired;
         }
     }
+
+    private string? _CachedAccessToken(int characterId) =>
+        _accessCache.TryGetValue(characterId, out var cached) && cached.ExpiresAt - DateTimeOffset.UtcNow > RefreshSkew
+            ? cached.AccessToken
+            : null;
 }

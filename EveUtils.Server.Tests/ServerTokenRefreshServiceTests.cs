@@ -173,6 +173,7 @@ public sealed class ServerTokenRefreshServiceTests
                 authClient,
                 new UnusedJwtValidator(),
                 new EsiOptions(),
+                new ServerTokenRefreshGate(),
                 time,
                 logger);
             return new TokenRefreshHarness(services, factory, service, time, authClient, logger);
