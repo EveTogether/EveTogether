@@ -1,0 +1,34 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vw="using:EveUtils.Client.ViewModels.Widgets"
+             x:Class="EveUtils.Client.Views.Widgets.WidgetPreview"
+             x:DataType="vw:WidgetPreviewModel">
+
+    <!-- Draws what widget-page.html draws for this config (the placeholder until the presets fill in), so the preview
+         in the manager is what OBS shows: the name in the accent, the field keys, theme, background and scale. -->
+    <LayoutTransformControl HorizontalAlignment="Left" VerticalAlignment="Top">
+        <LayoutTransformControl.LayoutTransform>
+            <ScaleTransform ScaleX="{Binding Scale}" ScaleY="{Binding Scale}"/>
+        </LayoutTransformControl.LayoutTransform>
+        <Border Background="{Binding Background}" BorderBrush="{Binding Accent}" BorderThickness="{Binding Edge}"
+                CornerRadius="{Binding Corner}" Padding="14,10">
+            <StackPanel Orientation="{Binding Orientation}" Spacing="6">
+                <TextBlock Text="{Binding Name}" Foreground="{Binding Accent}" FontWeight="SemiBold" FontSize="15"
+                           VerticalAlignment="Center"/>
+                <ItemsControl ItemsSource="{Binding Fields}" VerticalAlignment="Center">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate><WrapPanel MaxWidth="460"/></ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="x:String">
+                            <StackPanel Orientation="Horizontal" Spacing="4" Margin="0,0,12,2">
+                                <TextBlock Text="{Binding}" Foreground="#8B949E" FontSize="15"/>
+                                <TextBlock Text="—" Foreground="#E6EDF3" FontSize="15"/>
+                            </StackPanel>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </Border>
+    </LayoutTransformControl>
+</UserControl>

@@ -261,7 +261,7 @@
                             </StackPanel>
                             <Button x:Name="LocalApiStartStopButton" Content="Start" Click="OnToggleLocalApi" Margin="0,0,6,6"/>
                             <Button x:Name="LocalApiDocsButton" Content="API docs" Click="OnOpenApiDocs" Margin="0,0,6,6" IsEnabled="False"/>
-                            <Button x:Name="LocalApiWidgetButton" Content="Widget" Click="OnOpenWidget" Margin="0,0,0,6" IsEnabled="False"/>
+                            <Button x:Name="WidgetManagerButton" Content="Open widget manager…" Click="OnOpenWidgetManager" Margin="0,0,0,6"/>
                         </WrapPanel>
                         <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                             <Ellipse x:Name="LocalApiStatusDot" Width="9" Height="9" Fill="#6B7280"/>

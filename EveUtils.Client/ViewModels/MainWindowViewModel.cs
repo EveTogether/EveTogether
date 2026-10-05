@@ -373,6 +373,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
             case "esi": OpenEsiMetrics(); break;
             case "settings-sync": OpenSettingsSync(); break;
             case "appraisal": OpenAppraisal(); break;
+            case "widgets": OpenWidgetManager(); break;
             case "runs": await OpenRunsAsync(); break;
             case "runs-start": await OpenManualRunStartAsync(); break;
             case "killmails": await OpenKillmailsAsync(); break;
@@ -769,6 +770,15 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
             _services.GetRequiredService<EveClientPresenceService>(),
             _services.GetRequiredService<IEveSettingsWatch>(),
             _dialogs));
+    }
+
+    /// <summary>Opens the widget manager (ET-434), from Settings › Integrations and the home's Local API status. A fresh
+    /// view-model per open so it reads the API key and "Include my location" as they are now.</summary>
+    private void OpenWidgetManager()
+    {
+        if (_dialogs is null || _services is null)
+            return;
+        _dialogs.ShowWidgetManager(new ViewModels.Widgets.WidgetManagerViewModel(_services, _dialogs));
     }
 
     /// <summary>Opens the Appraisal tool (ET-83) — non-modal, like the other modules. A fresh view-model per open so
@@ -1417,7 +1427,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
             loadImages, _theme?.Current ?? FactionTheme.Gallente, SdeVersionLabel(), ApplySettingsAsync, openDetailAfterImport, toastPosition,
             localApiEnabled, localApiPort, localApiStatusLabel, localApi, checkUpdatesOnStartup, _clipboardWatch, initialCategory, openFleetRunWindow,
             autoPublishFleetRuns, shares.IsShared(MetricKind.Loot), shares.IsShared(MetricKind.MiningYield), autoStartMissions, autoStartSites,
-            _weekStart?.FirstDay ?? Calendar.WeekStartService.SystemDefault(), includeNightlyBuilds, _services.GetService<IUpdateService>(), offerHomefrontRuns, RunSetupAgainAsync, includeLocationInLocalApi);
+            _weekStart?.FirstDay ?? Calendar.WeekStartService.SystemDefault(), includeNightlyBuilds, _services.GetService<IUpdateService>(), offerHomefrontRuns, RunSetupAgainAsync, includeLocationInLocalApi, OpenWidgetManager);
     }
 
     /// <summary>Opens the About dialog: app identity + version, creator credits with portraits,

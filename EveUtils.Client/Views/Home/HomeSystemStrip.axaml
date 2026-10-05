@@ -28,6 +28,8 @@
             <Ellipse Classes="dot" Classes.up="{Binding IsLocalApiRunning}"/>
             <TextBlock Text="Local API"/>
             <TextBlock Classes="value" Text="{Binding LocalApiText}"/>
+            <Button x:Name="WidgetManagerLink" Classes="rowlink" FontSize="10.5" VerticalAlignment="Center"
+                    Content="Widgets…" Command="{Binding OpenWidgetManagerCommand}" ToolTip.Tip="Open the widget manager"/>
         </StackPanel>
         <StackPanel Classes="strip">
             <Ellipse Classes="dot up"/>
