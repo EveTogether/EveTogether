@@ -9,7 +9,7 @@ namespace EveUtils.Shared.Modules.Market.Services.Implementations;
 /// same query the Settings screen and <c>ClipboardWatchService</c> already use, rather than taking the setting
 /// repository directly — the read is the whole of what this needs from Settings.</summary>
 public sealed class AppraisalProviderSelector(IEnumerable<IAppraisalProvider> providers, IDispatcher dispatcher)
-    : IAppraisalProviderSelector, ISingletonService
+    : IAppraisalProviderSelector, IScopedService
 {
     /// <summary>Settings key for the chosen provider's <see cref="IAppraisalProvider.Id"/>. Absent = the default.</summary>
     public const string SettingKey = "appraisal.provider";
