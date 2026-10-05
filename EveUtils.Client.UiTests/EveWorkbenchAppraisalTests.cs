@@ -45,11 +45,13 @@ public sealed class EveWorkbenchAppraisalTests
             [new AppraisalLine(34, "Tritanium", 1000), new AppraisalLine(35, "Pyerite", 500)], cancellationToken);
 
         Assert.True(result.IsSuccess);
-        HttpRequestMessage request = Assert.NotNull(sent);
-        Assert.Equal("a-personal-access-token", request.Headers.GetValues("Character-Access-Token").Single());
-        AppraisalOutcome outcome = Assert.NotNull(result.Value);
+        Assert.NotNull(sent);
+        Assert.Equal("a-personal-access-token", sent.Headers.GetValues("Character-Access-Token").Single());
+        var outcome = result.Value;
+        Assert.NotNull(outcome);
         var tritanium = Assert.Single(outcome.Rows);
-        var price = Assert.NotNull(tritanium.Price);
+        var price = tritanium.Price;
+        Assert.NotNull(price);
         Assert.Equal(5.0, price.Estimate);
         Assert.Equal(5.0, price.Sell);
         Assert.Equal(4.5, price.Buy);
