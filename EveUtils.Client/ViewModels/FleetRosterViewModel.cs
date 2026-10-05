@@ -1475,15 +1475,22 @@ public sealed partial class FleetRosterViewModel : ObservableObject, IDisposable
             .OfType<int>()
             .ToHashSet();
 
+        // The same presence the tree shows, read fresh rather than from the last sweep.
+        _RefreshPresence(DateTimeOffset.UtcNow);
         var rows = members
-            .Select(m => new FleetStartMember(
-                m.CharacterId,
-                NameFor(m.CharacterId),
-                mine.Contains(m.CharacterId),
-                m.CharacterId == _fleet.CreatorCharacterId,
-                m.IsExternal,
-                m.IsExternal ? null : elsewhere.GetValueOrDefault(m.CharacterId),
-                m.Availability == FleetMemberAvailability.SignedOff))
+            .Select(m => (Member: m, Node: _nodesByCharacter.GetValueOrDefault(m.CharacterId)?.FirstOrDefault()))
+            .Select(entry => new FleetStartMember(
+                entry.Member.CharacterId,
+                NameFor(entry.Member.CharacterId),
+                mine.Contains(entry.Member.CharacterId),
+                entry.Member.CharacterId == _fleet.CreatorCharacterId,
+                entry.Member.IsExternal,
+                entry.Member.IsExternal ? null : elsewhere.GetValueOrDefault(entry.Member.CharacterId),
+                entry.Member.Availability == FleetMemberAvailability.SignedOff,
+                entry.Node?.Presence ?? FleetMemberPresenceState.Unknown,
+                entry.Node?.StatusText,
+                entry.Node?.PresenceTooltip,
+                entry.Member.IsConnected))
             .ToList();
 
         // A client-only fleet's roster is the owner's own pilots and externals: nobody there has an inbox to ask.

@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using EveUtils.Shared.Modules.Fleet.Metrics;
 
 namespace EveUtils.Client.Dialogs;
 
@@ -11,6 +12,11 @@ namespace EveUtils.Client.Dialogs;
 /// Present means "elsewhere active" — never "offline", which in this app means not logged in and nothing else.</param>
 /// <param name="IsSignedOff">Signed off this fleet's next start (ET-169) — stays on the roster, but is skipped
 /// on start exactly like an external is, and for the same dialog reason: starting cannot do anything for them.</param>
+/// <param name="Presence">Whether the pilot is in game, as the Fleets screen reads it (ET-444).</param>
+/// <param name="StatusText">The Fleets screen's word for a fleet mate ("no link", "app closed"); null for an own
+/// character, which <paramref name="Presence"/> answers alone.</param>
+/// <param name="StatusTooltip">The full reason behind <paramref name="StatusText"/>.</param>
+/// <param name="IsConnected">The server's word on whether the pilot has a connection; null when it cannot say.</param>
 public sealed record FleetStartMember(
     int CharacterId,
     string Name,
@@ -18,9 +24,26 @@ public sealed record FleetStartMember(
     bool IsCommander,
     bool IsExternal,
     string? ElsewhereFleetName,
-    bool IsSignedOff = false)
+    bool IsSignedOff = false,
+    FleetMemberPresenceState Presence = FleetMemberPresenceState.Unknown,
+    string? StatusText = null,
+    string? StatusTooltip = null,
+    bool? IsConnected = null)
 {
     public bool IsElsewhereActive => !string.IsNullOrEmpty(ElsewhereFleetName);
+
+    public bool IsOnline => Presence is FleetMemberPresenceState.Online;
+
+    /// <summary>In game and not cut off from the server, the Fleets screen's "ready".</summary>
+    public bool IsReady => !IsExternal && IsOnline && IsConnected is not false;
+
+    /// <summary>The presence chip's word, the same as on the Fleets screen.</summary>
+    public string StatusWord => StatusText ?? Presence switch
+    {
+        FleetMemberPresenceState.Online => "online",
+        FleetMemberPresenceState.Offline => "not in game",
+        _ => "unknown",
+    };
 
     /// <summary>The tail of the roster line: what starting will do for this pilot, and — when it will do nothing —
     /// why. Whose pilot it is comes first, because that is what decides whether the answer is "switch them" or
@@ -78,11 +101,21 @@ public sealed record FleetStartPrompt(
     public IReadOnlyList<FleetStartMember> ActiveElsewhere { get; } =
         Members.Where(m => m.IsElsewhereActive).ToList();
 
-    /// <summary>Pilots with a client of their own: the ones a start can link. An external is on the roster on trust
+    /// <summary>Pilots with EVE Together of their own, connected or not: the ones a start can link. An external is on the roster on trust
     /// and shares nothing either way, so counting them as "available" would overstate what starting achieves.</summary>
     public int AvailableCount { get; } = Members.Count(m => !m.IsExternal);
 
     public int ExternalCount { get; } = Members.Count(m => m.IsExternal);
+
+    /// <summary>Pilots in game and connected (ET-444), out of <see cref="AvailableCount"/>.</summary>
+    public int ReadyCount { get; } = Members.Count(m => m.IsReady);
+
+    /// <summary>Why the rest are not ready, one entry per word with its count, most common first: "1 no link".</summary>
+    public IReadOnlyList<string> NotReady { get; } = [.. Members
+        .Where(m => !m.IsExternal && !m.IsReady)
+        .GroupBy(m => m.StatusWord)
+        .OrderByDescending(group => group.Count())
+        .Select(group => $"{group.Count()} {group.Key}")];
     public int MineCount { get; } = Members.Count(m => m.IsMine);
     public int RosterCount => Members.Count;
 

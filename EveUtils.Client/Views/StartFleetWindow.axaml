@@ -143,12 +143,19 @@
                         <ItemsControl.ItemTemplate>
                             <DataTemplate x:DataType="dlg:FleetStartMember">
                                 <Border Classes="charopt" Classes.busy="{Binding IsElsewhereActive}" Margin="0,0,0,5">
-                                    <Grid ColumnDefinitions="Auto,Auto,Auto,Auto,*" ColumnSpacing="7">
-                                        <TextBlock Grid.Column="0" Classes="charname" Text="{Binding Name}"/>
-                                        <Border Grid.Column="1" Classes="chip ok" IsVisible="{Binding IsCommander}"><TextBlock Text="FC"/></Border>
-                                        <Border Grid.Column="2" Classes="chip dim" IsVisible="{Binding IsMine}"><TextBlock Text="yours"/></Border>
-                                        <Border Grid.Column="3" Classes="chip warn" IsVisible="{Binding IsElsewhereActive}"><TextBlock Text="ELSEWHERE ACTIVE"/></Border>
-                                        <TextBlock Grid.Column="4" Classes="charstate" Classes.warn="{Binding IsElsewhereActive}"
+                                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="7">
+                                        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="7">
+                                            <TextBlock Classes="charname" Text="{Binding Name}"/>
+                                            <Border Classes="chip ok" IsVisible="{Binding IsCommander}"><TextBlock Text="FC"/></Border>
+                                            <Border Classes="chip dim" IsVisible="{Binding IsMine}"><TextBlock Text="yours"/></Border>
+                                            <!-- The Fleets screen's presence chip (ET-444): who is ready for the start. -->
+                                            <Border Classes="chip" Classes.good="{Binding IsOnline}" Classes.dim="{Binding !IsOnline}"
+                                                    IsVisible="{Binding !IsExternal}" ToolTip.Tip="{Binding StatusTooltip}">
+                                                <TextBlock Text="{Binding StatusWord}"/>
+                                            </Border>
+                                            <Border Classes="chip warn" IsVisible="{Binding IsElsewhereActive}"><TextBlock Text="ELSEWHERE ACTIVE"/></Border>
+                                        </StackPanel>
+                                        <TextBlock Grid.Column="1" Classes="charstate" Classes.warn="{Binding IsElsewhereActive}"
                                                    Text="{Binding StateText}"/>
                                     </Grid>
                                 </Border>
