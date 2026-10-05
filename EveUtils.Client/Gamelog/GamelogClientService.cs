@@ -490,14 +490,6 @@ public sealed class GamelogClientService : IFleetMetricSource, ISingletonService
     private static bool IsActiveServerParticipant(IReadOnlyList<FleetParticipant> participation, int characterId) =>
         participation.Any(p => p.CharacterId == characterId && !p.ClientOnly);
 
-    /// <summary>Samples + publishes the local default character — kept for timer-driven decay callers.</summary>
-    public Task PublishSampleAsync(CancellationToken cancellationToken = default) =>
-        PublishSampleAsync(_localCharacter, cancellationToken);
-
-    /// <summary>Samples one character's tracker against "now" and publishes it (decaying graph).</summary>
-    public Task PublishSampleAsync(string characterName, CancellationToken cancellationToken = default)
-        => PublishSampleAsync(characterName, EventTarget.Both, cancellationToken);
-
     /// <summary>Sample + publish to a specific target. <c>AddHitAsync</c> publishes the local leg
     /// synchronously (bus/UI) and offloads the remote leg, so the slow per-server send never throttles the feed.</summary>
     public Task PublishSampleAsync(string characterName, EventTarget target, CancellationToken cancellationToken = default)
