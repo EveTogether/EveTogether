@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Avalonia.Headless.XUnit;
+using EveUtils.Client.Runs;
 using EveUtils.Client.ViewModels.Runs;
 using EveUtils.Shared.Data;
 using EveUtils.Shared.Messaging;
@@ -180,7 +181,7 @@ public sealed class KillmailRunLinkTests
 
         ActivityOverviewRowDto row = Assert.Single(await _RowsAsync(dispatcher));
         Result<ActivityDetailDto> detail = await dispatcher.Query(new GetActivityDetailQuery(row.ActivitySummaryId), Ct);
-        decimal day = RunsActivitySummaryText.SourcesFor(
+        decimal day = RunTotals.Sources(
             [new ActivityOverviewRowViewModel(row, id => $"character {id}", _ => Task.CompletedTask, _ => Task.CompletedTask)]).Total;
         // 1,000 × 1,000 loot + 500,000 bounty − 2 × 100,000 filament − (300,000 + 3 × 10,000) lost
         Assert.Equal((970_000m, 970_000m, 970_000m), (row.Isk.Total, detail.Value?.Isk.Total, day));

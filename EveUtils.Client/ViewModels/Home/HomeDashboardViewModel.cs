@@ -109,7 +109,7 @@ public sealed partial class HomeDashboardViewModel : ObservableObject, IRefresha
         Fleets = new HomeFleetsViewModel(services, navigation, _faces);
         Fits = new HomeFitsViewModel(services, navigation, fitLibrary);
         Activity = new HomeActivityViewModel(inbox, navigation);
-        SystemStrip = new HomeSystemStripViewModel(services);
+        SystemStrip = new HomeSystemStripViewModel(services, () => navigation.LaunchModule("widgets"));
         Attention = new HomeAttentionViewModel(Pilots, _busConnector, _serverRegistry, navigation);
         if (_dispatcher is not null && services.GetService<IDialogService>() is { } dialogs)
         {

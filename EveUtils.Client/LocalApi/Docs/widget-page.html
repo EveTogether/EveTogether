@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>EVE Together widget</title>
+<link rel="icon" href="data:,"/>
+<style>
+  /* Loaded by an OBS browser source: transparent, pinned top-left, nothing on screen but the widget itself.
+     Colours are plain rgba (no color-mix): older OBS builds ship an older Chromium. */
+  html, body { margin:0; background:transparent; overflow:hidden; }
+  #widget { display:inline-flex; flex-direction:column; align-items:flex-start; gap:8px;
+    --wa:#4F9BD9; --wa-b:#8FC6F0; --wa-55:rgba(79,155,217,.55); --wa-35:rgba(79,155,217,.35); --wa-18:rgba(79,155,217,.18);
+    --wop:.82; --mono:Consolas,"Cascadia Mono",monospace; }
+  #widget[hidden] { display:none; }
+
+  .w { box-sizing:border-box; position:relative; color:#F3ECE0; font:12px/1.35 "Segoe UI",Inter,system-ui,sans-serif;
+    font-variant-numeric:tabular-nums; background:rgba(12,16,14,var(--wop)); }
+  .w.t-together { border:1px solid var(--wa-55); }
+  .w.t-together .wh { display:flex; align-items:center; gap:6px; padding:5px 10px; border-bottom:1px solid var(--wa-35);
+    background:linear-gradient(var(--wa-18), transparent); font-size:10px; letter-spacing:2px; }
+  .w.t-together .wh i { font-style:normal; color:var(--wa); font-size:8px; }
+  .w.t-together .wh .r { margin-left:auto; font:10px var(--mono); letter-spacing:1px; color:var(--wa-b); }
+  .w.t-minimal { text-shadow:0 1px 2px #000, 0 0 6px rgba(0,0,0,.8); }
+  .w.t-minimal .wh { font-size:10px; letter-spacing:2px; color:var(--wa-b); padding:6px 10px 0; }
+  .w.t-minimal .wh i, .w.t-minimal .wh .r { display:none; }
+  .w.t-ticker { display:flex; align-items:stretch; height:40px; border-top:2px solid var(--wa); white-space:nowrap; }
+  .w.t-ticker .wh { display:flex; align-items:center; padding:0 12px; background:var(--wa); color:#06070A; font-weight:700;
+    font-size:11px; letter-spacing:1.6px; }
+  .w.t-ticker .wh i, .w.t-ticker .wh .r { display:none; }
+  .w.t-ticker .wb { display:flex; align-items:center; gap:22px; padding:0 16px; flex:1; overflow:hidden; }
+  .w.t-ticker .kv { display:flex; flex:none; gap:6px; align-items:baseline; }
+  .w.t-ticker .kv:last-child, .w.t-ticker .kv:last-child > .v { flex:0 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; }
+  .w.t-ticker .kv .k { font-size:10px; }
+  .w.t-ticker .kv .v { font:600 16px var(--mono); }
+
+  .wb { padding:8px 10px; }
+  .media { display:flex; gap:10px; align-items:center; }
+  .media > .main { flex:1; min-width:0; }
+  .big { font:700 30px/1.05 var(--mono); letter-spacing:-.5px; }
+  .mid { font:600 18px/1.1 var(--mono); }
+  .k { font-size:9px; letter-spacing:1.6px; color:#A0958A; text-transform:uppercase; }
+  .v { font-family:var(--mono); }
+  .acc { color:var(--wa-b); }
+  .pos { color:#4ADE80; } .neg { color:#EF5A5A; } .dim { color:#A0958A; } .warn { color:#E0B341; }
+  .strong { font-weight:600; }
+  .row { display:flex; justify-content:space-between; align-items:baseline; gap:10px; }
+  .row + .row, .row + .kvs, .kvs + .row, .note + .row, .row + .note, .bar + .kvs, .bar + .row, .tl + .row { margin-top:6px; }
+  .row > span { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .row > .k, .row > .badge { flex:none; }
+  .kvs { display:grid; grid-template-columns:repeat(3, 1fr); gap:6px 10px; }
+  .kvs .v { font-size:15px; font-weight:600; white-space:nowrap; }
+  .note { font-size:10.5px; color:#A0958A; margin-top:3px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .bar { height:4px; background:rgba(255,255,255,.1); margin-top:3px; }
+  .bar > div { height:100%; background:var(--wa); }
+  .badge { font:700 9px var(--mono); letter-spacing:1.4px; padding:2px 6px; }
+  .badge.kill { background:rgba(74,222,128,.15); color:#4ADE80; border:1px solid rgba(74,222,128,.4); }
+  .badge.loss { background:rgba(239,90,90,.15); color:#EF5A5A; border:1px solid rgba(239,90,90,.4); }
+  .ico { width:44px; height:44px; flex:none; background:linear-gradient(135deg, #2b3a4a, #0d141c); border:1px solid rgba(255,255,255,.13);
+    display:flex; align-items:center; justify-content:center; font:700 10px var(--mono); color:#8FC6F0; }
+  .clock { font:700 26px/1.1 var(--mono); }
+  .typebar { display:flex; gap:4px; margin-top:8px; height:6px; }
+  .typebar div { height:100%; }
+  .tl { display:grid; grid-template-columns:1fr auto auto; gap:2px 10px; font-size:11px; margin-top:6px; }
+  .tl .v { text-align:right; }
+  .graph canvas { display:block; }
+  .legend { display:flex; flex-wrap:wrap; gap:4px 10px; font:10px var(--mono); margin-top:4px; }
+  .legend span::before { content:""; display:inline-block; width:10px; height:2px; margin-right:4px; vertical-align:middle; background:currentColor; }
+  .alert-in { animation:alertIn .5s ease-out; }
+  @keyframes alertIn { from { transform:translateX(-30px); opacity:0; } to { transform:none; opacity:1; } }
+</style>
+</head>
+<body>
+<div id="widget" hidden></div>
+<script>
+'use strict';
+// One page for every preset: /w/<id> loads the saved config, the data the preset needs (a snapshot on connect, then
+// the /ws pushes), and follows widget.config live. Every piece of text goes in through textContent. Nothing — no
+// status line, no error — ever shows on stream: a widget without data hides.
+const params = new URLSearchParams(location.search);
+const widgetId = decodeURIComponent(location.pathname.split('/').pop());
+const keyQuery = params.get('key') ? '?key=' + encodeURIComponent(params.get('key')) : '';
+// ?preview: the manager's thumbnail shows the last kill instead of an empty alert.
+const preview = params.has('preview');
+const root = document.getElementById('widget');
+
+let config = null;
+let baseWidth = 360;
+const data = {
+  metrics: [], history: [], fleet: null, fleetSamples: new Map(),
+  runs: null, summaries: [], killmails: null, alert: null
+};
+
+// ───────── formatting ─────────
+const n0 = value => Math.round(value || 0).toLocaleString('en-US');
+function isk(value) {
+  if (value === null || value === undefined) return '—';
+  const abs = Math.abs(value);
+  if (abs >= 1e12) return (value / 1e12).toFixed(2) + 'T';
+  if (abs >= 1e9) return (value / 1e9).toFixed(2) + 'B';
+  if (abs >= 1e6) return (value / 1e6).toFixed(1) + 'M';
+  if (abs >= 1e3) return (value / 1e3).toFixed(1) + 'K';
+  return n0(value);
+}
+function clock(seconds) {
+  const s = Math.max(0, Math.floor(seconds)), h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60, pad = n => String(n).padStart(2, '0');
+  return h > 0 ? `${h}:${pad(m)}:${pad(s % 60)}` : `${m}:${pad(s % 60)}`;
+}
+function ago(utc) {
+  const minutes = Math.max(0, Math.round((Date.now() - utc) / 60000));
+  if (minutes < 1) return 'just now';
+  if (minutes < 60) return minutes + ' min ago';
+  const hours = Math.floor(minutes / 60);
+  return hours < 24 ? hours + ' h ago' : Math.floor(hours / 24) + ' d ago';
+}
+// The API's *Utc fields are UTC; one serialized without a zone suffix would otherwise parse as local time.
+const utcMs = text => Date.parse(/[zZ]|[+-]\d\d:\d\d$/.test(text) ? text : text + 'Z');
+const shortName = name => name.split(/\s+/).filter(Boolean).slice(0, 3).map(word => word[0]).join('').toUpperCase();
+
+// ───────── config ─────────
+const has = field => config.fields.includes(field);
+const option = (name, fallback) => config.options[name] ?? fallback;
+const wants = id => config.characterIds.length === 0 || config.characterIds.includes(id);
+// A location field shows only when it is on and the API hands out the location at all (the value is null otherwise).
+const located = field => config.showLocation === true && has(field);
+
+function hexToRgb(hex) { return [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16)); }
+function applyConfig(next) {
+  config = next;
+  const accent = /^#[0-9a-fA-F]{6}$/.test(config.accent) ? config.accent : '#4fc3f7';
+  const [r, g, b] = hexToRgb(accent), light = c => Math.round(c + (255 - c) * 0.45);
+  const style = root.style;
+  style.setProperty('--wa', accent);
+  style.setProperty('--wa-b', `rgb(${light(r)},${light(g)},${light(b)})`);
+  for (const alpha of [55, 35, 18]) style.setProperty('--wa-' + alpha, `rgba(${r},${g},${b},${alpha / 100})`);
+  style.setProperty('--wop', config.background === 'panel' ? String(config.panelOpacity / 100) : '0');
+  style.zoom = config.scale / 100;
+  render();
+}
+
+// ───────── card: what a preset says, drawn per theme ─────────
+// A preset lists rows/figures/notes; the together and minimal themes draw them as a panel, the ticker as one line.
+// Free-form nodes (graph, bars, tables) only make sense in a panel, so the ticker leaves them out.
+function card(title, right) {
+  const items = [];
+  const api = {
+    title, right, items, icon: null, className: '',
+    hero(label, value, tone = '', size = 'big') { items.push({ kind: 'hero', label, value, tone, size }); return api; },
+    stat(label, value, tone = '') { items.push({ kind: 'stat', label, value, tone }); return api; },
+    row(left, rightText, leftTone = '', rightTone = '') { items.push({ kind: 'row', left, right: rightText, leftTone, rightTone }); return api; },
+    note(text) { if (text) items.push({ kind: 'note', text }); return api; },
+    node(node) { items.push({ kind: 'node', node }); return api; }
+  };
+  return api;
+}
+
+function el(tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text !== undefined && text !== null) node.textContent = String(text);
+  return node;
+}
+const part = (content, className) => content instanceof Node ? content : el('span', className, content);
+
+function drawCard(c) {
+  const theme = config.theme;
+  const w = el('div', `w t-${theme} ${c.className}`);
+  w.style.width = baseWidth + 'px';
+
+  const head = el('div', 'wh');
+  head.append(el('i', '', '◆'), theme === 'ticker' && c.right ? `${c.title} · ${c.right}` : c.title);
+  if (c.right) head.append(el('span', 'r', c.right));
+  const body = el('div', 'wb');
+  w.append(head, body);
+
+  if (theme === 'ticker') {
+    for (const item of c.items) {
+      if (item.kind === 'hero' || item.kind === 'stat') {
+        const kv = el('div', 'kv');
+        kv.append(el('span', 'k', item.label), el('span', 'v ' + item.tone, item.value));
+        body.append(kv);
+      } else if (item.kind === 'row') {
+        const kv = el('div', 'kv');
+        kv.append(part(item.left, item.leftTone), part(item.right ?? '', 'v ' + item.rightTone));
+        body.append(kv);
+      } else if (item.kind === 'note') {
+        body.append(el('span', 'dim', item.text));
+      }
+    }
+    return w;
+  }
+
+  let target = body;
+  if (c.icon) {
+    const media = el('div', 'media'), main = el('div', 'main');
+    media.append(el('div', 'ico', c.icon), main);
+    body.append(media);
+    target = main;
+  }
+  let stats = null;
+  for (const item of c.items) {
+    if (item.kind !== 'stat') stats = null;
+    if (item.kind === 'stat') {
+      if (!stats) target.append(stats = el('div', 'kvs'));
+      const cell = el('div');
+      cell.append(el('div', 'k', item.label), el('div', 'v ' + item.tone, item.value));
+      stats.append(cell);
+    } else if (item.kind === 'hero') {
+      const row = el('div', 'row');
+      row.append(el('span', 'k', item.label), el('span', `${item.size} ${item.tone}`, item.value));
+      target.append(row);
+    } else if (item.kind === 'row') {
+      const row = el('div', 'row');
+      row.append(part(item.left, item.leftTone), part(item.right ?? '', 'v ' + item.rightTone));
+      target.append(row);
+    } else if (item.kind === 'note') {
+      target.append(el('div', 'note', item.text));
+    } else {
+      target.append(item.node);
+    }
+  }
+  return w;
+}
+
+// ───────── presets ─────────
+const ownCharacters = () => data.metrics.filter(m => wants(m.characterId));
+const verdicts = { sweetSpot: 'Sweet spot', adjust: 'Adjust', ok: 'OK' };
+
+function liveDps() {
+  return ownCharacters().map(m => {
+    const c = card(has('name') ? m.characterName.toUpperCase() : 'LIVE DPS', 'LIVE');
+    if (has('dpsOut')) c.hero('DPS out', n0(m.dpsOut));
+    if (has('dpsIn')) c.hero('DPS in', n0(m.dpsIn), 'neg', 'mid');
+    if (has('peak')) c.stat('Peak', n0(m.peakDps));
+    if (has('reps')) c.stat('Reps in', n0(m.repIn), 'pos').stat('Reps out', n0(m.repOut), 'pos');
+    if (has('bounty')) c.stat('Bounty', isk(m.bountyTotal), 'acc');
+    if (has('application') && m.application && verdicts[m.application.verdict]) {
+      const percent = m.application.percent != null &&m.application.verdict !== 'sweetSpot' ? ` ${Math.round(m.application.percent)}%` : '';
+      c.stat('Applied', verdicts[m.application.verdict] + percent, m.application.verdict === 'adjust' ? 'warn' : 'pos');
+    }
+    if (located('system') && m.location) c.note(m.location);
+    return c;
+  });
+}
+
+// The graph draws and smooths itself like the app's DPS pop-out (DpsViewModel): every line is a trailing average
+// over 30 frames at 30 fps, never an EMA, and the figures read the value the line ends at. Inks are CombatInk's.
+const FRAME_MS = 1000 / 30, SMOOTHING_FRAMES = 30, KEEP_MS = 300000;
+const GRAPH_LINES = [
+  { key: 'dpsOut', field: 'dpsOut', ink: '#F3ECE0', lane: 'hp', label: 'OUT' },
+  { key: 'dpsIn', field: 'dpsIn', ink: '#EF5A5A', lane: 'hp', label: 'IN' },
+  { key: 'repIn', field: 'reps', ink: '#199E70', lane: 'hp', label: 'REP IN' },
+  { key: 'repOut', field: 'reps', ink: '#199E70', lane: 'hp', label: 'REP OUT', dashed: true },
+  { key: 'neutIn', field: 'neut', ink: '#9085E9', lane: 'cap', label: 'NEUT IN' },
+  { key: 'neutOut', field: 'neut', ink: '#9085E9', lane: 'cap', label: 'NEUT OUT', dashed: true },
+  { key: 'capIn', field: 'cap', ink: '#C98500', lane: 'cap', label: 'CAP IN' },
+  { key: 'capOut', field: 'cap', ink: '#C98500', lane: 'cap', label: 'CAP OUT', dashed: true }
+];
+const graph = { character: null, lines: null, lastStep: 0, lastLegend: 0, block: null, canvas: null, legend: null };
+
+function graphCharacter() { return ownCharacters()[0] || null; }
+const characterKey = m => m.characterId ?? m.characterName;
+
+function resetGraph(m) {
+  graph.character = characterKey(m);
+  graph.lines = Object.fromEntries(GRAPH_LINES.map(line => [line.key, { points: [], recent: [], sum: 0, target: 0, shown: 0, seen: false }]));
+  const history = data.history.find(h => characterKey(h) === graph.character);
+  if (!history) return;
+  const now = Date.now(), step = history.intervalSeconds * 1000;
+  for (const line of GRAPH_LINES) {
+    const values = history[line.key] || [], state = graph.lines[line.key];
+    values.forEach((value, i) => state.points.push({ t: now - (values.length - 1 - i) * step, v: value }));
+    // Start the trailing window where the history ends, so the live line continues it instead of dipping to zero.
+    const lastValue = values.length ? values[values.length - 1] : 0;
+    state.recent = Array(SMOOTHING_FRAMES).fill(lastValue);
+    state.sum = lastValue * SMOOTHING_FRAMES;
+    state.shown = lastValue;
+    state.seen = values.some(v => v > 0);
+  }
+}
+
+function stepGraph(now) {
+  for (const state of Object.values(graph.lines)) {
+    state.recent.push(state.target);
+    state.sum += state.target;
+    while (state.recent.length > SMOOTHING_FRAMES) state.sum -= state.recent.shift();
+    state.shown = state.sum / state.recent.length;
+    state.seen ||= state.shown > 0.5;
+    state.points.push({ t: now, v: state.shown });
+    while (state.points.length && state.points[0].t < now - KEEP_MS) state.points.shift();
+  }
+}
+
+function niceCeiling(value, floor) {
+  if (value <= floor) return floor;
+  const magnitude = Math.pow(10, Math.floor(Math.log10(value))), normalized = value / magnitude;
+  return (normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 2.5 ? 2.5 : normalized <= 5 ? 5 : 10) * magnitude;
+}
+
+function drawGraph(now) {
+  const enabled = GRAPH_LINES.filter(line => has(line.field));
+  const capLane = enabled.some(line => line.lane === 'cap');
+  const width = baseWidth - 20, height = capLane ? 130 : 120, hpHeight = capLane ? 86 : height, capTop = hpHeight + 8;
+  const canvas = graph.canvas, ratio = window.devicePixelRatio * (config.scale / 100);
+  if (canvas.width !== Math.round(width * ratio) || canvas.height !== Math.round(height * ratio)) {
+    canvas.width = Math.round(width * ratio);
+    canvas.height = Math.round(height * ratio);
+    canvas.style.width = width + 'px';
+    canvas.style.height = height + 'px';
+  }
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+  ctx.clearRect(0, 0, width, height);
+
+  const span = Number(option('span', '60')) * 1000 || 60000, from = now - span;
+  const visibleMax = lane => Math.max(0, ...enabled.filter(line => line.lane === lane)
+    .flatMap(line => graph.lines[line.key].points.filter(p => p.t >= from).map(p => p.v)));
+  const lanes = {
+    hp: { top: 0, height: hpHeight, max: niceCeiling(visibleMax('hp'), 100), unit: 'HP/s' },
+    cap: { top: capTop, height: height - capTop, max: niceCeiling(visibleMax('cap'), 10), unit: 'GJ/s' }
+  };
+
+  ctx.font = '9px Consolas, "Cascadia Mono", monospace';
+  for (const [name, lane] of Object.entries(lanes)) {
+    if (name === 'cap' && !capLane) continue;
+    ctx.strokeStyle = 'rgba(255,255,255,.13)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    ctx.moveTo(0, lane.top + lane.height - 0.5);
+    ctx.lineTo(width, lane.top + lane.height - 0.5);
+    ctx.stroke();
+    ctx.fillStyle = '#A0958A';
+    ctx.fillText(`${lane.unit} ${n0(lane.max)}`, 2, lane.top + 9);
+  }
+
+  for (const line of enabled) {
+    const lane = lanes[line.lane], points = graph.lines[line.key].points;
+    let first = points.findIndex(p => p.t >= from);
+    if (first < 0) continue;
+    if (first > 0) first--;
+    const stride = Math.max(1, Math.floor((points.length - first) / (width * 2)));
+    ctx.strokeStyle = line.ink;
+    ctx.lineWidth = 1.6;
+    ctx.setLineDash(line.dashed ? [4, 3] : []);
+    ctx.beginPath();
+    for (let i = first; i < points.length; i += stride) {
+      const p = points[i];
+      const x = width - (now - p.t) / span * width;
+      const y = lane.top + lane.height - Math.min(p.v, lane.max) / lane.max * (lane.height - 2) - 1;
+      if (i === first) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+  }
+
+  // Figures four times a second: the line moves every frame, a number that fast is unreadable.
+  if (!graph.legend.isConnected || now - graph.lastLegend < 250) return;
+  graph.lastLegend = now;
+  graph.legend.replaceChildren(...enabled
+    .filter(line => line.key === 'dpsOut' || line.key === 'dpsIn' || graph.lines[line.key].seen)
+    .map(line => {
+      const figure = el('span', '', `${line.label} ${n0(graph.lines[line.key].shown)}`);
+      figure.style.color = line.ink;
+      return figure;
+    }));
+}
+
+function graphFrame(now) {
+  if (config && config.preset === 'dps-graph' && graph.lines) {
+    if (now - graph.lastStep > 3000) graph.lastStep = now - FRAME_MS; // back from a pause: no burst of catch-up frames
+    while (now - graph.lastStep >= FRAME_MS) {
+      graph.lastStep += FRAME_MS;
+      stepGraph(Date.now());
+    }
+    drawGraph(Date.now());
+  }
+  requestAnimationFrame(graphFrame);
+}
+
+function dpsGraph() {
+  const m = graphCharacter();
+  if (!m) return null;
+  if (graph.character !== characterKey(m)) resetGraph(m);
+  for (const line of GRAPH_LINES) graph.lines[line.key].target = m[line.key] || 0;
+  if (!graph.block) {
+    graph.block = el('div', 'graph');
+    graph.canvas = el('canvas');
+    graph.legend = el('div', 'legend');
+    graph.block.append(graph.canvas);
+  }
+  if (has('numbers')) graph.block.append(graph.legend); else graph.legend.remove();
+
+  const spans = { 60: '60 s', 120: '2 min', 300: '5 min' };
+  const c = card(has('name') ? m.characterName.toUpperCase() : 'DPS', spans[option('span', '60')] || '60 s');
+  c.node(graph.block);
+  // A ticker has no room for a graph: it shows the figures the line ends at instead.
+  if (config.theme === 'ticker')
+    for (const line of GRAPH_LINES.filter(l => has(l.field) && (l.key === 'dpsOut' || l.key === 'dpsIn' || graph.lines[l.key].seen)))
+      c.stat(line.label, n0(graph.lines[line.key].shown));
+  if (located('system') && m.location) c.note(m.location);
+  return c;
+}
+
+const ABYSSAL_SECONDS = 20 * 60;
+function currentRun() {
+  const run = (data.runs || []).find(r => config.characterIds.length === 0 || r.crew.some(member => wants(member.characterId)));
+  if (!run) return null;
+  const abyssal = run.kind === 'abyssal';
+  const tier = run.abyssalTier !== null && run.abyssalTier !== undefined
+    ? [`T${run.abyssalTier}`, run.abyssalWeather].filter(Boolean).join(' · ') : null;
+  const c = card('CURRENT RUN', run.crew.length > 1 ? `${run.crew.length} PILOTS` : '');
+
+  const headline = [has('type') ? run.type : null, has('site') ? run.site : null].filter(Boolean).join(' · ');
+  if (headline || (has('tier') && tier)) c.row(headline, has('tier') ? tier : '', 'strong', 'acc');
+  c.note([located('signature') ? run.signature : null, located('system') ? run.system : null].filter(Boolean).join(' · '));
+
+  if (has('clock')) {
+    const elapsed = (Date.now() - utcMs(run.startedAtUtc)) / 1000;
+    if (abyssal) {
+      const left = ABYSSAL_SECONDS - elapsed, tone = left < 180 ? 'warn' : '';
+      c.hero('Time left', clock(left), tone, 'clock');
+      const bar = el('div', 'bar'), fill = el('div');
+      fill.style.width = Math.max(0, Math.min(100, left / ABYSSAL_SECONDS * 100)) + '%';
+      if (tone) fill.style.background = '#E0B341';
+      bar.append(fill);
+      c.node(bar);
+    } else {
+      c.hero('Elapsed', clock(elapsed), '', 'clock');
+    }
+  }
+  if (has('loot')) c.stat('Loot', isk(run.lootIsk), 'acc');
+  if (has('bounty')) c.stat('Bounty', isk(run.bountyIsk));
+  if (has('kills')) {
+    const crew = new Set(run.crew.map(member => member.characterId));
+    c.stat('Kills', n0(data.metrics.filter(m => crew.has(m.characterId)).reduce((sum, m) => sum + m.kills, 0)));
+  }
+  if (has('total')) c.hero('Run total', isk(run.totalIsk) + ' ISK', 'acc', 'mid');
+  if (has('crew')) c.note('Crew: ' + run.crew.map(member => member.name || 'Pilot').join(' · '));
+  return c;
+}
+
+function summaryFor(kind) {
+  const period = option('period', 'session');
+  return data.summaries.find(s => s.period === period && s.kind === kind) || null;
+}
+
+function runTotals() {
+  const kind = option('kind', 'all'), summary = summaryFor(kind);
+  if (!summary) return null;
+  const c = card('RUN TOTALS', [summary.period, kind !== 'all' ? kind : null].filter(Boolean).join(' · ').toUpperCase());
+  if (has('isk')) c.hero('Total', isk(summary.isk), 'acc');
+  if (has('runs')) c.stat('Runs', n0(summary.runs));
+  if (has('iskPerHour')) c.stat('ISK / hour', isk(summary.iskPerHour), 'pos');
+  if (has('flownTime')) c.stat('Flown', clock(summary.flownSeconds));
+  if (has('averagePerRun')) c.stat('Avg / run', isk(summary.averageIskPerRun));
+  if (has('bestDrop') && summary.bestDrop) c.row(el('span', 'k', 'Best drop'), `${summary.bestDrop.name} · ${isk(summary.bestDrop.isk)}`);
+  if (has('perCharacter'))
+    for (const character of summary.characters.filter(ch => wants(ch.characterId))) c.row(character.name, isk(character.isk));
+  return c;
+}
+
+const WEATHER_INK = { Electrical: '#8FC6F0', Dark: '#9085E9', Exotic: '#E0B341', Firestorm: '#EF5A5A', Gamma: '#4ADE80' };
+function abyssalTotals() {
+  const summary = summaryFor('abyssal');
+  if (!summary) return null;
+  const c = card('ABYSSAL', summary.period.toUpperCase());
+  if (has('isk')) c.hero('Abyssal ISK', isk(summary.isk), 'acc');
+  if (has('runs')) c.stat('Clears', n0(summary.runs));
+  if (has('iskPerHour')) c.stat('ISK / hour', isk(summary.iskPerHour), 'pos');
+  if (has('averageClear')) c.stat('Avg clear', summary.averageRunSeconds === null ? '—' : clock(summary.averageRunSeconds));
+  if (has('shipsLost')) c.stat('Ships lost', n0(summary.shipsLost), summary.shipsLost ? 'neg' : 'pos');
+  const tiers = (summary.abyssal || []).filter(t => t.runs > 0);
+  if (has('byTier') && tiers.length) {
+    const bar = el('div', 'typebar'), table = el('div', 'tl');
+    for (const t of tiers) {
+      const ink = WEATHER_INK[t.weather] || '#A0958A';
+      const segment = el('div');
+      segment.style.flex = String(Math.max(Number(t.isk) || 0, 1));
+      segment.style.background = ink;
+      bar.append(segment);
+      const name = el('span'), swatch = el('span', '', '■ ');
+      swatch.style.color = ink;
+      name.append(swatch, [t.tier !== null ? 'T' + t.tier : null, t.weather].filter(Boolean).join(' ') || 'Unknown');
+      table.append(name, el('span', 'v dim', t.runs + '×'), el('span', 'v', isk(t.isk)));
+    }
+    c.node(bar).node(table);
+  }
+  return c;
+}
+
+const killmailShown = mail => {
+  const show = option('show', 'both');
+  return wants(mail.characterId) && (show === 'both' || (show === 'kills') === (mail.kind === 'Kill'));
+};
+const badge = mail => el('span', 'badge ' + mail.kind.toLowerCase(), mail.kind.toUpperCase());
+
+function lastKillmail() {
+  const mail = (data.killmails || []).find(killmailShown);
+  if (!mail) return null;
+  const c = card('LAST KILLMAIL', '');
+  if (has('ship')) c.icon = shortName(mail.shipName);
+  if (has('badge') || has('ago')) c.row(has('badge') ? badge(mail) : '', has('ago') ? ago(utcMs(mail.killmailTimeUtc)) : '', '', 'dim');
+  const who = has('victim') && mail.victimName
+    ? mail.victimName + (has('corporation') && mail.victimCorporationName ? ` [${mail.victimCorporationName}]` : '') : null;
+  if (has('ship') || who) c.row([has('ship') ? mail.shipName : null, who].filter(Boolean).join(' · '), '', 'strong');
+  const detail = [
+    has('attackers') ? `${mail.attackerCount} attacker${mail.attackerCount === 1 ? '' : 's'}` : null,
+    has('finalBlow') && mail.finalBlow && mail.finalBlow.characterName ? 'FB ' + mail.finalBlow.characterName : null
+  ].filter(Boolean).join(' · ');
+  if (has('isk')) c.row(el('span', 'mid ' + (mail.kind === 'Loss' ? 'neg' : 'pos'), isk(mail.iskValue)), detail, '', 'dim');
+  else c.note(detail);
+  c.note([has('run') && mail.runId ? 'During a run' : null, located('system') ? mail.solarSystemName : null].filter(Boolean).join(' · '));
+  return c;
+}
+
+function killAlert() {
+  const mail = data.alert;
+  if (!mail) return null;
+  const hold = Number(option('holdSeconds', '8'));
+  const c = card('NEW ' + mail.kind.toUpperCase(), hold + ' S');
+  c.className = 'alert-in';
+  if (has('ship')) c.icon = shortName(mail.shipName);
+  c.row(badge(mail), has('isk') ? el('span', 'mid ' + (mail.kind === 'Loss' ? 'neg' : 'pos'), isk(mail.iskValue)) : '');
+  if (has('ship')) c.row(mail.shipName, '', 'strong');
+  c.note([has('victim') ? mail.victimName : null, located('system') ? mail.solarSystemName : null].filter(Boolean).join(' · '));
+  return c;
+}
+
+let alertTimer = 0;
+function announce(mail) {
+  const minIsk = Number(option('minIsk', '0')) || 0;
+  if (!killmailShown(mail) || (minIsk > 0 && !(mail.iskValue >= minIsk))) return;
+  data.alert = mail;
+  root.replaceChildren(); // restart the slide-in for a mail that lands while the previous one is still up
+  clearTimeout(alertTimer);
+  if (!preview) alertTimer = setTimeout(() => { data.alert = null; render(); }, (Number(option('holdSeconds', '8')) || 8) * 1000);
+  render();
+}
+
+function fleetDps() {
+  const fleet = data.fleet;
+  if (!fleet || fleet.members.length === 0) return null;
+  const c = card('FLEET', `${fleet.members.length} MEMBER${fleet.members.length === 1 ? '' : 'S'}`);
+  let total = 0;
+  fleet.members.forEach((member, i) => {
+    const sample = data.fleetSamples.get(member.characterId) || {};
+    const out = sample.Dps || 0, received = sample.DpsIn || 0;
+    total += out;
+    const name = el('span', '', has('names') ? member.characterName || `Pilot ${i + 1}` : `Member ${i + 1}`);
+    if (located('systems') && sample.Location) name.append(' ', el('span', 'dim', sample.Location));
+    const figures = el('span', 'v');
+    if (has('dpsOut')) figures.append(n0(out));
+    if (has('dpsIn')) figures.append(' ', el('span', 'neg', n0(received)));
+    c.row(name, figures);
+    if (has('dpsOut')) {
+      const bar = el('div', 'bar'), fill = el('div');
+      fill.style.width = Math.min(100, out / 10) + '%';
+      fill.style.background = '#F3ECE0';
+      bar.append(fill);
+      c.node(bar);
+    }
+  });
+  if (has('total')) c.hero('Fleet DPS', n0(total), 'acc', 'mid');
+  return c;
+}
+
+const PRESETS = {
+  'live-dps': { render: liveDps },
+  'dps-graph': { render: dpsGraph },
+  'current-run': { render: currentRun, load: loadRuns, ticks: true },
+  'run-totals': { render: runTotals, load: loadSummary },
+  'abyssal-totals': { render: abyssalTotals, load: loadSummary },
+  'last-killmail': { render: lastKillmail, load: loadKillmails, ticks: true },
+  'kill-alert': { render: killAlert, load: preview ? loadKillmails : null },
+  'fleet-dps': { render: fleetDps }
+};
+
+function render() {
+  const preset = config && PRESETS[config.preset];
+  const result = preset ? preset.render() : null;
+  const cards = (Array.isArray(result) ? result : [result]).filter(Boolean);
+  root.replaceChildren(...cards.map(drawCard));
+  root.hidden = cards.length === 0;
+}
+
+// ───────── data ─────────
+async function getJson(path) {
+  try {
+    const response = await fetch(path + (path.includes('?') ? keyQuery.replace('?', '&') : keyQuery));
+    return response.ok && response.status !== 204 ? await response.json() : null;
+  } catch { return null; } // stays empty: no error on stream
+}
+
+async function loadRuns() { data.runs = await getJson('/api/v1/runs/current'); }
+async function loadSummary() {
+  const kind = config.preset === 'abyssal-totals' ? 'abyssal' : option('kind', 'all');
+  const summary = await getJson(`/api/v1/runs/summary?period=${encodeURIComponent(option('period', 'session'))}&kind=${encodeURIComponent(kind)}`);
+  if (summary) data.summaries = [summary, ...data.summaries.filter(s => s.period !== summary.period || s.kind !== summary.kind)];
+}
+async function loadKillmails() {
+  data.killmails = await getJson('/api/v1/killmails/latest?limit=25') || [];
+  if (preview && config.preset === 'kill-alert') data.alert = data.killmails.find(killmailShown) || null;
+}
+async function loadFleet() {
+  data.fleet = await getJson('/api/v1/fleet');
+}
+
+async function load() {
+  const widget = await getJson('/api/v1/widgets/' + encodeURIComponent(widgetId));
+  if (!widget) return;
+  baseWidth = Math.round(widget.width * 100 / widget.config.scale);
+  config = widget.config;
+  const preset = PRESETS[config.preset];
+  if (preset && preset.load) await preset.load();
+  applyConfig(widget.config);
+}
+
+function onMessage(message) {
+  const d = message.data;
+  switch (message.type) {
+    case 'widget.config':
+      if (d.id !== widgetId) return;
+      if (d.change === 'deleted') { config = null; render(); return; }
+      load(); // re-read rather than apply d.config: the size (theme) and the preset's data (period, kind) may have changed
+      return;
+    case 'snapshot':
+      data.metrics = d.metrics || [];
+      data.history = d.history || [];
+      data.fleet = d.fleet;
+      graph.character = null; // re-seed the graph from the fresh history
+      break;
+    case 'metrics': data.metrics = d; break;
+    case 'run.changed': data.runs = d; break;
+    case 'runs.summary': data.summaries = d; break;
+    case 'killmail.added':
+      if (data.killmails) data.killmails = [d, ...data.killmails.filter(mail => mail.killmailId !== d.killmailId)];
+      if (config && config.preset === 'kill-alert') announce(d);
+      break;
+    case 'fleet.changed': loadFleet().then(render); return;
+    case 'fleet.metrics': {
+      const sample = data.fleetSamples.get(d.characterId) || {};
+      sample[d.kind] = d.kind === 'Location' ? d.text : d.value;
+      data.fleetSamples.set(d.characterId, sample);
+      break;
+    }
+    default: return;
+  }
+  if (config) render();
+}
+
+function connect() {
+  const socket = new WebSocket('ws://' + location.host + '/ws' + keyQuery);
+  socket.onopen = load; // also picks up a change made while the socket was down
+  socket.onmessage = event => {
+    try { onMessage(JSON.parse(event.data)); } catch { /* a malformed message never breaks the overlay */ }
+  };
+  socket.onclose = () => setTimeout(connect, 3000);
+}
+
+setInterval(() => { if (config && PRESETS[config.preset] && PRESETS[config.preset].ticks) render(); }, 1000);
+requestAnimationFrame(graphFrame);
+connect();
+</script>
+</body>
+</html>

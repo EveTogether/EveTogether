@@ -14,12 +14,14 @@ internal sealed class LocalKillmailRepository(IDbContextFactory<SharedDbContext>
         return await _KnownIdsAsync(db, characterId, killmailIds, cancellationToken);
     }
 
-    public async Task AddMissingAsync(int characterId, IReadOnlyList<LocalKillmail> killmails, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<LocalKillmail>> AddMissingAsync(int characterId, IReadOnlyList<LocalKillmail> killmails, CancellationToken cancellationToken = default)
     {
         await using var db = await contextFactory.CreateDbContextAsync(cancellationToken);
         var known = await _KnownIdsAsync(db, characterId, killmails.Select(killmail => killmail.KillmailId).ToList(), cancellationToken);
-        db.Set<LocalKillmail>().AddRange(killmails.Where(killmail => !known.Contains(killmail.KillmailId)));
+        List<LocalKillmail> added = [.. killmails.Where(killmail => !known.Contains(killmail.KillmailId))];
+        db.Set<LocalKillmail>().AddRange(added);
         await db.SaveChangesAsync(cancellationToken);
+        return added;
     }
 
     public async Task<IReadOnlyList<LocalKillmail>> GetForCharacterAsync(int characterId, CancellationToken cancellationToken = default)

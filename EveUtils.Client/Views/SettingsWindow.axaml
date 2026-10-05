@@ -261,7 +261,7 @@
                             </StackPanel>
                             <Button x:Name="LocalApiStartStopButton" Content="Start" Click="OnToggleLocalApi" Margin="0,0,6,6"/>
                             <Button x:Name="LocalApiDocsButton" Content="API docs" Click="OnOpenApiDocs" Margin="0,0,6,6" IsEnabled="False"/>
-                            <Button x:Name="LocalApiWidgetButton" Content="Widget" Click="OnOpenWidget" Margin="0,0,0,6" IsEnabled="False"/>
+                            <Button x:Name="WidgetManagerButton" Content="Open widget manager…" Click="OnOpenWidgetManager" Margin="0,0,0,6"/>
                         </WrapPanel>
                         <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                             <Ellipse x:Name="LocalApiStatusDot" Width="9" Height="9" Fill="#6B7280"/>
@@ -269,6 +269,9 @@
                                        Foreground="{DynamicResource TextAccentBrush}" Text="Stopped" TextWrapping="Wrap"/>
                         </StackPanel>
                         <TextBlock Text="Off by default. A read-only server bound to 127.0.0.1 only (never your network) — for example to feed your own stream overlays or widgets (Twitch/OBS). Start or stop it here; the interactive API reference (Scalar) opens via API docs. Default port 8001."
+                                   FontSize="10" Opacity="0.6" TextWrapping="Wrap"/>
+                        <CheckBox x:Name="IncludeLocationInLocalApiBox" Content="Include my location" Margin="0,6,0,0"/>
+                        <TextBlock Text="Off by default. When on, the API and widgets also get the system you are in. OPSEC mode leaves it out again while it is on."
                                    FontSize="10" Opacity="0.6" TextWrapping="Wrap"/>
                     </StackPanel>
                 </StackPanel>

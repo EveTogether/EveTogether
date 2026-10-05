@@ -4,10 +4,17 @@ using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
+using System.Threading.Channels;
 using System.Threading.Tasks;
 using EveUtils.Client.LocalApi.Dtos;
+using EveUtils.Client.LocalApi.Widgets;
+using EveUtils.Client.Runs;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Fleet.Events;
+using EveUtils.Shared.Modules.Killmails.Enums;
+using EveUtils.Shared.Modules.Killmails.Events;
+using EveUtils.Shared.Modules.Fleet.Metrics;
+using EveUtils.Shared.Modules.Runs.Events;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -19,16 +26,25 @@ namespace EveUtils.Client.LocalApi;
 /// anything itself. Own-character combat metrics are polled from the existing query bridge on a 1 Hz timer (the
 /// always-on baseline, fleet or not); fleet metric/roster changes are forwarded from the in-process
 /// <see cref="IEventBus"/> the fleet windows already publish on. Each client gets a <c>snapshot</c> on connect, then
-/// the live <c>{ type, data, ts }</c> stream. Tied to the host lifecycle: started after the Kestrel host starts and
-/// stopped before it stops. (No <c>fit.changed</c> event exists yet, so that stream is intentionally absent.)
+/// the live <c>{ type, data, ts }</c> stream. A runs change (<see cref="RunsChangedEvent"/>, a session reset, a pocket's
+/// tier or weather) pushes <c>run.changed</c> and <c>runs.summary</c>, read off the event, never inside it. Tied to the
+/// host lifecycle: started after the Kestrel host starts and stopped before it stops. (No <c>fit.changed</c> event
+/// exists yet, so that stream is intentionally absent.)
 /// </summary>
 public sealed class LocalApiBroadcaster
 {
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
     private static readonly TimeSpan MetricsInterval = TimeSpan.FromSeconds(1);
 
+    // A burst of run writes (bounty after bounty) is one re-read a second at most, never one per write.
+    private static readonly TimeSpan RunsPushInterval = TimeSpan.FromSeconds(1);
+
     private readonly IServiceProvider _rootServices;
     private readonly LocalApiQueries _queries;
+    private readonly LocalApiPrivacy _privacy;
+    private readonly LocalApiRuns _runs;
+    private readonly Channel<bool> _runsChanged =
+        Channel.CreateBounded<bool>(new BoundedChannelOptions(1) { FullMode = BoundedChannelFullMode.DropWrite });
     private readonly ILogger _logger;
     private readonly Dictionary<Guid, WebSocket> _clients = [];
     private readonly object _clientsGate = new();
@@ -36,13 +52,18 @@ public sealed class LocalApiBroadcaster
     private readonly CancellationTokenSource _cts = new();
     private readonly List<IDisposable> _subscriptions = [];
     private Task? _metricsLoop;
+    private WidgetStore? _widgets;
+    private Task? _runsLoop;
     private IHubContext<FleetHub>? _hub;
     private int _signalRCount;
 
-    public LocalApiBroadcaster(IServiceProvider rootServices, ILogger logger)
+    public LocalApiBroadcaster(IServiceProvider rootServices, LocalApiQueries queries, LocalApiPrivacy privacy, LocalApiRuns runs,
+        ILogger logger)
     {
         _rootServices = rootServices;
-        _queries = new LocalApiQueries(rootServices);
+        _queries = queries;
+        _privacy = privacy;
+        _runs = runs;
         _logger = logger;
     }
 
@@ -59,15 +80,40 @@ public sealed class LocalApiBroadcaster
         if (_rootServices.GetService<IEventBus>() is { } bus)
         {
             _subscriptions.Add(bus.Subscribe<FleetMetricEvent>((e, _) =>
-                _BroadcastAsync("fleet.metrics", FleetMetricSampleDto.FromSample(e.Data), e.Data.UnixMs)));
+                e.Data.Kind == MetricKind.Location && !_privacy.ExposesLocation
+                    ? Task.CompletedTask
+                    : _BroadcastAsync("fleet.metrics", FleetMetricSampleDto.FromSample(e.Data), e.Data.UnixMs)));
             _subscriptions.Add(bus.Subscribe<FleetChangedEvent>((e, _) =>
                 _BroadcastAsync("fleet.changed", FleetChangedDto.FromEvent(e), _NowMs())));
+            _subscriptions.Add(bus.Subscribe<KillmailsChangedEvent>((e, _) => _OnKillmailsChanged(e.Data)));
+            _subscriptions.Add(bus.Subscribe<RunsChangedEvent>((_, _) =>
+            {
+                _OnRunsChanged();
+                return Task.CompletedTask;
+            }));
+        }
+        if (_rootServices.GetService<RunsSession>() is { } session)
+        {
+            session.WasReset += _OnRunsChanged;
+            _subscriptions.Add(new Unsubscriber(() => session.WasReset -= _OnRunsChanged));
+        }
+        if (_rootServices.GetService<RunningAbyssalPockets>() is { } pockets)
+        {
+            pockets.Changed += _OnRunsChanged;
+            _subscriptions.Add(new Unsubscriber(() => pockets.Changed -= _OnRunsChanged));
+        }
+        if (_rootServices.GetService<WidgetStore>() is { } widgets)
+        {
+            _widgets = widgets;
+            widgets.Changed += _OnWidgetChanged;
         }
         _metricsLoop = Task.Run(() => _MetricsLoopAsync(_cts.Token));
+        _runsLoop = Task.Run(() => _RunsLoopAsync(_cts.Token));
     }
 
     public async Task StopAsync()
     {
+        if (_widgets is not null) _widgets.Changed -= _OnWidgetChanged;
         _cts.Cancel();
         foreach (var subscription in _subscriptions) subscription.Dispose();
         _subscriptions.Clear();
@@ -75,6 +121,10 @@ public sealed class LocalApiBroadcaster
         if (_metricsLoop is not null)
         {
             try { await _metricsLoop; } catch { /* loop cancelled */ }
+        }
+        if (_runsLoop is not null)
+        {
+            try { await _runsLoop; } catch { /* loop cancelled */ }
         }
 
         foreach (var socket in _Snapshot())
@@ -110,9 +160,11 @@ public sealed class LocalApiBroadcaster
 
     private async Task _SendSnapshotAsync(WebSocket socket, CancellationToken cancellationToken)
     {
+        var metrics = await _queries.GetMetricsAsync(cancellationToken);
         var snapshot = new WsSnapshotDto(
-            await _queries.GetMetricsAsync(cancellationToken),
-            await _queries.GetActiveFleetAsync(cancellationToken));
+            metrics,
+            await _queries.GetActiveFleetAsync(cancellationToken),
+            _queries.GetHistory(metrics));
         var json = _Envelope("snapshot", snapshot, _NowMs());
 
         await _sendGate.WaitAsync(cancellationToken);
@@ -136,6 +188,47 @@ public sealed class LocalApiBroadcaster
                 _logger.LogDebug(ex, "Local API metrics tick failed.");
             }
         }
+    }
+
+    private void _OnRunsChanged() => _runsChanged.Writer.TryWrite(true);
+
+    private async Task _RunsLoopAsync(CancellationToken cancellationToken)
+    {
+        await foreach (bool _ in _runsChanged.Reader.ReadAllAsync(cancellationToken))
+        {
+            if (_HasNoListeners()) continue; // nobody listens → a widget reads runs/* itself on connect
+            try
+            {
+                if (await _runs.GetCurrentAsync(cancellationToken) is { } current)
+                    await _BroadcastAsync("run.changed", current, _NowMs());
+                if (await _runs.GetSummariesAsync(cancellationToken) is { } summaries)
+                    await _BroadcastAsync("runs.summary", summaries, _NowMs());
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger.LogDebug(ex, "Local API runs push failed.");
+            }
+            await Task.Delay(RunsPushInterval, cancellationToken);
+        }
+    }
+
+    // Off the bus thread: resolving victim names can call ESI, and the bus awaits its subscribers inside the command.
+    private Task _OnKillmailsChanged(KillmailsChangedData change)
+    {
+        if (change.Kind != KillmailsChangeKind.Imported || change.AddedKillmailIds.Count == 0) return Task.CompletedTask;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                foreach (var killmail in await _queries.GetNewKillmailsAsync(change.CharacterId, change.AddedKillmailIds, _cts.Token))
+                    await _BroadcastAsync("killmail.added", killmail, _NowMs());
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger.LogDebug(ex, "Local API killmail.added push failed.");
+            }
+        });
+        return Task.CompletedTask;
     }
 
     private async Task _BroadcastAsync(string type, object data, long ts)
@@ -165,6 +258,9 @@ public sealed class LocalApiBroadcaster
         }
         finally { _sendGate.Release(); }
     }
+
+    // The store raises this inside the save; the send must not hold the save up, and _BroadcastAsync never throws.
+    private void _OnWidgetChanged(WidgetConfigChangedDto change) => _ = _BroadcastAsync("widget.config", change, _NowMs());
 
     private static async Task _SendRawAsync(WebSocket socket, string json, CancellationToken cancellationToken)
     {
@@ -208,5 +304,10 @@ public sealed class LocalApiBroadcaster
             foreach (var (id, socket) in _clients) list.Add((id, socket));
             return list;
         }
+    }
+
+    private sealed class Unsubscriber(Action unsubscribe) : IDisposable
+    {
+        public void Dispose() => unsubscribe();
     }
 }

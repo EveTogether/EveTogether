@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using EveUtils.Client.Runs;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Runs.Isk;
@@ -25,7 +26,9 @@ public sealed record RunsActivityFacts(
     Guid ActivitySummaryId = default,
     string SiteText = "",
     int CrewCount = 1,
-    IReadOnlyDictionary<long, IskBreakdown>? IskByOwnCharacter = null) : IRunsActivityFigures
+    IReadOnlyDictionary<long, IskBreakdown>? IskByOwnCharacter = null,
+    string? AbyssalFilamentText = null,
+    bool HasShipLoss = false) : IRunsActivityFigures
 {
     public DateOnly Day => DateOnly.FromDateTime(StartedAtLocal);
 
@@ -55,6 +58,8 @@ public sealed record RunsActivityFacts(
             row.ActivitySummaryId,
             ActivityOverviewRowViewModel.SiteTextOf(row, type),
             Math.Max(row.Crew.Count, row.ParticipantCount),
-            row.OwnIskByCharacter);
+            row.OwnIskByCharacter,
+            row.AbyssalFilamentText,
+            row.HasShipLoss);
     }
 }

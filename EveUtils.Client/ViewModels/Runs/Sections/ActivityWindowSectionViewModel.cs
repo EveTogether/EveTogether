@@ -8,6 +8,7 @@ using CommunityToolkit.Mvvm.Input;
 using EveUtils.Client.Clipboard;
 using EveUtils.Client.Dialogs;
 using EveUtils.Client.Opsec;
+using EveUtils.Client.Runs;
 using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Fleet.Dtos;
@@ -67,6 +68,7 @@ public sealed partial class ActivityWindowSectionViewModel : RunWindowSection
             .ToList();
         _lootStrategies = context.RunType.LootStrategies;
         LootStrategyChoices = _ChoicesFor(_lootStrategies);
+        _ShareLivePocket();
     }
 
     /// <summary>The abyssal block instead of the site block: a pocket has a tier and a weather, and no signature.</summary>
@@ -138,6 +140,12 @@ public sealed partial class ActivityWindowSectionViewModel : RunWindowSection
         await eventBus.PublishAsync(new FleetRunGroupAbyssalUpdatedEvent(
             new RunGroupAbyssalUpdate(fleetId, Context.Kind, groupCode, Context.TierIndex, Context.Weather?.Name),
             Context.RunCharacterId), EventTarget.Both);
+    }
+
+    private void _ShareLivePocket()
+    {
+        if (Context.RunId is { } runId)
+            Context.Services.GetService<RunningAbyssalPockets>()?.Set(runId, Context.TierIndex, Context.Weather?.Name);
     }
 
     /// <summary>Reopen the picker on the run that is already answered — the one line it folded behind.</summary>
@@ -407,10 +415,15 @@ public sealed partial class ActivityWindowSectionViewModel : RunWindowSection
             case nameof(IRunWindowContext.WeatherIndex):
                 OnPropertyChanged(nameof(WeatherEnvironmentText));
                 OnPropertyChanged(nameof(WeatherEffectText));
+                _ShareLivePocket();
                 break;
             case nameof(IRunWindowContext.TierIndex):
                 OnPropertyChanged(nameof(TierText));
                 OnPropertyChanged(nameof(WeatherEffectText));
+                _ShareLivePocket();
+                break;
+            case nameof(IRunWindowContext.RunId):
+                _ShareLivePocket();
                 break;
             case nameof(IRunWindowContext.HasWeatherAndTier):
                 OnPropertyChanged(nameof(HasWeatherAndTier));

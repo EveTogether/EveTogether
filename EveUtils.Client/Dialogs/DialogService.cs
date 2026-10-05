@@ -437,9 +437,9 @@ public sealed class DialogService : IDialogService, ISingletonService
         Route(new FleetsWindow(viewModel), "FLEETS", "fleet", "fleets", MaterialIconKind.AccountGroupOutline)
             as FleetsViewModel ?? viewModel;
 
-    public void ShowSettings(string currentDirectory, string detectedDefault, bool shareLocation, bool shareBounty, bool shareCombat, bool loadTypeImages, Theming.FactionTheme currentFaction, string sdeVersionLabel, Func<SettingsResult, Task> onApply, bool openFitDetailAfterImport = true, Notifications.ToastPosition toastPosition = Notifications.ToastPosition.TopRight, bool enableLocalApi = false, int localApiPort = LocalApi.LocalApiServer.DefaultPort, string localApiStatusLabel = "", LocalApi.ILocalApiServer? localApiServer = null, bool checkUpdatesOnStartup = true, Clipboard.ClipboardWatchService? clipboardWatch = null, int initialCategory = 0, bool openFleetRunWindowImmediately = false, bool autoPublishFleetRuns = true, bool shareLoot = false, bool shareMining = false, bool autoStartMissions = true, bool autoStartSites = true, DayOfWeek weekStartsOn = DayOfWeek.Monday, bool includeNightlyBuilds = false, Updates.IUpdateService? updates = null, bool offerHomefrontRuns = true, Func<Task>? runSetupAgain = null)
+    public void ShowSettings(string currentDirectory, string detectedDefault, bool shareLocation, bool shareBounty, bool shareCombat, bool loadTypeImages, Theming.FactionTheme currentFaction, string sdeVersionLabel, Func<SettingsResult, Task> onApply, bool openFitDetailAfterImport = true, Notifications.ToastPosition toastPosition = Notifications.ToastPosition.TopRight, bool enableLocalApi = false, int localApiPort = LocalApi.LocalApiServer.DefaultPort, string localApiStatusLabel = "", LocalApi.ILocalApiServer? localApiServer = null, bool checkUpdatesOnStartup = true, Clipboard.ClipboardWatchService? clipboardWatch = null, int initialCategory = 0, bool openFleetRunWindowImmediately = false, bool autoPublishFleetRuns = true, bool shareLoot = false, bool shareMining = false, bool autoStartMissions = true, bool autoStartSites = true, DayOfWeek weekStartsOn = DayOfWeek.Monday, bool includeNightlyBuilds = false, Updates.IUpdateService? updates = null, bool offerHomefrontRuns = true, Func<Task>? runSetupAgain = null, bool includeLocationInLocalApi = false, Action? openWidgetManager = null)
     {
-        var window = new SettingsWindow(currentDirectory, detectedDefault, shareLocation, shareBounty, shareCombat, loadTypeImages, currentFaction, sdeVersionLabel, openFitDetailAfterImport, toastPosition, enableLocalApi, localApiPort, localApiStatusLabel, localApiServer, checkUpdatesOnStartup, clipboardWatch, onApply, initialCategory, openFleetRunWindowImmediately, autoPublishFleetRuns, shareLoot, shareMining, autoStartMissions, autoStartSites, weekStartsOn, includeNightlyBuilds, updates, offerHomefrontRuns, runSetupAgain);
+        var window = new SettingsWindow(currentDirectory, detectedDefault, shareLocation, shareBounty, shareCombat, loadTypeImages, currentFaction, sdeVersionLabel, openFitDetailAfterImport, toastPosition, enableLocalApi, localApiPort, localApiStatusLabel, localApiServer, checkUpdatesOnStartup, clipboardWatch, onApply, initialCategory, openFleetRunWindowImmediately, autoPublishFleetRuns, shareLoot, shareMining, autoStartMissions, autoStartSites, weekStartsOn, includeNightlyBuilds, updates, offerHomefrontRuns, runSetupAgain, includeLocationInLocalApi, openWidgetManager);
         Route(window, "SETTINGS", "settings", "settings", MaterialIconKind.TuneVariant); // docked tab in docked mode, floating window otherwise
     }
 
@@ -525,6 +525,13 @@ public sealed class DialogService : IDialogService, ISingletonService
         _Observe(viewModel.LoadAsync(), "the game logs could not be read");
         return Route(new GameLogsWindow(viewModel), "GAME LOGS", "gamelogs", "game-logs", MaterialIconKind.ScriptTextOutline)
             as GameLogsViewModel ?? viewModel;
+    }
+
+    public void ShowWidgetManager(ViewModels.Widgets.WidgetManagerViewModel viewModel)
+    {
+        _Observe(viewModel.LoadAsync(), "the widget manager could not read the widgets");
+        Route(new Views.Widgets.WidgetManagerWindow(viewModel), "WIDGETS", "tools", "widget-manager",
+            MaterialIconKind.MonitorDashboard);
     }
 
     public void ShowEsiMetrics(EsiMetricsViewModel viewModel) =>

@@ -199,7 +199,7 @@ public interface IDialogService
     /// none), <paramref name="detectedDefault"/> the platform-probed fallback (Auto-detect). On Save the view invokes
     /// <paramref name="onApply"/> with the chosen values (the caller persists + applies live); Cancel/close does nothing.
     /// </summary>
-    void ShowSettings(string currentDirectory, string detectedDefault, bool shareLocation, bool shareBounty, bool shareCombat, bool loadTypeImages, FactionTheme currentFaction, string sdeVersionLabel, Func<SettingsResult, Task> onApply, bool openFitDetailAfterImport = true, Notifications.ToastPosition toastPosition = Notifications.ToastPosition.TopRight, bool enableLocalApi = false, int localApiPort = LocalApi.LocalApiServer.DefaultPort, string localApiStatusLabel = "", LocalApi.ILocalApiServer? localApiServer = null, bool checkUpdatesOnStartup = true, Clipboard.ClipboardWatchService? clipboardWatch = null, int initialCategory = 0, bool openFleetRunWindowImmediately = false, bool autoPublishFleetRuns = true, bool shareLoot = false, bool shareMining = false, bool autoStartMissions = true, bool autoStartSites = true, DayOfWeek weekStartsOn = DayOfWeek.Monday, bool includeNightlyBuilds = false, Updates.IUpdateService? updates = null, bool offerHomefrontRuns = true, Func<Task>? runSetupAgain = null);
+    void ShowSettings(string currentDirectory, string detectedDefault, bool shareLocation, bool shareBounty, bool shareCombat, bool loadTypeImages, FactionTheme currentFaction, string sdeVersionLabel, Func<SettingsResult, Task> onApply, bool openFitDetailAfterImport = true, Notifications.ToastPosition toastPosition = Notifications.ToastPosition.TopRight, bool enableLocalApi = false, int localApiPort = LocalApi.LocalApiServer.DefaultPort, string localApiStatusLabel = "", LocalApi.ILocalApiServer? localApiServer = null, bool checkUpdatesOnStartup = true, Clipboard.ClipboardWatchService? clipboardWatch = null, int initialCategory = 0, bool openFleetRunWindowImmediately = false, bool autoPublishFleetRuns = true, bool shareLoot = false, bool shareMining = false, bool autoStartMissions = true, bool autoStartSites = true, DayOfWeek weekStartsOn = DayOfWeek.Monday, bool includeNightlyBuilds = false, Updates.IUpdateService? updates = null, bool offerHomefrontRuns = true, Func<Task>? runSetupAgain = null, bool includeLocationInLocalApi = false, Action? openWidgetManager = null);
 
     /// <summary>Per-fleet sharing dialog: per character a three-way override per metric. Returns true if the user saved.</summary>
     Task<bool> ShowFleetSharingAsync(ViewModels.FleetShareViewModel viewModel);
@@ -238,6 +238,9 @@ public interface IDialogService
     /// <summary>Shows the GAME LOGS screen (ET-410): every character's EVE game log lines in one list, as a hosted
     /// module — a docked tab or a floating window.</summary>
     GameLogsViewModel ShowGameLogs(GameLogsViewModel viewModel);
+
+    /// <summary>The widget manager (ET-434): stream widget presets, My widgets and their OBS URLs.</summary>
+    void ShowWidgetManager(ViewModels.Widgets.WidgetManagerViewModel viewModel);
 
     /// <summary>Shows the client ESI-metrics window non-modally so the per-bucket counters keep
     /// updating live while it is open.</summary>

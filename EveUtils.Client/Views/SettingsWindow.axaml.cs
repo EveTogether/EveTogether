@@ -42,6 +42,7 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
     private readonly Func<SettingsResult, Task>? _onApply;
     private readonly IUpdateService? _updates;
     private readonly Func<Task>? _runSetupAgain;
+    private readonly Action? _openWidgetManager;
 
     // The channel actually in force when this window opened (ET-339) — what "Check now" asks about. It follows
     // Save/Cancel's own rule: nothing the operator has not saved yet takes effect, so a pending, unsaved flip of
@@ -77,7 +78,7 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
     private TextBox _localApiPortBox = null!;
     private Ellipse _localApiStatusDot = null!;
     private TextBlock _localApiStatusBlock = null!;
-    private Button _localApiStartStopButton = null!, _localApiDocsButton = null!, _localApiWidgetButton = null!;
+    private Button _localApiStartStopButton = null!, _localApiDocsButton = null!;
     private RadioButton _factionGallente = null!, _factionAmarr = null!, _factionCaldari = null!, _factionMinmatar = null!;
     private StackPanel _generalPanel = null!, _interfacePanel = null!, _privacyPanel = null!, _integrationsPanel = null!;
     private StackPanel _keyboardShortcutsPanel = null!, _shortcutRowsPanel = null!;
@@ -125,9 +126,10 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
     }
 
     public SettingsWindow(string currentDirectory, string detectedDefault, bool shareLocation, bool shareBounty, bool shareCombat, bool loadTypeImages, Theming.FactionTheme currentFaction, string sdeVersionLabel, bool openFitDetailAfterImport = true, Notifications.ToastPosition toastPosition = Notifications.ToastPosition.TopRight, bool enableLocalApi = false, int localApiPort = LocalApi.LocalApiServer.DefaultPort, string localApiStatusLabel = "", ILocalApiServer? localApiServer = null, bool checkUpdatesOnStartup = true, ClipboardWatchService? clipboardWatch = null, Func<SettingsResult, Task>? onApply = null,
-        int initialCategory = 0, bool openFleetRunWindowImmediately = false, bool autoPublishFleetRuns = true, bool shareLoot = false, bool shareMining = false, bool autoStartMissions = true, bool autoStartSites = true, DayOfWeek weekStartsOn = DayOfWeek.Monday, bool includeNightlyBuilds = false, IUpdateService? updates = null, bool offerHomefrontRuns = true, Func<Task>? runSetupAgain = null) : this()
+        int initialCategory = 0, bool openFleetRunWindowImmediately = false, bool autoPublishFleetRuns = true, bool shareLoot = false, bool shareMining = false, bool autoStartMissions = true, bool autoStartSites = true, DayOfWeek weekStartsOn = DayOfWeek.Monday, bool includeNightlyBuilds = false, IUpdateService? updates = null, bool offerHomefrontRuns = true, Func<Task>? runSetupAgain = null, bool includeLocationInLocalApi = false, Action? openWidgetManager = null) : this()
     {
         _runSetupAgain = runSetupAgain;
+        _openWidgetManager = openWidgetManager;
         _detectedDefault = detectedDefault;
         _localApi = localApiServer;
         _clipboardWatch = clipboardWatch;
@@ -157,6 +159,8 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
         _autoStartSitesBox = this.FindControl<CheckBox>("AutoStartSitesBox")!;
         OfferHomefrontRunsBox = this.FindControl<CheckBox>(nameof(OfferHomefrontRunsBox))
             ?? throw new InvalidOperationException("OfferHomefrontRunsBox is missing from SettingsWindow.axaml");
+        IncludeLocationInLocalApiBox = this.FindControl<CheckBox>(nameof(IncludeLocationInLocalApiBox))
+            ?? throw new InvalidOperationException("IncludeLocationInLocalApiBox is missing from SettingsWindow.axaml");
         _clipboardConsumersBlock = this.FindControl<TextBlock>("ClipboardConsumersBlock")!;
         _clipboardUnsupportedBlock = this.FindControl<TextBlock>("ClipboardUnsupportedBlock")!;
         _enableLocalApiBox = this.FindControl<CheckBox>("EnableLocalApiBox")!;
@@ -168,7 +172,6 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
         _localApiStatusBlock = this.FindControl<TextBlock>("LocalApiStatusBlock")!;
         _localApiStartStopButton = this.FindControl<Button>("LocalApiStartStopButton")!;
         _localApiDocsButton = this.FindControl<Button>("LocalApiDocsButton")!;
-        _localApiWidgetButton = this.FindControl<Button>("LocalApiWidgetButton")!;
         _factionGallente = this.FindControl<RadioButton>("FactionGallente")!;
         _factionAmarr = this.FindControl<RadioButton>("FactionAmarr")!;
         _factionCaldari = this.FindControl<RadioButton>("FactionCaldari")!;
@@ -238,6 +241,7 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
         _autoStartMissionsBox.IsChecked = autoStartMissions;
         _autoStartSitesBox.IsChecked = autoStartSites;
         OfferHomefrontRunsBox.IsChecked = offerHomefrontRuns;
+        IncludeLocationInLocalApiBox.IsChecked = includeLocationInLocalApi;
         this.FindControl<TextBlock>("SdeVersionBlock")!.Text = sdeVersionLabel;
         this.FindControl<TextBlock>("DataFolderBlock")!.Text = Composition.ClientServices.DataDirectory();
         _toastPositionBox.SelectedIndex = (int)toastPosition;
@@ -309,7 +313,6 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
         _localApiStartStopButton.Content = button;
         var running = snapshot.Status == LocalApiStatus.Running;
         _localApiDocsButton.IsEnabled = running;
-        _localApiWidgetButton.IsEnabled = running;
         _enableLocalApiBox.IsChecked = running;
     }
 
@@ -321,13 +324,8 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
         _ = TopLevel.GetTopLevel(this)?.Launcher.LaunchUriAsync(new Uri($"{url}/scalar/"));
     }
 
-    // Opens the ready-to-run sample DPS widget in the browser (only enabled while the server runs).
-    private void OnOpenWidget(object? sender, RoutedEventArgs e)
-    {
-        var url = _localApi?.Status.Url;
-        if (string.IsNullOrEmpty(url)) return;
-        _ = TopLevel.GetTopLevel(this)?.Launcher.LaunchUriAsync(new Uri($"{url}/widget"));
-    }
+    // The widget manager says itself when the API is off and offers to start it, so this works either way.
+    private void OnOpenWidgetManager(object? sender, RoutedEventArgs e) => _openWidgetManager?.Invoke();
 
     // Live start/stop of the local API host without leaving the view. Uses the port currently in the box; the
     // status indicator and checkbox update from the resulting StatusChanged event.
@@ -804,6 +802,6 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
         var autoStartSites = _autoStartSitesBox.IsChecked ?? true;
         var weekStartsOn = _weekStartsOnBox.SelectedIndex == 1 ? DayOfWeek.Sunday : DayOfWeek.Monday;
         var includeNightlyBuilds = _channelNightlyButton?.IsChecked ?? false;
-        return new SettingsResult(dir, shareLocation, shareBounty, shareCombat, loadTypeImages, SelectedFaction(), reimportSde, openFitDetailAfterImport, toastPosition, enableLocalApi, localApiPort, checkUpdatesOnStartup, openFleetRunWindowImmediately, autoPublishFleetRuns, shareLoot, shareMining, autoStartMissions, autoStartSites, weekStartsOn, includeNightlyBuilds, _channelTouched, OfferHomefrontRunsBox.IsChecked ?? true);
+        return new SettingsResult(dir, shareLocation, shareBounty, shareCombat, loadTypeImages, SelectedFaction(), reimportSde, openFitDetailAfterImport, toastPosition, enableLocalApi, localApiPort, checkUpdatesOnStartup, openFleetRunWindowImmediately, autoPublishFleetRuns, shareLoot, shareMining, autoStartMissions, autoStartSites, weekStartsOn, includeNightlyBuilds, _channelTouched, OfferHomefrontRunsBox.IsChecked ?? true, IncludeLocationInLocalApiBox.IsChecked ?? false);
     }
 }
