@@ -12,14 +12,9 @@ namespace EveUtils.Shared.Modules.Runs.Commands;
 
 [ClientOnly]
 internal sealed class SetRunAttendanceCommandHandler(
-    IDbContextFactory<ClientDbContext> contextFactory, IEventBus eventBus, IDispatcher dispatcher)
+    IDbContextFactory<ClientDbContext> contextFactory, IEventBus eventBus, IDispatcher dispatcher, RunAttendanceWriteGate writeGate)
     : ICommandHandler<SetRunAttendanceCommand, Result<int>>
 {
-    // Serializes every attendance write app-wide (ET-287, ET-375): two windows on the same run now genuinely call
-    // this at the same instant and can collide on the Sqlite file ("database is locked") instead of leaving the
-    // StandingSetAtUtc check below to settle who wins — see PR for the full race.
-    private static readonly SemaphoreSlim _writeGate = new(1, 1);
-
     public async Task<Result<int>> Handle(SetRunAttendanceCommand command, CancellationToken cancellationToken = default)
     {
         bool byGroup = !string.IsNullOrEmpty(command.GroupCode);
@@ -30,7 +25,9 @@ internal sealed class SetRunAttendanceCommandHandler(
             return Result<int>.Failure(new ResultMessage(MessageSeverity.Error, MessageCodes.ValidationFailed,
                 "The number of pilots not on the roster cannot be negative.", "Runs"));
 
-        await _writeGate.WaitAsync(cancellationToken);
+        // Two windows on the same run write at the same instant; serialized, the StandingSetAtUtc check settles who wins
+        // instead of a "database is locked".
+        await writeGate.Gate.WaitAsync(cancellationToken);
         try
         {
             try
@@ -46,7 +43,7 @@ internal sealed class SetRunAttendanceCommandHandler(
         }
         finally
         {
-            _writeGate.Release();
+            writeGate.Gate.Release();
         }
     }
 
