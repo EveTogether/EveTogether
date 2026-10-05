@@ -109,7 +109,19 @@ public sealed partial class FleetMemberRowViewModel : ObservableObject, IFleetMe
     public bool IsOffline => Presence == FleetMemberPresenceState.Offline;
     public bool IsPresenceUnknown => Presence == FleetMemberPresenceState.Unknown;
 
-    public string PresenceText => Presence switch
+    /// <summary>The presence chip's word for a fleet mate (ET-440) — "not in game", "no link", "app closed" — instead of
+    /// a bare "unknown"; <see cref="PresenceTooltip"/> carries the reason in full. Null for an own character, whose
+    /// presence this client sees directly.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(PresenceText))]
+    private string? _statusText;
+
+    [ObservableProperty] private string? _presenceTooltip;
+
+    /// <summary>Whether the server holds a connection for this character; null from a server too old to say.</summary>
+    public bool? IsConnected { get; init; }
+
+    public string PresenceText => StatusText ?? Presence switch
     {
         FleetMemberPresenceState.Online => "online",
         FleetMemberPresenceState.Offline => "offline",

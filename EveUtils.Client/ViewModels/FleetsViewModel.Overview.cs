@@ -249,10 +249,7 @@ public sealed partial class FleetsViewModel
         {
             foreach (var member in row.Members)
             {
-                member.Presence = FleetMemberPresence.Read(
-                    member.IsMine ? _presence?.IsInGame(member.CharacterId, member.CharacterName) : null,
-                    PresenceState.Unknown,
-                    FleetMemberPresence.IsSilent(member.LastSeenAt, now));
+                _ApplyPresence(row, member, now);
                 member.LinkState = LinkStateOf(row, member, links);
                 member.ElsewhereNote = member.LinkState == FleetMemberLinkState.ElsewhereActive
                     ? ElsewhereNoteFor(member, links)
@@ -771,6 +768,43 @@ public sealed partial class FleetsViewModel
             lane.Tick(now);
         foreach (var row in _allRows.Where(r => r.IsInActiveGroup))
             row.Tick(now);
+        // Every fleet still to fly, not only the started ones: who is ready matters most before the start (ET-440).
+        foreach (var row in _allRows.Where(r => !r.IsFinished))
+        {
+            foreach (var member in row.Members)
+                _ApplyPresence(row, member, now);
+            row.RefreshReadiness();
+        }
+    }
+
+    /// <summary>
+    /// One member's presence and the reason behind it (ET-440). An own character is read off this machine's EVE
+    /// client; anyone else off what the fleet stream last said about them, with the roster's last-seen and the server's
+    /// connection flag behind it. This used to read the roster's last-seen alone — a snapshot from the last reload — so
+    /// a member who joined after it read "unknown" and everyone else turned "offline" ninety seconds after it.
+    /// </summary>
+    private void _ApplyPresence(FleetViewModel row, FleetMemberRowViewModel member, DateTimeOffset now)
+    {
+        if (member.IsMine)
+        {
+            member.Presence = FleetMemberPresence.Read(
+                _presence?.IsInGame(member.CharacterId, member.CharacterName), PresenceState.Unknown, isSilent: false);
+            member.StatusText = null;
+            member.PresenceTooltip = null;
+            return;
+        }
+
+        if (_board is null || member.IsExternal)
+        {
+            member.Presence = FleetMemberPresence.Read(null, PresenceState.Unknown,
+                FleetMemberPresence.IsSilent(member.LastSeenAt, now));
+            return;
+        }
+
+        FleetMateStatus status = _board.StatusOf(row.Id, member.CharacterId, member.IsConnected, member.LastSeenAt, now);
+        member.Presence = status.Reason is FleetMemberStatusReason.NotConnected ? FleetMemberPresenceState.Offline : status.Presence;
+        member.StatusText = FleetMemberStatusText.Short(status);
+        member.PresenceTooltip = FleetMemberStatusText.Line(status, null, now);
     }
 
     // ── Row actions the overview adds (ET-170): the lifecycle verbs that used to live in the roster only ──────
