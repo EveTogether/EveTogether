@@ -138,7 +138,7 @@ public sealed class KillmailImportTests : IDisposable
     public async Task ImportAsync_WithoutTheScope_ReportsScopeMissingWithoutCallingEsi()
     {
         _routes[Page1] = () => _RecentPage(1, 1);
-        var (client, _, stub) = _Pipeline(EsiAuthorization.ScopeMissing("esi-killmails.read_killmails.v1"));
+        var (client, _, stub) = _Pipeline(EsiAuthorization.Authorized("token"), grantedScopes: []);
 
         var result = await new EsiKillmailImporter(client, Repository, Scopes).ImportAsync(CharacterId, TestContext.Current.CancellationToken);
 
@@ -414,12 +414,14 @@ public sealed class KillmailImportTests : IDisposable
         }
     }
 
-    private (IEsiClient Client, FileEsiCacheStore Store, StubHttpMessageHandler Stub) _Pipeline(EsiAuthorization authorization)
+    // Grants the killmail scope unless a test says otherwise, so a request for any other scope fails like the real one.
+    private (IEsiClient Client, FileEsiCacheStore Store, StubHttpMessageHandler Stub) _Pipeline(EsiAuthorization authorization,
+        IReadOnlyCollection<string>? grantedScopes = null)
     {
         var stub = new StubHttpMessageHandler((request, _) => _routes[request.RequestUri?.PathAndQuery ?? ""]());
         var store = new FileEsiCacheStore(_cacheDirectory);
         var cache = new EsiCacheHandler(store, new EsiRateLimitMonitor(NullLogger<EsiRateLimitMonitor>.Instance)) { InnerHandler = stub };
-        var client = new EsiClient(new SingleClientHttpFactory(new HttpClient(cache)), new FakeEsiTokenProvider(authorization),
+        var client = new EsiClient(new SingleClientHttpFactory(new HttpClient(cache)), new FakeEsiTokenProvider(authorization, grantedScopes ?? [KillmailsScopeCatalog.ReadKillmails]),
             new EsiOutageDetector(new EsiAvailabilityState()), NullLogger<EsiClient>.Instance);
         return (client, store, stub);
     }
