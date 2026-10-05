@@ -405,6 +405,8 @@
                                 <Button Classes="mk" Content="EDIT" Command="{Binding EditDoctrineCommand}"
                                         IsVisible="{Binding SelectedComposition.CanEdit}"
                                         ToolTip.Tip="Edit the whole composition: roles, fits, minimums"/>
+                                <Button Classes="mk" Content="START FLEET" Command="{Binding StartFleetCommand}"
+                                        ToolTip.Tip="Start a new fleet with this doctrine, in FLEETS"/>
                             </StackPanel>
                         </Grid>
                     </Border>

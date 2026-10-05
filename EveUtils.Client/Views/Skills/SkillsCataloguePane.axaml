@@ -110,11 +110,13 @@
             <TextBlock DockPanel.Dock="Top" Margin="14,10,14,6" FontSize="10.5">
                 <Run FontSize="10" LetterSpacing="1.8" Foreground="{DynamicResource TextAccentBrush}" Text="{Binding ListTitle}"/><Run Text="   "/><Run Text="{Binding ListSummary}"/>
             </TextBlock>
-            <ScrollViewer HorizontalScrollBarVisibility="Disabled" Padding="14,0,2,8">
-                <ListBox Classes="skilllist" ItemsSource="{Binding Skills}" SelectedItem="{Binding SelectedSkillRow, Mode=TwoWay}">
+            <!-- The list scrolls itself, so the two-column grid keeps the mockup's 28 px rows instead of being stretched
+                 to fill the height. -->
+            <ListBox Classes="skilllist" Margin="14,0,2,8" ItemsSource="{Binding Skills}" SelectedItem="{Binding SelectedSkillRow, Mode=TwoWay}"
+                     ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                     <ListBox.ItemsPanel>
                         <ItemsPanelTemplate>
-                            <UniformGrid Columns="2"/>
+                            <UniformGrid Columns="2" VerticalAlignment="Top"/>
                         </ItemsPanelTemplate>
                     </ListBox.ItemsPanel>
                     <ListBox.ItemTemplate>
@@ -139,8 +141,7 @@
                             </Border>
                         </DataTemplate>
                     </ListBox.ItemTemplate>
-                </ListBox>
-            </ScrollViewer>
+            </ListBox>
         </DockPanel>
 
         <Border Grid.Column="1" BorderThickness="1,0,0,0" BorderBrush="{DynamicResource BorderBrush}"

@@ -290,6 +290,29 @@ public sealed partial class CompositionsViewModel : ObservableObject, IRefreshab
         ReadinessEntries.Clear();
     }
 
+    /// <summary>START FLEET in the doctrine header: the FLEETS module's own new-fleet flow. A local doctrine is coupled to
+    /// the new local fleet at once; a server fleet's create returns no id, so there the doctrine is set in its roster.</summary>
+    [RelayCommand]
+    private Task StartFleet() => _ObserveAsync(_StartFleetAsync());
+
+    private async Task _StartFleetAsync()
+    {
+        if (SelectedComposition is not { } doctrine)
+        {
+            return;
+        }
+
+        var fleets = _dialogs.ShowFleets(new FleetsViewModel(_services));
+        if (doctrine.IsLocal)
+        {
+            await fleets.NewLocalFleetForCompositionAsync(doctrine.Id);
+            return;
+        }
+
+        await fleets.NewFleetCommand.ExecuteAsync(null);
+        StatusMessage = $"A server fleet takes its doctrine in its roster: pick \"{doctrine.Name}\" under COMPOSITION once the fleet exists.";
+    }
+
     /// <summary>EDIT in the doctrine header: the full composition editor, as OPEN on the library card.</summary>
     [RelayCommand]
     private Task EditDoctrine() => OpenCompositionCommand.ExecuteAsync(SelectedComposition);
