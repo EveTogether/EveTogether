@@ -14,5 +14,6 @@ public static class SkillPlansModule
     {
         modelBuilder.ApplyConfiguration(new SkillPlanConfiguration());
         modelBuilder.ApplyConfiguration(new SkillPlanRowConfiguration());
+        modelBuilder.ApplyConfiguration(new SkillPlanSourceConfiguration());
     }
 }

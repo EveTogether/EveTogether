@@ -35,6 +35,41 @@ internal sealed class SkillPlanRepository(IDbContextFactory<SharedDbContext> con
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<IReadOnlyList<SkillPlanSource>> GetSourcesAsync(int planId, CancellationToken cancellationToken = default)
+    {
+        await using var db = await contextFactory.CreateDbContextAsync(cancellationToken);
+        return await db.Set<SkillPlanSource>()
+            .AsNoTracking()
+            .Where(source => source.PlanId == planId)
+            .OrderBy(source => source.Id)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<bool> SaveSourceAsync(int characterId, int planId, SkillPlanSource source, CancellationToken cancellationToken = default)
+    {
+        await using var db = await contextFactory.CreateDbContextAsync(cancellationToken);
+        bool owned = await db.Set<SkillPlan>().AnyAsync(p => p.Id == planId && p.CharacterId == characterId, cancellationToken);
+        if (!owned)
+        {
+            return false;
+        }
+
+        var existing = await db.Set<SkillPlanSource>().FirstOrDefaultAsync(s => s.PlanId == planId && s.Source == source.Source
+            && s.SourceRef == source.SourceRef && s.Label == source.Label, cancellationToken);
+        if (existing is null)
+        {
+            source.PlanId = planId;
+            db.Set<SkillPlanSource>().Add(source);
+        }
+        else
+        {
+            existing.DroppedLevels = source.DroppedLevels;
+        }
+
+        await db.SaveChangesAsync(cancellationToken);
+        return true;
+    }
+
     public async Task<int> CreateAsync(SkillPlan plan, CancellationToken cancellationToken = default)
     {
         await using var db = await contextFactory.CreateDbContextAsync(cancellationToken);
@@ -68,6 +103,8 @@ internal sealed class SkillPlanRepository(IDbContextFactory<SharedDbContext> con
 
         var rows = await db.Set<SkillPlanRow>().Where(row => row.PlanId == planId).ToListAsync(cancellationToken);
         db.Set<SkillPlanRow>().RemoveRange(rows);
+        db.Set<SkillPlanSource>().RemoveRange(
+            await db.Set<SkillPlanSource>().Where(source => source.PlanId == planId).ToListAsync(cancellationToken));
         db.Set<SkillPlan>().Remove(plan);
         await db.SaveChangesAsync(cancellationToken);
         return true;

@@ -101,7 +101,8 @@ public sealed class EsiSkillImporter(
         UnallocatedSp = unallocatedSp,
         LastRemapDate = attributes.LastRemapDate,
         AccruedRemapCooldownDate = attributes.AccruedRemapCooldownDate,
-        BonusRemaps = attributes.BonusRemaps
+        BonusRemaps = attributes.BonusRemaps,
+        SkillsRefreshedAt = DateTimeOffset.UtcNow
     };
 
     private static SkillImportResult Failure(EsiError? error) => error?.Kind switch

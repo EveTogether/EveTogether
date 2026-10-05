@@ -29,5 +29,9 @@ public interface ISkillPlanRepository : ISkillPlanReader
     /// <c>RemoveMatchingProvisionalKillmailCommand</c> matches on a natural key instead of a synthetic row id.
     /// Returns false when the plan carries no such row, or <paramref name="planId"/> is not one of
     /// <paramref name="characterId"/>'s.</summary>
+    /// <summary>Records what the plan was built from; a source already recorded (same kind, ref and label) is
+    /// replaced. Returns false when <paramref name="planId"/> is not one of <paramref name="characterId"/>'s plans.</summary>
+    Task<bool> SaveSourceAsync(int characterId, int planId, SkillPlanSource source, CancellationToken cancellationToken = default);
+
     Task<bool> RemoveRowAsync(int characterId, int planId, int skillTypeId, int level, CancellationToken cancellationToken = default);
 }

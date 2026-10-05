@@ -15,4 +15,7 @@ public interface ISkillPlanReader
 
     /// <summary>A plan's rows, ordered by their stored position.</summary>
     Task<IReadOnlyList<SkillPlanRow>> GetRowsAsync(int planId, CancellationToken cancellationToken = default);
+
+    /// <summary>What a plan was built from, in the order it was added.</summary>
+    Task<IReadOnlyList<SkillPlanSource>> GetSourcesAsync(int planId, CancellationToken cancellationToken = default);
 }
