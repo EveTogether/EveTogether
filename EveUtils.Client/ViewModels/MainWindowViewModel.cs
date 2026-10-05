@@ -1639,6 +1639,12 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         await RefreshCharactersAsync();        // reflect any scope/coupling changes in the list badges
     }
 
+    /// <summary>The red ESI chip in the character list: the sign-in EVE refused, one click from being redone (ET-445).
+    /// A chip in any other state only explains itself on hover.</summary>
+    [RelayCommand]
+    private Task SignInAgain(CharacterViewModel? character) =>
+        character is { EsiNeedsSignIn: true } ? ReAuthenticateAsync(character.CharacterId) : Task.CompletedTask;
+
     /// <summary>
     /// Re-authenticate a character through the same scope-selection popup shown at sign-in, called from its
     /// settings dialog. The character's currently granted scopes are pre-ticked, so the user can add or drop ESI scopes.

@@ -95,11 +95,16 @@ public sealed partial class HomeAttentionViewModel : ObservableObject, IDisposab
                     $"skill queue paused, {queue.Queued} skill{(queue.Queued == 1 ? "" : "s")} waiting ({queue.SkillText} first). "
                     + "It resumes when the character logs in.", null, null));
 
-            if (row.Character.EsiTokenStatus == TokenStatus.NeedsReauth)
+            // Same test as the red ESI chip (ET-445): a refused token is removed from disk (ET-54), so after the next check
+            // or a restart the same character reads as NoToken — and still needs this line.
+            if (row.Character.EsiNeedsSignIn)
             {
                 int characterId = row.CharacterId;
+                string why = row.Character.EsiTokenStatus == TokenStatus.NeedsReauth
+                    ? "ESI refused the refresh token."
+                    : "has no ESI sign-in on this PC.";
                 lines.Add(_Line($"esi:{characterId}", AttentionKind.Esi, row.Character.Name,
-                    "ESI refused the refresh token. ESI reads (location gaps, ship, skills, fleet sync) are paused until it signs in again.",
+                    $"{why} ESI reads (location gaps, ship, skills, fleet sync) are paused until it signs in again.",
                     "RE-AUTHORIZE", () => _ = _navigation.ReAuthorize(characterId)));
             }
         }
