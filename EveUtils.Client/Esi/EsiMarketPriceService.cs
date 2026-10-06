@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using EveUtils.Client.Runs;
 using EveUtils.Shared.Modules.Esi.Http;
 using EveUtils.Shared.Modules.Market.Entities;
 using EveUtils.Shared.Modules.Market.Repositories;
@@ -19,6 +20,7 @@ namespace EveUtils.Client.Esi;
 public sealed class EsiMarketPriceService(
     IEsiClient esi,
     IMarketPriceRepository repository,
+    UnrecognisedLootRepricer unrecognisedLoot,
     ILogger<EsiMarketPriceService> logger) : BackgroundService
 {
     private static readonly TimeSpan PollInterval = TimeSpan.FromHours(1);
@@ -75,5 +77,9 @@ public sealed class EsiMarketPriceService(
 
         await repository.ReplaceAllAsync(prices, cancellationToken);
         logger.LogInformation("Refreshed {Count} ESI market prices.", prices.Count);
+
+        // New prices can be the ones an unpriced loot line was waiting for; saved activities valued before them are
+        // added up again here rather than only when their detail screen happens to be opened (ET-460).
+        await unrecognisedLoot.RepriceAsync(cancellationToken);
     }
 }

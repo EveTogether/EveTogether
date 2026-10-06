@@ -77,7 +77,7 @@ public sealed partial class InventoryListEditorViewModel(
             return false;
 
         InventoryTextReading reading = string.IsNullOrWhiteSpace(Text)
-            ? new InventoryTextReading([], 0, Refusal: null, IsSingleUnknownRow: false)
+            ? new InventoryTextReading([], [], Refusal: null, IsSingleUnknownRow: false)
             : InventoryTextReading.Read(Text, sde);
         if (reading.Lines.Count == 0 && !string.IsNullOrWhiteSpace(Text))
         {

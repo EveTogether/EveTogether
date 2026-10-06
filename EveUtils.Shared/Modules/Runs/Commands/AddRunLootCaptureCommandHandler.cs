@@ -59,6 +59,12 @@ internal sealed class AddRunLootCaptureCommandHandler(IDbContextFactory<ClientDb
                 ClipboardPrice = entry.ClipboardPrice,
                 LootKind = entry.LootKind
             });
+        // A repeat is excluded from the totals, so its unknown names would be counted a second time by the log.
+        if (repeatOf is null)
+            foreach (UnrecognisedLootNameInput unrecognised in command.Capture.UnrecognisedNames)
+                entity.UnrecognisedLines.Add(UnrecognisedLootWrites.NewLine(unrecognised, entity.Id,
+                    command.Capture.CharacterId ?? run.CharacterId, UnrecognisedItemSource.ClipboardCapture,
+                    command.Capture.CapturedAtUtc));
         db.Set<RunLootCapture>().Add(entity);
         await db.SaveChangesAsync(cancellationToken);
         // Whoever is showing this run has to hear that it just gained loot. Storing the capture and telling the

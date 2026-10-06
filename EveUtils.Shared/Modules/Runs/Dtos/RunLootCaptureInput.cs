@@ -20,4 +20,8 @@ public sealed class RunLootCaptureInput
     /// on B's run even while a window for character A is open (ET-130 deel 4 / ET-211).</summary>
     public long? CharacterId { get; init; }
     public required IReadOnlyList<RunLootEntryInput> Entries { get; init; }
+
+    /// <summary>Names of this copy no SDE type carries (ET-460), kept so they can be priced once one does. Names and
+    /// amounts only, never the copied text.</summary>
+    public IReadOnlyList<UnrecognisedLootNameInput> UnrecognisedNames { get; init; } = [];
 }

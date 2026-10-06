@@ -121,7 +121,8 @@ public sealed class ClipboardLootCapture : ISingletonService, IDisposable
             _openFingerprint = fingerprint;
         }
 
-        _TrackLastStore(StoreAndOfferAsync(fingerprint, reading.Lines, reading.UnresolvedCount, capture.CopiedByCharacter));
+        _TrackLastStore(StoreAndOfferAsync(fingerprint, reading.Lines, reading.UnrecognisedNames, reading.UnresolvedCount,
+            capture.CopiedByCharacter));
     }
 
     /// <summary>
@@ -177,8 +178,8 @@ public sealed class ClipboardLootCapture : ISingletonService, IDisposable
     /// reason, or kept as an excluded repeat — instead of announcing "recognised" before the save is known to have
     /// worked (ET-65 AC-5/AC-7 review finding).</summary>
     private async Task StoreAndOfferAsync(string fingerprint,
-        IReadOnlyList<(AppraisalLine Line, ClipboardInventoryItem Item)> lines, int unresolvedCount,
-        string? copiedByCharacter)
+        IReadOnlyList<(AppraisalLine Line, ClipboardInventoryItem Item)> lines,
+        IReadOnlyList<UnrecognisedLootNameInput> unrecognisedNames, int unresolvedCount, string? copiedByCharacter)
     {
         Result<RunLootCaptureSaveResult> result;
         try
@@ -203,7 +204,8 @@ public sealed class ClipboardLootCapture : ISingletonService, IDisposable
                         ClipboardPrice = resolved.Item.Price,
                         LootKind = LootKind.Gained
                     })
-                ]
+                ],
+                UnrecognisedNames = unrecognisedNames
             }));
         }
         catch (Exception ex)
@@ -222,7 +224,9 @@ public sealed class ClipboardLootCapture : ISingletonService, IDisposable
         }
 
         RunLootCaptureSaveResult saved = result.Value!;
-        var unresolvedSuffix = unresolvedCount > 0 ? $" {unresolvedCount} name(s) were not recognised." : string.Empty;
+        var unresolvedSuffix = unresolvedCount > 0
+            ? $" {unresolvedCount} name(s) were not recognised and are kept in the unrecognised items log."
+            : string.Empty;
 
         if (saved.RepeatOfCapturedAtUtc is { } repeatOf)
         {

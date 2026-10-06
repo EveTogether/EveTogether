@@ -1158,6 +1158,63 @@ namespace EveUtils.Migrations.Server.PostgreSql.Migrations
                     b.ToTable("RunParameter");
                 });
 
+            modelBuilder.Entity("EveUtils.Shared.Modules.Runs.Entities.UnrecognisedLootLine", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<long?>("CharacterId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("FirstSeenAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<long>("Quantity")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime?>("ResolvedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("ResolvedRunLootEntryId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("ResolvedRunParameterId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int?>("ResolvedTypeId")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal?>("ResolvedUnitPrice")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<Guid?>("RunId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("RunLootCaptureId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Source")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RunLootCaptureId");
+
+                    b.HasIndex("Status");
+
+                    b.ToTable("UnrecognisedLootLine");
+                });
+
             modelBuilder.Entity("EveUtils.Shared.Modules.ServerAuth.Entities.AllowedCharacter", b =>
                 {
                     b.Property<int>("Id")
@@ -1621,6 +1678,16 @@ namespace EveUtils.Migrations.Server.PostgreSql.Migrations
                     b.Navigation("Run");
                 });
 
+            modelBuilder.Entity("EveUtils.Shared.Modules.Runs.Entities.UnrecognisedLootLine", b =>
+                {
+                    b.HasOne("EveUtils.Shared.Modules.Runs.Entities.RunLootCapture", "RunLootCapture")
+                        .WithMany("UnrecognisedLines")
+                        .HasForeignKey("RunLootCaptureId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.Navigation("RunLootCapture");
+                });
+
             modelBuilder.Entity("EveUtils.Shared.Modules.ServerAuth.Entities.ServerSession", b =>
                 {
                     b.HasOne("EveUtils.Shared.Modules.ServerAuth.Entities.SyncedCharacter", "SyncedCharacter")
@@ -1673,6 +1740,8 @@ namespace EveUtils.Migrations.Server.PostgreSql.Migrations
             modelBuilder.Entity("EveUtils.Shared.Modules.Runs.Entities.RunLootCapture", b =>
                 {
                     b.Navigation("Entries");
+
+                    b.Navigation("UnrecognisedLines");
                 });
 
             modelBuilder.Entity("EveUtils.Shared.Modules.Ships.Entities.Ship", b =>

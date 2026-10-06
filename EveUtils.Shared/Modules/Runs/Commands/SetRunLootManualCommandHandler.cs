@@ -65,6 +65,9 @@ internal sealed class SetRunLootManualCommandHandler(
                 LootKind = entry.LootKind
             });
 
+        await UnrecognisedLootWrites.ReplaceOpenAsync(db, manual.Id, command.UnrecognisedNames, run.CharacterId,
+            command.CapturedAtUtc, cancellationToken);
+
         // Excluded and not deleted: the captures the list was written from stay readable underneath it, which is the
         // only way to read back what the correction actually changed.
         foreach (RunLootCapture superseded in captures.Where(candidate => candidate.Id != manual.Id

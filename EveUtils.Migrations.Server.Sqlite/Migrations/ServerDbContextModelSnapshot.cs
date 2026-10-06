@@ -1119,6 +1119,63 @@ namespace EveUtils.Migrations.Server.Sqlite.Migrations
                     b.ToTable("RunParameter");
                 });
 
+            modelBuilder.Entity("EveUtils.Shared.Modules.Runs.Entities.UnrecognisedLootLine", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("CharacterId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("FirstSeenAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("Quantity")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime?>("ResolvedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("ResolvedRunLootEntryId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("ResolvedRunParameterId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("ResolvedTypeId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<decimal?>("ResolvedUnitPrice")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("RunId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("RunLootCaptureId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Source")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RunLootCaptureId");
+
+                    b.HasIndex("Status");
+
+                    b.ToTable("UnrecognisedLootLine");
+                });
+
             modelBuilder.Entity("EveUtils.Shared.Modules.ServerAuth.Entities.AllowedCharacter", b =>
                 {
                     b.Property<int>("Id")
@@ -1570,6 +1627,16 @@ namespace EveUtils.Migrations.Server.Sqlite.Migrations
                     b.Navigation("Run");
                 });
 
+            modelBuilder.Entity("EveUtils.Shared.Modules.Runs.Entities.UnrecognisedLootLine", b =>
+                {
+                    b.HasOne("EveUtils.Shared.Modules.Runs.Entities.RunLootCapture", "RunLootCapture")
+                        .WithMany("UnrecognisedLines")
+                        .HasForeignKey("RunLootCaptureId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.Navigation("RunLootCapture");
+                });
+
             modelBuilder.Entity("EveUtils.Shared.Modules.ServerAuth.Entities.ServerSession", b =>
                 {
                     b.HasOne("EveUtils.Shared.Modules.ServerAuth.Entities.SyncedCharacter", "SyncedCharacter")
@@ -1622,6 +1689,8 @@ namespace EveUtils.Migrations.Server.Sqlite.Migrations
             modelBuilder.Entity("EveUtils.Shared.Modules.Runs.Entities.RunLootCapture", b =>
                 {
                     b.Navigation("Entries");
+
+                    b.Navigation("UnrecognisedLines");
                 });
 
             modelBuilder.Entity("EveUtils.Shared.Modules.Ships.Entities.Ship", b =>

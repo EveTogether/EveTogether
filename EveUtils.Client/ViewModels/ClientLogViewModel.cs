@@ -25,6 +25,9 @@ public partial class ClientLogViewModel : ViewModelBase, ISingletonService
 
     public ObservableCollection<ClientLogRowViewModel> Entries { get; } = [];
 
+    /// <summary>The second tab: item names the EVE static data does not know yet (ET-460). Null without services.</summary>
+    public UnrecognisedItemsLogViewModel? Unrecognised { get; }
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsEmpty))]
     private int _count;
@@ -36,10 +39,11 @@ public partial class ClientLogViewModel : ViewModelBase, ISingletonService
     {
     }
 
-    public ClientLogViewModel(ILogStore store, IDialogService dialogs)
+    public ClientLogViewModel(ILogStore store, IDialogService dialogs, UnrecognisedItemsLogViewModel? unrecognised = null)
     {
         _store = store;
         _dialogs = dialogs;
+        Unrecognised = unrecognised;
         _store.EntryAdded += OnEntryAdded;
         Reload();
     }
@@ -57,7 +61,12 @@ public partial class ClientLogViewModel : ViewModelBase, ISingletonService
     }
 
     [RelayCommand]
-    private void Refresh() => Reload();
+    private void Refresh()
+    {
+        Reload();
+        if (Unrecognised is not null)
+            _ = Unrecognised.LoadAsync();
+    }
 
     [RelayCommand]
     private void Clear()

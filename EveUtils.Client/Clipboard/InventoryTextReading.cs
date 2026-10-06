@@ -1,5 +1,8 @@
+using System;
 using System.Collections.Generic;
+using System.Linq;
 using EveUtils.Shared.Modules.Market.Services;
+using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Sde;
 
 namespace EveUtils.Client.Clipboard;
@@ -8,10 +11,22 @@ namespace EveUtils.Client.Clipboard;
 /// nothing resolved — the reason to put in front of the pilot.</summary>
 public sealed record InventoryTextReading(
     IReadOnlyList<(AppraisalLine Line, ClipboardInventoryItem Item)> Lines,
-    int UnresolvedCount,
+    IReadOnlyList<ClipboardInventoryItem> Unresolved,
     string? Refusal,
     bool IsSingleUnknownRow)
 {
+    public int UnresolvedCount => Unresolved.Count;
+
+    /// <summary>The rows no SDE type carries, by name and merged — what the unrecognised log keeps (ET-460). A row
+    /// without a name has nothing to keep.</summary>
+    public IReadOnlyList<UnrecognisedLootNameInput> UnrecognisedNames =>
+    [
+        .. Unresolved
+            .Where(item => !string.IsNullOrWhiteSpace(item.Name))
+            .GroupBy(item => item.Name.Trim(), StringComparer.OrdinalIgnoreCase)
+            .Select(group => new UnrecognisedLootNameInput { Name = group.Key, Quantity = group.Sum(item => item.Quantity ?? 1) })
+    ];
+
     /// <summary>The one reading path, shared by the clipboard watch and the window's paste boxes, so the same text
     /// cannot be loot in one place and refused in the other. Whether a refusal is shown, logged or left in the box
     /// is the caller's business; working out that there is one is not.</summary>
@@ -19,7 +34,7 @@ public sealed record InventoryTextReading(
     {
         bool hasSingleRow = ClipboardInventoryParser.HasSingleRow(text);
         IReadOnlyList<ClipboardInventoryItem> items = ClipboardInventoryParser.Parse(text);
-        var resolution = SdeInventoryResolver.Resolve(items, sde);
+        var resolution = SdeInventoryResolver.ResolveItems(items, sde);
         bool hasNoSdeMatch = hasSingleRow && sde.IsAvailable && resolution.Lines.Count == 0;
         if (resolution.Lines.Count == 0 && sde.IsAvailable)
         {
@@ -33,12 +48,12 @@ public sealed record InventoryTextReading(
         }
 
         if (resolution.Lines.Count > 0)
-            return new InventoryTextReading(resolution.Lines, resolution.Unresolved.Count, Refusal: null, IsSingleUnknownRow: false);
+            return new InventoryTextReading(resolution.Lines, resolution.Unresolved, Refusal: null, IsSingleUnknownRow: false);
 
         // It never asks for column headings: an EVE inventory copy carries none.
         string refusal = resolution.Unresolved.Count > 0
             ? $"None of the {resolution.Unresolved.Count} copied names is a known item type. Copy rows from an EVE inventory window."
             : "No column in this copy stands out as the item names. Copy the rows from an EVE inventory window.";
-        return new InventoryTextReading([], resolution.Unresolved.Count, refusal, hasNoSdeMatch);
+        return new InventoryTextReading([], resolution.Unresolved, refusal, hasNoSdeMatch);
     }
 }

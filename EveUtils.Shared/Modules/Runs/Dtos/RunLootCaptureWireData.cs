@@ -10,4 +10,7 @@ public sealed class RunLootCaptureWireData
     public string? ContentHash { get; init; }
     public required bool IsExcluded { get; init; }
     public required IReadOnlyList<RunLootEntryInput> Entries { get; init; }
+
+    /// <summary>Not required: a payload from a client older than ET-460 simply has none.</summary>
+    public IReadOnlyList<UnrecognisedLootLineInput> UnrecognisedLines { get; init; } = [];
 }

@@ -308,6 +308,12 @@ sealed class Program
             if (repairedSiteTypes.IsSuccess && repairedSiteTypes.Value > 0)
                 Console.Error.WriteLine($"[startup] repaired the dungeon id of {repairedSiteTypes.Value} run(s)");
 
+            // Names copied while the SDE did not know them yet (ET-460) that it knows now.
+            Result<int> repricedLoot = dispatcher
+                .Send(new RepriceUnrecognisedLootCommand()).GetAwaiter().GetResult();
+            if (repricedLoot.IsSuccess && repricedLoot.Value > 0)
+                Console.Error.WriteLine($"[startup] recognised {repricedLoot.Value} loot line(s) the SDE had no name for");
+
             // One-time repair for ET-260: a mission flown with more than one own toon wrote the same reward
             // parameters onto every one of that group's runs, before the run window learned to write them onto only
             // the character who actually accepted the mission. Idempotent: a group already down to one run with

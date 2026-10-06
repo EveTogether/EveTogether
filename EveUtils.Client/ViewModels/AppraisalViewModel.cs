@@ -13,6 +13,8 @@ using EveUtils.Client.Formatting;
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Modules.Market.Services;
 using EveUtils.Shared.Modules.Market.Services.Implementations;
+using EveUtils.Shared.Modules.Runs.Commands;
+using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Sde;
 using EveUtils.Shared.Modules.Settings.Commands;
 
@@ -251,7 +253,9 @@ public partial class AppraisalViewModel : ViewModelBase
                 return;
             }
 
-            var (lines, unresolved) = SdeInventoryResolver.Resolve(parsed, _sde);
+            var (lines, unresolvedItems) = SdeInventoryResolver.ResolveItems(parsed, _sde);
+            IReadOnlyList<string> unresolved = [.. unresolvedItems.Select(item => item.Name)];
+            await _RecordUnrecognisedAsync(unresolvedItems, cancellationToken);
 
             if (lines.Count == 0)
             {
@@ -283,6 +287,22 @@ public partial class AppraisalViewModel : ViewModelBase
         {
             IsBusy = false;
         }
+    }
+
+    /// <summary>A name the SDE does not know is exactly what the unrecognised log is for (ET-460), whichever way it came
+    /// in. An appraisal belongs to no run, so it is only logged; a screen without a dispatcher has nowhere to log it.</summary>
+    private async Task _RecordUnrecognisedAsync(IReadOnlyList<ClipboardInventoryItem> unresolved, CancellationToken cancellationToken)
+    {
+        if (_dispatcher is null || unresolved.Count == 0)
+            return;
+
+        await _dispatcher.Send(new RecordUnrecognisedItemsCommand(
+        [
+            .. unresolved
+                .Where(item => !string.IsNullOrWhiteSpace(item.Name))
+                .GroupBy(item => item.Name.Trim(), StringComparer.OrdinalIgnoreCase)
+                .Select(group => new UnrecognisedLootNameInput { Name = group.Key, Quantity = group.Sum(item => item.Quantity ?? 1) })
+        ]), cancellationToken);
     }
 
     /// <summary>Empties the box and everything read out of it, so the next paste is not appraised beside the last.</summary>
