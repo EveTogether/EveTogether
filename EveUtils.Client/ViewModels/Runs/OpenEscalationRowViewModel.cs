@@ -11,13 +11,16 @@ namespace EveUtils.Client.ViewModels.Runs;
 public sealed partial class OpenEscalationRowViewModel
 {
     private readonly Func<OpenEscalationRowViewModel, Task> _start;
+    private readonly Func<OpenEscalationRowViewModel, Task> _decline;
 
     public OpenEscalationRowViewModel(
-        OpenEscalationDto escalation, string characterName, DateTime nowUtc, Func<OpenEscalationRowViewModel, Task> start)
+        OpenEscalationDto escalation, string characterName, DateTime nowUtc, Func<OpenEscalationRowViewModel, Task> start,
+        Func<OpenEscalationRowViewModel, Task> decline)
     {
         Escalation = escalation;
         CharacterText = characterName;
         _start = start;
+        _decline = decline;
         EscalationSiteText = OpsecText.Mark(escalation.Escalation.SiteName) ?? escalation.Escalation.SiteName;
         EscalationSystemText = OpsecText.Mark(escalation.Escalation.SystemName) ?? "system not recorded";
         SourceSiteText = $"from {OpsecText.Mark(escalation.SourceSiteName) ?? "a run"} · " +
@@ -42,6 +45,9 @@ public sealed partial class OpenEscalationRowViewModel
 
     [RelayCommand(CanExecute = nameof(CanStart))]
     private Task StartAsync() => _start(this);
+
+    [RelayCommand]
+    private Task DeclineAsync() => _decline(this);
 
     /// <summary>Hours and minutes, the precision the Agency itself shows — never seconds that are stale on arrival.</summary>
     private static string _Remaining(TimeSpan left) => left.TotalHours >= 1

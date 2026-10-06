@@ -86,7 +86,8 @@ internal static class ActivityOverviewRows
                     group.Key == RunParameterKey.Escalation
                         ? group.Select(reward => reward.TypedValue).FirstOrDefault(value => !string.IsNullOrEmpty(value))
                         : null,
-                    group.Key == RunParameterKey.Escalation ? escalationExpiresAtUtc : null))],
+                    group.Key == RunParameterKey.Escalation ? escalationExpiresAtUtc : null,
+                    group.Key == RunParameterKey.Escalation ? _EscalationStandingOf(all) : null))],
             summary.BountyIsk, summary.LootIskNet, summary.EnemyTypeCount,
             rewards.Any(reward => reward.ParameterKey == RunParameterKey.Escalation),
             hasAutoSavedRun,
@@ -98,6 +99,27 @@ internal static class ActivityOverviewRows
             abyssalFilamentText,
             _OwnShareByCharacterOf(summary, ownCharacterIds),
             hasShipLoss);
+    }
+
+    private static EscalationStanding? _EscalationStandingOf(IEnumerable<RunParameter> parameters)
+    {
+        DateTime nowUtc = DateTime.UtcNow;
+        EscalationStanding[] standings =
+        [
+            .. parameters
+                .Select(parameter => new RunParameterDto(parameter.RunId, parameter.ParameterKey, parameter.TypedValue,
+                    parameter.Amount, parameter.ItemTypeId, parameter.BonusWindowSeconds, parameter.ObservedAtUtc,
+                    parameter.EntryId))
+                .GroupBy(parameter => parameter.RunId)
+                .SelectMany(run => RunEscalations.Read(run))
+                .Select(escalation => escalation.StandingAt(nowUtc))
+        ];
+        if (standings.Length == 0)
+            return null;
+
+        return standings.Contains(EscalationStanding.Open) ? EscalationStanding.Open
+            : standings.Contains(EscalationStanding.Missed) ? EscalationStanding.Missed
+            : EscalationStanding.Done;
     }
 
     private static IReadOnlyDictionary<long, IskBreakdown>? _OwnShareByCharacterOf(

@@ -377,6 +377,16 @@
         <Setter Property="BorderBrush" Value="{StaticResource ValueBrush}"/>
         <Setter Property="TextElement.Foreground" Value="{StaticResource ValueBrush}"/>
     </Style>
+    <!-- The same chip once its escalation is settled (ET-453): green when flown, red when missed. Below .esc so they win
+         on a chip that carries both. -->
+    <Style Selector="Border.chip.escdone">
+        <Setter Property="BorderBrush" Value="{StaticResource GreenBrush}"/>
+        <Setter Property="TextElement.Foreground" Value="{StaticResource GreenBrush}"/>
+    </Style>
+    <Style Selector="Border.chip.escmissed">
+        <Setter Property="BorderBrush" Value="{StaticResource RedBrush}"/>
+        <Setter Property="TextElement.Foreground" Value="{StaticResource RedBrush}"/>
+    </Style>
     <!-- A fleet mate connected to the server with no word from the game yet (ET-455): blue, so it reads apart from the
          green of online and the dim of unknown and no link. Declared after .dim so it wins on a chip that carries both. -->
     <Style Selector="Border.chip.connected">

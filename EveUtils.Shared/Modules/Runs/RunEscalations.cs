@@ -16,6 +16,26 @@ public static class RunEscalations
             .OfType<RunEscalationDto>()
             .OrderBy(escalation => escalation.RegisteredAtUtc)];
 
+    /// <summary>The parameter rows of one newly registered escalation, sharing <paramref name="entryId"/> — the one
+    /// place that decides which rows an escalation is made of, for the run window's SAVE and for registering after it
+    /// (ET-453). The deadline is always the pilot's own reading, never a default duration (ET-125 AC-3).</summary>
+    public static IReadOnlyList<RunParameterInput> Rows(
+        Guid entryId, string siteName, int? dungeonId, string destinationSystem, int? destinationSolarSystemId,
+        DateTime expiresAtUtc, DateTime observedAtUtc)
+    {
+        RunParameterInput Row(RunParameterKey key, string value) =>
+            new() { ParameterKey = key, TypedValue = value, EntryId = entryId, ObservedAtUtc = observedAtUtc };
+
+        List<RunParameterInput> rows = [Row(RunParameterKey.Escalation, siteName)];
+        if (dungeonId is { } dungeon)
+            rows.Add(Row(RunParameterKey.EscalationDungeonId, dungeon.ToString(CultureInfo.InvariantCulture)));
+        rows.Add(Row(RunParameterKey.EscalationSystem, destinationSystem));
+        if (destinationSolarSystemId is { } solarSystem)
+            rows.Add(Row(RunParameterKey.EscalationSolarSystemId, solarSystem.ToString(CultureInfo.InvariantCulture)));
+        rows.Add(Row(RunParameterKey.EscalationExpiresAtUtc, expiresAtUtc.ToString("o", CultureInfo.InvariantCulture)));
+        return rows;
+    }
+
     /// <summary>The run an escalation run was started from, and which of its escalations — null on any other run.</summary>
     public static (Guid SourceRunId, Guid? EntryId)? SourceOf(IEnumerable<RunParameterDto> parameters) =>
         parameters.FirstOrDefault(parameter => parameter.ParameterKey == RunParameterKey.EscalationSourceRunId) is { } source

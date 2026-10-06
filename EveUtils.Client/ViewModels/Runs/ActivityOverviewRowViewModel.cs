@@ -198,7 +198,8 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase, IRunsA
         // nothing for that run and the FixedPayout chip from row.Rewards below carries the typed figure instead.
         IEnumerable<ActivityRewardChipViewModel> chips = row.Rewards
             .OrderBy(reward => (int)reward.ParameterKey)
-            .Select(reward => new ActivityRewardChipViewModel(reward.ParameterKey, reward.Amount, reward.TypedValue, reward.ExpiresAtUtc));
+            .Select(reward => new ActivityRewardChipViewModel(reward.ParameterKey, reward.Amount, reward.TypedValue, reward.ExpiresAtUtc,
+                standing: reward.Standing));
         if (row.OwnIsk.Of(IskSource.HomefrontPayout) is { } homefrontPayout)
             chips = chips.Append(new ActivityRewardChipViewModel(RunParameterKey.FixedPayout, homefrontPayout.Amount));
         Chips = [.. chips];

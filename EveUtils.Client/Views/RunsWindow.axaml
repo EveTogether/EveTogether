@@ -604,7 +604,7 @@
                     <ItemsControl x:Name="OpenEscalationsList" ItemsSource="{Binding OpenEscalations}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate DataType="vr:OpenEscalationRowViewModel">
-                                <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10" Margin="0,3">
+                                <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="10" Margin="0,3">
                                     <StackPanel Grid.Column="0" VerticalAlignment="Center">
                                         <TextBlock FontSize="11.5" TextTrimming="CharacterEllipsis"
                                                    Foreground="{StaticResource TextBrightBrush}">
@@ -617,6 +617,9 @@
                                     <TextBlock Grid.Column="1" Classes="rowfigure" VerticalAlignment="Center"
                                                Text="{Binding ExpiresText}"/>
                                     <Button Grid.Column="2" Classes="rowaction" MinWidth="62"
+                                            Content="WON'T DO" Command="{Binding DeclineCommand}"
+                                            ToolTip.Tip="Take this escalation off the list: you are not going to fly it"/>
+                                    <Button Grid.Column="3" Classes="rowaction" MinWidth="62"
                                             Content="START" Command="{Binding StartCommand}"
                                             ToolTip.Tip="Start the escalation run for this pilot, filled in and linked to the run it came from"/>
                                 </Grid>

@@ -28,6 +28,7 @@ internal sealed class DeleteRunsInGroupCommandHandler(
         if (command.OnlyRunIds is { } onlyRunIds)
             targets = targets.Where(run => onlyRunIds.Contains(run.Id));
 
+        List<Guid> deletedRunIds = await targets.Select(run => run.Id).ToListAsync(cancellationToken);
         int changed = await targets.ExecuteUpdateAsync(properties => properties
             .SetProperty(run => run.DeletedAtUtc, command.DeletedAtUtc)
             .SetProperty(run => run.SyncState,
@@ -45,6 +46,7 @@ internal sealed class DeleteRunsInGroupCommandHandler(
         // Rebuilt before the event fires, not after — same reasoning as SaveRunCommandHandler: a screen reacting to
         // RunDeletedEvent by re-reading the overview must never see the summary as it stood before this delete.
         await dispatcher.Send(new RebuildActivitySummariesCommand(representativeRunId), cancellationToken);
+        await EscalationRunLinks.ReopenSourcesOfAsync(db, dispatcher, deletedRunIds, cancellationToken);
         await eventBus.PublishAsync(new RunDeletedEvent(representativeRunId), EventTarget.Local, cancellationToken);
         await eventBus.PublishAsync(new RunsChangedEvent(representativeRunId, command.GroupCode), EventTarget.Local, cancellationToken);
         return Result<int>.Success(changed);

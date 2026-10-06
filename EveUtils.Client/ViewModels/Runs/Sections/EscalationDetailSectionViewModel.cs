@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using EveUtils.Client.Dialogs;
 using EveUtils.Client.Opsec;
 using EveUtils.Client.Runs;
@@ -14,6 +15,7 @@ using EveUtils.Shared.Modules.Runs.Commands;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Runs.Queries;
+using EveUtils.Shared.Modules.Sde.Dtos;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace EveUtils.Client.ViewModels.Runs.Sections;
@@ -27,10 +29,13 @@ public sealed partial class EscalationDetailSectionViewModel(RunDetailSectionSer
     private readonly Dictionary<int, (string? Text, string? EmptyText)> _jumpsByDestination = [];
 
     private ActivityDetailDto? _detail;
+    private Guid? _registerRunId;
     private Func<long, string> _nameOf = id => id.ToString(CultureInfo.InvariantCulture);
 
     [ObservableProperty] private IReadOnlyList<EscalationEntryViewModel> _entries = [];
     [ObservableProperty] private string? _escalationEmptyText;
+    [ObservableProperty] private string? _registerMessage;
+    [ObservableProperty] private bool _canRegister;
 
     public override bool HasContent => Entries.Count > 0;
 
@@ -53,6 +58,8 @@ public sealed partial class EscalationDetailSectionViewModel(RunDetailSectionSer
                 && _jumpsByDestination.TryGetValue(destination, out (string? Text, string? EmptyText) jumps))
                 (entry.EscalationJumpsText, entry.EscalationJumpsEmptyText) = jumps;
 
+        _registerRunId = _RegisterTargetOf(input.Detail);
+        CanRegister = _registerRunId is not null;
         EscalationEmptyText = Entries.Count == 0 ? "No escalation has been registered for this activity." : null;
         HeaderSummary = Entries switch
         {
@@ -87,6 +94,39 @@ public sealed partial class EscalationDetailSectionViewModel(RunDetailSectionSer
     private bool _IsOwn(ActivityDetailDto detail, Guid runId) =>
         services.OwnCharacterIds is not { } own
         || detail.Runs.FirstOrDefault(run => run.RunId == runId) is { } run && own.Contains(run.CharacterId);
+
+    /// <summary>The run a late registration lands on: this machine's own saved run of the activity (ET-453) — the
+    /// escalation was offered to that pilot, and the run is theirs to change (ET-214).</summary>
+    private Guid? _RegisterTargetOf(ActivityDetailDto detail) =>
+        detail.Runs.FirstOrDefault(run => _IsOwn(detail, run.RunId))?.RunId;
+
+    /// <summary>Registers an escalation on the saved run, the dialog the run window uses (ET-453).</summary>
+    [RelayCommand]
+    private async Task RegisterAsync()
+    {
+        if (_registerRunId is not { } runId || _detail is not { } detail || services.Services is not { } app
+            || app.GetService<IDialogService>() is not { } dialogs || services.Sde is not { } sde)
+            return;
+
+        IReadOnlyList<SdeSite> sourceSites = detail.SiteTypeId > 0
+            ? [.. sde.SearchSites().Where(site => site.DungeonId == detail.SiteTypeId)]
+            : [];
+        EscalationDialogViewModel dialog = await EscalationDialogFactory.CreateAsync(sde, sourceSites, services.Dispatcher);
+        if (!await dialogs.ShowEscalationDialogAsync(dialog) || dialog.Result is not { } registration)
+            return;
+
+        Result result = await services.Dispatcher.Send(new RegisterRunEscalationCommand(runId, registration.SiteName,
+            registration.DungeonId, registration.DestinationSystem, registration.DestinationSolarSystemId,
+            registration.ExpiresAtUtc));
+        if (!result.IsSuccess)
+        {
+            RegisterMessage = result.Messages.Count > 0 ? result.Messages[0].Text : "The escalation could not be registered.";
+            return;
+        }
+
+        RegisterMessage = null;
+        RaiseActivityCorrected();
+    }
 
     private async Task _StartAsync(EscalationEntryViewModel entry)
     {

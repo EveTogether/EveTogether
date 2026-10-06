@@ -1007,7 +1007,7 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
         DateTime nowUtc = _time.GetUtcNow().UtcDateTime;
         OpenEscalations.ReconcileTo([.. (open.Value ?? []).Select(row => new OpenEscalationRowViewModel(row,
             CharacterNameResolver.Resolve(row.CharacterNameSnapshot, row.CharacterId, _NameOf), nowUtc,
-            _StartEscalationRunAsync))]);
+            _StartEscalationRunAsync, _DeclineEscalationAsync))]);
         HasOpenEscalations = OpenEscalations.Count > 0;
     }
 
@@ -1017,6 +1017,15 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
     {
         StatusMessage = await new EscalationRunStarter(_dispatcher, _dialogs, _services).StartAsync(
             row.Escalation.SourceRunId, row.Escalation.CharacterId, row.CharacterText, row.Escalation.Escalation);
+    }
+
+    /// <summary>WON'T DO (ET-453): the escalation leaves the list at once; its badge on the source run turns red.</summary>
+    private async Task _DeclineEscalationAsync(OpenEscalationRowViewModel row)
+    {
+        Result result = await _dispatcher.Send(new SetEscalationOutcomeCommand(
+            row.Escalation.SourceRunId, row.Escalation.Escalation.EntryId, EscalationOutcome.Declined));
+        if (!result.IsSuccess)
+            StatusMessage = result.Messages.Count > 0 ? result.Messages[0].Text : "The escalation could not be changed.";
     }
 
     private void _ShowUnfinished(IReadOnlyList<UnfinishedRunDto> unfinished)

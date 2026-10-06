@@ -11,6 +11,7 @@ using EveUtils.Client.Opsec;
 using EveUtils.Client.Runs;
 using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Shared.Messaging;
+using EveUtils.Shared.Modules.Runs;
 using EveUtils.Shared.Modules.Fleet.Dtos;
 using EveUtils.Shared.Modules.Fleet.Events;
 using EveUtils.Shared.Modules.Runs.Commands;
@@ -242,50 +243,26 @@ public sealed partial class ActivityWindowSectionViewModel : RunWindowSection
             || Context.Services.GetService<ISdeAccessor>() is not { } sde)
             return;
 
-        IReadOnlyList<SdeSite> sourceSites = _SourceSites(sde);
-        var dialog = new EscalationDialogViewModel(sde, sourceSites, await _EscalationHistoryAsync(sourceSites));
+        EscalationDialogViewModel dialog;
+        using (var scope = Context.Services.CreateScope())
+            dialog = await EscalationDialogFactory.CreateAsync(
+                sde, _SourceSites(sde), scope.ServiceProvider.GetRequiredService<CqrsDispatcher>());
         if (!await dialogs.ShowEscalationDialogAsync(dialog) || dialog.Result is not { } result)
             return;
 
-        DateTime nowUtc = DateTime.UtcNow;
-        Guid entryId = Guid.CreateVersion7();
-        RunParameterInput Row(RunParameterKey key, string value) =>
-            new() { ParameterKey = key, TypedValue = value, EntryId = entryId, ObservedAtUtc = nowUtc };
-
-        _escalationParameters.Add(Row(RunParameterKey.Escalation, result.SiteName));
-        if (result.DungeonId is { } dungeonId)
-            _escalationParameters.Add(Row(RunParameterKey.EscalationDungeonId,
-                dungeonId.ToString(CultureInfo.InvariantCulture)));
-        _escalationParameters.Add(Row(RunParameterKey.EscalationSystem, result.DestinationSystem));
-        if (result.DestinationSolarSystemId is { } destinationSolarSystemId)
-            _escalationParameters.Add(Row(RunParameterKey.EscalationSolarSystemId,
-                destinationSolarSystemId.ToString(CultureInfo.InvariantCulture)));
-        _escalationParameters.Add(Row(RunParameterKey.EscalationExpiresAtUtc,
-            result.ExpiresAtUtc.ToString("o", CultureInfo.InvariantCulture)));
+        _escalationParameters.AddRange(RunEscalations.Rows(Guid.CreateVersion7(), result.SiteName, result.DungeonId,
+            result.DestinationSystem, result.DestinationSolarSystemId, result.ExpiresAtUtc, DateTime.UtcNow));
 
         _registeredEscalations.Add($"{OpsecText.Mark(result.SiteName)} · {OpsecText.Mark(result.DestinationSystem)}");
         EscalationRegisteredText = string.Join(Environment.NewLine, _registeredEscalations);
     }
 
-    /// <summary>The escalations registered before from this run's own catalogue site, for the dialog to rank first —
-    /// none while the site matched nothing or matched more than one site.</summary>
     /// <summary>This run's own site in the catalogue: the live match, or — once a run is adopted and the match is
     /// cleared, as for an escalation run started from its source — the site the run itself stored.</summary>
     private IReadOnlyList<SdeSite> _SourceSites(ISdeAccessor sde) =>
         Context.MatchedSites.Count > 0 || Context.RunSiteTypeId <= 0
             ? Context.MatchedSites
             : [.. sde.SearchSites().Where(site => site.DungeonId == Context.RunSiteTypeId)];
-
-    private async Task<IReadOnlyList<int>> _EscalationHistoryAsync(IReadOnlyList<SdeSite> sourceSites)
-    {
-        if (SdeSiteCanonicalization.Canonicalize(sourceSites) is not [{ DungeonId: var sourceDungeonId }])
-            return [];
-
-        using var scope = Context.Services.CreateScope();
-        Result<IReadOnlyList<int>> history = await scope.ServiceProvider.GetRequiredService<CqrsDispatcher>()
-            .Query(new GetEscalationHistoryQuery(sourceDungeonId));
-        return history.Value ?? [];
-    }
 
     // ── Where ──────────────────────────────────────────────────────────────────────────────────────
 
