@@ -99,6 +99,10 @@ internal sealed class RebuildActivitySummariesCommandHandler(
         MiningOreTypes ores = RunIskFactsReader.OresOf(runs, sde);
         ILookup<Guid, LocalKillmail> lossesByRun = await RunIskFactsReader.LinkedLossesAsync(db,
             [.. runs.Select(run => run.Id)], cancellationToken);
+        // A run whose every line carries its own fixed price adds up the same after any refresh (ET-463).
+        if (command.OnlyWhenPricesChanged
+            && !runs.Any(run => RunIskFactsReader.HasLiveValue(run, parametersByRun[run.Id], lossesByRun[run.Id])))
+            return Result<int>.Success(0);
         IReadOnlyDictionary<int, double> prices = await marketPrices.GetAveragePricesAsync(
             [.. RunIskFactsReader.PricedTypeIds(runs, parametersByRun.SelectMany(group => group), ores,
                 lossesByRun.SelectMany(group => group))], cancellationToken);

@@ -1065,11 +1065,21 @@ namespace EveUtils.Migrations.Server.MySql.Migrations
                         .HasMaxLength(255)
                         .HasColumnType("varchar(255)");
 
+                    b.Property<int?>("PriceSource")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("PricedAtUtc")
+                        .HasColumnType("datetime(6)");
+
                     b.Property<long?>("Quantity")
                         .HasColumnType("bigint");
 
                     b.Property<Guid>("RunLootCaptureId")
                         .HasColumnType("char(36)");
+
+                    b.Property<decimal?>("UnitPriceIsk")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<decimal?>("Volume")
                         .HasPrecision(18, 3)
@@ -1101,11 +1111,21 @@ namespace EveUtils.Migrations.Server.MySql.Migrations
                         .IsRequired()
                         .HasColumnType("varchar(255)");
 
+                    b.Property<int?>("PriceSource")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("PricedAtUtc")
+                        .HasColumnType("datetime(6)");
+
                     b.Property<int>("ResidueUnits")
                         .HasColumnType("int");
 
                     b.Property<Guid>("RunId")
                         .HasColumnType("char(36)");
+
+                    b.Property<decimal?>("UnitPriceIsk")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<int>("Units")
                         .HasColumnType("int");
@@ -1143,6 +1163,12 @@ namespace EveUtils.Migrations.Server.MySql.Migrations
                     b.Property<int>("ParameterKey")
                         .HasColumnType("int");
 
+                    b.Property<int?>("PriceSource")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("PricedAtUtc")
+                        .HasColumnType("datetime(6)");
+
                     b.Property<Guid>("RunId")
                         .HasColumnType("char(36)");
 
@@ -1150,6 +1176,10 @@ namespace EveUtils.Migrations.Server.MySql.Migrations
                         .IsRequired()
                         .HasMaxLength(255)
                         .HasColumnType("varchar(255)");
+
+                    b.Property<decimal?>("UnitPriceIsk")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
 
                     b.HasKey("Id");
 

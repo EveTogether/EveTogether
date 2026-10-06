@@ -10,9 +10,9 @@ using Microsoft.Extensions.DependencyInjection;
 namespace EveUtils.Client.Runs;
 
 /// <summary>The one way unrecognised loot names are tried again (ET-460): after the SDE or the price cache has been
-/// replaced, and on the log's button. Recognised names move into their runs first, then every saved activity that still
-/// had unpriced loot is added up again at the current prices, so a name that is now known and a price that is now there
-/// both reach the totals.</summary>
+/// replaced, and on the log's button. Recognised names move into their runs first, then every line of an own run that
+/// still had no fixed price takes the first one there is, once (ET-463), and every saved activity that still had unpriced
+/// loot is added up again, so a name that is now known and a price that is now there both reach the totals.</summary>
 public sealed class UnrecognisedLootRepricer(IServiceScopeFactory scopes) : ISingletonService
 {
     /// <summary>How many lines became loot entries.</summary>
@@ -21,6 +21,7 @@ public sealed class UnrecognisedLootRepricer(IServiceScopeFactory scopes) : ISin
         using IServiceScope scope = scopes.CreateScope();
         var dispatcher = scope.ServiceProvider.GetRequiredService<IDispatcher>();
         Result<int> moved = await dispatcher.Send(new RepriceUnrecognisedLootCommand(), cancellationToken);
+        await dispatcher.Send(new FillRunPriceSnapshotsCommand(), cancellationToken);
         await dispatcher.Send(new RebuildActivitySummariesCommand(OnlyWithUnpricedLoot: true), cancellationToken);
         return moved.IsSuccess ? moved.Value : 0;
     }

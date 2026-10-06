@@ -102,6 +102,13 @@ public sealed class CommandSignalCoverageTests
         // screen but the log's own tab shows it, and that tab reads the list again whenever it is shown.
         [typeof(RecordUnrecognisedItemsCommand)] = "keeps names from the appraisal tool, which belongs to no run; nothing "
             + "but the log tab shows them, and it reads the list again whenever it is shown",
+        // ET-463: both price a run's lines from the market cache and only touch this machine's own runs, which the shared
+        // harness can neither seed a price nor a local character for per scenario. Each publishes RunsChangedEvent and,
+        // for a saved run, RunLootCorrectedEvent for every run that changed value, proven in RunPriceSnapshotTests.
+        [typeof(FillRunPriceSnapshotsCommand)] = "needs a market price that arrives after the capture and a local character, "
+            + "which the shared harness cannot seed per scenario; its signals are proven in RunPriceSnapshotTests instead",
+        [typeof(RevalueRunsCommand)] = "needs a market price that moved since the capture and a local character, which the "
+            + "shared harness cannot seed per scenario; its signals are proven in RunPriceSnapshotTests instead",
         [typeof(ImportMissingGroupBountyCommand)] ="writes no run of its own: it only picks the runs and hands them to "
             + "ImportRunBountyCommand, whose own writes are the ones that signal",
         // ET-381: asking members to come over changes no fleet — no roster, no seat, no invite. It only enqueues a

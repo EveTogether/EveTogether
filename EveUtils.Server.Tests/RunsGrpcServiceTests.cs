@@ -168,6 +168,49 @@ public sealed class RunsGrpcServiceTests
         Assert.Equal(("Crimson Harvest Token", 3L, UnrecognisedItemStatus.Open), (line.Name, line.Quantity, line.Status));
     }
 
+    /// <summary>ET-463: the price fixed on each loot, ore and filament line travels with the run, so the server copy
+    /// and every fleetmate reading it value the run the same as its pilot does. Counter-proof: drop a column from the
+    /// server model and the line comes back without its price.</summary>
+    [Fact]
+    public async Task APublishedRun_ComesBackWithTheFixedPricesOfItsLines()
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        var repository = new ServerRunSyncRepository((IDbContextFactory<ServerDbContext>)_factory);
+        Run run = _SavedRun(Raymond, groupCode: null);
+        DateTime pricedAtUtc = run.StartedAtUtc.AddMinutes(3);
+        var capture = new RunLootCapture
+        {
+            Id = Guid.CreateVersion7(), RunId = run.Id, CapturedAtUtc = pricedAtUtc, Source = LootCaptureSource.Clipboard
+        };
+        capture.Entries.Add(new RunLootEntry
+        {
+            Id = Guid.CreateVersion7(), RunLootCaptureId = capture.Id, ItemTypeId = 34, Name = "Tritanium", Quantity = 100,
+            LootKind = LootKind.Gained, UnitPriceIsk = 5.25m, PricedAtUtc = pricedAtUtc, PriceSource = PriceSnapshotSource.Capture
+        });
+        run.LootCaptures.Add(capture);
+        run.MiningEntries.Add(new RunMiningEntry
+        {
+            Id = Guid.CreateVersion7(), RunId = run.Id, OreType = "Veldspar", Units = 10, FirstObservedAtUtc = pricedAtUtc,
+            LastObservedAtUtc = pricedAtUtc, UnitPriceIsk = 20m, PricedAtUtc = pricedAtUtc, PriceSource = PriceSnapshotSource.Migrated
+        });
+        run.Parameters.Add(new RunParameter
+        {
+            Id = Guid.CreateVersion7(), RunId = run.Id, ParameterKey = RunParameterKey.AbyssalFilamentTypeId, TypedValue = "60000",
+            ObservedAtUtc = pricedAtUtc, UnitPriceIsk = 1000m, PricedAtUtc = pricedAtUtc, PriceSource = PriceSnapshotSource.Revalued
+        });
+        await repository.UpsertAsync(run, cancellationToken);
+
+        Run published = Assert.Single(await repository.ListPublishedAsync(
+            Raymond, run.StartedAtUtc.AddDays(-1), run.StartedAtUtc.AddDays(1), cancellationToken));
+
+        RunLootEntry entry = Assert.Single(Assert.Single(published.LootCaptures).Entries);
+        Assert.Equal((5.25m, PriceSnapshotSource.Capture), (entry.UnitPriceIsk, entry.PriceSource));
+        RunMiningEntry ore = Assert.Single(published.MiningEntries);
+        Assert.Equal((20m, PriceSnapshotSource.Migrated), (ore.UnitPriceIsk, ore.PriceSource));
+        RunParameter filament = Assert.Single(published.Parameters, parameter => parameter.ParameterKey == RunParameterKey.AbyssalFilamentTypeId);
+        Assert.Equal((1000m, PriceSnapshotSource.Revalued), (filament.UnitPriceIsk, filament.PriceSource));
+    }
+
     private const long Jithran = 90250177;
     private const long Raymond = 90000002;
     private const long Stranger = 90000003;

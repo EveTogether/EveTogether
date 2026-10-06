@@ -11,6 +11,7 @@ internal static class RunLootCaptureMapper
 {
     public static RunLootCaptureDto ToDto(RunLootCapture capture) => new(
         capture.Id, capture.CapturedAtUtc, capture.IsExcluded, capture.ContentHash, capture.Source, capture.Role,
-        [.. capture.Entries.Select(entry => new RunLootEntryDto(entry.ItemTypeId, entry.Name, entry.Quantity, entry.ClipboardPrice, entry.LootKind))],
+        [.. capture.Entries.Select(entry => new RunLootEntryDto(entry.ItemTypeId, entry.Name, entry.Quantity, entry.ClipboardPrice, entry.LootKind,
+            entry.UnitPriceIsk))],
         [.. capture.UnrecognisedLines.Where(line => line.Status is UnrecognisedItemStatus.Open).Select(line => new UnrecognisedLootLineDto(line.Name, line.Quantity))]);
 }

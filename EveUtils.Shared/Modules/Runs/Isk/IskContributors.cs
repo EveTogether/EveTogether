@@ -30,8 +30,9 @@ public static class IskContributors
     // summary before, so every activity saved until now is added up again once. 3 (ET-274): a homefront payout counts
     // once per character, and the startup fold of duplicate runs (HF-DYB4: nine runs for five characters) must reach
     // the summaries built over them.  4 (ET-296): every activity also stores what each character of it earned, so the
-    // totals can show the pilot's own share rather than the whole group's.
-    private const int Revision = 4;
+    // totals can show the pilot's own share rather than the whole group's. 5 (ET-463): loot, ore and filament are
+    // valued at the price fixed on each line, so every summary is added up again once at the prices the migration fixed.
+    private const int Revision = 5;
 
     /// <param name="nowUtc">Stands in for the stop of a run that is still going.</param>
     public static IskBreakdown Breakdown(IReadOnlyList<RunIskFacts> runs, DateTime nowUtc) =>

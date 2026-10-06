@@ -127,6 +127,9 @@ internal sealed class RepriceUnrecognisedLootCommandHandler(
             RunLootWrites.MarkCorrected(saved);
 
         await db.SaveChangesAsync(cancellationToken);
+        // A name recognised now is loot that came in without a price, so it takes the first one there is, once (ET-463).
+        if ((await RunPriceSnapshots.FixAsync(db, marketPrices, sde, runIds, PriceSnapshotSource.Backfill, cancellationToken)).Count > 0)
+            await db.SaveChangesAsync(cancellationToken);
 
         foreach (Run run in runs)
         {

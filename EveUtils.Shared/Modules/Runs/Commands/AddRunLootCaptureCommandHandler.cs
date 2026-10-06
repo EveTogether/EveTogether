@@ -2,16 +2,19 @@ using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Data;
 using EveUtils.Shared.DependencyInjection;
 using EveUtils.Shared.Messaging;
+using EveUtils.Shared.Modules.Market.Repositories;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Entities;
 using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Runs.Events;
+using EveUtils.Shared.Modules.Sde;
 using Microsoft.EntityFrameworkCore;
 
 namespace EveUtils.Shared.Modules.Runs.Commands;
 
 [ClientOnly]
-internal sealed class AddRunLootCaptureCommandHandler(IDbContextFactory<ClientDbContext> contextFactory, IEventBus eventBus)
+internal sealed class AddRunLootCaptureCommandHandler(
+    IDbContextFactory<ClientDbContext> contextFactory, IEventBus eventBus, IMarketPriceRepository marketPrices, ISdeAccessor sde)
     : ICommandHandler<AddRunLootCaptureCommand, Result<RunLootCaptureSaveResult>>
 {
     public async Task<Result<RunLootCaptureSaveResult>> Handle(AddRunLootCaptureCommand command, CancellationToken cancellationToken = default)
@@ -72,6 +75,7 @@ internal sealed class AddRunLootCaptureCommandHandler(IDbContextFactory<ClientDb
                     command.Capture.CapturedAtUtc));
         db.Set<RunLootCapture>().Add(entity);
         await db.SaveChangesAsync(cancellationToken);
+        await RunPriceSnapshots.FixOnCaptureAsync(db, marketPrices, sde, run.Id, cancellationToken);
         // Whoever is showing this run has to hear that it just gained loot. Storing the capture and telling the
         // player it was stored were two different things, and an activity window that was already open did neither:
         // the toast said "Loot copied" while the LOOT section under it went on reading "no loot captured".

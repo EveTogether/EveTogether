@@ -92,15 +92,20 @@ public sealed partial class MiningDetailSectionViewModel(RunDetailSectionService
         Rows.Clear();
         foreach ((RunMiningEntryDto entry, MiningOreType? ore) in resolved.OrderByDescending(r => r.Entry.Units))
         {
-            decimal? unitPrice = ore is null ? null : MiningValuation.UnitPrice(ore.TypeId, ore.IsMutanite, prices);
+            decimal? unitPrice = _UnitPrice(entry, ore, prices);
             Rows.Add(new ActivityMiningRowViewModel(
                 entry.RunId, characterByRun[entry.RunId], entry.OreType, entry.Units, entry.CriticalUnits,
                 entry.ResidueUnits, unitPrice is { } price ? price * entry.Units : null, ore?.IsMutanite ?? false,
-                input.NameOf, corrector: CorrectorFor(characterByRun[entry.RunId])));
+                input.NameOf, corrector: CorrectorFor(characterByRun[entry.RunId]), isLivePrice: entry.UnitPriceIsk is null && ore is { IsMutanite: false }));
         }
 
         _SyncGroups(input, resolved, characterByRun, prices);
     }
+
+    /// <summary>The price the run fixed for the ore (ET-463), and only without one the live price, the way the stored
+    /// summary values it.</summary>
+    private static decimal? _UnitPrice(RunMiningEntryDto entry, MiningOreType? ore, IReadOnlyDictionary<int, double> prices) =>
+        entry.UnitPriceIsk ?? (ore is null ? null : MiningValuation.UnitPrice(ore.TypeId, ore.IsMutanite, prices));
 
     /// <summary>ET-364: the selector (the user's chosen provider, with a fallback to ESI average) takes priority;
     /// <c>services.Appraisal</c> only still matters for a caller that never set <c>Services</c>.</summary>
@@ -182,13 +187,14 @@ public sealed partial class MiningDetailSectionViewModel(RunDetailSectionService
     private (MiningCharacterGroupViewModel Group, decimal Isk) _ToGroup(CharacterBuild build,
         Dictionary<int, double> prices, IReadOnlyDictionary<string, int> fleetOreUnits, bool isFleetScenario)
     {
-        List<(Guid RunId, string Ore, int Units, int Crit, int Residue, decimal? Isk, decimal? UnitPrice, bool IsFixedPrice)> lines =
+        List<(Guid RunId, string Ore, int Units, int Crit, int Residue, decimal? Isk, decimal? UnitPrice, bool IsFixedPrice, bool IsLive)> lines =
         [
             .. build.Entries.Select(r =>
             {
-                decimal? unitPrice = r.Ore is { } ore ? MiningValuation.UnitPrice(ore.TypeId, ore.IsMutanite, prices) : null;
+                decimal? unitPrice = _UnitPrice(r.Entry, r.Ore, prices);
                 return (r.Entry.RunId, r.Entry.OreType, r.Entry.Units, r.Entry.CriticalUnits, r.Entry.ResidueUnits,
-                    unitPrice is { } price ? price * r.Entry.Units : (decimal?)null, unitPrice, r.Ore?.IsMutanite ?? false);
+                    unitPrice is { } price ? price * r.Entry.Units : (decimal?)null, unitPrice, r.Ore?.IsMutanite ?? false,
+                    r.Entry.UnitPriceIsk is null && r.Ore is { IsMutanite: false });
             })
         ];
         MiningLineCorrector? corrector = CorrectorFor(build.CharacterId);
@@ -198,7 +204,7 @@ public sealed partial class MiningDetailSectionViewModel(RunDetailSectionService
         decimal residueIsk = lines.Sum(line => (line.UnitPrice ?? 0m) * line.Residue);
 
         List<ActivityMiningRowViewModel> oreRows = [];
-        foreach ((Guid runId, string ore, int units, int crit, int residue, decimal? lineIsk, decimal? _, bool isFixedPrice) in
+        foreach ((Guid runId, string ore, int units, int crit, int residue, decimal? lineIsk, decimal? _, bool isFixedPrice, bool isLive) in
                  lines.OrderByDescending(line => line.Units))
         {
             double? shareFraction = null;
@@ -217,7 +223,7 @@ public sealed partial class MiningDetailSectionViewModel(RunDetailSectionService
             }
 
             var row = new ActivityMiningRowViewModel(runId, build.CharacterId, ore, units, crit, residue,
-                lineIsk, isFixedPrice, _ => build.Name, shareFraction, shareTooltip, corrector)
+                lineIsk, isFixedPrice, _ => build.Name, shareFraction, shareTooltip, corrector, isLive)
             {
                 IsAlternate = oreRows.Count % 2 == 1
             };
