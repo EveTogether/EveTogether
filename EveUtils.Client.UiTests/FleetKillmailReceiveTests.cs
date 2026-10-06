@@ -45,6 +45,7 @@ namespace EveUtils.Client.UiTests;
 public sealed class FleetKillmailReceiveTests : IDisposable
 {
     private const int Own = 95220001;
+    private const int OwnAlt = 95220005;
     private const int Mate = 95220002;
     private const int SecondMate = 95220003;
     private const int ThirdMate = 95220004;
@@ -77,6 +78,7 @@ public sealed class FleetKillmailReceiveTests : IDisposable
         await instance.Services.GetRequiredService<ICharacterRegistry>().AddOrUpdateAsync(
             new Character("Own Pilot", Own, GrantedScopes: [KillmailsScopeCatalog.ReadKillmails]), Ct);
         await repository.AddMissingAsync(Own, [_OwnKill(500)], Ct);
+        await repository.AddMissingAsync(OwnAlt, [_OwnKill(501, OwnAlt)], Ct);
 
         // The mate's group run, synced to this client the way RunSynchronizationService applies it.
         Result<Guid> started = await dispatcher.Send(new StartRunCommand(Mate, ActivityKind.Site, StartedAtUtc, 0,
@@ -109,10 +111,11 @@ public sealed class FleetKillmailReceiveTests : IDisposable
 
         // The opposite outcome: the own overview, for "All characters" and for the own character, shows only own mails.
         KillmailsOverviewViewModel overview = new(dispatcher, new RecordingDialogService(), instance.Services,
-            [new Character("Own Pilot", Own, GrantedScopes: [KillmailsScopeCatalog.ReadKillmails])], (_, _) => Task.CompletedTask);
+            [new Character("Own Pilot", Own, GrantedScopes: [KillmailsScopeCatalog.ReadKillmails]),
+                new Character("Own Alt", OwnAlt, GrantedScopes: [KillmailsScopeCatalog.ReadKillmails])], (_, _) => Task.CompletedTask);
         await overview.LoadAsync(Ct);
         Assert.True(await _WaitForAsync(() => !overview.IsBusy));
-        Assert.Equal([500], _VisibleIds(overview));
+        Assert.Equal([500, 501], _VisibleIds(overview).Order());
         overview.SelectedCharacter = overview.CharacterOptions.Single(option => option.CharacterId == Own);
         Assert.True(await _WaitForAsync(() => !overview.IsBusy));
         Assert.Equal([500], _VisibleIds(overview));
@@ -240,9 +243,9 @@ public sealed class FleetKillmailReceiveTests : IDisposable
              $$"""{"character_id":{{attacker}},"damage_done":1,"final_blow":{{(index == 0 ? "true" : "false")}}}"""))}}]}
         """;
 
-    private static LocalKillmail _OwnKill(int killmailId) => new()
+    private static LocalKillmail _OwnKill(int killmailId, int characterId = Own) => new()
     {
-        CharacterId = Own,
+        CharacterId = characterId,
         KillmailId = killmailId,
         Hash = $"hash{killmailId}",
         KillmailTimeUtc = StartedAtUtc.AddDays(-1),

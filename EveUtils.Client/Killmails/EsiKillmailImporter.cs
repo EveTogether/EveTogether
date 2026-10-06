@@ -147,7 +147,7 @@ public sealed class EsiKillmailImporter(IEsiClient esi, ILocalKillmailReader kil
     /// stored for them is fetched from the public <c>/killmails/{id}/{hash}/</c> (immutable and cached, so a kill several
     /// mates share costs one request) — never their <c>/recent</c> feed. All or nothing: one failed fetch stores nothing
     /// and keeps the previous state, so the next share retries. A mail the mate is not on is left out rather than stored
-    /// as theirs. Not <see cref="ImportOneAsync"/>, whose refusal of a mail without an own character stays as it is.
+    /// as theirs; that check runs when the mail is first fetched for them, so a mail they already hold is not fetched again. Not <see cref="ImportOneAsync"/>, whose refusal of a mail without an own character stays as it is.
     /// </summary>
     public async Task<KillmailImportResult> ImportFleetShareAsync(int characterId, long fleetId,
         IReadOnlyList<(int KillmailId, string Hash)> shared, CancellationToken cancellationToken = default)

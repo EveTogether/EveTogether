@@ -31,6 +31,9 @@ internal sealed class LocalKillmailRepository(IDbContextFactory<SharedDbContext>
         var known = await _KnownIdsAsync(db, characterId, fetched.Select(killmail => killmail.KillmailId).ToList(), cancellationToken);
         db.Set<LocalKillmail>().AddRange(fetched.Where(killmail => !known.Contains(killmail.KillmailId)));
 
+        // ponytail: one row per (mate, mail) carries one fleet, so a mail a mate shares in two fleets is removed when the
+        // first fleet withdraws it and comes back (from the ESI cache) on the other fleet's next share; a per-fleet
+        // provenance table lifts that if it ever matters.
         // Loaded with their items and attackers, so EF removes those too instead of leaning on the database cascade.
         List<LocalKillmail> withdrawn = await db.Set<LocalKillmail>()
             .Include(killmail => killmail.Items)
