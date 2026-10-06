@@ -17,6 +17,7 @@ namespace EveUtils.Client.Dialogs;
 /// character, which <paramref name="Presence"/> answers alone.</param>
 /// <param name="StatusTooltip">The full reason behind <paramref name="StatusText"/>.</param>
 /// <param name="IsConnected">The server's word on whether the pilot has a connection; null when it cannot say.</param>
+/// <param name="StatusReason">The reason behind <paramref name="StatusText"/>; null for an own character.</param>
 public sealed record FleetStartMember(
     int CharacterId,
     string Name,
@@ -28,11 +29,15 @@ public sealed record FleetStartMember(
     FleetMemberPresenceState Presence = FleetMemberPresenceState.Unknown,
     string? StatusText = null,
     string? StatusTooltip = null,
-    bool? IsConnected = null)
+    bool? IsConnected = null,
+    FleetMemberStatusReason? StatusReason = null)
 {
     public bool IsElsewhereActive => !string.IsNullOrEmpty(ElsewhereFleetName);
 
     public bool IsOnline => Presence is FleetMemberPresenceState.Online;
+
+    /// <summary>Connected to the server with no word from the game yet (ET-455).</summary>
+    public bool IsConnectedOnly => StatusReason is FleetMemberStatusReason.Connected;
 
     /// <summary>In game and not cut off from the server, the Fleets screen's "ready".</summary>
     public bool IsReady => !IsExternal && IsOnline && IsConnected is not false;

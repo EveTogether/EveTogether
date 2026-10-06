@@ -150,6 +150,7 @@
                                             <Border Classes="chip dim" IsVisible="{Binding IsMine}"><TextBlock Text="yours"/></Border>
                                             <!-- The Fleets screen's presence chip (ET-444): who is ready for the start. -->
                                             <Border Classes="chip" Classes.good="{Binding IsOnline}" Classes.dim="{Binding !IsOnline}"
+                                                    Classes.connected="{Binding IsConnectedOnly}"
                                                     IsVisible="{Binding !IsExternal}" ToolTip.Tip="{Binding StatusTooltip}">
                                                 <TextBlock Text="{Binding StatusWord}"/>
                                             </Border>

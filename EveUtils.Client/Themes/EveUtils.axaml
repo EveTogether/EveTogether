@@ -377,6 +377,12 @@
         <Setter Property="BorderBrush" Value="{StaticResource ValueBrush}"/>
         <Setter Property="TextElement.Foreground" Value="{StaticResource ValueBrush}"/>
     </Style>
+    <!-- A fleet mate connected to the server with no word from the game yet (ET-455): blue, so it reads apart from the
+         green of online and the dim of unknown and no link. Declared after .dim so it wins on a chip that carries both. -->
+    <Style Selector="Border.chip.connected">
+        <Setter Property="BorderBrush" Value="{StaticResource BlueBrush}"/>
+        <Setter Property="TextElement.Foreground" Value="{StaticResource BlueBrush}"/>
+    </Style>
 
     <!-- A chip's icon rides at the label's size, not the app default: a chip is 9.5px text, and a 14px icon beside it
          would be the loudest thing on the character card. -->
