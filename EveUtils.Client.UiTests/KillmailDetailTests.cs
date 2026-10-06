@@ -339,7 +339,7 @@ public sealed class KillmailDetailTests
                 // a throwing stub proves that instead of asserting it away with null!.
                 var linkedLoss = new LinkedLossViewModel(new _UnusedDispatcher(), Pilot, 1, [], () => Task.CompletedTask, () => opened = true)
                 {
-                    ShipText = "Gila", FitText = "fit", TimeText = "t", FinalBlowText = "fb", ReasonText = "r"
+                    PilotText = "Test Pilot", ShipText = "Gila", FitText = "fit", TimeText = "t", FinalBlowText = "fb", ReasonText = "r"
                 };
                 linkedLoss.OpenKillmailCommand.Execute(null);
                 return Task.FromResult(opened);

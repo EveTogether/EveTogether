@@ -190,7 +190,7 @@ public sealed partial class KillmailDetailViewModel : ViewModelBase
         IsAbyssal = AbyssalSpace.IsAbyssalSystem(detail.SolarSystemId);
         SystemLineText = _SystemLineText(detail.SolarSystemId, IsAbyssal);
 
-        decimal? destroyedValue = _SumKnown([detail.ShipValue, .. detail.Items.Where(item => item.IsDestroyed).Select(item => item.Value)]);
+        decimal? destroyedValue = detail.DestroyedValue;
         decimal? droppedValue = _SumKnown(detail.Items.Where(item => !item.IsDestroyed).Select(item => item.Value));
         decimal totalValue = destroyedValue.GetValueOrDefault() + droppedValue.GetValueOrDefault();
 
