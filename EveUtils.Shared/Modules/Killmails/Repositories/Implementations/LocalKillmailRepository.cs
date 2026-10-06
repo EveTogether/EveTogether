@@ -24,7 +24,7 @@ internal sealed class LocalKillmailRepository(IDbContextFactory<SharedDbContext>
         return added;
     }
 
-    public async Task<bool> ReconcileFleetShareAsync(int characterId, long fleetId, IReadOnlyCollection<int> sharedKillmailIds,
+    public async Task<(bool Changed, IReadOnlyList<Guid> WithdrawnFromRunIds)> ReconcileFleetShareAsync(int characterId, long fleetId, IReadOnlyCollection<int> sharedKillmailIds,
         IReadOnlyList<LocalKillmail> fetched, CancellationToken cancellationToken = default)
     {
         await using var db = await contextFactory.CreateDbContextAsync(cancellationToken);
@@ -42,7 +42,8 @@ internal sealed class LocalKillmailRepository(IDbContextFactory<SharedDbContext>
                                && !sharedKillmailIds.Contains(killmail.KillmailId))
             .ToListAsync(cancellationToken);
         db.Set<LocalKillmail>().RemoveRange(withdrawn);
-        return await db.SaveChangesAsync(cancellationToken) > 0;
+        bool changed = await db.SaveChangesAsync(cancellationToken) > 0;
+        return (changed, [.. withdrawn.Select(killmail => killmail.RunId).OfType<Guid>().Distinct()]);
     }
 
     public async Task<IReadOnlyList<LocalKillmail>> GetForCharacterAsync(int characterId, CancellationToken cancellationToken = default)

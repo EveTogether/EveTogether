@@ -161,6 +161,13 @@ public sealed class EsiKillmailImporter(IEsiClient esi, ILocalKillmailReader kil
             var notOnMail = new HashSet<int>();
             foreach (var (killmailId, hash) in shared.Where(entry => !known.Contains(entry.KillmailId)).DistinctBy(entry => entry.KillmailId))
             {
+                // A mate's input goes into the ESI path: only a real killmail hash (40 hex characters) is asked for.
+                if (hash.Length != 40 || !hash.All(char.IsAsciiHexDigit))
+                {
+                    notOnMail.Add(killmailId);
+                    continue;
+                }
+
                 var detail = await esi.GetAsync<EsiKillmail>($"/killmails/{killmailId}/{hash}/", cancellationToken: cancellationToken);
                 if (!detail.IsSuccess || detail.Value is null)
                 {

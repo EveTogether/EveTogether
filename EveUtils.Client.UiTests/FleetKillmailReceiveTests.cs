@@ -85,15 +85,15 @@ public sealed class FleetKillmailReceiveTests : IDisposable
             "Angel Hideaway", Jita), Ct);
         await dispatcher.Send(new SaveRunCommand(started.Value, StartedAtUtc.AddMinutes(15), StartedAtUtc.AddMinutes(16),
             [], [], [], []), Ct);
-        _routes["/killmails/1/hash1/"] = _ => Json(200, _Killmail(1, victim: Mate, attackers: [Enemy]));
+        _routes[_Path(1)] = _ => Json(200, _Killmail(1, victim: Mate, attackers: [Enemy]));
         (FleetKillmailShareReceiver receiver, StubHttpMessageHandler stub) = _Receiver(instance);
         using IDisposable subscription = receiver;
 
-        await _ShareAsync(instance, Mate, FleetId, 1, (1, "hash1"));
+        await _ShareAsync(instance, Mate, FleetId, 1, 1);
         await receiver.WhenIdleAsync();
 
         CapturedRequest request = Assert.Single(stub.Captured);
-        Assert.Equal("/killmails/1/hash1/", new Uri(request.Uri).AbsolutePath);
+        Assert.Equal(_Path(1), new Uri(request.Uri).AbsolutePath);
         Assert.Null(request.Authorization);
         LocalKillmail stored = Assert.Single(await repository.GetForCharacterAsync(Mate, Ct));
         Assert.Equal(FleetId, stored.SharedFromFleetId);
@@ -120,6 +120,26 @@ public sealed class FleetKillmailReceiveTests : IDisposable
         Assert.True(await _WaitForAsync(() => !overview.IsBusy));
         Assert.Equal([500], _VisibleIds(overview));
         overview.Dispose();
+
+        // A hash that is not a killmail hash never reaches the ESI path (a mate's input, ET-371 trust boundary).
+        await instance.Services.GetRequiredService<IEventBus>().PublishAsync(new FleetKillmailShareEvent(new FleetKillmailShare
+        {
+            FleetId = 99,
+            UnixMs = 1,
+            Killmails = [new FleetKillmailReference { KillmailId = 9, Hash = "../../status", KillmailTimeUtc = StartedAtUtc }],
+        }, Mate), EventTarget.Local, Ct);
+        await receiver.WhenIdleAsync();
+        Assert.Single(stub.Captured);
+        Assert.Equal([1], (await repository.GetForCharacterAsync(Mate, Ct)).Select(killmail => killmail.KillmailId));
+
+        // Withdrawn by a newer empty share: the row goes, and the run's stored totals no longer carry the loss.
+        await _ShareAsync(instance, Mate, FleetId, 2);
+        await receiver.WhenIdleAsync();
+        Assert.Empty(await repository.GetForCharacterAsync(Mate, Ct));
+        var afterWithdrawal = new ActivityDetailViewModel(dispatcher, rows.Single(row => row.RunId == started.Value).ActivitySummaryId,
+            sde: instance.Services.GetRequiredService<ISdeAccessor>());
+        await afterWithdrawal.LoadAsync(Ct);
+        Assert.DoesNotContain(afterWithdrawal.Sections.OfType<LossDetailSectionViewModel>(), section => section.HasContent);
     }
 
     [Fact]
@@ -127,27 +147,27 @@ public sealed class FleetKillmailReceiveTests : IDisposable
     {
         using TestClientInstance instance = _Instance();
         ILocalKillmailRepository repository = instance.Services.GetRequiredService<ILocalKillmailRepository>();
-        _routes["/killmails/8/hash8/"] = _ => Json(200, _Killmail(8, victim: Enemy, attackers: [Mate]));
+        _routes[_Path(8)] = _ => Json(200, _Killmail(8, victim: Enemy, attackers: [Mate]));
         // The shared kill: ESI answers 404 once (not yet published), then the mail.
-        _routes["/killmails/7/hash7/"] = call => call == 1
+        _routes[_Path(7)] = call => call == 1
             ? Json(404, """{"error":"Killmail not found"}""")
             : Json(200, _Killmail(7, victim: Enemy, attackers: [Mate, SecondMate, ThirdMate]));
         (FleetKillmailShareReceiver receiver, _) = _Receiver(instance);
         using IDisposable subscription = receiver;
 
         // 8 fetches fine, 7 fails: nothing of this share is stored, not even 8.
-        await _ShareAsync(instance, Mate, FleetId, 1, (8, "hash8"), (7, "hash7"));
+        await _ShareAsync(instance, Mate, FleetId, 1, 8, 7);
         await receiver.WhenIdleAsync();
         Assert.Empty(await repository.GetForCharacterAsync(Mate, Ct));
 
         // The next share retries; the other two mates' shares of the same kill come from the cache.
-        await _ShareAsync(instance, Mate, FleetId, 2, (8, "hash8"), (7, "hash7"));
-        await _ShareAsync(instance, SecondMate, FleetId, 1, (7, "hash7"));
-        await _ShareAsync(instance, ThirdMate, FleetId, 1, (7, "hash7"));
+        await _ShareAsync(instance, Mate, FleetId, 2, 8, 7);
+        await _ShareAsync(instance, SecondMate, FleetId, 1, 7);
+        await _ShareAsync(instance, ThirdMate, FleetId, 1, 7);
         await receiver.WhenIdleAsync();
 
-        Assert.Equal(2, _hits["/killmails/7/hash7/"]); // the 404 and exactly one successful GET
-        Assert.Equal(1, _hits["/killmails/8/hash8/"]); // the retry reads 8 from the cache
+        Assert.Equal(2, _hits[_Path(7)]); // the 404 and exactly one successful GET
+        Assert.Equal(1, _hits[_Path(8)]); // the retry reads 8 from the cache
         Assert.Equal([7, 8], (await repository.GetForCharacterAsync(Mate, Ct)).Select(killmail => killmail.KillmailId).Order());
         foreach (int mate in new[] { SecondMate, ThirdMate })
         {
@@ -176,16 +196,16 @@ public sealed class FleetKillmailReceiveTests : IDisposable
         await repository.AddMissingAsync(Own, [_OwnKill(1)], Ct);
         foreach (int id in new[] { 1, 2, 3 })
         {
-            _routes[$"/killmails/{id}/hash{id}/"] = _ => Json(200, _Killmail(id, victim: Enemy, attackers: [Mate, Own]));
+            _routes[_Path(id)] = _ => Json(200, _Killmail(id, victim: Enemy, attackers: [Mate, Own]));
         }
 
         (FleetKillmailShareReceiver receiver, _) = _Receiver(instance);
         using IDisposable subscription = receiver;
-        await _ShareAsync(instance, Mate, FleetId, 10, (1, "hash1"), (2, "hash2"));
-        await _ShareAsync(instance, Mate, 43, 10, (3, "hash3"));
+        await _ShareAsync(instance, Mate, FleetId, 10, 1, 2);
+        await _ShareAsync(instance, Mate, 43, 10, 3);
         await receiver.WhenIdleAsync();
 
-        await _ShareAsync(instance, sender, fleetId, unixMs, [.. killmailIds.Select(id => (id, $"hash{id}"))]);
+        await _ShareAsync(instance, sender, fleetId, unixMs, killmailIds);
         await receiver.WhenIdleAsync();
 
         Assert.Equal(expectedMateIds, (await repository.GetForCharacterAsync(Mate, Ct)).Select(killmail => killmail.KillmailId).Order());
@@ -223,15 +243,15 @@ public sealed class FleetKillmailReceiveTests : IDisposable
 
     // The way the server echo arrives: a FleetKillmailShareEvent on the local bus, stamped with the sender.
     private static Task _ShareAsync(TestClientInstance instance, int sender, long fleetId, long unixMs,
-        params (int KillmailId, string Hash)[] killmails) =>
+        params int[] killmailIds) =>
         instance.Services.GetRequiredService<IEventBus>().PublishAsync(new FleetKillmailShareEvent(new FleetKillmailShare
         {
             FleetId = fleetId,
             UnixMs = unixMs,
-            Killmails = [.. killmails.Select(killmail => new FleetKillmailReference
+            Killmails = [.. killmailIds.Select(killmailId => new FleetKillmailReference
             {
-                KillmailId = killmail.KillmailId,
-                Hash = killmail.Hash,
+                KillmailId = killmailId,
+                Hash = _Hash(killmailId),
                 KillmailTimeUtc = StartedAtUtc,
             })],
         }, sender), EventTarget.Local, Ct);
@@ -243,11 +263,15 @@ public sealed class FleetKillmailReceiveTests : IDisposable
              $$"""{"character_id":{{attacker}},"damage_done":1,"final_blow":{{(index == 0 ? "true" : "false")}}}"""))}}]}
         """;
 
+    private static string _Hash(int killmailId) => killmailId.ToString("x40");
+
+    private static string _Path(int killmailId) => $"/killmails/{killmailId}/{_Hash(killmailId)}/";
+
     private static LocalKillmail _OwnKill(int killmailId, int characterId = Own) => new()
     {
         CharacterId = characterId,
         KillmailId = killmailId,
-        Hash = $"hash{killmailId}",
+        Hash = _Hash(killmailId),
         KillmailTimeUtc = StartedAtUtc.AddDays(-1),
         SolarSystemId = Jita,
         VictimShipTypeId = Gila,

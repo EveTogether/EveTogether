@@ -14,7 +14,7 @@ public interface ILocalKillmailRepository : ILocalKillmailReader
     /// <summary>Makes a fleet mate's rows shared in <paramref name="fleetId"/> match their latest full share, in one
     /// transaction: adds the missing <paramref name="fetched"/> mails and removes the rows of that fleet whose id is no
     /// longer in <paramref name="sharedKillmailIds"/>. Rows without that fleet id (own imports, other fleets) are never
-    /// touched. Returns whether anything changed.</summary>
-    Task<bool> ReconcileFleetShareAsync(int characterId, long fleetId, IReadOnlyCollection<int> sharedKillmailIds,
+    /// touched. Returns whether anything changed, and the runs a withdrawn row was linked to.</summary>
+    Task<(bool Changed, IReadOnlyList<Guid> WithdrawnFromRunIds)> ReconcileFleetShareAsync(int characterId, long fleetId, IReadOnlyCollection<int> sharedKillmailIds,
         IReadOnlyList<LocalKillmail> fetched, CancellationToken cancellationToken = default);
 }
