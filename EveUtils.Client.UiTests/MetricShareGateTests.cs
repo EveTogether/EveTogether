@@ -3,8 +3,13 @@ using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Fleet.Events;
 using EveUtils.Shared.Modules.Fleet.Metrics;
+using EveUtils.Shared.Modules.Killmails.Entities;
+using EveUtils.Shared.Modules.Killmails.Enums;
+using EveUtils.Shared.Modules.Killmails.Events;
+using EveUtils.Shared.Modules.Killmails.Repositories;
 using EveUtils.Shared.Modules.Settings.Commands;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace EveUtils.Client.UiTests;
@@ -21,6 +26,59 @@ public class MetricShareGateTests
 {
     private const int Owner = 95000001;
     private const long FleetId = 4242;
+
+    [Theory]
+    [InlineData("default", 1)]
+    [InlineData("global-off", 0)]
+    [InlineData("matching-override", 1)]
+    [InlineData("other-fleet", 0)]
+    [InlineData("other-character", 0)]
+    public async Task KillmailShare_SettingsScenario_PublishesExpectedFullState(string scenario, int expectedKillmails)
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        using TestClientInstance instance = TestClientInstance.Create();
+        if (scenario != "default")
+        {
+            await SetSettingAsync(instance, MetricShareSnapshot.KillmailShareKey, "false", cancellationToken);
+        }
+
+        string? overrideKey = scenario switch
+        {
+            "matching-override" => MetricShareSnapshot.KillmailOverrideKeyFor(FleetId, Owner),
+            "other-fleet" => MetricShareSnapshot.KillmailOverrideKeyFor(FleetId + 1, Owner),
+            "other-character" => MetricShareSnapshot.KillmailOverrideKeyFor(FleetId, Owner + 1),
+            _ => null,
+        };
+        if (overrideKey is not null)
+        {
+            await SetSettingAsync(instance, overrideKey, "true", cancellationToken);
+        }
+
+        var sent = new List<FleetKillmailShareEvent>();
+        var bus = new InProcessEventBus(new KillmailRecordingTransport(sent));
+        var participation = new FleetParticipation();
+        participation.Set([new FleetParticipant(
+            Owner,
+            FleetId,
+            ClientOnly: false,
+            ActivatedAt: new DateTimeOffset(2026, 9, 20, 11, 0, 0, TimeSpan.Zero))]);
+        using var publisher = new FleetKillmailSharePublisher(
+            bus,
+            participation,
+            new FixedKillmailReader(),
+            instance.Services.GetRequiredService<IMetricShareSettings>(),
+            TimeProvider.System,
+            NullLogger<FleetKillmailSharePublisher>.Instance);
+
+        await bus.PublishAsync(
+            new KillmailsChangedEvent(Owner, KillmailsChangeKind.Imported, [1]),
+            EventTarget.Local,
+            cancellationToken);
+        await publisher.WhenIdleAsync();
+
+        FleetKillmailShareEvent share = Assert.Single(sent);
+        Assert.Equal(expectedKillmails, share.Data.Killmails.Count);
+    }
 
     [Fact]
     public void Snapshot_Defaults_ShareCombat_ButNotLocation()
@@ -195,6 +253,44 @@ public class MetricShareGateTests
                 broadcast.Add(metric.Data.Kind);
             return Task.CompletedTask;
         }
+    }
+
+    private sealed class KillmailRecordingTransport(List<FleetKillmailShareEvent> sent) : IRemoteEventTransport
+    {
+        public Task SendAsync(IIntegrationEvent integrationEvent, CancellationToken cancellationToken = default)
+        {
+            if (integrationEvent is FleetKillmailShareEvent share)
+            {
+                sent.Add(share);
+            }
+
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class FixedKillmailReader : ILocalKillmailReader
+    {
+        public Task<IReadOnlySet<int>> GetKnownIdsAsync(
+            int characterId,
+            IReadOnlyCollection<int> killmailIds,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlySet<int>>(new HashSet<int>());
+
+        public Task<IReadOnlyList<LocalKillmail>> GetForCharacterAsync(
+            int characterId,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<LocalKillmail>>(
+            [
+                new LocalKillmail
+                {
+                    CharacterId = characterId,
+                    KillmailId = 1,
+                    Hash = "hash1",
+                    KillmailTimeUtc = new DateTime(2026, 9, 20, 12, 0, 0, DateTimeKind.Utc),
+                    SolarSystemId = 30000142,
+                    VictimShipTypeId = 587,
+                },
+            ]);
     }
 
     // A SERVER-backed participant: the per-metric share gate is a privacy boundary for what you broadcast to other

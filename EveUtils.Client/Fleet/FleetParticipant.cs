@@ -18,4 +18,4 @@ namespace EveUtils.Client.Fleet;
 /// <c>FleetInfo</c> and a client-only <c>Fleet</c> row already name themselves at the point this record is built.</param>
 public readonly record struct FleetParticipant(
     int CharacterId, long FleetId, bool ClientOnly, int? FleetCommanderCharacterId = null, string? ServerAddress = null,
-    string? FleetName = null);
+    string? FleetName = null, DateTimeOffset? ActivatedAt = null);

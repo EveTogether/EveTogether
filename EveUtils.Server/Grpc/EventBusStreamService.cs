@@ -95,7 +95,8 @@ public sealed class EventBusStreamService(
 
                 // Reroute strategy: a targeted event goes only to that character's connections;
                 // a fleet-scoped event goes to the fleet's live broadcast set — its roster members who are connected
-                // (server-authoritative: membership ∩ presence), excluding the sender; anything else broadcasts.
+                // (server-authoritative: membership ∩ presence). Existing event types exclude the sender; an event
+                // explicitly marked IEchoToSenderEvent includes it. Anything else broadcasts.
                 if (envelope.Event.TargetCharacterId != 0)
                     await connectedClients.SendToCharacterAsync(envelope.Event.TargetCharacterId, envelope.Event, context.CancellationToken);
                 else if (envelope.Event.FleetId != 0)
@@ -133,7 +134,11 @@ public sealed class EventBusStreamService(
                     if (members.Count == 0 && !await broadcast.IsStartedAsync(envelope.Event.FleetId, context.CancellationToken))
                         await _SayRefusedOnceAsync(refusalsSaid, envelope.Event.FleetId, FleetRelayRefusal.FleetNotStarted,
                             attachedCharacterId, characterName, context.CancellationToken);
-                    await connectedClients.SendToCharactersAsync(members, envelope.Event, context.CancellationToken, exceptKey: key);
+                    await connectedClients.SendToCharactersAsync(
+                        members,
+                        envelope.Event,
+                        context.CancellationToken,
+                        exceptKey: SenderExclusionKey(evt, key));
                 }
                 else
                     await connectedClients.BroadcastExceptAsync(key, envelope.Event, context.CancellationToken);
@@ -191,6 +196,9 @@ public sealed class EventBusStreamService(
         }
         return allowed;
     }
+
+    internal static string? SenderExclusionKey(IIntegrationEvent integrationEvent, string connectionKey) =>
+        integrationEvent is IEchoToSenderEvent ? null : connectionKey;
 
     private static string? ExtractBearer(ServerCallContext context)
     {

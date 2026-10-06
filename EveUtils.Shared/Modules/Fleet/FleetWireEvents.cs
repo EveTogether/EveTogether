@@ -46,6 +46,13 @@ public sealed class FleetWireEvents : IWireEventCatalog
             return new FleetRunShareEvent(payload, characterId);
         });
 
+        registry.Register("fleet.killmail-share", (payloadJson, characterId) =>
+        {
+            var payload = JsonSerializer.Deserialize<FleetKillmailShare>(payloadJson)
+                          ?? throw new InvalidOperationException("Invalid fleet.killmail-share payload.");
+            return new FleetKillmailShareEvent(payload, characterId);
+        });
+
         registry.Register("fleet.run-group", (payloadJson, characterId) =>
         {
             var payload = JsonSerializer.Deserialize<RunGroupCodeStart>(payloadJson)

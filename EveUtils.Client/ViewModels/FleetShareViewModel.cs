@@ -56,14 +56,28 @@ public sealed partial class FleetShareViewModel : ObservableObject
         if (ApplyToAll)
         {
             foreach (var character in Characters)
+            {
                 foreach (var row in AllCharacters.Metrics)
+                {
                     writes.Add((character.CharacterId, MetricShareSnapshot.OverrideKeyFor(FleetId, character.CharacterId, row.Kind), ValueFor(row.ChoiceIndex)));
+                }
+
+                writes.Add((character.CharacterId, MetricShareSnapshot.KillmailOverrideKeyFor(FleetId, character.CharacterId),
+                    ValueFor(AllCharacters.Killmails.ChoiceIndex)));
+            }
         }
         else
         {
             foreach (var character in Characters)
+            {
                 foreach (var row in character.Metrics)
+                {
                     writes.Add((character.CharacterId, MetricShareSnapshot.OverrideKeyFor(FleetId, character.CharacterId, row.Kind), ValueFor(row.ChoiceIndex)));
+                }
+
+                writes.Add((character.CharacterId, MetricShareSnapshot.KillmailOverrideKeyFor(FleetId, character.CharacterId),
+                    ValueFor(character.Killmails.ChoiceIndex)));
+            }
         }
 
         return writes;
@@ -74,7 +88,11 @@ public sealed partial class FleetShareViewModel : ObservableObject
         var rows = Shareable
             .Select(m => new FleetMetricShareRowViewModel(m.Kind, m.Label, current.OverrideChoiceIndex(fleetId, characterId, m.Kind)))
             .ToList();
-        return new FleetShareCharacterViewModel(characterId, name, rows);
+        return new FleetShareCharacterViewModel(
+            characterId,
+            name,
+            rows,
+            new FleetKillmailShareRowViewModel(current.KillmailOverrideChoiceIndex(fleetId, characterId)));
     }
 
     private static string ValueFor(int choiceIndex) => choiceIndex switch

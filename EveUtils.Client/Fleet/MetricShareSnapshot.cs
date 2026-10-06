@@ -21,6 +21,8 @@ public sealed class MetricShareSnapshot(
     IReadOnlyDictionary<string, string> values,
     IReadOnlyDictionary<(long FleetId, int CharacterId), string>? sharedRuns = null)
 {
+    public const string KillmailShareKey = "fleet.share.killmails";
+
     /// <summary>Personal metrics that are opt-IN (off until explicitly enabled): location (privacy) and what a pilot
     /// made — bounty, loot and mining (ET-234, the same reasoning as loot: what a pilot mined is theirs to offer). A
     /// new kind inherits "shared", so ISK has to be named here or it goes out by default, which is the opposite of
@@ -57,6 +59,23 @@ public sealed class MetricShareSnapshot(
 
         return fleetChoice ?? IsShared(kind);
     }
+
+    public bool IsKillmailShared() =>
+        !string.Equals(values.GetValueOrDefault(KillmailShareKey), "false", StringComparison.OrdinalIgnoreCase);
+
+    public bool IsKillmailShared(long fleetId, int characterId) =>
+        _Choice(KillmailOverrideKeyFor(fleetId, characterId)) ?? IsKillmailShared();
+
+    public int KillmailOverrideChoiceIndex(long fleetId, int characterId) =>
+        _Choice(KillmailOverrideKeyFor(fleetId, characterId)) switch
+        {
+            true => 1,
+            false => 2,
+            null => 0,
+        };
+
+    public static string KillmailOverrideKeyFor(long fleetId, int characterId) =>
+        $"fleet.{fleetId}.{characterId}.share.killmails";
 
     /// <summary>What this character offers this fleet right now, as the <see cref="MetricKind.Shares"/> manifest carries
     /// it (ET-440). Combat stands for every live combat line: they share one switch.</summary>

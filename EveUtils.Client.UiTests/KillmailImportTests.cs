@@ -5,6 +5,7 @@ using System.Linq;
 using System.Net.Http;
 using System.Threading.Tasks;
 using EveUtils.Client.Esi.Testing;
+using EveUtils.Client.Fleet;
 using EveUtils.Client.Killmails;
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Data;
@@ -12,6 +13,10 @@ using EveUtils.Shared.Identity;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Esi;
 using EveUtils.Shared.Modules.Esi.Http;
+using EveUtils.Shared.Modules.Fleet.Entities;
+using EveUtils.Shared.Modules.Fleet.Enums;
+using EveUtils.Shared.Modules.Fleet.Dtos;
+using EveUtils.Shared.Modules.Fleet.Events;
 using EveUtils.Shared.Modules.Killmails;
 using EveUtils.Shared.Modules.Killmails.Entities;
 using EveUtils.Shared.Modules.Killmails.Enums;
@@ -44,6 +49,71 @@ public sealed class KillmailImportTests : IDisposable
 
     private ILocalKillmailRepository Repository => _instance.Services.GetRequiredService<ILocalKillmailRepository>();
     private IServiceScopeFactory Scopes => _instance.Services.GetRequiredService<IServiceScopeFactory>();
+
+    [Theory]
+    [InlineData(false, true, FleetState.Active, FleetActivation.Active, 1)]
+    [InlineData(true, true, FleetState.Active, FleetActivation.Active, 1)]
+    [InlineData(false, true, FleetState.Active, FleetActivation.Forming, 0)]
+    [InlineData(true, false, FleetState.Active, FleetActivation.Active, 0)]
+    public async Task ImportRoute_ParticipationScenario_PublishesCurrentFleetKillmailState(
+        bool pastedLink,
+        bool hasFleet,
+        FleetState state,
+        FleetActivation activation,
+        int expectedShares)
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        IEventBus bus = _instance.Services.GetRequiredService<IEventBus>();
+        IFleetParticipation participation = _instance.Services.GetRequiredService<IFleetParticipation>();
+        DateTimeOffset activatedAt = new(2026, 9, 20, 11, 0, 0, TimeSpan.Zero);
+        if (hasFleet && FleetParticipationRefresher.Participates(state, activation))
+        {
+            participation.Set([new FleetParticipant(77, 42, ClientOnly: false, ActivatedAt: activatedAt)]);
+        }
+
+        await Repository.AddMissingAsync(CharacterId, [_Stored(99)], cancellationToken);
+        var shared = new List<FleetKillmailShareEvent>();
+        using IDisposable capture = bus.Subscribe<FleetKillmailShareEvent>(shared.Add);
+        using var publisher = new FleetKillmailSharePublisher(
+            bus,
+            participation,
+            Repository,
+            _instance.Services.GetRequiredService<IMetricShareSettings>(),
+            TimeProvider.System,
+            NullLogger<FleetKillmailSharePublisher>.Instance);
+
+        _routes["/killmails/1/hash1/"] = () => Json(200, _Killmail(1));
+        var (client, _, _) = _Pipeline(EsiAuthorization.Authorized("token"));
+        var importer = new EsiKillmailImporter(client, Repository, Scopes);
+        if (pastedLink)
+        {
+            await _instance.Services.GetRequiredService<ICharacterRegistry>()
+                .AddOrUpdateAsync(new Character("Pilot", CharacterId), cancellationToken);
+            await importer.ImportOneAsync(1, "hash1", cancellationToken);
+        }
+        else
+        {
+            _routes[Page1] = () => _RecentPage(1, 1);
+            await importer.ImportAsync(CharacterId, cancellationToken);
+        }
+
+        await publisher.WhenIdleAsync();
+
+        Assert.Equal(expectedShares, shared.Count);
+        if (expectedShares == 0)
+        {
+            return;
+        }
+
+        FleetKillmailShareEvent share = Assert.Single(shared);
+        Assert.Equal(CharacterId, share.CharacterId);
+        Assert.Equal(42, share.FleetId);
+        FleetKillmailReference killmail = Assert.Single(share.Data.Killmails);
+        Assert.Equal(1, killmail.KillmailId);
+        Assert.Equal("hash1", killmail.Hash);
+        Assert.Equal(new DateTime(2026, 9, 20, 12, 0, 0, DateTimeKind.Utc), killmail.KillmailTimeUtc);
+        Assert.False(killmail.IsLoss);
+    }
 
     [Theory]
     [InlineData("/characters/77/killmails/recent/", false)]

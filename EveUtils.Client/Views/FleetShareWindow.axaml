@@ -18,6 +18,16 @@
                 </ComboBox>
             </Grid>
         </DataTemplate>
+        <DataTemplate x:Key="KillmailRow" x:DataType="vm:FleetKillmailShareRowViewModel">
+            <Grid ColumnDefinitions="*,170" Margin="0,2">
+                <TextBlock Grid.Column="0" Text="{Binding Label}" VerticalAlignment="Center"/>
+                <ComboBox Grid.Column="1" HorizontalAlignment="Stretch" SelectedIndex="{Binding ChoiceIndex}">
+                    <ComboBoxItem>Use global default</ComboBoxItem>
+                    <ComboBoxItem>Share</ComboBoxItem>
+                    <ComboBoxItem>Don't share</ComboBoxItem>
+                </ComboBox>
+            </Grid>
+        </DataTemplate>
     </Window.Resources>
 
     <DockPanel Margin="16">
@@ -41,7 +51,10 @@
                 <ContentControl IsVisible="{Binding ApplyToAll}" Content="{Binding AllCharacters}">
                     <ContentControl.ContentTemplate>
                         <DataTemplate x:DataType="vm:FleetShareCharacterViewModel">
-                            <ItemsControl ItemsSource="{Binding Metrics}" ItemTemplate="{StaticResource MetricRow}"/>
+                            <StackPanel>
+                                <ItemsControl ItemsSource="{Binding Metrics}" ItemTemplate="{StaticResource MetricRow}"/>
+                                <ContentControl Content="{Binding Killmails}" ContentTemplate="{StaticResource KillmailRow}"/>
+                            </StackPanel>
                         </DataTemplate>
                     </ContentControl.ContentTemplate>
                 </ContentControl>
@@ -54,6 +67,7 @@
                                 <TextBlock Text="{Binding Name}" FontWeight="SemiBold"
                                            Foreground="{StaticResource TextBrightBrush}"/>
                                 <ItemsControl ItemsSource="{Binding Metrics}" ItemTemplate="{StaticResource MetricRow}"/>
+                                <ContentControl Content="{Binding Killmails}" ContentTemplate="{StaticResource KillmailRow}"/>
                             </StackPanel>
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>

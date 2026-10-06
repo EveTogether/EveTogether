@@ -58,6 +58,7 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
     private CheckBox _shareLocationBox = null!, _shareBountyBox = null!, _shareCombatBox = null!;
     private CheckBox? _shareLootBox;
     private CheckBox? _shareMiningBox;
+    private CheckBox? _shareKillmailsBox;
     private CheckBox _loadTypeImagesBox = null!, _openFitDetailAfterImportBox = null!, _enableLocalApiBox = null!;
     private CheckBox _openFleetRunWindowBox = null!;
     private CheckBox? _autoPublishFleetRunsBox;
@@ -126,7 +127,7 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
     }
 
     public SettingsWindow(string currentDirectory, string detectedDefault, bool shareLocation, bool shareBounty, bool shareCombat, bool loadTypeImages, Theming.FactionTheme currentFaction, string sdeVersionLabel, bool openFitDetailAfterImport = true, Notifications.ToastPosition toastPosition = Notifications.ToastPosition.TopRight, bool enableLocalApi = false, int localApiPort = LocalApi.LocalApiServer.DefaultPort, string localApiStatusLabel = "", ILocalApiServer? localApiServer = null, bool checkUpdatesOnStartup = true, ClipboardWatchService? clipboardWatch = null, Func<SettingsResult, Task>? onApply = null,
-        int initialCategory = 0, bool openFleetRunWindowImmediately = false, bool autoPublishFleetRuns = true, bool shareLoot = false, bool shareMining = false, bool autoStartMissions = true, bool autoStartSites = true, DayOfWeek weekStartsOn = DayOfWeek.Monday, bool includeNightlyBuilds = false, IUpdateService? updates = null, bool offerHomefrontRuns = true, Func<Task>? runSetupAgain = null, bool includeLocationInLocalApi = false, Action? openWidgetManager = null) : this()
+        int initialCategory = 0, bool openFleetRunWindowImmediately = false, bool autoPublishFleetRuns = true, bool shareLoot = false, bool shareMining = false, bool autoStartMissions = true, bool autoStartSites = true, DayOfWeek weekStartsOn = DayOfWeek.Monday, bool includeNightlyBuilds = false, IUpdateService? updates = null, bool offerHomefrontRuns = true, Func<Task>? runSetupAgain = null, bool includeLocationInLocalApi = false, Action? openWidgetManager = null, bool shareKillmails = true) : this()
     {
         _runSetupAgain = runSetupAgain;
         _openWidgetManager = openWidgetManager;
@@ -204,10 +205,19 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
         _shareBountyBox.IsChecked = shareBounty;
         _shareLootBox = this.FindControl<CheckBox>("ShareLootBox");
         if (_shareLootBox is not null)
+        {
             _shareLootBox.IsChecked = shareLoot;
+        }
+
         _shareMiningBox = this.FindControl<CheckBox>("ShareMiningBox");
         if (_shareMiningBox is not null)
+        {
             _shareMiningBox.IsChecked = shareMining;
+        }
+
+        _shareKillmailsBox = this.FindControl<CheckBox>("ShareKillmailsBox")
+            ?? throw new InvalidOperationException("ShareKillmailsBox is missing from SettingsWindow.axaml");
+        _shareKillmailsBox.IsChecked = shareKillmails;
         _shareCombatBox.IsChecked = shareCombat;
         _loadTypeImagesBox.IsChecked = loadTypeImages;
         _openFitDetailAfterImportBox.IsChecked = openFitDetailAfterImport;
@@ -798,10 +808,11 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
         var autoPublishFleetRuns = _autoPublishFleetRunsBox?.IsChecked ?? true;
         var shareLoot = _shareLootBox?.IsChecked ?? false;
         var shareMining = _shareMiningBox?.IsChecked ?? false;
+        var shareKillmails = _shareKillmailsBox?.IsChecked ?? true;
         var autoStartMissions = _autoStartMissionsBox.IsChecked ?? true;
         var autoStartSites = _autoStartSitesBox.IsChecked ?? true;
         var weekStartsOn = _weekStartsOnBox.SelectedIndex == 1 ? DayOfWeek.Sunday : DayOfWeek.Monday;
         var includeNightlyBuilds = _channelNightlyButton?.IsChecked ?? false;
-        return new SettingsResult(dir, shareLocation, shareBounty, shareCombat, loadTypeImages, SelectedFaction(), reimportSde, openFitDetailAfterImport, toastPosition, enableLocalApi, localApiPort, checkUpdatesOnStartup, openFleetRunWindowImmediately, autoPublishFleetRuns, shareLoot, shareMining, autoStartMissions, autoStartSites, weekStartsOn, includeNightlyBuilds, _channelTouched, OfferHomefrontRunsBox.IsChecked ?? true, IncludeLocationInLocalApiBox.IsChecked ?? false);
+        return new SettingsResult(dir, shareLocation, shareBounty, shareCombat, loadTypeImages, SelectedFaction(), reimportSde, openFitDetailAfterImport, toastPosition, enableLocalApi, localApiPort, checkUpdatesOnStartup, openFleetRunWindowImmediately, autoPublishFleetRuns, shareLoot, shareMining, autoStartMissions, autoStartSites, weekStartsOn, includeNightlyBuilds, _channelTouched, OfferHomefrontRunsBox.IsChecked ?? true, IncludeLocationInLocalApiBox.IsChecked ?? false, shareKillmails);
     }
 }
