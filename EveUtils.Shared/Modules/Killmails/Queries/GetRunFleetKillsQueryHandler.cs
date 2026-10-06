@@ -26,9 +26,11 @@ internal sealed class GetRunFleetKillsQueryHandler(IDbContextFactory<ClientDbCon
                                && (untilUtc == null || killmail.KillmailTimeUtc <= untilUtc))
             .ToListAsync(cancellationToken);
 
-        // A mail one member lost stays a loss, however many other members attacked on it.
+        // A mail one member lost stays a loss, however many other members attacked on it, and even when the victim's own row is not stored.
         HashSet<int> lossIds = [.. rows.Where(row => row.IsLoss).Select(row => row.KillmailId)];
-        List<IGrouping<int, LocalKillmail>> kills = [.. rows.Where(row => !row.IsLoss && !lossIds.Contains(row.KillmailId))
+        List<IGrouping<int, LocalKillmail>> kills = [.. rows
+            .Where(row => !row.IsLoss && !lossIds.Contains(row.KillmailId)
+                          && !(row.VictimCharacterId is { } victim && query.CharacterIds.Contains(victim)))
             .GroupBy(row => row.KillmailId)];
 
         List<RunFleetKillDto> dtos = [];

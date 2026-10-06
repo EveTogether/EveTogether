@@ -81,6 +81,8 @@ public sealed class RunFleetKillsTests
             _Kill(Own, 9, Rifter, StartedAtUtc.AddHours(3).AddMinutes(5), Enemy + 3),
             // The same mail as the mate's loss, seen from the pilot who attacked on it: a loss, never a kill.
             _Kill(Own, 21, Gila, StartedAtUtc.AddMinutes(9), MateOne),
+            // Friendly fire: a member killed a member whose own loss row is not stored; still no kill.
+            _Kill(Own, 22, Rifter, StartedAtUtc.AddMinutes(11), MateTwo),
             _Loss(Own, 20, Gila, StartedAtUtc.AddMinutes(8), ownRun)
         ]);
         await store.AddMissingAsync(MateOne, [_Loss(MateOne, 21, Gila, StartedAtUtc.AddMinutes(9), mateRun)]);

@@ -47,7 +47,7 @@ public sealed class FleetKillsDetailSectionViewModel(RunDetailSectionServices se
     // Known only after LoadAsync, so the screen places this section again once every section has loaded.
     public override bool HasContent => Kills.Count > 0;
 
-    public override void Apply(RunDetailSectionInput input) => HeaderSummary = "none";
+    public override void Apply(RunDetailSectionInput input) => HeaderSummary = Kills.Count == 0 ? "none" : HeaderSummary;
 
     public override async Task LoadAsync(RunDetailSectionInput input, bool followUp, CancellationToken cancellationToken)
     {
