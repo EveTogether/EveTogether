@@ -44,8 +44,15 @@ public sealed class KillmailImportTests : IDisposable
     private const string Page3 = "/characters/77/killmails/recent/?page=3";
 
     private readonly string _cacheDirectory = Path.Combine(Path.GetTempPath(), "esi-killmail-test-" + Guid.NewGuid().ToString("N"));
-    private readonly TestClientInstance _instance = TestClientInstance.Create();
+    private readonly List<FleetKillmailShareEvent> _remoteShares = [];
+    private readonly TestClientInstance _instance;
     private readonly Dictionary<string, Func<HttpResponseMessage>> _routes = [];
+
+    public KillmailImportTests()
+    {
+        _instance = TestClientInstance.Create(services =>
+            services.AddSingleton<IRemoteEventTransport>(new KillmailShareRecordingTransport(_remoteShares)));
+    }
 
     private ILocalKillmailRepository Repository => _instance.Services.GetRequiredService<ILocalKillmailRepository>();
     private IServiceScopeFactory Scopes => _instance.Services.GetRequiredService<IServiceScopeFactory>();
@@ -68,12 +75,16 @@ public sealed class KillmailImportTests : IDisposable
         DateTimeOffset activatedAt = new(2026, 9, 20, 11, 0, 0, TimeSpan.Zero);
         if (hasFleet && FleetParticipationRefresher.Participates(state, activation))
         {
-            participation.Set([new FleetParticipant(77, 42, ClientOnly: false, ActivatedAt: activatedAt)]);
+            participation.Set([new FleetParticipant(
+                77,
+                42,
+                ClientOnly: false,
+                ServerAddress: "https://fleet.example",
+                ActivatedAt: activatedAt)]);
         }
 
         await Repository.AddMissingAsync(CharacterId, [_Stored(99)], cancellationToken);
-        var shared = new List<FleetKillmailShareEvent>();
-        using IDisposable capture = bus.Subscribe<FleetKillmailShareEvent>(shared.Add);
+        _remoteShares.Clear();
         using var publisher = new FleetKillmailSharePublisher(
             bus,
             participation,
@@ -99,13 +110,13 @@ public sealed class KillmailImportTests : IDisposable
 
         await publisher.WhenIdleAsync();
 
-        Assert.Equal(expectedShares, shared.Count);
+        Assert.Equal(expectedShares, _remoteShares.Count);
         if (expectedShares == 0)
         {
             return;
         }
 
-        FleetKillmailShareEvent share = Assert.Single(shared);
+        FleetKillmailShareEvent share = Assert.Single(_remoteShares);
         Assert.Equal(CharacterId, share.CharacterId);
         Assert.Equal(42, share.FleetId);
         FleetKillmailReference killmail = Assert.Single(share.Data.Killmails);
@@ -113,6 +124,19 @@ public sealed class KillmailImportTests : IDisposable
         Assert.Equal("hash1", killmail.Hash);
         Assert.Equal(new DateTime(2026, 9, 20, 12, 0, 0, DateTimeKind.Utc), killmail.KillmailTimeUtc);
         Assert.False(killmail.IsLoss);
+    }
+
+    private sealed class KillmailShareRecordingTransport(List<FleetKillmailShareEvent> shares) : IRemoteEventTransport
+    {
+        public Task SendAsync(IIntegrationEvent integrationEvent, CancellationToken cancellationToken = default)
+        {
+            if (integrationEvent is FleetKillmailShareEvent share)
+            {
+                shares.Add(share);
+            }
+
+            return Task.CompletedTask;
+        }
     }
 
     [Theory]

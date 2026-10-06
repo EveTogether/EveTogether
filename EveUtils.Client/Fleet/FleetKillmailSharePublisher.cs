@@ -154,7 +154,7 @@ public sealed class FleetKillmailSharePublisher : ISingletonService, IDisposable
                 UnixMs = unixMs,
                 Killmails = shared,
             };
-            EventTarget target = participant.ClientOnly ? EventTarget.Local : EventTarget.Both;
+            EventTarget target = participant.ClientOnly ? EventTarget.Local : EventTarget.Remote;
             await _eventBus.PublishAsync(new FleetKillmailShareEvent(payload, characterId), target, cancellationToken);
         }
     }
