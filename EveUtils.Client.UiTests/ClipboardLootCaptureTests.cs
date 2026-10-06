@@ -148,6 +148,25 @@ public sealed class ClipboardLootCaptureTests
         Assert.Contains("1 name(s) were not recognised", offer.Message);
     }
 
+    /// <summary>ET-460: a name no SDE type carries yet is kept with its amount instead of being dropped from the copy,
+    /// and a repeated copy — excluded from the totals — does not keep it a second time.</summary>
+    [AvaloniaFact]
+    public async Task AnUnknownNameInACopy_IsKeptWithItsAmount_AndARepeatedCopyDoesNotKeepItAgain()
+    {
+        using var env = await Env.StartAsync();
+        await env.StartRunAsync();
+        const string text = "Rifter\t1\r\nCrimson Harvest Token\t3\r\ncrimson harvest token\t2";
+
+        await env.CopyAsync(text);
+        env.CloseOffer();
+        await env.CopyAsync(text);
+
+        UnrecognisedLootLine line = Assert.Single(await env.UnrecognisedLinesAsync());
+        Assert.Equal(("Crimson Harvest Token", 5L, UnrecognisedItemSource.ClipboardCapture, UnrecognisedItemStatus.Open),
+            (line.Name, line.Quantity, line.Source, line.Status));
+        Assert.Equal(2, (await env.CapturesAsync()).Count);
+    }
+
     /// <summary>
     /// ET-65, Raymond 2026-09-02: a copied loot window that produced nothing at all — no loot, no toast, no line in
     /// the log, indistinguishable from a watcher that never ran.
@@ -683,6 +702,12 @@ public sealed class ClipboardLootCaptureTests
                 .Include(capture => capture.Entries)
                 .OrderBy(capture => capture.CapturedAtUtc)
                 .ToListAsync(Token);
+        }
+
+        public async Task<IReadOnlyList<UnrecognisedLootLine>> UnrecognisedLinesAsync()
+        {
+            await using ClientDbContext db = await CreateDbAsync();
+            return await db.Set<UnrecognisedLootLine>().AsNoTracking().ToListAsync(Token);
         }
 
         public async Task<ActivitySummary> SaveAndRebuildAsync()

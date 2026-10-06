@@ -134,6 +134,40 @@ public sealed class RunsGrpcServiceTests
         Assert.Empty(reply.PayloadJson);
     }
 
+    /// <summary>ET-460: a name the SDE did not know when the loot was copied is part of the run a pilot publishes, so a
+    /// fleetmate reading it back sees the same open line. Counter-proof: take the include out of
+    /// <c>ServerRunSyncRepository.WithChildren</c> and the run comes back without it.</summary>
+    [Fact]
+    public async Task APublishedRun_ComesBackWithItsUnrecognisedLootLines()
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        var repository = new ServerRunSyncRepository((IDbContextFactory<ServerDbContext>)_factory);
+        Run run = _SavedRun(Raymond, groupCode: null);
+        var capture = new RunLootCapture
+        {
+            Id = Guid.CreateVersion7(), RunId = run.Id, CapturedAtUtc = run.StartedAtUtc.AddMinutes(3), Source = LootCaptureSource.Clipboard
+        };
+        capture.UnrecognisedLines.Add(new UnrecognisedLootLine
+        {
+            Id = Guid.CreateVersion7(),
+            RunLootCaptureId = capture.Id,
+            CharacterId = Raymond,
+            Source = UnrecognisedItemSource.ClipboardCapture,
+            Name = "Crimson Harvest Token",
+            Quantity = 3,
+            FirstSeenAtUtc = capture.CapturedAtUtc,
+            Status = UnrecognisedItemStatus.Open
+        });
+        run.LootCaptures.Add(capture);
+        await repository.UpsertAsync(run, cancellationToken);
+
+        IReadOnlyList<Run> published = await repository.ListPublishedAsync(
+            Raymond, run.StartedAtUtc.AddDays(-1), run.StartedAtUtc.AddDays(1), cancellationToken);
+
+        UnrecognisedLootLine line = Assert.Single(Assert.Single(Assert.Single(published).LootCaptures).UnrecognisedLines);
+        Assert.Equal(("Crimson Harvest Token", 3L, UnrecognisedItemStatus.Open), (line.Name, line.Quantity, line.Status));
+    }
+
     private const long Jithran = 90250177;
     private const long Raymond = 90000002;
     private const long Stranger = 90000003;

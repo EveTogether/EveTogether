@@ -58,6 +58,9 @@ internal sealed class SaveRunCommandHandler(IDbContextFactory<ClientDbContext> c
                     LootKind = entry.LootKind
                 });
             }
+            foreach (UnrecognisedLootNameInput unrecognised in capture.UnrecognisedNames)
+                entity.UnrecognisedLines.Add(UnrecognisedLootWrites.NewLine(unrecognised, entity.Id, capture.CharacterId ?? run.CharacterId,
+                    UnrecognisedItemSource.RunWindowEntry, capture.CapturedAtUtc));
             db.Set<RunLootCapture>().Add(entity);
         }
         foreach (RunBountyEntryInput bounty in command.BountyEntries)
