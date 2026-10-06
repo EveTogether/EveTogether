@@ -226,12 +226,12 @@ public sealed class ConsumablesTests
     }
 
     /// <summary>
-    /// The 62,789 ISK between the loot header and LOOT: the header is the summary's stored share, valued when the run
-    /// was saved, the table under it is valued at today's prices. Red without the change: the prices moved from 100 to
-    /// 200 after the save and the header kept reading 300 next to a table that said 600.
+    /// The 62,789 ISK between the loot header and LOOT (ET-329), closed the other way round since ET-463: the loot is
+    /// worth what it was when it came in, so the header, the table under it and the runs list all keep reading 300
+    /// after the market moved to 200 a unit. Red without the snapshot: all three move to 600.
     /// </summary>
     [AvaloniaFact]
-    public async Task OpeningASavedActivity_AddsItUpAgain_WhenThePricesMovedSinceItWasSaved()
+    public async Task OpeningASavedActivity_KeepsTheValueItWasSavedAt_WhenThePricesMovedSince()
     {
         using var instance = TestClientInstance.Create(services =>
             services.AddSingleton<ISdeAccessor>(_Sde()));
@@ -243,10 +243,10 @@ public sealed class ConsumablesTests
         ActivityOverviewRowDto row = Assert.Single((await dispatcher.Query(new GetActivityOverviewQuery())).Value!);
         ActivityDetailViewModel detail = await _DetailAsync(instance, dispatcher, row);
 
-        Assert.Equal("600 ISK", detail.Loot().LootOverview.LootIskDisplay);
-        Assert.StartsWith("600 ISK", detail.Loot().HeaderSummary);
-        Assert.Equal("600 ISK", detail.TotalIskText);
-        Assert.Equal(600m, Assert.Single((await dispatcher.Query(new GetActivityOverviewQuery())).Value!).Isk.Total);
+        Assert.Equal("300 ISK", detail.Loot().LootOverview.LootIskDisplay);
+        Assert.StartsWith("300 ISK", detail.Loot().HeaderSummary);
+        Assert.Equal("300 ISK", detail.TotalIskText);
+        Assert.Equal(300m, Assert.Single((await dispatcher.Query(new GetActivityOverviewQuery())).Value!).Isk.Total);
     }
 
     /// <summary>The run window hands the filament its rows price to the LOOT totals, so CONSUMED and NET there say the

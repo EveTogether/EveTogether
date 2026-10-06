@@ -1,3 +1,5 @@
+using EveUtils.Shared.Modules.Runs.Enums;
+
 namespace EveUtils.Shared.Modules.Runs.Entities;
 
 /// <summary>One ore, aggregated for one run (ET-229) — not one row per mining cycle, since a single site is on the
@@ -23,5 +25,11 @@ public sealed class RunMiningEntry
     public DateTime FirstObservedAtUtc { get; set; }
 
     public DateTime LastObservedAtUtc { get; set; }
+
+    /// <summary>The ore's unit price, fixed the way <see cref="RunLootEntry.UnitPriceIsk"/> is (ET-463).</summary>
+    public decimal? UnitPriceIsk { get; set; }
+
+    public DateTime? PricedAtUtc { get; set; }
+    public PriceSnapshotSource? PriceSource { get; set; }
     public Run? Run { get; set; }
 }

@@ -1,3 +1,5 @@
+using EveUtils.Shared.Modules.Market.Repositories;
+using EveUtils.Shared.Modules.Sde;
 using System.Globalization;
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Data;
@@ -14,7 +16,8 @@ namespace EveUtils.Shared.Modules.Runs.Commands;
 
 [ClientOnly]
 internal sealed class SetRunConsumablesManualCommandHandler(
-    IDbContextFactory<ClientDbContext> contextFactory, IEventBus eventBus, IDispatcher dispatcher)
+    IDbContextFactory<ClientDbContext> contextFactory, IEventBus eventBus, IDispatcher dispatcher, IMarketPriceRepository marketPrices,
+    ISdeAccessor sde)
     : ICommandHandler<SetRunConsumablesManualCommand, Result>
 {
     public async Task<Result> Handle(SetRunConsumablesManualCommand command, CancellationToken cancellationToken = default)
@@ -45,6 +48,7 @@ internal sealed class SetRunConsumablesManualCommandHandler(
         await _ReplaceSpentAsync(db, run, spent, command.UnrecognisedNames ?? [], nowUtc, cancellationToken);
 
         await db.SaveChangesAsync(cancellationToken);
+        await RunPriceSnapshots.FixOnCaptureAsync(db, marketPrices, sde, command.RunId, cancellationToken);
         await dispatcher.Send(new RebuildActivitySummariesCommand(command.RunId), cancellationToken);
         await eventBus.PublishAsync(new RunLootCorrectedEvent(command.RunId), EventTarget.Local, cancellationToken);
         await eventBus.PublishAsync(new RunsChangedEvent(run.Id, run.GroupCode), EventTarget.Local, cancellationToken);

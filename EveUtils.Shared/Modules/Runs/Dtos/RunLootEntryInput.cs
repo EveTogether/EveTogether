@@ -10,4 +10,10 @@ public sealed class RunLootEntryInput
     public decimal? Volume { get; init; }
     public decimal? ClipboardPrice { get; init; }
     public required LootKind LootKind { get; init; }
+
+    // The fixed price travels (ET-463), so a server copy and every fleetmate value the line the same. Not required: a
+    // payload from an older client reads as "no price fixed yet".
+    public decimal? UnitPriceIsk { get; init; }
+    public DateTime? PricedAtUtc { get; init; }
+    public PriceSnapshotSource? PriceSource { get; init; }
 }

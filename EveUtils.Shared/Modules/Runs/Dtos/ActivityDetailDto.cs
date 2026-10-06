@@ -10,7 +10,9 @@ public sealed record RunBountyEntryDto(Guid RunId, DateTime OccurredAtUtc, decim
 /// reads its "mining time" ISK/h from, next to the whole run's own average.</summary>
 public sealed record RunMiningEntryDto(
     Guid RunId, string OreType, int Units, int CriticalUnits, int ResidueUnits,
-    DateTime FirstObservedAtUtc, DateTime LastObservedAtUtc);
+    DateTime FirstObservedAtUtc, DateTime LastObservedAtUtc,
+    // The ore's fixed unit price (ET-463); null while it is still valued at the live price.
+    decimal? UnitPriceIsk = null);
 
 /// <summary>One sighting of one enemy type on one run. Deliberately not merged across runs by
 /// <see cref="EnemyTypeId"/>: two participants in the same activity can each carry their own row for the same type,
@@ -21,7 +23,9 @@ public sealed record RunEnemyObservationDto(
 
 public sealed record RunParameterDto(
     Guid RunId, RunParameterKey ParameterKey, string TypedValue, decimal? Amount, int? ItemTypeId,
-    int? BonusWindowSeconds, DateTime ObservedAtUtc, Guid? EntryId = null);
+    int? BonusWindowSeconds, DateTime ObservedAtUtc, Guid? EntryId = null,
+    // The fixed unit price of the type the row names (ET-463) — only ever set on the filament's type row.
+    decimal? UnitPriceIsk = null);
 
 /// <summary>One run within the activity, with its own loot captures — never another run's, and never the loot of
 /// whichever run happens to be running right now. <see cref="TimesCorrectedAtUtc"/> travels along because the

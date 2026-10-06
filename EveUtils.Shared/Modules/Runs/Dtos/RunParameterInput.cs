@@ -11,4 +11,9 @@ public sealed class RunParameterInput
     public int? BonusWindowSeconds { get; init; }
     public Guid? EntryId { get; init; }
     public required DateTime ObservedAtUtc { get; init; }
+
+    // Not required, for the reason RunLootEntryInput gives (ET-463).
+    public decimal? UnitPriceIsk { get; init; }
+    public DateTime? PricedAtUtc { get; init; }
+    public PriceSnapshotSource? PriceSource { get; init; }
 }

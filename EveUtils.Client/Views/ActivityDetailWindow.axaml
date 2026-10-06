@@ -223,9 +223,15 @@
                      foreign, read-only activity (ET-215) has nothing here to delete. The weight of the decision
                      sits in the confirmation this opens, not in how the control itself looks. -->
                 <Border Padding="14,16" IsVisible="{Binding CanDelete}">
-                    <Button x:Name="DeleteButton" Classes="deletebutton" Content="{Binding DeleteText}"
-                            Command="{Binding DeleteCommand}"
-                            ToolTip.Tip="Delete this activity — every run of it that is yours"/>
+                    <StackPanel Orientation="Horizontal" Spacing="12">
+                        <Button x:Name="DeleteButton" Classes="deletebutton" Content="{Binding DeleteText}"
+                                Command="{Binding DeleteCommand}"
+                                ToolTip.Tip="Delete this activity — every run of it that is yours"/>
+                        <!-- ET-463: values are fixed when the loot comes in; this is the one way to replace them. -->
+                        <Button x:Name="RevalueButton" Classes="deletebutton" Content="{Binding RevalueText}"
+                                Command="{Binding RevalueCommand}"
+                                ToolTip.Tip="Value your runs in this activity again at today's prices, replacing what they were worth when the loot came in"/>
+                    </StackPanel>
                 </Border>
 
             </StackPanel>

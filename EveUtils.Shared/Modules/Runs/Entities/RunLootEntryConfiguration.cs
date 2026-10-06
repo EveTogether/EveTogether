@@ -11,6 +11,7 @@ public sealed class RunLootEntryConfiguration : IEntityTypeConfiguration<RunLoot
         builder.Property(entry => entry.Name).IsRequired().HasMaxLength(255);
         builder.Property(entry => entry.Volume).HasPrecision(18, 3);
         builder.Property(entry => entry.ClipboardPrice).HasPrecision(18, 2);
+        builder.Property(entry => entry.UnitPriceIsk).HasPrecision(18, 2);
         builder.HasOne(entry => entry.RunLootCapture)
             .WithMany(capture => capture.Entries)
             .HasForeignKey(entry => entry.RunLootCaptureId)

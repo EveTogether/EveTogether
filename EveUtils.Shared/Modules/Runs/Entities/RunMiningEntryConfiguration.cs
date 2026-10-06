@@ -9,6 +9,7 @@ public sealed class RunMiningEntryConfiguration : IEntityTypeConfiguration<RunMi
     {
         builder.HasKey(entry => entry.Id);
         builder.Property(entry => entry.OreType).IsRequired();
+        builder.Property(entry => entry.UnitPriceIsk).HasPrecision(18, 2);
         // One row per ore per run (ET-229): the upsert the command handler does depends on this being unique.
         builder.HasIndex(entry => new { entry.RunId, entry.OreType }).IsUnique();
         builder.HasOne(entry => entry.Run)

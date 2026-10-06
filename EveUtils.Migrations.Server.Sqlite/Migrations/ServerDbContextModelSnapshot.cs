@@ -1026,10 +1026,20 @@ namespace EveUtils.Migrations.Server.Sqlite.Migrations
                         .HasMaxLength(255)
                         .HasColumnType("TEXT");
 
+                    b.Property<int?>("PriceSource")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime?>("PricedAtUtc")
+                        .HasColumnType("TEXT");
+
                     b.Property<long?>("Quantity")
                         .HasColumnType("INTEGER");
 
                     b.Property<Guid>("RunLootCaptureId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal?>("UnitPriceIsk")
+                        .HasPrecision(18, 2)
                         .HasColumnType("TEXT");
 
                     b.Property<decimal?>("Volume")
@@ -1062,10 +1072,20 @@ namespace EveUtils.Migrations.Server.Sqlite.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<int?>("PriceSource")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime?>("PricedAtUtc")
+                        .HasColumnType("TEXT");
+
                     b.Property<int>("ResidueUnits")
                         .HasColumnType("INTEGER");
 
                     b.Property<Guid>("RunId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal?>("UnitPriceIsk")
+                        .HasPrecision(18, 2)
                         .HasColumnType("TEXT");
 
                     b.Property<int>("Units")
@@ -1104,12 +1124,22 @@ namespace EveUtils.Migrations.Server.Sqlite.Migrations
                     b.Property<int>("ParameterKey")
                         .HasColumnType("INTEGER");
 
+                    b.Property<int?>("PriceSource")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime?>("PricedAtUtc")
+                        .HasColumnType("TEXT");
+
                     b.Property<Guid>("RunId")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("TypedValue")
                         .IsRequired()
                         .HasMaxLength(255)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal?>("UnitPriceIsk")
+                        .HasPrecision(18, 2)
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");

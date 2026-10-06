@@ -29,10 +29,11 @@ internal static class ActivityDetails
                     observation.EnemyName, observation.Count, observation.FirstObservedAtUtc, observation.LastObservedAtUtc))],
             [.. parameters.OrderBy(parameter => parameter.ParameterKey).ThenBy(parameter => parameter.ObservedAtUtc)
                 .Select(parameter => new RunParameterDto(parameter.RunId, parameter.ParameterKey, parameter.TypedValue,
-                    parameter.Amount, parameter.ItemTypeId, parameter.BonusWindowSeconds, parameter.ObservedAtUtc, parameter.EntryId))],
+                    parameter.Amount, parameter.ItemTypeId, parameter.BonusWindowSeconds, parameter.ObservedAtUtc, parameter.EntryId,
+                    parameter.UnitPriceIsk))],
             [.. miningEntries.OrderByDescending(entry => entry.Units)
                 .Select(entry => new RunMiningEntryDto(entry.RunId, entry.OreType, entry.Units, entry.CriticalUnits,
-                    entry.ResidueUnits, entry.FirstObservedAtUtc, entry.LastObservedAtUtc))],
+                    entry.ResidueUnits, entry.FirstObservedAtUtc, entry.LastObservedAtUtc, entry.UnitPriceIsk))],
             StoredIskBreakdown.Read(summary.IskContributions),
             attendance, fleetId, iskByCharacter);
 

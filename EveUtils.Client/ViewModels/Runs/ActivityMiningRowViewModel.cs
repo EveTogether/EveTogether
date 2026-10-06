@@ -17,10 +17,11 @@ namespace EveUtils.Client.ViewModels.Runs;
 /// <see cref="ActivityRunRowViewModel"/> for why this is not always possible yet.</param>
 /// <param name="corrector">What the line's edit action (ET-424) writes through. Null for a line that is not this
 /// machine's to correct — someone else's, or one that stands for several runs at once — which then has no edit action.</param>
+/// <param name="isLivePrice">Valued at today's cache price because the line has no price of its own fixed yet (ET-463).</param>
 public sealed partial class ActivityMiningRowViewModel(
     Guid runId, long characterId, string oreType, int units, int criticalUnits, int residueUnits, decimal? value,
     bool isFixedPrice, Func<long, string>? nameOf = null, double? shareFraction = null, string? shareTooltip = null,
-    MiningLineCorrector? corrector = null) : ObservableObject
+    MiningLineCorrector? corrector = null, bool isLivePrice = false) : ObservableObject
 {
     /// <summary>What an ISK figure holding Mutanite says on hover (ET-288) — the fact ET-229 used to append to the
     /// figure itself as " (NPC price)", which no ISK column in the run window has room for.</summary>
@@ -65,11 +66,13 @@ public sealed partial class ActivityMiningRowViewModel(
 
     /// <summary>Bare amount (ET-288) — the ISK header above it names the unit, the same as UNITS and RESIDUE; "—"
     /// until it can be valued at all, with <see cref="ValueTooltip"/> saying why.</summary>
-    public string ValueText { get; } = value is { } isk ? IskFormat.Number(isk) : "—";
+    public string ValueText { get; } = value is { } isk ? IskFormat.Number(isk) + (isLivePrice ? " · live" : string.Empty) : "—";
 
     /// <summary>The NPC-buy exception, named rather than folded silently into the figure (ET-229) — or that there is
-    /// no price yet.</summary>
-    public string? ValueTooltip { get; } = isFixedPrice ? FixedPriceTooltip : value is null ? "No price for this ore yet." : null;
+    /// no price yet, or only today's.</summary>
+    public string? ValueTooltip { get; } = isFixedPrice ? FixedPriceTooltip
+        : value is null ? "No price for this ore yet."
+        : isLivePrice ? "Valued at today's price until this ore's price is fixed." : null;
 
     public bool HasShareBar { get; } = shareFraction is not null;
 

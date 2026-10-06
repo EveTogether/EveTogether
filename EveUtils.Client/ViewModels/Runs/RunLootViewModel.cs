@@ -32,6 +32,7 @@ public sealed partial class RunLootViewModel : ViewModelBase
     private readonly ISdeAccessor? _sde;
     private readonly ITypeImageProvider? _images;
     private readonly Dictionary<int, decimal> _unitPrices = [];
+    private readonly HashSet<int> _liveTypeIds = [];
     private readonly Dictionary<int, string> _names = [];
     private IReadOnlyList<LootTallyLine> _counted = [];
     private string? _pricingBasis;
@@ -205,7 +206,10 @@ public sealed partial class RunLootViewModel : ViewModelBase
     /// <summary>What these figures are, said by whoever priced them. ET-65 AC-5 had this read "Clipboard ISK total"
     /// because the total WAS the copied column; it is a valuation now, so the label says so — including when the
     /// price cache has nothing in it yet and the honest answer is why there are no figures.</summary>
-    public string TotalIskLabel => _pricingBasis ?? "Valued at the cached ESI average price per item.";
+    public string TotalIskLabel => PricingProblemText
+                                   ?? (_unitPrices.Count > 0 && _liveTypeIds.Count == 0
+                                       ? "Valued at the price each item had when it came in."
+                                       : _pricingBasis ?? "Valued at the cached ESI average price per item.");
 
     /// <summary>Why nothing could be priced at all — the price cache still empty — and only that; the ordinary basis
     /// of a valuation that worked is not a problem to report.</summary>
@@ -296,9 +300,11 @@ public sealed partial class RunLootViewModel : ViewModelBase
     {
         _isLoadDeferred = false;
         RunStatusMessage = null;
+        // Read over every capture, spent ones too: the stored run fixes one price per type across all of them.
+        Dictionary<int, decimal> fixedPrices = FixedLootPrices.Of(captures);
         // What the pilot spent is CONSUMABLES' list (ET-334), stored beside the loot but never part of it.
         captures = [.. captures.Where(capture => capture.Role is not LootCaptureRole.Consumed)];
-        await _LoadPricesAsync(captures.SelectMany(capture => capture.Entries), cancellationToken);
+        await _LoadPricesAsync(captures.SelectMany(capture => capture.Entries), fixedPrices, cancellationToken);
         _names.Clear();
         foreach (RunLootEntryDto entry in captures.SelectMany(capture => capture.Entries))
             _names[entry.ItemTypeId] = entry.Name;
@@ -580,24 +586,29 @@ public sealed partial class RunLootViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// Prices every entry from <see cref="IAppraisalProvider"/> — the hourly ESI cache — by type id, and never from
-    /// the clipboard's own ISK column (Raymond, 2026-09-02). That makes an Icons copy worth the same as the Details
-    /// copy of the same items: the columns differ, the type ids do not.
+    /// Prices every entry at the unit price its run fixed for the type (ET-463), and only a type without one from
+    /// <see cref="IAppraisalProvider"/> — the hourly ESI cache — by type id, marked live; never from the clipboard's
+    /// own ISK column (Raymond, 2026-09-02). That makes an Icons copy worth the same as the Details copy of the same
+    /// items: the columns differ, the type ids do not.
     ///
     /// Prices are read once per refresh and held; re-totalling works from what is already here rather than asking
     /// again. A cache with nothing in it comes back as a failure, which becomes the label under the figures instead
     /// of a silent zero.
     /// </summary>
-    private async Task _LoadPricesAsync(IEnumerable<RunLootEntryDto> entries, CancellationToken cancellationToken)
+    private async Task _LoadPricesAsync(IEnumerable<RunLootEntryDto> entries, IReadOnlyDictionary<int, decimal> fixedPrices,
+        CancellationToken cancellationToken)
     {
         _unitPrices.Clear();
+        _liveTypeIds.Clear();
         _pricingBasis = null;
         PricingProblemText = null;
+        foreach ((int typeId, decimal price) in fixedPrices)
+            _unitPrices[typeId] = price;
 
         List<AppraisalLine> lines = [.. entries
             .Select(entry => entry.ItemTypeId)
             .Distinct()
-            .Where(typeId => typeId > 0)
+            .Where(typeId => typeId > 0 && !_unitPrices.ContainsKey(typeId))
             .Select(typeId => new AppraisalLine(typeId, string.Empty, 1))];
         if (lines.Count == 0)
             return;
@@ -619,13 +630,16 @@ public sealed partial class RunLootViewModel : ViewModelBase
         if (!valued.IsSuccess)
         {
             _pricingBasis = valued.Messages.Count > 0 ? valued.Messages[0].Text : null;
-            PricingProblemText = _pricingBasis;
+            // Lines with a fixed price are still priced, so an empty cache is only a problem when there are none.
+            // Lines with a fixed price are still priced, so an empty cache is only a problem when there are none.
+            PricingProblemText = _unitPrices.Count == 0 ? _pricingBasis : null;
             return;
         }
 
         _pricingBasis = valued.Value!.PricingBasis;
-        foreach (AppraisalRow row in valued.Value.Rows.Where(row => row.Price is not null))
-            _unitPrices[row.Line.TypeId] = (decimal)row.Price!.Estimate;
+        foreach (AppraisalRow row in valued.Value.Rows)
+            if (row.Price is { } price && _unitPrices.TryAdd(row.Line.TypeId, (decimal)price.Estimate))
+                _liveTypeIds.Add(row.Line.TypeId);
     }
 
     /// <summary>Everything that arrived after the hand-written list. Derived from the order rather than stored: the
@@ -690,7 +704,8 @@ public sealed partial class RunLootViewModel : ViewModelBase
             capture.SubtotalDisplay = _Display(subtotal);
             capture.SubtotalAmountText = IskFormat.NumberOrNoPrice(subtotal);
             capture.Lines = [.. capture.Entries.Select(entry => new ActivityLootLineViewModel(
-                entry.ItemTypeId, entry.Name, entry.Quantity, _UnitPrice(entry.ItemTypeId), entry.LootKind))];
+                entry.ItemTypeId, entry.Name, entry.Quantity, _UnitPrice(entry.ItemTypeId), entry.LootKind,
+                isLivePrice: _liveTypeIds.Contains(entry.ItemTypeId)))];
         }
 
         OnPropertyChanged(nameof(TotalIskLabel));
@@ -713,7 +728,7 @@ public sealed partial class RunLootViewModel : ViewModelBase
 
     private ActivityLootLineViewModel _Row(int itemTypeId, LootKind lootKind, long quantity, bool isExcluded, int captureCount) =>
         new(itemTypeId, _names.GetValueOrDefault(itemTypeId, $"type {itemTypeId}"), quantity, _UnitPrice(itemTypeId),
-            lootKind, isExcluded, captureCount);
+            lootKind, isExcluded, captureCount, _liveTypeIds.Contains(itemTypeId));
 
     private int _CapturesHolding(int itemTypeId, LootKind lootKind, bool isExcluded) =>
         Captures.Count(capture => capture.IsExcluded == isExcluded

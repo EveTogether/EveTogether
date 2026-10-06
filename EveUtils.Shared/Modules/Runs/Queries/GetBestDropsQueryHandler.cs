@@ -32,11 +32,10 @@ internal sealed class GetBestDropsQueryHandler(IDbContextFactory<ClientDbContext
 
         // Loot counts for the character whose run holds the capture, without a split (ET-296) — so summing the runs
         // is the own total, the same as the earnings on the tiles.
-        Dictionary<int, long> quantities = [];
-        foreach (LootTallyLine line in runs.SelectMany(run => LootTally.Count(RunIskFactsReader.Tally(run)))
-                     .Where(line => line.LootKind == LootKind.Gained))
-            quantities[line.ItemTypeId] = quantities.GetValueOrDefault(line.ItemTypeId) + (line.Quantity ?? 1);
-        if (quantities.Count == 0)
+        (Run Run, LootTallyLine Line)[] gained = [.. runs.SelectMany(run => LootTally.Count(RunIskFactsReader.Tally(run))
+            .Where(line => line.LootKind == LootKind.Gained)
+            .Select(line => (run, line)))];
+        if (gained.Length == 0)
             return Result<IReadOnlyList<BestDropDto>>.Success([]);
 
         Dictionary<int, string> names = runs
@@ -44,14 +43,20 @@ internal sealed class GetBestDropsQueryHandler(IDbContextFactory<ClientDbContext
             .SelectMany(capture => capture.Entries)
             .GroupBy(entry => entry.ItemTypeId)
             .ToDictionary(group => group.Key, group => group.First().Name);
-        IReadOnlyDictionary<int, double> prices = await marketPrices.GetAveragePricesAsync([.. quantities.Keys], cancellationToken);
+        IReadOnlyDictionary<int, double> live = await marketPrices.GetAveragePricesAsync(
+            [.. gained.Select(drop => drop.Line.ItemTypeId).Distinct()], cancellationToken);
+        // Each run at the prices its own lines fixed (ET-463), the way its activity's totals are.
+        Dictionary<Guid, RunPrices> pricesByRun = runs.ToDictionary(run => run.Id, run => RunPrices.Of(run, [], live));
 
         return Result<IReadOnlyList<BestDropDto>>.Success(
         [
-            .. quantities
-                .Where(item => prices.ContainsKey(item.Key))
-                .Select(item => new BestDropDto(item.Key, names.GetValueOrDefault(item.Key, $"#{item.Key}"), item.Value,
-                    (decimal)prices[item.Key] * item.Value))
+            .. gained
+                .GroupBy(drop => drop.Line.ItemTypeId)
+                .Select(type => (TypeId: type.Key, Quantity: type.Sum(drop => drop.Line.Quantity ?? 1),
+                    Values: type.Select(drop => pricesByRun[drop.Run.Id].Loot(type.Key) * (drop.Line.Quantity ?? 1)).OfType<decimal>().ToArray()))
+                .Where(type => type.Values.Length > 0)
+                .Select(type => new BestDropDto(type.TypeId, names.GetValueOrDefault(type.TypeId, $"#{type.TypeId}"), type.Quantity,
+                    type.Values.Sum()))
                 .OrderByDescending(drop => drop.Value)
                 .Take(query.Take)
         ]);

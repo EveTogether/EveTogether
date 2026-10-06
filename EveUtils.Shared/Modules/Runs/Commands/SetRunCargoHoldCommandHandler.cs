@@ -2,16 +2,19 @@ using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Data;
 using EveUtils.Shared.DependencyInjection;
 using EveUtils.Shared.Messaging;
+using EveUtils.Shared.Modules.Market.Repositories;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Entities;
 using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Runs.Events;
+using EveUtils.Shared.Modules.Sde;
 using Microsoft.EntityFrameworkCore;
 
 namespace EveUtils.Shared.Modules.Runs.Commands;
 
 [ClientOnly]
-internal sealed class SetRunCargoHoldCommandHandler(IDbContextFactory<ClientDbContext> contextFactory, IEventBus eventBus)
+internal sealed class SetRunCargoHoldCommandHandler(
+    IDbContextFactory<ClientDbContext> contextFactory, IEventBus eventBus, IMarketPriceRepository marketPrices, ISdeAccessor sde)
     : ICommandHandler<SetRunCargoHoldCommand, Result<Guid>>
 {
     public async Task<Result<Guid>> Handle(SetRunCargoHoldCommand command, CancellationToken cancellationToken = default)
@@ -61,6 +64,7 @@ internal sealed class SetRunCargoHoldCommandHandler(IDbContextFactory<ClientDbCo
             command.CapturedAtUtc, cancellationToken);
         await RunLootCaptureRoles.AssignAsync(db, capture, command.Role, cancellationToken);
         await db.SaveChangesAsync(cancellationToken);
+        await RunPriceSnapshots.FixOnCaptureAsync(db, marketPrices, sde, run.Id, cancellationToken);
         await eventBus.PublishAsync(new RunLootCapturedEvent(run.Id), EventTarget.Local, cancellationToken);
         await eventBus.PublishAsync(new RunsChangedEvent(run.Id, run.GroupCode), EventTarget.Local, cancellationToken);
         return Result<Guid>.Success(capture.Id);

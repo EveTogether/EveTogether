@@ -1065,11 +1065,21 @@ namespace EveUtils.Migrations.Server.SqlServer.Migrations
                         .HasMaxLength(255)
                         .HasColumnType("nvarchar(255)");
 
+                    b.Property<int?>("PriceSource")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("PricedAtUtc")
+                        .HasColumnType("datetime2");
+
                     b.Property<long?>("Quantity")
                         .HasColumnType("bigint");
 
                     b.Property<Guid>("RunLootCaptureId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal?>("UnitPriceIsk")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<decimal?>("Volume")
                         .HasPrecision(18, 3)
@@ -1101,11 +1111,21 @@ namespace EveUtils.Migrations.Server.SqlServer.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(450)");
 
+                    b.Property<int?>("PriceSource")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("PricedAtUtc")
+                        .HasColumnType("datetime2");
+
                     b.Property<int>("ResidueUnits")
                         .HasColumnType("int");
 
                     b.Property<Guid>("RunId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal?>("UnitPriceIsk")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<int>("Units")
                         .HasColumnType("int");
@@ -1143,6 +1163,12 @@ namespace EveUtils.Migrations.Server.SqlServer.Migrations
                     b.Property<int>("ParameterKey")
                         .HasColumnType("int");
 
+                    b.Property<int?>("PriceSource")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("PricedAtUtc")
+                        .HasColumnType("datetime2");
+
                     b.Property<Guid>("RunId")
                         .HasColumnType("uniqueidentifier");
 
@@ -1150,6 +1176,10 @@ namespace EveUtils.Migrations.Server.SqlServer.Migrations
                         .IsRequired()
                         .HasMaxLength(255)
                         .HasColumnType("nvarchar(255)");
+
+                    b.Property<decimal?>("UnitPriceIsk")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
 
                     b.HasKey("Id");
 
