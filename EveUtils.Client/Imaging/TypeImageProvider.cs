@@ -7,6 +7,7 @@ using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Media.Imaging;
+using Avalonia.Platform;
 using EveUtils.Shared.Modules.Sde;
 using EveUtils.Shared.Modules.Settings.Repositories;
 
@@ -19,7 +20,8 @@ namespace EveUtils.Client.Imaging;
 /// and the detail window) share a single download + decode instead of stampeding the server. The bytes are written to a
 /// per-instance disk cache and the decode runs off the UI thread. Any failure (offline, disabled, 404) yields null — and
 /// is not cached, so the next request retries — and the wheel falls back to its offline glyph. A 404 is the exception: the
-/// server has no such image (it has none for any SKIN), so retrying within the session only repeats the miss.
+/// server has no such image, so retrying within the session only repeats the miss. SKINs never reach the server: they
+/// resolve to the bundled placeholder.
 /// </summary>
 public sealed class TypeImageProvider(IHttpClientFactory httpClientFactory, ISettingRepository settings, string dataDirectory,
     IDogmaDataAccessor? sde = null) : ITypeImageProvider
@@ -28,7 +30,9 @@ public sealed class TypeImageProvider(IHttpClientFactory httpClientFactory, ISet
     public const string EnabledSettingKey = "fit.images.enabled";
 
     private const int SkinCategoryId = 91;
-    private const string SkinGlyph = "SK";
+    // The image server has no icon or render for any SKIN, so they share one bundled placeholder instead of a download.
+    private static readonly Lazy<Bitmap> SkinPlaceholder =
+        new(() => new Bitmap(AssetLoader.Open(new Uri("avares://EveUtils.Client/Assets/skin-placeholder.png"))));
 
     private readonly string _cacheDirectory = Path.Combine(dataDirectory, "type-images");
     // A measured 28-card render burst needs 28 MiB; keep one window intact with 4 MiB of headroom.
@@ -55,13 +59,13 @@ public sealed class TypeImageProvider(IHttpClientFactory httpClientFactory, ISet
     {
         // The load is shared across callers, so a single caller's cancellation must not abort it for the others — the
         // per-call token is intentionally not threaded into the shared download (image loads are fire-and-forget).
+        if (sde?.GetCategoryId(typeId) == SkinCategoryId)
+            return Task.FromResult<Bitmap?>(SkinPlaceholder.Value);
+
         var key = $"{typeId}_{kind}_{size}";
         Lazy<Task<Bitmap?>> load = _cache.GetOrAdd(key, k => new Lazy<Task<Bitmap?>>(() => LoadAsync(k, typeId, kind, size)));
         return _TrackAsync(key, load.Value);
     }
-
-    public string? GetFallbackGlyph(int typeId) =>
-        sde?.GetCategoryId(typeId) == SkinCategoryId ? SkinGlyph : null;
 
     private async Task<Bitmap?> _TrackAsync(string key, Task<Bitmap?> load)
     {
