@@ -114,6 +114,20 @@ public sealed partial class EscalationDialogViewModel : ObservableObject
     /// cancelled.</summary>
     public EscalationRegistration? Result { get; private set; }
 
+    /// <summary>Fills the dialog from an escalation already registered, to change it (ET-457). The deadline goes back
+    /// in as the time still remaining; one already passed is left empty for the pilot to read off the Agency again.</summary>
+    public void Prefill(string siteName, int? dungeonId, string? destinationSystem, DateTime? expiresAtUtc)
+    {
+        SiteQuery = siteName;
+        SelectedOption = dungeonId is { } dungeon
+            ? SiteResults.FirstOrDefault(option => option.Site.DungeonId == dungeon)
+            : null;
+        DestinationSystem = destinationSystem ?? string.Empty;
+        RemainingTimeText = expiresAtUtc - DateTime.UtcNow is { } remaining && remaining > TimeSpan.Zero
+            ? TimeSpan.FromSeconds(Math.Floor(remaining.TotalSeconds)).ToString("c", CultureInfo.InvariantCulture)
+            : string.Empty;
+    }
+
     /// <summary>Raised on Register (true) or Cancel (false) — the dialog's cue to close.</summary>
     public event Action<bool>? CloseRequested;
 

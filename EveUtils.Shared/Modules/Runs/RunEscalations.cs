@@ -20,7 +20,7 @@ public static class RunEscalations
     /// place that decides which rows an escalation is made of, for the run window's SAVE and for registering after it
     /// (ET-453). The deadline is always the pilot's own reading, never a default duration (ET-125 AC-3).</summary>
     public static IReadOnlyList<RunParameterInput> Rows(
-        Guid entryId, string siteName, int? dungeonId, string destinationSystem, int? destinationSolarSystemId,
+        Guid? entryId, string siteName, int? dungeonId, string destinationSystem, int? destinationSolarSystemId,
         DateTime expiresAtUtc, DateTime observedAtUtc)
     {
         RunParameterInput Row(RunParameterKey key, string value) =>

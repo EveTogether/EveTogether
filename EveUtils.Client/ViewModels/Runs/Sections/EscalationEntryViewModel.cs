@@ -15,15 +15,18 @@ public sealed partial class EscalationEntryViewModel : ObservableObject
     private readonly Func<EscalationEntryViewModel, Task> _start;
     private readonly Func<EscalationEntryViewModel, EscalationOutcome?, Task> _setOutcome;
     private readonly Func<EscalationEntryViewModel, Task> _openCompletedRun;
+    private readonly Func<EscalationEntryViewModel, Task> _change;
 
     public EscalationEntryViewModel(
         Guid sourceRunId, RunEscalationDto escalation, bool isOwn, DateTime nowUtc,
         Func<EscalationEntryViewModel, Task> start,
         Func<EscalationEntryViewModel, EscalationOutcome?, Task> setOutcome,
-        Func<EscalationEntryViewModel, Task> openCompletedRun)
+        Func<EscalationEntryViewModel, Task> openCompletedRun,
+        Func<EscalationEntryViewModel, Task> change)
     {
         SourceRunId = sourceRunId;
         Escalation = escalation;
+        _change = change;
         _start = start;
         _setOutcome = setOutcome;
         _openCompletedRun = openCompletedRun;
@@ -81,6 +84,9 @@ public sealed partial class EscalationEntryViewModel : ObservableObject
     /// name at registration.</summary>
     public int? DestinationSystemId => Escalation.SolarSystemId;
 
+
+    [RelayCommand]
+    private Task ChangeAsync() => _change(this);
 
     [RelayCommand]
     private Task StartEscalationRunAsync() => _start(this);
