@@ -87,7 +87,7 @@ public sealed partial class ActivityWindowViewModel
         bool? addThisRun = await _services.GetRequiredService<IDialogService>().ChooseAsync("Join the fleet run?",
             "Add this run to the fleet's run: everything on it so far is shared and counts for the group. Or stop it " +
             "here — it waits under unfinished — and start a new run that joins.",
-            "Add this run", "Start a new run");
+            "Add this run", "Start a new run", this);
         if (addThisRun is null)
             return;
 

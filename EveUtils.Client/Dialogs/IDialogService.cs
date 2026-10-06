@@ -60,7 +60,7 @@ public interface IDialogService
     /// screens' own "which character(s)" questions are unaffected by this parameter existing.
     /// </param>
     Task<IReadOnlyList<int>?> PickCharactersAsync(string prompt, IReadOnlyList<CharacterPickOption> options,
-        IReadOnlyList<int>? preselectedCharacterIds = null);
+        IReadOnlyList<int>? preselectedCharacterIds = null, object? owner = null);
 
     /// <summary>The setup wizard (ET-425), modal over the main window until it is done, skipped or closed.</summary>
     Task ShowSetupWizardAsync(SetupWizardViewModel viewModel);
@@ -76,7 +76,7 @@ public interface IDialogService
     Task<string?> SelectServerAsync(string prompt, IReadOnlyList<ServerPickOption> options);
 
     /// <summary>Shows a modal message box (used for error reporting instead of crashing).</summary>
-    Task ShowMessageAsync(string title, string message);
+    Task ShowMessageAsync(string title, string message, object? owner = null);
 
     /// <summary>
     /// Paste-a-fit dialog: returns the pasted EFT/DNA text, or null if cancelled/empty.
@@ -110,12 +110,14 @@ public interface IDialogService
     Task<string?> GetClipboardTextAsync();
 
     /// <summary>Yes/No confirmation for destructive actions. Returns true if confirmed.</summary>
-    Task<bool> ConfirmAsync(string title, string message, string okText = "Delete");
+    /// <param name="owner">The view model of the window the question comes from (ET-459): the dialog opens over that
+    /// window when it is the run window or a floating module, over the main window otherwise.</param>
+    Task<bool> ConfirmAsync(string title, string message, string okText = "Delete", object? owner = null);
 
     /// <summary>A question with two answers and a way out: true for <paramref name="primaryText"/>, false for
     /// <paramref name="secondaryText"/>, null for cancel. Cancel is not a third opinion but the absence of one —
     /// somebody who hit the close button by accident has to be able to take it back.</summary>
-    Task<bool?> ChooseAsync(string title, string message, string primaryText, string secondaryText);
+    Task<bool?> ChooseAsync(string title, string message, string primaryText, string secondaryText, object? owner = null);
 
     /// <summary>Opens the per-character settings dialog: ESI scopes, coupled servers, couple/decouple.</summary>
     Task ShowCharacterAsync(CharacterDialogViewModel viewModel);
@@ -226,7 +228,7 @@ public interface IDialogService
     /// Single-select fit picker: picks one fit immediately, optionally scoped to a coupled
     /// composition's allowed fits. Returns the chosen fit's snapshot, or null if cancelled.
     /// </summary>
-    Task<Fleet.FitReferenceInfo?> PickFitAsync(FitPickerViewModel viewModel);
+    Task<Fleet.FitReferenceInfo?> PickFitAsync(FitPickerViewModel viewModel, object? owner = null);
 
     /// <summary>Opens the message inbox window — non-modal so deliveries keep landing while it is open;
     /// marks the shown messages read so the unread badge clears.</summary>
@@ -264,7 +266,7 @@ public interface IDialogService
 
     /// <summary>Opens the register-escalation dialog (ET-125): modal, filling in <see cref="EscalationDialogViewModel.Result"/>.
     /// Returns true when the pilot registered (Result is set), false on Cancel.</summary>
-    Task<bool> ShowEscalationDialogAsync(EscalationDialogViewModel viewModel);
+    Task<bool> ShowEscalationDialogAsync(EscalationDialogViewModel viewModel, object? owner = null);
 
     /// <summary>Opens one saved activity's detail as a hosted module (ET-162). Keyed on the activity so two
     /// activities are two tabs rather than one tab that quietly changes subject under the reader.</summary>

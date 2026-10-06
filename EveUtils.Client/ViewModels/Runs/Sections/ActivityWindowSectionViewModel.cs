@@ -216,7 +216,7 @@ public sealed partial class ActivityWindowSectionViewModel : RunWindowSection
             return;
 
         await Context.Services.GetRequiredService<IDialogService>()
-            .ShowMessageAsync("What to expect at this site", text);
+            .ShowMessageAsync("What to expect at this site", text, Context);
     }
 
     // ── The escalation ─────────────────────────────────────────────────────────────────────────────
@@ -247,7 +247,7 @@ public sealed partial class ActivityWindowSectionViewModel : RunWindowSection
         using (var scope = Context.Services.CreateScope())
             dialog = await EscalationDialogFactory.CreateAsync(
                 sde, _SourceSites(sde), scope.ServiceProvider.GetRequiredService<CqrsDispatcher>());
-        if (!await dialogs.ShowEscalationDialogAsync(dialog) || dialog.Result is not { } result)
+        if (!await dialogs.ShowEscalationDialogAsync(dialog, Context) || dialog.Result is not { } result)
             return;
 
         _escalationParameters.AddRange(RunEscalations.Rows(Guid.CreateVersion7(), result.SiteName, result.DungeonId,

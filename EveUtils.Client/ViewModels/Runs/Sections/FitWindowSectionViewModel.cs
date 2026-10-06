@@ -90,18 +90,18 @@ public sealed partial class FitWindowSectionViewModel(IRunWindowContext context)
         if (Context.ActingCharacterId is not { } characterId)
         {
             await dialogs.ShowMessageAsync("Choose a fit",
-                "Start the run first — its character is what a fit is filed under.");
+                "Start the run first — its character is what a fit is filed under.", Context);
             return;
         }
 
         var picker = new FitPickerViewModel(Context.Services, FitPickerMode.Single, alreadyAdded: null,
             composition: null, currentFitHash: null, skillCheckCharacterId: characterId);
-        FitReferenceInfo? fit = await dialogs.PickFitAsync(picker);
+        FitReferenceInfo? fit = await dialogs.PickFitAsync(picker, Context);
         if (fit is null)
             return;
         if (fit.LocalFittingId is null)
         {
-            await dialogs.ShowMessageAsync("Choose a local fit", "Only a local fit can be filed against a run.");
+            await dialogs.ShowMessageAsync("Choose a local fit", "Only a local fit can be filed against a run.", Context);
             return;
         }
 
@@ -110,7 +110,7 @@ public sealed partial class FitWindowSectionViewModel(IRunWindowContext context)
         if (!overrideResult.IsSuccess)
         {
             await dialogs.ShowMessageAsync("Fit selection",
-                overrideResult.Messages.FirstOrDefault()?.Text ?? "Could not save the fit selection.");
+                overrideResult.Messages.FirstOrDefault()?.Text ?? "Could not save the fit selection.", Context);
             return;
         }
 
@@ -131,7 +131,7 @@ public sealed partial class FitWindowSectionViewModel(IRunWindowContext context)
         if (!detached.IsSuccess)
         {
             await Context.Services.GetRequiredService<IDialogService>().ShowMessageAsync("Fit selection",
-                detached.Messages.FirstOrDefault()?.Text ?? "Could not unlink the fit.");
+                detached.Messages.FirstOrDefault()?.Text ?? "Could not unlink the fit.", Context);
             return;
         }
 
