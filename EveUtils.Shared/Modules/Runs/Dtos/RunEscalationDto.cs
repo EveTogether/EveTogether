@@ -16,7 +16,19 @@ public sealed record RunEscalationDto(
     EscalationOutcome? Outcome,
     Guid? CompletedByRunId)
 {
-    /// <summary>Still to be flown: nobody ticked it off and its deadline has not passed. An escalation registered
-    /// without a readable deadline stays open until someone says otherwise.</summary>
-    public bool IsOpenAt(DateTime nowUtc) => Outcome is null && !(ExpiresAtUtc <= nowUtc);
+    /// <summary>How long an escalation registered without a readable deadline stays flyable — past it nobody can still
+    /// tell whether the site is there, so it leaves the open list like an expired one (ET-453).</summary>
+    public static readonly TimeSpan UndatedLifetime = TimeSpan.FromHours(24);
+
+    /// <summary>Still to be flown: nobody settled it and its deadline has not passed — or, without a deadline, it was
+    /// registered less than <see cref="UndatedLifetime"/> ago.</summary>
+    public bool IsOpenAt(DateTime nowUtc) =>
+        Outcome is null && (ExpiresAtUtc ?? RegisteredAtUtc + UndatedLifetime) > nowUtc;
+
+    public EscalationStanding StandingAt(DateTime nowUtc) => Outcome switch
+    {
+        EscalationOutcome.Completed => EscalationStanding.Done,
+        null when IsOpenAt(nowUtc) => EscalationStanding.Open,
+        _ => EscalationStanding.Missed
+    };
 }

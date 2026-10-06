@@ -11,8 +11,13 @@ namespace EveUtils.Shared.Modules.Runs.Dtos;
 /// (its own <c>TypedValue</c>) and its sibling <c>EscalationExpiresAtUtc</c> row's value (ET-289) — the accounting
 /// keys an escalation is written alongside (<c>EscalationDungeonId</c>, <c>EscalationSystem</c>,
 /// <c>EscalationSolarSystemId</c>, <c>EscalationExpiresAtUtc</c>) never become rewards of their own. Null for every
-/// other kind.</summary>
-public sealed record ActivityRewardDto(RunParameterKey ParameterKey, decimal? Amount, string? TypedValue = null, DateTime? ExpiresAtUtc = null);
+/// other kind.
+///
+/// <see cref="Standing"/> is where the activity's escalations stand (ET-453), set on the <c>Escalation</c> chip only:
+/// open while any can still be flown, otherwise missed if any was, otherwise done.</summary>
+public sealed record ActivityRewardDto(
+    RunParameterKey ParameterKey, decimal? Amount, string? TypedValue = null, DateTime? ExpiresAtUtc = null,
+    EscalationStanding? Standing = null);
 
 /// <summary>Where one activity stands towards one server. <see cref="IsPending"/> is true while any of its runs is
 /// still queued for that server. <see cref="IsOutdated"/> is true when one of its runs had its loot corrected after

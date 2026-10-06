@@ -86,7 +86,7 @@ public sealed class OpsecSourceMarkingTests
             StartedAtUtc.AddHours(20), StartedAtUtc, null, null);
         var row = new OpenEscalationRowViewModel(
             new OpenEscalationDto(Guid.NewGuid(), Pilot, "Ra Vinter", "Sansha Refuge", StartedAtUtc, escalation, null),
-            "Ra Vinter", StartedAtUtc.AddHours(1), _ => Task.CompletedTask);
+            "Ra Vinter", StartedAtUtc.AddHours(1), _ => Task.CompletedTask, _ => Task.CompletedTask);
 
         Assert.Equal((OpsecText.Mark("Command Relay Outpost"), OpsecText.Mark("Ervekam")),
             (row.EscalationSiteText, row.EscalationSystemText));
