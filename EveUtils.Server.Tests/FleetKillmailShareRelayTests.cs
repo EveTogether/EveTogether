@@ -181,8 +181,10 @@ public sealed class FleetKillmailShareRelayTests
         return (sessions, accessToken);
     }
 
+    // Every relayed copy must carry the server-attributed sender, not the 0 the client sent.
     private static int CountKillmailShares(RecordingWriter writer) =>
-        writer.Written.Count(message => message.Event.EventType == "fleet.killmail-share");
+        writer.Written.Count(message => message.Event.EventType == "fleet.killmail-share"
+                                        && message.Event.CharacterId == Sender);
 
     private sealed class FleetMetricsPolicy(bool allowed) : IAccessPolicy
     {

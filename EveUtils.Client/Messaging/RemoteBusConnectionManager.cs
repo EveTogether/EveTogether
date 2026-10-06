@@ -188,15 +188,9 @@ public sealed class RemoteBusConnectionManager(
         ServerConnection[] live;
         lock (_gate)
         {
-            var connected = _connections.Values
-                .Where(connection => connection.State == ServerConnectionState.Connected
-                                     && (targetServer is null || string.Equals(
-                                         connection.ServerAddress,
-                                         targetServer,
-                                         StringComparison.OrdinalIgnoreCase)))
-                .ToList();
+            var connected = _connections.Values.Where(c => c.State == ServerConnectionState.Connected).ToList();
             var chosen = SelectTargets(connected.Select(c => new ConnectionRef(c.ServerAddress, c.CharacterId)).ToList(),
-                claimedCharacter).ToHashSet();
+                claimedCharacter, targetServer).ToHashSet();
             live = connected.Where(c => chosen.Contains(new ConnectionRef(c.ServerAddress, c.CharacterId))).ToArray();
         }
 
@@ -217,14 +211,22 @@ public sealed class RemoteBusConnectionManager(
     /// own connection(s) — so multiboxing several characters does not funnel all their metrics through one stream that
     /// the server would reject for every other character. A character-agnostic event (<paramref name="claimedCharacter"/>
     /// 0) is deduped to one connection per server (sending it up every stream would reroute it once per stream).
+    /// A <paramref name="targetServer"/> (an <see cref="IRemoteServerTargetedEvent"/>) narrows that to one server: a
+    /// fleet id is only unique within its server, so the same character coupled to two servers must not carry it to both.
     /// </summary>
-    public static IReadOnlyList<ConnectionRef> SelectTargets(IReadOnlyList<ConnectionRef> connected, int claimedCharacter) =>
-        claimedCharacter != 0
-            ? connected.Where(c => c.CharacterId == claimedCharacter).ToList()
-            : connected
+    public static IReadOnlyList<ConnectionRef> SelectTargets(
+        IReadOnlyList<ConnectionRef> connected, int claimedCharacter, string? targetServer = null)
+    {
+        var onServer = targetServer is null
+            ? connected
+            : connected.Where(c => string.Equals(c.ServerAddress, targetServer, StringComparison.OrdinalIgnoreCase)).ToList();
+        return claimedCharacter != 0
+            ? onServer.Where(c => c.CharacterId == claimedCharacter).ToList()
+            : onServer
                 .GroupBy(c => c.ServerAddress, StringComparer.OrdinalIgnoreCase)
                 .Select(g => g.First())
                 .ToList();
+    }
 
     /// <summary>Per-server state = the best of its characters' connection states (connected if any character is).</summary>
     private static ServerConnectionState Aggregate(IEnumerable<ServerConnectionState> states)

@@ -28,6 +28,12 @@ public class RemoteBusRoutingTests
 
         var only = Assert.Single(targets);
         Assert.Equal(RaymondKrah, only.CharacterId);   // not Catbank's stream → server no longer rejects it
+
+        // A server-targeted event (fleet.killmail-share) goes to its own server only, even with the same character
+        // coupled to a second server whose fleet may carry the same id (ET-370).
+        IReadOnlyList<Ref> twoServers = [new(Server, RaymondKrah), new("srv:8443", RaymondKrah)];
+        var targeted = Assert.Single(RemoteBusConnectionManager.SelectTargets(twoServers, RaymondKrah, "SRV:8443"));
+        Assert.Equal(new Ref("srv:8443", RaymondKrah), targeted);
     }
 
     [Fact]

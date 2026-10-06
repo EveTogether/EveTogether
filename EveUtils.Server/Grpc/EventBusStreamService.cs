@@ -89,6 +89,10 @@ public sealed class EventBusStreamService(
                 if (evt is FleetMetricEvent metric && !presenceGuard.Admit(key, metric.Data, DateTimeOffset.UtcNow))
                     continue;
 
+                // Relay what the server attributed, not what the client claimed: a client that left CharacterId 0 would
+                // otherwise reach every receiver (and its own echo) without the sender a fleet handler keys on (ET-370).
+                envelope.Event.CharacterId = attachedCharacterId;
+
                 // Server local bus: server handlers + the SignalR bridge pick it up.
                 var bus = services.GetRequiredService<IEventBus>();
                 await bus.PublishAsync(evt, EventTarget.Local, context.CancellationToken);
