@@ -1103,7 +1103,8 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
 
         // My characters in this fleet: the same fleet can appear once per coupled character.
         var myCharacters = ServerGroups.SelectMany(g => g.Fleets).Concat(LocalFleets)
-            .Where(r => r.Id == row.Id)
+            .Where(r => r.Id == row.Id
+                        && string.Equals(r.ServerAddress, row.ServerAddress, StringComparison.OrdinalIgnoreCase))
             .Select(r => (Id: r.ActingCharacterId, Name: string.IsNullOrWhiteSpace(r.CharacterName) ? $"Char {r.ActingCharacterId}" : r.CharacterName))
             .DistinctBy(c => c.Id)
             .ToList();
@@ -1117,7 +1118,7 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
             snapshot = new MetricShareSnapshot(settings.ToDictionary(s => s.Key, s => s.Value, StringComparer.Ordinal));
         }
 
-        var vm = new FleetShareViewModel(row.Name, row.Id, myCharacters, snapshot);
+        var vm = new FleetShareViewModel(row.Name, row.Id, myCharacters, snapshot, row.ServerAddress);
         if (!await _dialogs.ShowFleetSharingAsync(vm))
             return;
 
@@ -1127,6 +1128,9 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
             foreach (var (_, key, value) in vm.BuildOverrides())
                 await dispatcher.Send(new SetSettingCommand(key, value));
         }
+
+        await _services.GetRequiredService<FleetKillmailSharePublisher>()
+            .PublishCurrentAsync(row.ServerAddress, row.Id);
 
         StatusMessage = $"Sharing updated for '{row.Name}'.";
     }

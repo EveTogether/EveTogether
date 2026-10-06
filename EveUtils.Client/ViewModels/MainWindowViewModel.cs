@@ -1466,7 +1466,8 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
             loadImages, _theme?.Current ?? FactionTheme.Gallente, SdeVersionLabel(), ApplySettingsAsync, openDetailAfterImport, toastPosition,
             localApiEnabled, localApiPort, localApiStatusLabel, localApi, checkUpdatesOnStartup, _clipboardWatch, initialCategory, openFleetRunWindow,
             autoPublishFleetRuns, shares.IsShared(MetricKind.Loot), shares.IsShared(MetricKind.MiningYield), autoStartMissions, autoStartSites,
-            _weekStart?.FirstDay ?? Calendar.WeekStartService.SystemDefault(), includeNightlyBuilds, _services.GetService<IUpdateService>(), offerHomefrontRuns, RunSetupAgainAsync, includeLocationInLocalApi, OpenWidgetManager);
+            _weekStart?.FirstDay ?? Calendar.WeekStartService.SystemDefault(), includeNightlyBuilds, _services.GetService<IUpdateService>(), offerHomefrontRuns, RunSetupAgainAsync, includeLocationInLocalApi, OpenWidgetManager,
+            shares.IsKillmailShared());
     }
 
     /// <summary>Opens the About dialog: app identity + version, creator credits with portraits,
@@ -1520,6 +1521,8 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
             await dispatcher.Send(new SetSettingCommand(
                 MetricShareSnapshot.CombatShareKey, result.ShareCombat ? "true" : "false"));
             await dispatcher.Send(new SetSettingCommand(
+                MetricShareSnapshot.KillmailShareKey, result.ShareKillmails ? "true" : "false"));
+            await dispatcher.Send(new SetSettingCommand(
                 TypeImageProvider.EnabledSettingKey, result.LoadTypeImages ? "true" : "false"));
             await dispatcher.Send(new SetSettingCommand(
                 OpenDetailAfterImportSettingKey, result.OpenFitDetailAfterImport ? "true" : "false"));
@@ -1552,6 +1555,8 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
             await dispatcher.Send(new SetSettingCommand(
                 EveUtils.Client.Runs.HomefrontDetector.OfferSettingKey, result.OfferHomefrontRuns ? "true" : "false"));
         }
+
+        await _services.GetRequiredService<FleetKillmailSharePublisher>().PublishCurrentAsync();
 
         // Apply the toast position live so the next toast uses it without a restart.
         if (_services.GetService<Notifications.ToastService>() is { } toastService)

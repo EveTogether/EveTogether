@@ -1,4 +1,6 @@
 using System.Globalization;
+using System.Security.Cryptography;
+using System.Text;
 using EveUtils.Shared.Modules.Fleet.Metrics;
 
 namespace EveUtils.Client.Fleet;
@@ -21,6 +23,8 @@ public sealed class MetricShareSnapshot(
     IReadOnlyDictionary<string, string> values,
     IReadOnlyDictionary<(long FleetId, int CharacterId), string>? sharedRuns = null)
 {
+    public const string KillmailShareKey = "fleet.share.killmails";
+
     /// <summary>Personal metrics that are opt-IN (off until explicitly enabled): location (privacy) and what a pilot
     /// made — bounty, loot and mining (ET-234, the same reasoning as loot: what a pilot mined is theirs to offer). A
     /// new kind inherits "shared", so ISK has to be named here or it goes out by default, which is the opposite of
@@ -56,6 +60,29 @@ public sealed class MetricShareSnapshot(
             return _Choice(RunKeyFor(groupCode, kind)) ?? fleetChoice ?? true;
 
         return fleetChoice ?? IsShared(kind);
+    }
+
+    public bool IsKillmailShared() =>
+        !string.Equals(values.GetValueOrDefault(KillmailShareKey), "false", StringComparison.OrdinalIgnoreCase);
+
+    public bool IsKillmailShared(string? serverAddress, long fleetId, int characterId) =>
+        _Choice(KillmailOverrideKeyFor(serverAddress, fleetId, characterId)) ?? IsKillmailShared();
+
+    public int KillmailOverrideChoiceIndex(string? serverAddress, long fleetId, int characterId) =>
+        _Choice(KillmailOverrideKeyFor(serverAddress, fleetId, characterId)) switch
+        {
+            true => 1,
+            false => 2,
+            null => 0,
+        };
+
+    public static string KillmailOverrideKeyFor(string? serverAddress, long fleetId, int characterId)
+    {
+        string identity = string.IsNullOrWhiteSpace(serverAddress)
+            ? "local"
+            : serverAddress.Trim().TrimEnd('/').ToUpperInvariant();
+        string serverKey = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(identity))).ToLowerInvariant();
+        return $"fleet.server.{serverKey}.{fleetId}.{characterId}.share.killmails";
     }
 
     /// <summary>What this character offers this fleet right now, as the <see cref="MetricKind.Shares"/> manifest carries
@@ -113,9 +140,13 @@ public sealed class MetricShareSnapshot(
     public static bool IsOverrideKeyOf(string key, int characterId)
     {
         string[] parts = key.Split('.');
-        return parts is ["fleet", var fleetId, var owner, "share", _]
-               && long.TryParse(fleetId, NumberStyles.None, CultureInfo.InvariantCulture, out _)
-               && owner == characterId.ToString(CultureInfo.InvariantCulture);
+        bool metricOverride = parts is ["fleet", var fleetId, var owner, "share", _]
+                              && long.TryParse(fleetId, NumberStyles.None, CultureInfo.InvariantCulture, out _)
+                              && owner == characterId.ToString(CultureInfo.InvariantCulture);
+        bool killmailOverride = parts is ["fleet", "server", _, var scopedFleetId, var scopedOwner, "share", "killmails"]
+                                && long.TryParse(scopedFleetId, NumberStyles.None, CultureInfo.InvariantCulture, out _)
+                                && scopedOwner == characterId.ToString(CultureInfo.InvariantCulture);
+        return metricOverride || killmailOverride;
     }
 
     /// <summary>The per-run key for loot or bounty (ET-242), one for every own character on the run: the run window's

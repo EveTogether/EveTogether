@@ -5,6 +5,7 @@ using System.Linq;
 using System.Net.Http;
 using System.Threading.Tasks;
 using EveUtils.Client.Esi.Testing;
+using EveUtils.Client.Fleet;
 using EveUtils.Client.Killmails;
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Data;
@@ -12,6 +13,10 @@ using EveUtils.Shared.Identity;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Esi;
 using EveUtils.Shared.Modules.Esi.Http;
+using EveUtils.Shared.Modules.Fleet.Entities;
+using EveUtils.Shared.Modules.Fleet.Enums;
+using EveUtils.Shared.Modules.Fleet.Dtos;
+using EveUtils.Shared.Modules.Fleet.Events;
 using EveUtils.Shared.Modules.Killmails;
 using EveUtils.Shared.Modules.Killmails.Entities;
 using EveUtils.Shared.Modules.Killmails.Enums;
@@ -39,11 +44,109 @@ public sealed class KillmailImportTests : IDisposable
     private const string Page3 = "/characters/77/killmails/recent/?page=3";
 
     private readonly string _cacheDirectory = Path.Combine(Path.GetTempPath(), "esi-killmail-test-" + Guid.NewGuid().ToString("N"));
-    private readonly TestClientInstance _instance = TestClientInstance.Create();
+    private readonly List<FleetKillmailShareEvent> _remoteShares = [];
+    private readonly TestClientInstance _instance;
     private readonly Dictionary<string, Func<HttpResponseMessage>> _routes = [];
+
+    public KillmailImportTests()
+    {
+        _instance = TestClientInstance.Create(services =>
+            services.AddSingleton<IRemoteEventTransport>(new KillmailShareRecordingTransport(_remoteShares)));
+    }
 
     private ILocalKillmailRepository Repository => _instance.Services.GetRequiredService<ILocalKillmailRepository>();
     private IServiceScopeFactory Scopes => _instance.Services.GetRequiredService<IServiceScopeFactory>();
+
+    [Theory]
+    [InlineData(false, true, FleetState.Active, FleetActivation.Active, 1)]
+    [InlineData(true, true, FleetState.Active, FleetActivation.Active, 1)]
+    [InlineData(false, true, FleetState.Active, FleetActivation.Forming, 0)]
+    [InlineData(true, false, FleetState.Active, FleetActivation.Active, 0)]
+    public async Task ImportRoute_ParticipationScenario_PublishesCurrentFleetKillmailState(
+        bool pastedLink,
+        bool hasFleet,
+        FleetState state,
+        FleetActivation activation,
+        int expectedShares)
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        IEventBus bus = _instance.Services.GetRequiredService<IEventBus>();
+        var localShares = new List<FleetKillmailShareEvent>();
+        using IDisposable localSubscription = bus.Subscribe<FleetKillmailShareEvent>((share, _) =>
+        {
+            localShares.Add(share);
+            return Task.CompletedTask;
+        });
+        IFleetParticipation participation = _instance.Services.GetRequiredService<IFleetParticipation>();
+        DateTimeOffset activatedAt = new(2026, 9, 20, 11, 0, 0, TimeSpan.Zero);
+        if (hasFleet && FleetParticipationRefresher.Participates(state, activation))
+        {
+            participation.Set([new FleetParticipant(
+                77,
+                42,
+                ClientOnly: false,
+                ServerAddress: "https://fleet.example",
+                ActivatedAt: activatedAt)]);
+        }
+
+        await Repository.AddMissingAsync(CharacterId, [_Stored(99)], cancellationToken);
+        _remoteShares.Clear();
+        using var publisher = new FleetKillmailSharePublisher(
+            bus,
+            participation,
+            Repository,
+            _instance.Services.GetRequiredService<IMetricShareSettings>(),
+            TimeProvider.System,
+            NullLogger<FleetKillmailSharePublisher>.Instance);
+
+        _routes["/killmails/1/hash1/"] = () => Json(200, _Killmail(1));
+        var (client, _, _) = _Pipeline(EsiAuthorization.Authorized("token"));
+        var importer = new EsiKillmailImporter(client, Repository, Scopes);
+        if (pastedLink)
+        {
+            await _instance.Services.GetRequiredService<ICharacterRegistry>()
+                .AddOrUpdateAsync(new Character("Pilot", CharacterId), cancellationToken);
+            await importer.ImportOneAsync(1, "hash1", cancellationToken);
+        }
+        else
+        {
+            _routes[Page1] = () => _RecentPage(1, 1);
+            await importer.ImportAsync(CharacterId, cancellationToken);
+        }
+
+        await publisher.WhenIdleAsync();
+
+        // The sender sees its share only as the server's echo: no unauthorized local copy is published.
+        Assert.Empty(localShares);
+        Assert.Equal(expectedShares, _remoteShares.Count);
+        if (expectedShares == 0)
+        {
+            return;
+        }
+
+        FleetKillmailShareEvent share = Assert.Single(_remoteShares);
+        Assert.Equal(CharacterId, share.CharacterId);
+        Assert.Equal(42, share.FleetId);
+        Assert.Equal("https://fleet.example", share.ServerAddress);
+        FleetKillmailReference killmail = Assert.Single(share.Data.Killmails);
+        Assert.Equal(1, killmail.KillmailId);
+        Assert.Equal("hash1", killmail.Hash);
+        Assert.Equal(new DateTime(2026, 9, 20, 12, 0, 0, DateTimeKind.Utc), killmail.KillmailTimeUtc);
+        Assert.False(killmail.IsLoss);
+    }
+
+    private sealed class KillmailShareRecordingTransport(List<FleetKillmailShareEvent> shares) : IRemoteEventTransport
+    {
+        public Task SendAsync(IIntegrationEvent integrationEvent, CancellationToken cancellationToken = default)
+        {
+            if (integrationEvent is FleetKillmailShareEvent share)
+            {
+                shares.Add(share);
+            }
+
+            return Task.CompletedTask;
+        }
+    }
 
     [Theory]
     [InlineData("/characters/77/killmails/recent/", false)]
