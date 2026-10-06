@@ -109,6 +109,14 @@ public sealed class FleetWireEvents : IWireEventCatalog
             return new FleetRunDiscardedEvent(payload, characterId);
         });
 
+        // The commander saved the shared run (ET-458). A client that does not know this type drops it on arrival.
+        registry.Register("fleet.run-saved", (payloadJson, characterId) =>
+        {
+            var payload = JsonSerializer.Deserialize<RunGroupSave>(payloadJson)
+                          ?? throw new InvalidOperationException("Invalid fleet.run-saved payload.");
+            return new FleetRunSavedEvent(payload, characterId);
+        });
+
         // Fleet lifecycle/membership change pushed by the server to a fleet's members, so an open fleet list, roster
         // and the metrics participation refresh live instead of only on a reconnect/restart.
         registry.Register("fleet.changed", (payloadJson, characterId) =>

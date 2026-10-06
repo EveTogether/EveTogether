@@ -646,6 +646,17 @@
                 <!-- Why the window is still here after SAVE. The toast is gone in seconds; this is not. -->
                 <TextBlock x:Name="RunNoticeText" Classes="hint" Margin="0" TextWrapping="Wrap"
                            IsVisible="{Binding HasRunNotice}" Text="{Binding RunNoticeText}"/>
+                <!-- The commander saved or discarded the shared run and this pilot follows it (ET-458): the clock
+                     and the way out of it, said on the window itself. -->
+                <Grid x:Name="FollowFleetCommander" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8"
+                      IsVisible="{Binding IsFollowShown}">
+                    <TextBlock x:Name="FollowFleetCommanderText" TextWrapping="Wrap" VerticalAlignment="Center"
+                               Text="{Binding FollowText}"/>
+                    <Button x:Name="FollowNowButton" Grid.Column="1" Classes="accent" VerticalAlignment="Center"
+                            Content="{Binding FollowActionLabel}" Command="{Binding FollowNowCommand}"/>
+                    <Button x:Name="CancelFollowButton" Grid.Column="2" VerticalAlignment="Center"
+                            Content="{Binding FollowCancelLabel}" Command="{Binding CancelFollowCommand}"/>
+                </Grid>
                 <!-- The commander's run is going and this window is not in it (ET-440): joined late, declined the
                      offer, or cut off by a discard. Said on the window, with the way in beside it. -->
                 <Grid x:Name="JoinFleetRun" ColumnDefinitions="*,Auto" ColumnSpacing="10"
