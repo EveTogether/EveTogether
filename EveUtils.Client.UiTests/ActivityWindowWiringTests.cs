@@ -983,6 +983,21 @@ public class ActivityWindowWiringTests
         Assert.DoesNotContain("fleet", harness.Dialogs.LastConfirmMessage, StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>ET-459: the DISCARD question names the run window as the one it is asked for, so the dialog service
+    /// can open it there instead of over the main window.</summary>
+    [AvaloniaFact]
+    public async Task Discard_AsksTheConfirmOnBehalfOfTheRunWindow()
+    {
+        using var harness = await ActivityWindowHarness.CreateAsync();
+        ActivityWindowViewModel model = await harness.OpenAsync();
+        await model.StartRunCommand.ExecuteAsync(null);
+        harness.Dialogs.OnConfirm = (_, _) => Task.FromResult(true);
+
+        await model.DiscardRunCommand.ExecuteAsync(null);
+
+        Assert.Same(model, Assert.Single(harness.Dialogs.ConfirmOwners));
+    }
+
     /// <summary>
     /// Closing the window does not end the run, so opening one again has to find it rather than start a second —
     /// two running rows is the state that breaks every loot copy afterwards.

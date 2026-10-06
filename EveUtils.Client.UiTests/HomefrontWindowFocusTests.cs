@@ -215,6 +215,8 @@ public sealed class HomefrontWindowFocusTests
         Assert.Contains("dialog.Topmost = true", source, StringComparison.Ordinal);
     }
 
+    internal static string SourcePath(string relative) => _SourcePath(relative);
+
     private static string _SourcePath(string relative)
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
