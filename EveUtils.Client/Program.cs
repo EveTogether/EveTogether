@@ -42,6 +42,19 @@ sealed class Program
         CrashLog.Install(ClientServices.DataDirectory());
         LogDataFolderMove(ClientDataLocation.Migration);
 
+        // Before anything opens the store (ET-465): a second client on this data directory hands over to the first
+        // and goes, whether it is a second click on the icon or a Debug build next to the installed one. Held until
+        // Main returns.
+        string dataDirectory = ClientServices.DataDirectory();
+        using ClientInstanceLock? instanceLock = ClientInstanceLock.TryAcquire(dataDirectory);
+        if (instanceLock is null)
+        {
+            CrashLog.Record(LogLevel.Information, "InstanceLock",
+                $"Another client holds {dataDirectory}; this start handed over to it and exited");
+            AlreadyRunningNotice.Show(BuildAvaloniaApp(), ClientInstanceLock.OwnerProcessId(dataDirectory));
+            return;
+        }
+
         // The UI is English-only (§2) and the client's formatting helpers already pass InvariantCulture, so pin
         // the process instead of letting numbers follow the OS locale — that is the one element that would
         // silently differ per machine ("9,0 m³/s" next to an invariant "1.5B ISK" in the same window).
@@ -265,9 +278,9 @@ sealed class Program
         // Below every --diagnostic argument above, all of which return before this line: --smoke and --sde-check open
         // the same database, and a diagnostic run has no business ending a run the pilot is flying.
         //
-        // ponytail: "a previous process" is really "no other process", which holds because one data directory is one
-        // client — that is what EVETOGETHER_INSTANCE exists to keep true. A second launch against the same directory
-        // would stop the first one's run. Give the row the session that owns it if that ever stops being true.
+        // "A previous process" is really "no other process", which holds because one data directory is one client —
+        // the instance lock at the top of Main keeps it true, EVETOGETHER_INSTANCE gives a second client a directory
+        // of its own.
         using (var scope = Services.CreateScope())
         {
             var dispatcher = scope.ServiceProvider.GetRequiredService<IDispatcher>();
