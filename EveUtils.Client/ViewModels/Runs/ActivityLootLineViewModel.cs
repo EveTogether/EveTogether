@@ -39,7 +39,12 @@ public sealed partial class ActivityLootLineViewModel : ObservableObject
 
     /// <summary>The tile shown until the item's own icon is there, or instead of it when images are off — the same
     /// lettered fallback every other hex and tile in the app uses.</summary>
-    public string Initial => string.IsNullOrEmpty(Name) ? "?" : Name[..1].ToUpperInvariant();
+    public string Initial => FallbackGlyph ?? (string.IsNullOrEmpty(Name) ? "?" : Name[..1].ToUpperInvariant());
+
+    /// <summary>What a type without any image on the image server shows instead of a letter (a SKIN licence).</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(Initial))]
+    private string? _fallbackGlyph;
 
     /// <summary>"3×" — the loot table's own count column (ET-215 mockup).</summary>
     public string QuantityText => $"{(Quantity ?? 1).ToString("N0", CultureInfo.CurrentCulture)}×";
@@ -87,6 +92,9 @@ public sealed partial class ActivityLootLineViewModel : ObservableObject
 
     /// <summary>The type's icon from the app's own image cache, best-effort: images off or offline leaves the
     /// lettered tile, the way the fit browser's cargo strip does.</summary>
-    public async Task LoadIconAsync(ITypeImageProvider images) =>
+    public async Task LoadIconAsync(ITypeImageProvider images)
+    {
+        FallbackGlyph = images.GetFallbackGlyph(ItemTypeId);
         Icon = await images.GetImageAsync(ItemTypeId, TypeImageKind.Icon, 32);
+    }
 }

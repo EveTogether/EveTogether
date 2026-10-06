@@ -17,4 +17,8 @@ public interface ITypeImageProvider
 
     /// <summary>The cached or freshly fetched image for a type, or null when unavailable.</summary>
     Task<Bitmap?> GetImageAsync(int typeId, TypeImageKind kind, int size, CancellationToken cancellationToken = default);
+
+    /// <summary>Short label for a type the image server has no image for at all (a SKIN licence), shown on the tile
+    /// instead of the first letter of its name; null when the type should keep the lettered tile.</summary>
+    string? GetFallbackGlyph(int typeId) => null;
 }
