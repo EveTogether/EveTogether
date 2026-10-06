@@ -75,7 +75,9 @@ public sealed class RunSectionFrameworkTests
             if (module.CreateForWindow is not null)
                 Assert.True(RunTypeCatalogue.All.Any(type => type.WindowSections.Contains(module.Id)),
                     $"no type draws {module.Id} in the run window");
-            if (module.CreateForDetail is not null)
+            // FLEET KILLS (ET-373) is claimed by no type on purpose: a claimed section is always drawn, this one only when
+            // the group run has kills, which the screen's own "unclaimed section with content" rule already does.
+            if (module.CreateForDetail is not null && module.Id != RunSectionId.FleetKills)
                 Assert.True(RunTypeCatalogue.All.Any(type => type.DetailSections.Contains(module.Id)),
                     $"no type draws {module.Id} on the detail screen");
         }

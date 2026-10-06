@@ -338,7 +338,10 @@ public sealed class RunIskTotalTests
             + "breakdown, fleet mates' figures from the fleet stream, and TOTAL ISK itself — no source of its own"),
         (nameof(FleetDetailSectionViewModel),
             "the same row per character on the saved activity, from the registry's breakdown per character, and the "
-            + "stored TOTAL ISK — no source of its own")
+            + "stored TOTAL ISK — no source of its own"),
+        (nameof(FleetKillsDetailSectionViewModel),
+            "what the fleet destroyed (ET-373): information only, no income or cost of the run, so no source and "
+            + "never part of TOTAL ISK")
     ];
 
     // What puts an ISK figure on screen: the ISK formatter, a view model's ISK readout, or a view binding one.
