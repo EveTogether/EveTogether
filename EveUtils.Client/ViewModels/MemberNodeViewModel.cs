@@ -87,6 +87,14 @@ public sealed partial class MemberNodeViewModel : ObservableObject, IFleetMember
 
     [ObservableProperty] private string? _presenceTooltip;
 
+    /// <summary>The reason behind <see cref="StatusText"/>; null for an own character or an external.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsConnectedOnly))]
+    private FleetMemberStatusReason? _statusReason;
+
+    /// <summary>Connected to the server with no word from the game yet (ET-455) — its own chip colour, apart from online.</summary>
+    public bool IsConnectedOnly => StatusReason is FleetMemberStatusReason.Connected;
+
     public string PresenceText => StatusText ?? Presence switch
     {
         FleetMemberPresenceState.Online => "online",
@@ -103,9 +111,11 @@ public sealed partial class MemberNodeViewModel : ObservableObject, IFleetMember
     public bool ShowsInGameFleet => InGameFleet is true;
     public bool ShowsNotInGameFleet => InGameFleet is false;
 
-    public void ShowStanding(FleetMemberPresenceState presence, string? statusText, string? presenceTooltip, bool? inGameFleet)
+    public void ShowStanding(FleetMemberPresenceState presence, FleetMemberStatusReason? statusReason, string? statusText,
+        string? presenceTooltip, bool? inGameFleet)
     {
         Presence = presence;
+        StatusReason = statusReason;
         StatusText = statusText;
         PresenceTooltip = presenceTooltip;
         InGameFleet = inGameFleet;

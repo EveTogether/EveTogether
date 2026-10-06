@@ -367,6 +367,35 @@ public class FleetPresenceScreenTests
         Assert.Empty(VisibleChips(window, "not in EVE fleet"));     // only the boss's own ESI read may say so
     }
 
+    /// <summary>ET-455: before the start nobody publishes, so a mate whose client is connected used to read "unknown".
+    /// The chip now says "connected", in its own colour rather than online's green.</summary>
+    [AvaloniaFact]
+    public async Task TheRoster_ShowsAConnectedMateWhoHasNotReported_AsConnected()
+    {
+        using var harness = await StartAsync(members:
+        [
+            new FleetMemberInfo(1, Commander, -1, -1, FleetRole.FleetCommander, false, IsConnected: true),
+            new FleetMemberInfo(2, Mate, 1, 1, FleetRole.SquadMember, false, IsConnected: true,
+                LastSeenAt: DateTimeOffset.UtcNow.AddHours(-10)),
+        ]);
+        using var roster = new FleetRosterViewModel(harness.Services, harness.Fleets, Op, isOwner: true, Commander);
+        for (var i = 0; i < 200 && roster.Entries.Count < 2; i++)
+            await Task.Delay(20);
+        roster.RefreshPresence(DateTimeOffset.UtcNow);
+
+        var window = new FleetRosterWindow(roster) { Width = 1100, Height = 520 };
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+        window.UpdateLayout();
+        OverlayShots.Capture(window, "et455-roster-connected");
+
+        var chips = VisibleChips(window, "connected");
+        Assert.Equal(2, chips.Count);               // the mate in the list and in the tree
+        Assert.All(chips, chip => Assert.Contains("connected", chip.Classes));
+        Assert.All(chips, chip => Assert.DoesNotContain("good", chip.Classes));
+        Assert.Empty(VisibleChips(window, "unknown"));
+    }
+
     private static List<Border> VisibleChips(Window window, string text) =>
         [.. window.GetVisualDescendants().OfType<Border>()
             .Where(b => b.IsEffectivelyVisible && b.Classes.Contains("chip") && b.Child is TextBlock { Text: var t } && t == text)];

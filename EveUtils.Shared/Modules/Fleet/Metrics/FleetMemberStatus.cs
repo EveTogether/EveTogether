@@ -31,6 +31,10 @@ public enum FleetMemberStatusReason
     /// <summary>The server heard their client lately, but none of it reaches this client — a screen reading the roster
     /// rather than the fleet's own stream.</summary>
     ReportingElsewhere = 8,
+
+    /// <summary>The server holds a connection for them, and nothing of theirs has reached this client yet — before a
+    /// fleet starts nobody publishes. Connected to the server, not necessarily in game (ET-455).</summary>
+    Connected = 9,
 }
 
 /// <summary>What one member's row says, and from what. Pure, so every screen and the tests read the same verdict.</summary>
@@ -51,9 +55,13 @@ public static class FleetMemberStatus
         DateTimeOffset now)
     {
         if (lastHeardAt is null || FleetMemberPresence.IsSilent(lastHeardAt, now))
-            return isConnected is false
-                ? FleetMemberStatusReason.NotConnected
-                : lastHeardAt is null ? FleetMemberStatusReason.NeverHeard : FleetMemberStatusReason.Silent;
+            return (isConnected, lastHeardAt) switch
+            {
+                (false, _) => FleetMemberStatusReason.NotConnected,
+                (true, null) => FleetMemberStatusReason.Connected,
+                (_, null) => FleetMemberStatusReason.NeverHeard,
+                _ => FleetMemberStatusReason.Silent,
+            };
 
         if (presence is FleetMemberPresenceState.Offline)
             return FleetMemberStatusReason.NotInGame;

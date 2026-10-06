@@ -824,6 +824,7 @@ public sealed partial class FleetsViewModel
 
         FleetMateStatus status = _board.StatusOf(row.Id, member.CharacterId, member.IsConnected, member.LastSeenAt, now);
         member.Presence = status.Reason is FleetMemberStatusReason.NotConnected ? FleetMemberPresenceState.Offline : status.Presence;
+        member.StatusReason = status.Reason;
         member.StatusText = FleetMemberStatusText.Short(status);
         member.PresenceTooltip = FleetMemberStatusText.Line(status, null, now);
     }
@@ -948,7 +949,7 @@ public sealed partial class FleetsViewModel
             .Select(m => new FleetStartMember(
                 m.CharacterId, m.CharacterName, m.IsMine, m.IsFleetCommander, m.IsExternal,
                 m.IsExternal ? null : ElsewhereFleetNameFor(m.CharacterId, row) ?? Reported(m.CharacterId),
-                m.IsSignedOff, m.Presence, m.StatusText, m.PresenceTooltip, m.IsConnected))
+                m.IsSignedOff, m.Presence, m.StatusText, m.PresenceTooltip, m.IsConnected, m.StatusReason))
             .ToList();
 
         // A client-only fleet's roster is your own pilots and external ones: there is no inbox to send a request to.

@@ -159,7 +159,7 @@ public sealed partial class FleetRosterViewModel : ObservableObject, IDisposable
                 var verdict = FleetMemberPresence.Read(localInGame, PresenceState.Unknown,
                     FleetMemberPresence.IsSilent(member.LastSeenAt, now));
                 foreach (var node in nodes)
-                    node.ShowStanding(verdict, null, null, inGameFleet);
+                    node.ShowStanding(verdict, null, null, null, inGameFleet);
                 continue;
             }
 
@@ -168,7 +168,7 @@ public sealed partial class FleetRosterViewModel : ObservableObject, IDisposable
             var presence = status.Reason is FleetMemberStatusReason.NotConnected ? FleetMemberPresenceState.Offline : status.Presence;
             string text = FleetMemberStatusText.Short(status), tooltip = FleetMemberStatusText.Line(status, null, now);
             foreach (var node in nodes)
-                node.ShowStanding(presence, text, tooltip, inGameFleet);
+                node.ShowStanding(presence, status.Reason, text, tooltip, inGameFleet);
         }
     }
 
@@ -1490,7 +1490,8 @@ public sealed partial class FleetRosterViewModel : ObservableObject, IDisposable
                 entry.Node?.Presence ?? FleetMemberPresenceState.Unknown,
                 entry.Node?.StatusText,
                 entry.Node?.PresenceTooltip,
-                entry.Member.IsConnected))
+                entry.Member.IsConnected,
+                entry.Node?.StatusReason))
             .ToList();
 
         // A client-only fleet's roster is the owner's own pilots and externals: nobody there has an inbox to ask.

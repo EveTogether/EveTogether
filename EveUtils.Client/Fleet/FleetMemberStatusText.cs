@@ -23,6 +23,7 @@ public static class FleetMemberStatusText
         FleetMemberStatusReason.NeverHeard => "nothing received yet",
         FleetMemberStatusReason.OldClient => "older EVE Together, cannot tell where",
         FleetMemberStatusReason.ReportingElsewhere => "reporting to the server",
+        FleetMemberStatusReason.Connected => "connected to the server, no game status until the fleet starts",
         _ => string.Empty,
     };
 
@@ -35,6 +36,7 @@ public static class FleetMemberStatusText
         FleetMemberStatusReason.NotInGame => "not in game",
         FleetMemberStatusReason.Silent => "app closed",
         FleetMemberStatusReason.NotConnected => "no link",
+        FleetMemberStatusReason.Connected => "connected",
         _ => "unknown",
     };
 
