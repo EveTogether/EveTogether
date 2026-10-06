@@ -119,6 +119,7 @@ public sealed class KillmailImportTests : IDisposable
         FleetKillmailShareEvent share = Assert.Single(_remoteShares);
         Assert.Equal(CharacterId, share.CharacterId);
         Assert.Equal(42, share.FleetId);
+        Assert.Equal("https://fleet.example", share.ServerAddress);
         FleetKillmailReference killmail = Assert.Single(share.Data.Killmails);
         Assert.Equal(1, killmail.KillmailId);
         Assert.Equal("hash1", killmail.Hash);

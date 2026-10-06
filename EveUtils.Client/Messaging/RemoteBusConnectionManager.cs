@@ -181,11 +181,20 @@ public sealed class RemoteBusConnectionManager(
         // A character-agnostic event (CharacterId 0) keeps the dedupe: one connection per server is enough, and sending
         // it up every character's stream would make the server reroute the same event once per stream.
         var claimedCharacter = integrationEvent.CharacterId ?? 0;
+        string? targetServer = integrationEvent is IRemoteServerTargetedEvent targeted
+            ? targeted.ServerAddress
+            : null;
 
         ServerConnection[] live;
         lock (_gate)
         {
-            var connected = _connections.Values.Where(c => c.State == ServerConnectionState.Connected).ToList();
+            var connected = _connections.Values
+                .Where(connection => connection.State == ServerConnectionState.Connected
+                                     && (targetServer is null || string.Equals(
+                                         connection.ServerAddress,
+                                         targetServer,
+                                         StringComparison.OrdinalIgnoreCase)))
+                .ToList();
             var chosen = SelectTargets(connected.Select(c => new ConnectionRef(c.ServerAddress, c.CharacterId)).ToList(),
                 claimedCharacter).ToHashSet();
             live = connected.Where(c => chosen.Contains(new ConnectionRef(c.ServerAddress, c.CharacterId))).ToArray();
@@ -194,8 +203,8 @@ public sealed class RemoteBusConnectionManager(
         if (live.Length == 0)
             return; // no stream for this character/server attached — deliberate no-op
 
-        // Build the wire envelope once, broadcast to every connected server (POC; per-server event
-        // scoping is a later seam, still an open point).
+        // Untargeted events retain the existing broadcast-to-every-server behavior. Server-targeted events only use
+        // the matching connection, so equal fleet ids on independent servers cannot cross that transport boundary.
         var envelope = new ClientEnvelope { Event = ToEnvelope(integrationEvent) };
         await Task.WhenAll(live.Select(c => c.SendEnvelopeAsync(envelope, cancellationToken)));
     }

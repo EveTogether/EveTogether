@@ -155,7 +155,10 @@ public sealed class FleetKillmailSharePublisher : ISingletonService, IDisposable
                 Killmails = shared,
             };
             EventTarget target = participant.ClientOnly ? EventTarget.Local : EventTarget.Remote;
-            await _eventBus.PublishAsync(new FleetKillmailShareEvent(payload, characterId), target, cancellationToken);
+            await _eventBus.PublishAsync(
+                new FleetKillmailShareEvent(payload, characterId, participant.ServerAddress),
+                target,
+                cancellationToken);
         }
     }
 

@@ -1103,7 +1103,8 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
 
         // My characters in this fleet: the same fleet can appear once per coupled character.
         var myCharacters = ServerGroups.SelectMany(g => g.Fleets).Concat(LocalFleets)
-            .Where(r => r.Id == row.Id)
+            .Where(r => r.Id == row.Id
+                        && string.Equals(r.ServerAddress, row.ServerAddress, StringComparison.OrdinalIgnoreCase))
             .Select(r => (Id: r.ActingCharacterId, Name: string.IsNullOrWhiteSpace(r.CharacterName) ? $"Char {r.ActingCharacterId}" : r.CharacterName))
             .DistinctBy(c => c.Id)
             .ToList();
