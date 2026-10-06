@@ -31,4 +31,5 @@ public sealed record SettingsResult(
     bool IncludeNightlyBuilds = false,
     bool ChannelChoiceMade = false,
     bool OfferHomefrontRuns = true,
-    bool IncludeLocationInLocalApi = false);
+    bool IncludeLocationInLocalApi = false,
+    bool FollowFleetCommanderEnd = false);

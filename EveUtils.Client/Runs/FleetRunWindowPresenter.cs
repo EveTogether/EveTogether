@@ -209,10 +209,10 @@ public sealed class FleetRunWindowPresenter : ISingletonService, IDisposable
             }
         }
 
-        return _AsBool(perFleet) ?? _AsBool(central) ?? false;
+        return AsBool(perFleet) ?? AsBool(central) ?? false;
     }
 
-    private static bool? _AsBool(string? value) => value switch
+    internal static bool? AsBool(string? value) => value switch
     {
         { } v when string.Equals(v, "true", StringComparison.OrdinalIgnoreCase) => true,
         { } v when string.Equals(v, "false", StringComparison.OrdinalIgnoreCase) => false,
