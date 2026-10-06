@@ -14,11 +14,14 @@ public sealed class FleetKillmailShareEvent(
     int? characterId = null,
     string? serverAddress = null)
     : IntegrationEvent<FleetKillmailShare>(data, characterId), IFleetScopedEvent, IEchoToSenderEvent,
-        IRemoteServerTargetedEvent
+        IRemoteServerTargetedEvent, IServerSourcedEvent
 {
     public override string EventType => "fleet.killmail-share";
 
     public long FleetId => Data.FleetId;
 
     public string ServerAddress { get; } = serverAddress ?? "";
+
+    /// <summary>The server this share arrived from, stamped by the receiving connection; null for a client-only fleet.</summary>
+    public string? SourceServerAddress { get; set; }
 }
