@@ -10,6 +10,10 @@
                 <DataTemplate DataType="vr:LinkedLossViewModel">
                     <StackPanel Margin="0,0,0,8">
                         <Grid Classes="kv" ColumnDefinitions="Auto,*">
+                            <TextBlock Text="PILOT"/>
+                            <TextBlock Grid.Column="1" Text="{Binding PilotText}"/>
+                        </Grid>
+                        <Grid Classes="kv" ColumnDefinitions="Auto,*">
                             <TextBlock Text="SHIP"/>
                             <TextBlock Grid.Column="1" Text="{Binding ShipText}"/>
                         </Grid>

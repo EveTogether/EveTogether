@@ -1,0 +1,40 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vs="using:EveUtils.Client.ViewModels.Runs.Sections"
+             x:Class="EveUtils.Client.Views.Runs.Sections.FleetKillsDetailSectionView"
+             x:DataType="vs:FleetKillsDetailSectionViewModel">
+    <ItemsControl ItemsSource="{Binding Kills}">
+        <ItemsControl.ItemTemplate>
+            <DataTemplate DataType="vs:FleetKillViewModel">
+                <StackPanel Margin="0,0,0,8">
+                    <Grid Classes="kv" ColumnDefinitions="Auto,*">
+                        <TextBlock Text="KILLED"/>
+                        <TextBlock Grid.Column="1" Text="{Binding VictimText}"/>
+                    </Grid>
+                    <Grid Classes="kv" ColumnDefinitions="Auto,*">
+                        <TextBlock Text="SHIP"/>
+                        <TextBlock Grid.Column="1" Text="{Binding ShipText}"/>
+                    </Grid>
+                    <Grid Classes="kv" ColumnDefinitions="Auto,*">
+                        <TextBlock Text="BY"/>
+                        <TextBlock Grid.Column="1" Text="{Binding MembersText}" TextWrapping="Wrap"/>
+                    </Grid>
+                    <Grid Classes="kv" ColumnDefinitions="Auto,*">
+                        <TextBlock Text="FINAL BLOW"/>
+                        <TextBlock Grid.Column="1" Text="{Binding FinalBlowText}"/>
+                    </Grid>
+                    <Grid Classes="kv" ColumnDefinitions="Auto,*">
+                        <TextBlock Text="AT"/>
+                        <TextBlock Grid.Column="1" Text="{Binding TimeText}"/>
+                    </Grid>
+                    <Grid Classes="kv" ColumnDefinitions="Auto,*">
+                        <TextBlock Text="DESTROYED"/>
+                        <TextBlock Grid.Column="1" Text="{Binding ValueText}"/>
+                    </Grid>
+                    <Button Classes="rowaction" Content="OPEN KILLMAIL" HorizontalAlignment="Left" Margin="0,4,0,0"
+                            IsVisible="{Binding CanOpen}" Command="{Binding OpenCommand}"/>
+                </StackPanel>
+            </DataTemplate>
+        </ItemsControl.ItemTemplate>
+    </ItemsControl>
+</UserControl>

@@ -75,6 +75,8 @@ public static class RunSectionModules
         // Detail only, like ESCALATION: a loss arrives by killmail minutes after the fact, never while the run window
         // is open. Claimed by abyssal, where a loss ends the run; any other type shows it once one is linked (ET-331).
         new(RunSectionId.Loss, null, services => new LossDetailSectionViewModel(services), IskSource.ShipLoss),
+        // Detail only and without an IskSource: a kill is no cost or income of the run (ET-373), so no contributor reads it.
+        new(RunSectionId.FleetKills, null, services => new FleetKillsDetailSectionViewModel(services)),
         new(RunSectionId.Escalation, null, services => new EscalationDetailSectionViewModel(services))
     ];
 }

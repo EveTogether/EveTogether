@@ -28,4 +28,16 @@ public sealed record KillmailDetailDto(
     int CharacterId, int KillmailId, string Hash, DateTime KillmailTimeUtc, int SolarSystemId, bool IsLoss,
     int VictimShipTypeId, decimal? ShipValue, int? VictimCharacterId, int? VictimCorporationId, int? VictimAllianceId,
     int DamageTaken, IReadOnlyList<KillmailDetailItemLineDto> Items, IReadOnlyList<KillmailDetailAttackerLineDto> Attackers,
-    KillmailLinkedRunDto? LinkedRun);
+    KillmailLinkedRunDto? LinkedRun)
+{
+    /// <summary>The hull plus every destroyed item at today's average prices, null when none of them is priced (the one
+    /// formula behind ISK DESTROYED here and in a run's FLEET KILLS, ET-373); dropped items never count.</summary>
+    public decimal? DestroyedValue
+    {
+        get
+        {
+            List<decimal> known = [.. new[] { ShipValue }.Concat(Items.Where(item => item.IsDestroyed).Select(item => item.Value)).OfType<decimal>()];
+            return known.Count == 0 ? null : known.Sum();
+        }
+    }
+}
