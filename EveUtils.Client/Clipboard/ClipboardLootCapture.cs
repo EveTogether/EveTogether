@@ -89,7 +89,8 @@ public sealed class ClipboardLootCapture : ISingletonService, IDisposable
         }
 
         InventoryTextReading reading = InventoryTextReading.Read(capture.Text, _sde);
-        if (reading.Lines.Count == 0)
+        bool onlyUnrecognised = reading.Lines.Count == 0 && reading.OnlyUnrecognised.Count > 0;
+        if (reading.Lines.Count == 0 && !onlyUnrecognised)
         {
             // One copied line that matches no item type is far more often an ordinary copy than lost loot, so that
             // one case stays quiet on screen — but it says so in the log like every other refusal.
@@ -121,8 +122,11 @@ public sealed class ClipboardLootCapture : ISingletonService, IDisposable
             _openFingerprint = fingerprint;
         }
 
-        _TrackLastStore(StoreAndOfferAsync(fingerprint, reading.Lines, reading.UnrecognisedNames, reading.UnresolvedCount,
-            capture.CopiedByCharacter));
+        _TrackLastStore(onlyUnrecognised
+            ? StoreAndOfferAsync(fingerprint, [], InventoryTextReading.NamesOf(reading.OnlyUnrecognised),
+                reading.OnlyUnrecognised.Count, capture.CopiedByCharacter)
+            : StoreAndOfferAsync(fingerprint, reading.Lines, reading.UnrecognisedNames, reading.UnresolvedCount,
+                capture.CopiedByCharacter));
     }
 
     /// <summary>
@@ -224,6 +228,16 @@ public sealed class ClipboardLootCapture : ISingletonService, IDisposable
         }
 
         RunLootCaptureSaveResult saved = result.Value!;
+        if (lines.Count == 0)
+        {
+            // Nothing in this copy is known yet (a cargo of new event items): kept in the log, worth nothing until named.
+            _toasts.Show("Loot copied",
+                $"No item in this copy is known to the EVE static data yet. {unrecognisedNames.Count} name(s) are kept in the "
+                + $"unrecognised items log{(saved.CaptureId == Guid.Empty ? " without a run" : " and added to the current run")} "
+                + "and count as 0 until they are known.", ToastKind.Information,
+                [new ToastAction("Close", () => CloseOffer(fingerprint))], () => CloseOffer(fingerprint), FeatureName);
+            return;
+        }
         var unresolvedSuffix = unresolvedCount > 0
             ? $" {unresolvedCount} name(s) were not recognised and are kept in the unrecognised items log."
             : string.Empty;

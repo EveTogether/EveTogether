@@ -19,9 +19,16 @@ public sealed record InventoryTextReading(
 
     /// <summary>The rows no SDE type carries, by name and merged — what the unrecognised log keeps (ET-460). A row
     /// without a name has nothing to keep.</summary>
-    public IReadOnlyList<UnrecognisedLootNameInput> UnrecognisedNames =>
+    public IReadOnlyList<UnrecognisedLootNameInput> UnrecognisedNames => NamesOf(Unresolved);
+
+    /// <summary>The rows of a copy in which no name is known yet, but which carry an EVE inventory's own volume or
+    /// price column (ET-460): a cargo full of new event items. Without those columns "Budget rent 1200" is
+    /// indistinguishable from loot, so a copy like that stays refused. Empty whenever any row resolved.</summary>
+    public IReadOnlyList<ClipboardInventoryItem> OnlyUnrecognised { get; init; } = [];
+
+    public static IReadOnlyList<UnrecognisedLootNameInput> NamesOf(IEnumerable<ClipboardInventoryItem> items) =>
     [
-        .. Unresolved
+        .. items
             .Where(item => !string.IsNullOrWhiteSpace(item.Name))
             .GroupBy(item => item.Name.Trim(), StringComparer.OrdinalIgnoreCase)
             .Select(group => new UnrecognisedLootNameInput { Name = group.Key, Quantity = group.Sum(item => item.Quantity ?? 1) })
@@ -35,6 +42,7 @@ public sealed record InventoryTextReading(
         bool hasSingleRow = ClipboardInventoryParser.HasSingleRow(text);
         IReadOnlyList<ClipboardInventoryItem> items = ClipboardInventoryParser.Parse(text);
         var resolution = SdeInventoryResolver.ResolveItems(items, sde);
+        IReadOnlyList<ClipboardInventoryItem> shapedUnresolved = resolution.Unresolved;
         bool hasNoSdeMatch = hasSingleRow && sde.IsAvailable && resolution.Lines.Count == 0;
         if (resolution.Lines.Count == 0 && sde.IsAvailable)
         {
@@ -54,6 +62,11 @@ public sealed record InventoryTextReading(
         string refusal = resolution.Unresolved.Count > 0
             ? $"None of the {resolution.Unresolved.Count} copied names is a known item type. Copy rows from an EVE inventory window."
             : "No column in this copy stands out as the item names. Copy the rows from an EVE inventory window.";
-        return new InventoryTextReading([], resolution.Unresolved, refusal, hasNoSdeMatch);
+        return new InventoryTextReading([], resolution.Unresolved, refusal, hasNoSdeMatch)
+        {
+            OnlyUnrecognised = !sde.IsAvailable || resolution.Lines.Count > 0
+                ? []
+                : [.. shapedUnresolved.Where(item => item.Volume is not null || item.Price is not null)]
+        };
     }
 }

@@ -20,6 +20,7 @@ using EveUtils.Shared.Modules.Market.Services;
 using EveUtils.Shared.Modules.Runs.Commands;
 using EveUtils.Shared.Modules.Runs.Entities;
 using EveUtils.Shared.Modules.Runs.Enums;
+using EveUtils.Shared.Modules.Runs.Queries;
 using EveUtils.Shared.Modules.Sde;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -165,6 +166,44 @@ public sealed class ClipboardLootCaptureTests
         Assert.Equal(("Crimson Harvest Token", 5L, UnrecognisedItemSource.ClipboardCapture, UnrecognisedItemStatus.Open),
             (line.Name, line.Quantity, line.Source, line.Status));
         Assert.Equal(2, (await env.CapturesAsync()).Count);
+    }
+
+    /// <summary>ET-460: during an event a cargo can consist of new items only. Such a copy — recognisable as an EVE
+    /// inventory by its volume and price columns — is kept whole on the run and character it was copied for, and
+    /// shows in the unrecognised items log, instead of being refused. Copies without those columns stay refused.</summary>
+    [AvaloniaFact]
+    public async Task ACopyOfOnlyUnknownNames_IsKeptOnTheRunItWasCopiedFor_AndShowsInTheLog()
+    {
+        using var env = await Env.StartAsync();
+        await env.StartRunAsync();
+
+        await env.CopyAsync("Crimson Harvest Token\t3\t0,30 m3\t\r\nCrimson Harvest Mask\t1\t0,10 m3\t");
+
+        RunLootCapture capture = Assert.Single(await env.CapturesAsync());
+        Assert.Empty(capture.Entries);
+        Assert.Equal(["Crimson Harvest Mask", "Crimson Harvest Token"],
+            (await env.UnrecognisedLinesAsync()).Select(line => line.Name).Order());
+        Assert.All(await env.UnrecognisedLinesAsync(), line =>
+            Assert.Equal((capture.Id, 90000001L, UnrecognisedItemStatus.Open), (line.RunLootCaptureId, line.CharacterId, line.Status)));
+        var log = await env.Instance.Services.GetRequiredService<CqrsDispatcher>().Query(new GetUnrecognisedLootQuery(), CancellationToken.None);
+        Assert.Equal(2, log.Value!.Count);
+        Assert.DoesNotContain(env.Toasts.Toasts, toast => toast.Kind == ToastKind.Error);
+    }
+
+    [AvaloniaFact]
+    public async Task ACopyOfOnlyUnknownNames_WithNoRunToTakeIt_IsLoggedWithoutARun_AndNotTwice()
+    {
+        using var env = await Env.StartAsync();
+        const string text = "Crimson Harvest Token\t3\t0,30 m3\t";
+
+        await env.CopyAsync(text);
+        env.CloseOffer();
+        await env.CopyAsync(text);
+
+        UnrecognisedLootLine line = Assert.Single(await env.UnrecognisedLinesAsync());
+        Assert.Equal(("Crimson Harvest Token", 3L, UnrecognisedItemSource.ClipboardCapture, (Guid?)null, (Guid?)null),
+            (line.Name, line.Quantity, line.Source, line.RunLootCaptureId, line.RunId));
+        Assert.Empty(await env.CapturesAsync());
     }
 
     /// <summary>
