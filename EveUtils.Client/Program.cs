@@ -32,10 +32,11 @@ sealed class Program
     [STAThread]
     public static void Main(string[] args)
     {
-        // Must stay the first statement: installing, updating and uninstalling all re-run this executable with
+        // Must stay the first thing that runs: installing, updating and uninstalling all re-run this executable with
         // arguments Velopack handles here and then exits on. Anything above it runs the EF migration and the
         // background services against the user's data during an installation step.
-        VelopackApp.Build().Run();
+        bool restartedByUpdate = false;
+        VelopackApp.Build().OnRestarted(_ => restartedByUpdate = true).Run();
 
         // Last-chance net (ET-197): armed as early as possible so a fault anywhere further in startup still
         // leaves a trace. Writes straight to app-errors.jsonl, bypassing ILogger/DI — see CrashLog for why.
@@ -44,9 +45,11 @@ sealed class Program
 
         // Before anything opens the store (ET-465): a second client on this data directory hands over to the first
         // and goes, whether it is a second click on the icon or a Debug build next to the installed one. Held until
-        // Main returns.
+        // Main returns. The wait is for a holder that is leaving: after "update and restart" the old version may still
+        // be shutting down, and giving up on it would leave the pilot with no client at all.
         string dataDirectory = ClientServices.DataDirectory();
-        using ClientInstanceLock? instanceLock = ClientInstanceLock.TryAcquire(dataDirectory);
+        using ClientInstanceLock? instanceLock = ClientInstanceLock.Acquire(dataDirectory,
+            restartedByUpdate ? TimeSpan.FromSeconds(10) : TimeSpan.FromSeconds(2));
         if (instanceLock is null)
         {
             CrashLog.Record(LogLevel.Information, "InstanceLock",

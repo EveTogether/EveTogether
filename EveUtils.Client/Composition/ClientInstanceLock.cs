@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Globalization;
 
 namespace EveUtils.Client.Composition;
@@ -13,10 +14,28 @@ public sealed class ClientInstanceLock : IDisposable
 {
     private const string LockFileName = "instance.lock";
     private const string OwnerFileName = "instance.pid";
+    private static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(200);
 
     private readonly FileStream _lock;
 
     private ClientInstanceLock(FileStream lockStream) => _lock = lockStream;
+
+    /// <summary>The lock on <paramref name="dataDirectory"/>, waiting up to <paramref name="patience"/> for a holder that
+    /// is on its way out — the version Velopack just replaced, or a client closed a moment ago — before giving up with
+    /// null.</summary>
+    public static ClientInstanceLock? Acquire(string dataDirectory, TimeSpan patience)
+    {
+        var waited = Stopwatch.StartNew();
+        while (true)
+        {
+            if (TryAcquire(dataDirectory) is { } acquired)
+                return acquired;
+            if (waited.Elapsed >= patience)
+                return null;
+
+            Thread.Sleep(PollInterval);
+        }
+    }
 
     /// <summary>The lock on <paramref name="dataDirectory"/>, or null while another client holds it.</summary>
     public static ClientInstanceLock? TryAcquire(string dataDirectory)

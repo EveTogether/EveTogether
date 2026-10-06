@@ -64,6 +64,31 @@ public sealed class ClientInstanceLockTests : IDisposable
     }
 
     [Fact]
+    public async Task Acquire_HolderLetsGoWithinThePatience_IsGranted()
+    {
+        ClientInstanceLock? leaving = ClientInstanceLock.TryAcquire(_root);
+        Assert.NotNull(leaving);
+        Task letGo = Task.Delay(TimeSpan.FromMilliseconds(500), TestContext.Current.CancellationToken)
+            .ContinueWith(_ => leaving.Dispose(), TestContext.Current.CancellationToken);
+
+        using ClientInstanceLock? next = ClientInstanceLock.Acquire(_root, TimeSpan.FromSeconds(10));
+
+        await letGo;
+        Assert.NotNull(next);
+    }
+
+    [Fact]
+    public void Acquire_HolderStaysPastThePatience_IsRefused()
+    {
+        using ClientInstanceLock? staying = ClientInstanceLock.TryAcquire(_root);
+
+        using ClientInstanceLock? next = ClientInstanceLock.Acquire(_root, TimeSpan.FromMilliseconds(500));
+
+        Assert.NotNull(staying);
+        Assert.Null(next);
+    }
+
+    [Fact]
     public void OwnerProcessId_WhileHeld_IsTheHoldingProcess()
     {
         using ClientInstanceLock? held = ClientInstanceLock.TryAcquire(_root);
