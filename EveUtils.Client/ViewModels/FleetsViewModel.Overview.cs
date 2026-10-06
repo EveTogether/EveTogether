@@ -25,6 +25,7 @@ using EveUtils.Shared.Modules.Killmails.Queries;
 using EveUtils.Shared.Modules.Settings.Commands;
 using EveUtils.Shared.Modules.Settings.Queries;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using CqrsDispatcher = EveUtils.Shared.Cqrs.IDispatcher;
 
 namespace EveUtils.Client.ViewModels;
@@ -290,15 +291,23 @@ public sealed partial class FleetsViewModel
         }
 
         var names = FitNameResolverFactory.For(_services);
-        foreach (var row in _allRows)
+        // A copy: a rebuild may replace the rows while a query below is awaited.
+        foreach (var row in _allRows.ToList())
         {
             var linked = row.Members.Where(m => m.LinkState == FleetMemberLinkState.Linked).ToList();
             FleetKillmailSummaryDto? summary = null;
             if (row.IsInActiveGroup && row.Info.ActivatedAt is { } activatedAt && linked.Count > 0)
             {
-                var result = await dispatcher.Query(new GetFleetKillmailSummaryQuery(
-                    row.Id, activatedAt.UtcDateTime, [.. linked.Select(m => m.CharacterId).Distinct()]));
-                summary = result.IsSuccess ? result.Value : null;
+                try
+                {
+                    var result = await dispatcher.Query(new GetFleetKillmailSummaryQuery(
+                        row.Id, activatedAt.UtcDateTime, [.. linked.Select(m => m.CharacterId).Distinct()]));
+                    summary = result.IsSuccess ? result.Value : null;
+                }
+                catch (Exception exception)
+                {
+                    _services.GetService<ILogger<FleetsViewModel>>()?.LogWarning(exception, "Reading the fleet killmails failed");
+                }
             }
 
             foreach (var member in row.Members)
