@@ -274,12 +274,13 @@ public sealed class EscalationRunTests
     }
 
     [AvaloniaFact]
-    public async Task EscalationRegisteredAfterSave_JoinsTheBand_BesideTheOnesRegisteredBefore()
+    public async Task EscalationRegisteredAfterSave_JoinsTheBand_BesideTheOnesOfOtherRuns()
     {
         using var harness = await _CreateHarnessAsync();
         var dispatcher = harness.Services.GetRequiredService<IDispatcher>();
-        Guid sourceRunId = await _FlySourceRunAsync(harness, "Sansha Refuge", (RelayOutpost, "Ervekam", "23:00:00"));
-        ActivityDetailViewModel detail = await _SourceDetailAsync(dispatcher, sourceRunId, harness);
+        await _FlySourceRunAsync(harness, "Sansha Refuge", (RelayOutpost, "Ervekam", "23:00:00"));
+        Guid bareRunId = await _FlySourceRunAsync(harness, "Angel Hideaway");
+        ActivityDetailViewModel detail = await _SourceDetailAsync(dispatcher, bareRunId, harness);
         harness.Dialogs.OnShowEscalationDialog = dialog =>
         {
             dialog.SiteQuery = WarSupplyComplex.Name;
@@ -295,7 +296,81 @@ public sealed class EscalationRunTests
 
         Assert.Equal([WarSupplyComplex.DungeonId, RelayOutpost.DungeonId],
             (await _OpenEscalationsAsync(dispatcher)).Select(row => row.Escalation.DungeonId));
-        Assert.Equal(2, (await _SourceDetailAsync(dispatcher, sourceRunId)).Escalation().Entries.Count);
+        Assert.False((await _SourceDetailAsync(dispatcher, bareRunId, harness)).Escalation().CanRegister);
+    }
+
+    [AvaloniaFact]
+    public async Task RunWithAnEscalation_OffersChangeInsteadOfRegister()
+    {
+        using var harness = await _CreateHarnessAsync();
+        var dispatcher = harness.Services.GetRequiredService<IDispatcher>();
+        Guid sourceRunId = await _FlySourceRunAsync(harness, "Sansha Refuge", (RelayOutpost, "Ervekam", "23:00:00"));
+
+        EscalationDetailSectionViewModel section = (await _SourceDetailAsync(dispatcher, sourceRunId, harness)).Escalation();
+
+        Assert.False(section.CanRegister);
+        Assert.True(Assert.Single(section.Entries).CanAct);
+    }
+
+    [AvaloniaFact]
+    public async Task ChangingTheEscalation_PrefillsTheDialog_AndReplacesItInPlace()
+    {
+        using var harness = await _CreateHarnessAsync();
+        var dispatcher = harness.Services.GetRequiredService<IDispatcher>();
+        Guid sourceRunId = await _FlySourceRunAsync(harness, "Sansha Refuge", (RelayOutpost, "Ervekam", "23:00:00"));
+        Guid? entryId = await _EntryIdAsync(harness, RelayOutpost);
+        EscalationDetailSectionViewModel section = (await _SourceDetailAsync(dispatcher, sourceRunId, harness)).Escalation();
+        await section.Entries[0].MarkExpiredCommand.ExecuteAsync(null);
+        section = (await _SourceDetailAsync(dispatcher, sourceRunId, harness)).Escalation();
+        int? prefilledSite = null;
+        harness.Dialogs.OnShowEscalationDialog = dialog =>
+        {
+            prefilledSite = dialog.SelectedSite?.DungeonId;
+            dialog.SiteQuery = WarSupplyComplex.Name;
+            dialog.SelectedOption = Assert.Single(dialog.SiteResults);
+            dialog.DestinationSystem = "Ervekam";
+            dialog.RemainingTimeText = "6:00:00";
+            dialog.RegisterCommand.Execute(null);
+            return Task.FromResult(true);
+        };
+
+        await section.Entries[0].ChangeCommand.ExecuteAsync(null);
+
+        Assert.Equal(RelayOutpost.DungeonId, prefilledSite);
+        EscalationEntryViewModel changed = Assert.Single((await _SourceDetailAsync(dispatcher, sourceRunId)).Escalation().Entries);
+        Assert.Equal((entryId, WarSupplyComplex.DungeonId, EscalationOutcome.Expired),
+            (changed.Escalation.EntryId, changed.Escalation.DungeonId, changed.Escalation.Outcome));
+        Assert.InRange(changed.Escalation.ExpiresAtUtc!.Value, DateTime.UtcNow.AddHours(5), DateTime.UtcNow.AddHours(7));
+    }
+
+    [Fact]
+    public void EscalationDialog_PrefilledFromARegisteredEscalation_ShowsItsSiteSystemAndRemainingTime()
+    {
+        var sde = new FakeSdeAccessor().AddSolarSystem(new SdeSolarSystem(ErvekamId, "Ervekam", 0.69)).AddSite(RelayOutpost);
+        var dialog = new EscalationDialogViewModel(sde);
+
+        dialog.Prefill(RelayOutpost.Name, RelayOutpost.DungeonId, "Ervekam", DateTime.UtcNow.AddHours(5).AddMinutes(30));
+
+        Assert.Equal(RelayOutpost.DungeonId, dialog.SelectedSite?.DungeonId);
+        Assert.Equal("Ervekam", dialog.DestinationSystem);
+        Assert.StartsWith("05:2", dialog.RemainingTimeText);
+        Assert.True(dialog.RegisterCommand.CanExecute(null));
+    }
+
+    [AvaloniaFact]
+    public async Task ChangingAnEscalationThatIsGone_IsRefused_AndAddsNothing()
+    {
+        using var harness = await _CreateHarnessAsync();
+        var dispatcher = harness.Services.GetRequiredService<IDispatcher>();
+        Guid sourceRunId = await _FlySourceRunAsync(harness, "Sansha Refuge");
+
+        Result refused = await dispatcher.Send(new ChangeRunEscalationCommand(sourceRunId, Guid.NewGuid(),
+            RelayOutpost.Name, RelayOutpost.DungeonId, "Ervekam", ErvekamId, DateTime.UtcNow.AddHours(5)));
+
+        Assert.False(refused.IsSuccess);
+        await using ClientDbContext db = await harness.Services
+            .GetRequiredService<IDbContextFactory<ClientDbContext>>().CreateDbContextAsync();
+        Assert.False(await db.Set<RunParameter>().AnyAsync(parameter => parameter.ParameterKey == RunParameterKey.Escalation));
     }
 
     [AvaloniaFact]

@@ -55,6 +55,9 @@
                             <Button Classes="link" Content="reopen" Margin="0,0,12,0"
                                     IsVisible="{Binding CanReopen}"
                                     Command="{Binding ReopenCommand}"/>
+                            <Button Classes="link" Content="change" Margin="0,0,12,0"
+                                    IsVisible="{Binding CanAct}"
+                                    Command="{Binding ChangeCommand}"/>
                         </WrapPanel>
                         <TextBlock Classes="hint" TextWrapping="Wrap" Margin="0"
                                    IsVisible="{Binding ActionMessage, Converter={x:Static ObjectConverters.IsNotNull}}"

@@ -50,7 +50,7 @@ public sealed partial class EscalationDetailSectionViewModel(RunDetailSectionSer
                 .GroupBy(parameter => parameter.RunId)
                 .SelectMany(run => RunEscalations.Read(run).Select(escalation => new EscalationEntryViewModel(
                     run.Key, escalation, _IsOwn(input.Detail, run.Key), nowUtc,
-                    _StartAsync, _SetOutcomeAsync, _OpenCompletedRunAsync)))
+                    _StartAsync, _SetOutcomeAsync, _OpenCompletedRunAsync, _ChangeAsync)))
                 .OrderBy(entry => entry.Escalation.RegisteredAtUtc)
         ];
         foreach (EscalationEntryViewModel entry in Entries)
@@ -59,7 +59,8 @@ public sealed partial class EscalationDetailSectionViewModel(RunDetailSectionSer
                 (entry.EscalationJumpsText, entry.EscalationJumpsEmptyText) = jumps;
 
         _registerRunId = _RegisterTargetOf(input.Detail);
-        CanRegister = _registerRunId is not null;
+        // A site escalates once in practice: a run that carries one changes it rather than registering another (ET-457).
+        CanRegister = _registerRunId is { } target && Entries.All(entry => entry.SourceRunId != target);
         EscalationEmptyText = Entries.Count == 0 ? "No escalation has been registered for this activity." : null;
         HeaderSummary = Entries switch
         {
@@ -104,15 +105,7 @@ public sealed partial class EscalationDetailSectionViewModel(RunDetailSectionSer
     [RelayCommand]
     private async Task RegisterAsync()
     {
-        if (_registerRunId is not { } runId || _detail is not { } detail || services.Services is not { } app
-            || app.GetService<IDialogService>() is not { } dialogs || services.Sde is not { } sde)
-            return;
-
-        IReadOnlyList<SdeSite> sourceSites = detail.SiteTypeId > 0
-            ? [.. sde.SearchSites().Where(site => site.DungeonId == detail.SiteTypeId)]
-            : [];
-        EscalationDialogViewModel dialog = await EscalationDialogFactory.CreateAsync(sde, sourceSites, services.Dispatcher);
-        if (!await dialogs.ShowEscalationDialogAsync(dialog) || dialog.Result is not { } registration)
+        if (_registerRunId is not { } runId || await _AskEscalationAsync(null) is not { } registration)
             return;
 
         Result result = await services.Dispatcher.Send(new RegisterRunEscalationCommand(runId, registration.SiteName,
@@ -126,6 +119,44 @@ public sealed partial class EscalationDetailSectionViewModel(RunDetailSectionSer
 
         RegisterMessage = null;
         RaiseActivityCorrected();
+    }
+
+    /// <summary>Changes the escalation the run already carries instead of adding a second one (ET-457): the same
+    /// dialog, filled in from what is registered.</summary>
+    private async Task _ChangeAsync(EscalationEntryViewModel entry)
+    {
+        RunEscalationDto current = entry.Escalation;
+        if (await _AskEscalationAsync(current) is not { } registration)
+            return;
+
+        Result result = await services.Dispatcher.Send(new ChangeRunEscalationCommand(entry.SourceRunId,
+            current.EntryId, registration.SiteName, registration.DungeonId, registration.DestinationSystem,
+            registration.DestinationSolarSystemId, registration.ExpiresAtUtc));
+        if (!result.IsSuccess)
+        {
+            entry.ActionMessage = result.Messages.Count > 0 ? result.Messages[0].Text : "The escalation could not be changed.";
+            return;
+        }
+
+        RaiseActivityCorrected();
+    }
+
+    /// <summary>The escalation dialog for this activity's site, empty or filled in from <paramref name="current"/>;
+    /// null when the pilot cancelled or the screen has no dialogs or catalogue to offer.</summary>
+    private async Task<EscalationRegistration?> _AskEscalationAsync(RunEscalationDto? current)
+    {
+        if (_detail is not { } detail || services.Services is not { } app
+            || app.GetService<IDialogService>() is not { } dialogs || services.Sde is not { } sde)
+            return null;
+
+        IReadOnlyList<SdeSite> sourceSites = detail.SiteTypeId > 0
+            ? [.. sde.SearchSites().Where(site => site.DungeonId == detail.SiteTypeId)]
+            : [];
+        EscalationDialogViewModel dialog = await EscalationDialogFactory.CreateAsync(sde, sourceSites, services.Dispatcher);
+        if (current is not null)
+            dialog.Prefill(current.SiteName, current.DungeonId, current.SystemName, current.ExpiresAtUtc);
+
+        return await dialogs.ShowEscalationDialogAsync(dialog) ? dialog.Result : null;
     }
 
     private async Task _StartAsync(EscalationEntryViewModel entry)
