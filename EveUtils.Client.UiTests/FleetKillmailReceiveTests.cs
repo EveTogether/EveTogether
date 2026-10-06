@@ -162,7 +162,7 @@ public sealed class FleetKillmailReceiveTests : IDisposable
     [InlineData("newer-without-2", Mate, FleetId, 11, new[] { 1 }, new[] { 1, 3 }, new[] { 1 })]
     [InlineData("older-without-2", Mate, FleetId, 9, new[] { 1 }, new[] { 1, 2, 3 }, new[] { 1 })]
     [InlineData("other-fleet-empty", Mate, 43L, 11, new int[0], new[] { 1, 2 }, new[] { 1 })]
-    [InlineData("own-echo-empty", Own, FleetId, 11, new int[0], new[] { 1, 2, 3 }, new[] { 1 })]
+    [InlineData("own-echo", Own, FleetId, 11, new[] { 2 }, new[] { 1, 2, 3 }, new[] { 1 })]
     public async Task NewerShare_RemovesOnlyThatFleetsWithdrawnRemoteRow(string scenario, int sender, long fleetId,
         long unixMs, int[] killmailIds, int[] expectedMateIds, int[] expectedOwnIds)
     {
