@@ -73,6 +73,12 @@ public sealed partial class RunLootViewModel : ViewModelBase
     /// </summary>
     public ObservableCollection<ActivityLootLineViewModel> ItemRows { get; } = [];
 
+    /// <summary>Copied rows the SDE has no name for yet (ET-460), merged by name across the captures that count. They
+    /// are never part of a figure above: without a type there is nothing to value, and the rows say so.</summary>
+    public ObservableCollection<UnrecognisedLootRowViewModel> UnrecognisedRows { get; } = [];
+
+    [ObservableProperty] private int _unrecognisedCount;
+
     /// <summary>The run whose loot this section shows — set by the window that owns it, which has known the id all
     /// along. This used to ask "which run is running" instead, so the section read the store's guess rather than
     /// its own run: with eleven runs stopped and never saved that guess is ambiguous forever and the section stayed
@@ -315,7 +321,19 @@ public sealed partial class RunLootViewModel : ViewModelBase
         }
 
         _MarkAddedAfterEdit();
+        _ShowUnrecognised(captures);
         _Recompute();
+    }
+
+    private void _ShowUnrecognised(IReadOnlyList<RunLootCaptureDto> captures)
+    {
+        UnrecognisedRows.Clear();
+        foreach (var group in captures
+                     .Where(capture => !capture.IsExcluded)
+                     .SelectMany(capture => capture.UnrecognisedLines ?? [])
+                     .GroupBy(line => line.Name, StringComparer.OrdinalIgnoreCase))
+            UnrecognisedRows.Add(new UnrecognisedLootRowViewModel(group.First().Name, group.Sum(line => line.Quantity)));
+        UnrecognisedCount = UnrecognisedRows.Count;
     }
 
     /// <summary>
@@ -437,7 +455,7 @@ public sealed partial class RunLootViewModel : ViewModelBase
                     Volume = resolved.Item.Volume,
                     ClipboardPrice = resolved.Item.Price,
                     LootKind = LootKind.Gained
-                })]), cancellationToken);
+                })], reading.UnrecognisedNames), cancellationToken);
             if (!stored.IsSuccess)
                 return stored.Messages.Count > 0 ? stored.Messages[0].Text : "This list was not stored.";
 
@@ -459,7 +477,9 @@ public sealed partial class RunLootViewModel : ViewModelBase
     private string _AsPasteText() => string.Join(Environment.NewLine, ItemRows
         .Where(line => !line.IsExcluded)
         .Select(line => $"{_names.GetValueOrDefault(line.ItemTypeId, line.ItemTypeId.ToString(CultureInfo.InvariantCulture))}\t"
-                        + (line.Quantity ?? 1).ToString(CultureInfo.InvariantCulture)));
+                        + (line.Quantity ?? 1).ToString(CultureInfo.InvariantCulture))
+        // The names no SDE type carries yet are part of the list too: left out of the box, rewriting it would drop them.
+        .Concat(UnrecognisedRows.Select(row => $"{row.Name}\t{row.Quantity.ToString(CultureInfo.InvariantCulture)}")));
 
     partial void OnCargoBeforeTextChanged(string? value) =>
         _TrackCargoWrite(PasteCargoAsync(LootCaptureRole.CargoBefore, value));
@@ -504,7 +524,7 @@ public sealed partial class RunLootViewModel : ViewModelBase
                 Volume = resolved.Item.Volume,
                 ClipboardPrice = resolved.Item.Price,
                 LootKind = LootKind.Gained
-            })]), cancellationToken);
+            })], reading.UnrecognisedNames), cancellationToken);
         if (!stored.IsSuccess)
         {
             _SetCargoStatus(role, stored.Messages.Count > 0 ? stored.Messages[0].Text : "This cargo hold was not stored.");

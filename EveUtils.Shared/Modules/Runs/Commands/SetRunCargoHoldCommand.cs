@@ -9,5 +9,6 @@ namespace EveUtils.Shared.Modules.Runs.Commands;
 /// a second one on the run, because pasting again is a correction of the same cargo hold and not a new observation
 /// of it — that is what keeps "paste, paste again, change your mind" from leaving a trail of rows behind.</summary>
 public sealed record SetRunCargoHoldCommand(
-    Guid RunId, LootCaptureRole Role, DateTime CapturedAtUtc, IReadOnlyList<RunLootEntryInput> Entries)
+    Guid RunId, LootCaptureRole Role, DateTime CapturedAtUtc, IReadOnlyList<RunLootEntryInput> Entries,
+    IReadOnlyList<UnrecognisedLootNameInput>? UnrecognisedNames = null)
     : ICommand<Result<Guid>>;

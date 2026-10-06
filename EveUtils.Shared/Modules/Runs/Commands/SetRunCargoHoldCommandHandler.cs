@@ -57,6 +57,8 @@ internal sealed class SetRunCargoHoldCommandHandler(IDbContextFactory<ClientDbCo
                 ClipboardPrice = entry.ClipboardPrice,
                 LootKind = entry.LootKind
             });
+        await UnrecognisedLootWrites.ReplaceOpenAsync(db, capture.Id, command.UnrecognisedNames, run.CharacterId,
+            command.CapturedAtUtc, cancellationToken);
         await RunLootCaptureRoles.AssignAsync(db, capture, command.Role, cancellationToken);
         await db.SaveChangesAsync(cancellationToken);
         await eventBus.PublishAsync(new RunLootCapturedEvent(run.Id), EventTarget.Local, cancellationToken);

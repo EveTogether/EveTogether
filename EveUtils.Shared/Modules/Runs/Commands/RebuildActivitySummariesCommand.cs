@@ -15,4 +15,8 @@ public sealed record RebuildActivitySummariesCommand(
     /// <summary>Rebuild only when the price cache was refreshed after the summary was built: a summary is valued at
     /// the prices of its day, so the loot on the detail screen — valued at today's — no longer agrees with it
     /// (ET-329). Anything already valued at the current prices is left alone and returns zero.</summary>
-    bool OnlyWhenPricesChanged = false) : ICommand<Result<int>>;
+    bool OnlyWhenPricesChanged = false,
+    /// <summary>Rebuild only the activities that still had loot lines without a price when they were last built, and
+    /// only when the price cache was refreshed since (ET-460) — what a price refresh can change, without adding up
+    /// every saved run in the store every hour.</summary>
+    bool OnlyWithUnpricedLoot = false) : ICommand<Result<int>>;

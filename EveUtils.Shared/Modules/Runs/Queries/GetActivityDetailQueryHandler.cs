@@ -45,6 +45,8 @@ internal sealed class GetActivityDetailQueryHandler(
             .AsNoTracking()
             .Where(capture => runIds.Contains(capture.RunId))
             .Include(capture => capture.Entries)
+            .Include(capture => capture.UnrecognisedLines)
+            .AsSplitQuery()
             .ToListAsync(cancellationToken)).ToLookup(capture => capture.RunId);
         List<RunBountyEntry> bountyEntries = await db.Set<RunBountyEntry>()
             .AsNoTracking().Where(entry => runIds.Contains(entry.RunId)).ToListAsync(cancellationToken);

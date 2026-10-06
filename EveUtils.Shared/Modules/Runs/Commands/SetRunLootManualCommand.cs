@@ -9,4 +9,5 @@ namespace EveUtils.Shared.Modules.Runs.Commands;
 /// rule and the window and the saved run go on counting the same way. Editing again rewrites that one capture rather
 /// than hanging a second on the run.</summary>
 public sealed record SetRunLootManualCommand(
-    Guid RunId, DateTime CapturedAtUtc, IReadOnlyList<RunLootEntryInput> Entries) : ICommand<Result<Guid>>;
+    Guid RunId, DateTime CapturedAtUtc, IReadOnlyList<RunLootEntryInput> Entries,
+    IReadOnlyList<UnrecognisedLootNameInput>? UnrecognisedNames = null) : ICommand<Result<Guid>>;

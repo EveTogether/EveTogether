@@ -62,6 +62,20 @@ internal sealed class RebuildActivitySummariesCommandHandler(
         if (command.OnlyWhenPricesChanged && !await _AnyValuedBeforeTheLastPriceRefreshAsync(replaced, cancellationToken))
             return Result<int>.Success(0);
 
+        if (command.OnlyWithUnpricedLoot)
+        {
+            if (await marketPrices.GetSnapshotTimeAsync(cancellationToken) is not { } snapshot)
+                return Result<int>.Success(0);
+
+            DateTime refreshedAtUtc = snapshot.UtcDateTime;
+            IQueryable<ActivitySummary> unpriced = replaced
+                .Where(summary => summary.LootEntriesWithoutPrice > 0 && summary.ComputedAtUtc < refreshedAtUtc);
+            // The same key the full rebuild groups on: the group code, or the run itself when it has none.
+            saved = saved.Where(run => unpriced.Any(summary =>
+                run.GroupCode != null ? summary.GroupCode == run.GroupCode : summary.RunId == run.Id));
+            replaced = unpriced;
+        }
+
         List<Run> runs = await saved
             .Include(run => run.LootCaptures)
                 .ThenInclude(capture => capture.Entries)

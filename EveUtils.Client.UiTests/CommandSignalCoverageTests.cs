@@ -92,7 +92,17 @@ public sealed class CommandSignalCoverageTests
         // directory for; it publishes per run it added to, and HomefrontMoneyScenarioTests.S11 drives it end to end.
         [typeof(ImportRunBountyCommand)] = "needs a character's own gamelog file on disk to add anything, which the "
             + "shared harness has no directory for; proven end to end in HomefrontMoneyScenarioTests.S11",
-        [typeof(ImportMissingGroupBountyCommand)] = "writes no run of its own: it only picks the runs and hands them to "
+        // ET-460: re-reads kept item names against the SDE, which the shared harness has no way to seed per scenario.
+        // It publishes RunsChangedEvent and RunLootCorrectedEvent for every run it moved a name into, proven against a
+        // FakeSdeAccessor that learns the name in UnrecognisedLootTests.
+        [typeof(RepriceUnrecognisedLootCommand)] = "needs an SDE that knows a name it did not know before, which the shared "
+            + "harness has no way to seed per scenario; its signals are proven in UnrecognisedLootTests against a "
+            + "FakeSdeAccessor instead",
+        // ET-460: logs names the appraisal tool could not read — an input that belongs to no run. No run changes and no
+        // screen but the log's own tab shows it, and that tab reads the list again whenever it is shown.
+        [typeof(RecordUnrecognisedItemsCommand)] = "keeps names from the appraisal tool, which belongs to no run; nothing "
+            + "but the log tab shows them, and it reads the list again whenever it is shown",
+        [typeof(ImportMissingGroupBountyCommand)] ="writes no run of its own: it only picks the runs and hands them to "
             + "ImportRunBountyCommand, whose own writes are the ones that signal",
         // ET-381: asking members to come over changes no fleet — no roster, no seat, no invite. It only enqueues a
         // message per member, which is the Messaging module's to signal (ET-382); the answer runs SwitchToFleetCommand.

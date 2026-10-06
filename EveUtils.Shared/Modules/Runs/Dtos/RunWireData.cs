@@ -141,6 +141,18 @@ public sealed class RunWireData
                 Volume = entry.Volume,
                 ClipboardPrice = entry.ClipboardPrice,
                 LootKind = entry.LootKind
+            }).ToList(),
+            UnrecognisedLines = capture.UnrecognisedLines.Select(line => new UnrecognisedLootLineInput
+            {
+                Name = line.Name,
+                Quantity = line.Quantity,
+                CharacterId = line.CharacterId,
+                Source = line.Source,
+                FirstSeenAtUtc = line.FirstSeenAtUtc,
+                Status = line.Status,
+                ResolvedAtUtc = line.ResolvedAtUtc,
+                ResolvedTypeId = line.ResolvedTypeId,
+                ResolvedUnitPrice = line.ResolvedUnitPrice
             }).ToList()
         }).ToList(),
         BountyEntries = run.BountyEntries.Select(entry => new RunBountyEntryInput { OccurredAtUtc = entry.OccurredAtUtc, Isk = entry.Isk }).ToList(),
@@ -241,6 +253,21 @@ public sealed class RunWireData
                     Volume = entry.Volume,
                     ClipboardPrice = entry.ClipboardPrice,
                     LootKind = entry.LootKind
+                });
+            foreach (UnrecognisedLootLineInput line in capture.UnrecognisedLines)
+                entity.UnrecognisedLines.Add(new UnrecognisedLootLine
+                {
+                    Id = Guid.CreateVersion7(),
+                    RunLootCaptureId = entity.Id,
+                    Name = line.Name,
+                    Quantity = line.Quantity,
+                    CharacterId = line.CharacterId,
+                    Source = line.Source,
+                    FirstSeenAtUtc = line.FirstSeenAtUtc,
+                    Status = line.Status,
+                    ResolvedAtUtc = line.ResolvedAtUtc,
+                    ResolvedTypeId = line.ResolvedTypeId,
+                    ResolvedUnitPrice = line.ResolvedUnitPrice
                 });
             run.LootCaptures.Add(entity);
         }

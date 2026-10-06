@@ -23,6 +23,11 @@ internal sealed class AddRunLootCaptureCommandHandler(IDbContextFactory<ClientDb
         // more than one to choose between (the product decision, 2026-09-10).
         (Run? run, int runningCount) = await RunningRunLookup.FindAsync(db, cancellationToken, includeStopped: true,
             command.Capture.PreferredRunId, command.Capture.CharacterId);
+        // A copy of nothing but names nobody knows yet (ET-460) is still worth keeping when no run can take it: the log
+        // holds the names without a run, so they are there to price later.
+        if (run is null && command.Capture.Entries.Count == 0 && command.Capture.UnrecognisedNames.Count > 0)
+            return await _KeepWithoutARunAsync(db, command.Capture, cancellationToken);
+
         if (run is null)
             return Result<RunLootCaptureSaveResult>.Failure(runningCount == 0
                 ? new ResultMessage(MessageSeverity.Error, MessageCodes.NotFound,
@@ -59,6 +64,12 @@ internal sealed class AddRunLootCaptureCommandHandler(IDbContextFactory<ClientDb
                 ClipboardPrice = entry.ClipboardPrice,
                 LootKind = entry.LootKind
             });
+        // A repeat is excluded from the totals, so its unknown names would be counted a second time by the log.
+        if (repeatOf is null)
+            foreach (UnrecognisedLootNameInput unrecognised in command.Capture.UnrecognisedNames)
+                entity.UnrecognisedLines.Add(UnrecognisedLootWrites.NewLine(unrecognised, entity.Id,
+                    command.Capture.CharacterId ?? run.CharacterId, UnrecognisedItemSource.ClipboardCapture,
+                    command.Capture.CapturedAtUtc));
         db.Set<RunLootCapture>().Add(entity);
         await db.SaveChangesAsync(cancellationToken);
         // Whoever is showing this run has to hear that it just gained loot. Storing the capture and telling the
@@ -67,5 +78,23 @@ internal sealed class AddRunLootCaptureCommandHandler(IDbContextFactory<ClientDb
         await eventBus.PublishAsync(new RunLootCapturedEvent(run.Id), EventTarget.Local, cancellationToken);
         await eventBus.PublishAsync(new RunsChangedEvent(run.Id, run.GroupCode), EventTarget.Local, cancellationToken);
         return Result<RunLootCaptureSaveResult>.Success(new RunLootCaptureSaveResult(entity.Id, repeatOf));
+    }
+
+    private static async Task<Result<RunLootCaptureSaveResult>> _KeepWithoutARunAsync(
+        ClientDbContext db, RunLootCaptureInput capture, CancellationToken cancellationToken)
+    {
+        // The same copy again must not add its names a second time; a name and amount already open without a run is it.
+        HashSet<(string Name, long Quantity)> kept = (await db.Set<UnrecognisedLootLine>()
+                .Where(line => line.RunLootCaptureId == null && line.RunId == null
+                               && line.Source == UnrecognisedItemSource.ClipboardCapture && line.Status == UnrecognisedItemStatus.Open)
+                .Select(line => new { line.Name, line.Quantity })
+                .ToListAsync(cancellationToken))
+            .Select(line => (line.Name.ToUpperInvariant(), line.Quantity))
+            .ToHashSet();
+        foreach (UnrecognisedLootNameInput name in capture.UnrecognisedNames.Where(name => kept.Add((name.Name.ToUpperInvariant(), name.Quantity))))
+            db.Set<UnrecognisedLootLine>().Add(UnrecognisedLootWrites.NewLine(name, captureId: null, capture.CharacterId,
+                UnrecognisedItemSource.ClipboardCapture, capture.CapturedAtUtc));
+        await db.SaveChangesAsync(cancellationToken);
+        return Result<RunLootCaptureSaveResult>.Success(new RunLootCaptureSaveResult(Guid.Empty, null));
     }
 }

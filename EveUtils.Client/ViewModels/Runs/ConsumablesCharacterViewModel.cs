@@ -111,7 +111,7 @@ public sealed partial class ConsumablesCharacterViewModel : ObservableObject
                     Volume = resolved.Item.Volume,
                     ClipboardPrice = resolved.Item.Price,
                     LootKind = LootKind.Lost
-                })]), cancellationToken);
+                })], reading.UnrecognisedNames), cancellationToken);
             if (!stored.IsSuccess)
                 return stored.Messages.Count > 0 ? stored.Messages[0].Text : "This list was not stored.";
 

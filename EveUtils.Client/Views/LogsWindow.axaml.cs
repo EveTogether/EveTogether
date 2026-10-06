@@ -22,6 +22,11 @@ public partial class LogsWindow : ChromedWindow, IHostableModuleWindow
     public LogsWindow(ClientLogViewModel viewModel) : this()
     {
         DataContext = viewModel;
+        Opened += (_, _) =>
+        {
+            if (viewModel.Unrecognised is { } unrecognised)
+                _ = unrecognised.LoadAsync();
+        };
     }
 
     private void OnClose(object? sender, RoutedEventArgs e)

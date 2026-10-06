@@ -12,14 +12,23 @@ public static class SdeInventoryResolver
     public static (IReadOnlyList<(AppraisalLine Line, ClipboardInventoryItem Item)> Lines, IReadOnlyList<string> Unresolved) Resolve(
         IReadOnlyList<ClipboardInventoryItem> items, ISdeAccessor sde)
     {
+        var resolution = ResolveItems(items, sde);
+        return (resolution.Lines, [.. resolution.Unresolved.Select(item => item.Name)]);
+    }
+
+    /// <summary>The same resolution with the rows that did not resolve kept whole, for a caller that records them
+    /// (ET-460) rather than only counting them.</summary>
+    internal static (IReadOnlyList<(AppraisalLine Line, ClipboardInventoryItem Item)> Lines, IReadOnlyList<ClipboardInventoryItem> Unresolved) ResolveItems(
+        IReadOnlyList<ClipboardInventoryItem> items, ISdeAccessor sde)
+    {
         List<(AppraisalLine, ClipboardInventoryItem)> lines = [];
-        List<string> unresolved = [];
+        List<ClipboardInventoryItem> unresolved = [];
         foreach (ClipboardInventoryItem item in items)
         {
             if (sde.TryGetTypeId(item.Name, out int typeId))
                 lines.Add((new AppraisalLine(typeId, item.Name, item.Quantity ?? 1), item)); // no quantity column = one of it
             else
-                unresolved.Add(item.Name);
+                unresolved.Add(item);
         }
 
         return (lines, unresolved);
@@ -30,17 +39,17 @@ public static class SdeInventoryResolver
     /// what tells "Metal Scraps" from "Commodities" on a two-row copy, where counting distinct values cannot.
     /// A tie is still no answer, and so is nothing matching at all.
     /// </summary>
-    internal static (IReadOnlyList<(AppraisalLine Line, ClipboardInventoryItem Item)> Lines, IReadOnlyList<string> Unresolved)
+    internal static (IReadOnlyList<(AppraisalLine Line, ClipboardInventoryItem Item)> Lines, IReadOnlyList<ClipboardInventoryItem> Unresolved)
         ResolveBestCandidate(IReadOnlyList<IReadOnlyList<ClipboardInventoryItem>> columns, ISdeAccessor sde,
             out bool hasNoSdeMatch)
     {
-        (IReadOnlyList<(AppraisalLine Line, ClipboardInventoryItem Item)> Lines, IReadOnlyList<string> Unresolved) best = ([], []);
+        (IReadOnlyList<(AppraisalLine Line, ClipboardInventoryItem Item)> Lines, IReadOnlyList<ClipboardInventoryItem> Unresolved) best = ([], []);
         var bestCount = 0;
         var tied = false;
 
         foreach (IReadOnlyList<ClipboardInventoryItem> column in columns)
         {
-            var resolution = Resolve(column, sde);
+            var resolution = ResolveItems(column, sde);
             if (resolution.Lines.Count > bestCount)
             {
                 best = resolution;
@@ -57,7 +66,7 @@ public static class SdeInventoryResolver
         // Nothing matched and two columns matching equally are different refusals, so they carry different
         // evidence: the names that were looked up, or none at all.
         if (bestCount == 0)
-            return ([], [.. columns.SelectMany(column => column.Select(item => item.Name))]);
+            return ([], [.. columns.SelectMany(column => column)]);
 
         return tied ? ([], []) : best;
     }

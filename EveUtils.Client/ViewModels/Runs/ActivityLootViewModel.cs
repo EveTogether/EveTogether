@@ -128,6 +128,15 @@ public sealed partial class ActivityLootViewModel : ObservableObject
         var count => $"{count} lines have no price in the cache and count towards nothing."
     };
 
+    /// <summary>Names that were copied but no SDE type carries yet (ET-460): they count as 0 in every figure above, and
+    /// that is said here instead of the lines quietly missing from the total.</summary>
+    public string? UnrecognisedText => Characters.Sum(block => block.Loot.UnrecognisedCount) switch
+    {
+        0 => null,
+        1 => "1 copied name is not recognised yet and counts as 0 until the EVE static data knows it.",
+        var count => $"{count} copied names are not recognised yet and count as 0 until the EVE static data knows them."
+    };
+
     /// <summary>The block for this run, made when it is not there yet and kept as it is when it is — its open captures
     /// and a list half-typed by hand survive the owner reading the runs again.</summary>
     public ActivityLootCharacterViewModel Show(Guid runId, long characterId, string characterName)
@@ -210,7 +219,7 @@ public sealed partial class ActivityLootViewModel : ObservableObject
         if (e.PropertyName is nameof(RunLootViewModel.NetIsk) or nameof(RunLootViewModel.LootIsk)
             or nameof(RunLootViewModel.ConsumedIsk) or nameof(RunLootViewModel.EntriesWithoutPrice)
             or nameof(RunLootViewModel.ExcludedCount) or nameof(RunLootViewModel.HasCaptures)
-            or nameof(RunLootViewModel.PricingProblemText))
+            or nameof(RunLootViewModel.PricingProblemText) or nameof(RunLootViewModel.UnrecognisedCount))
             _RefreshFigures();
     }
 
@@ -233,6 +242,7 @@ public sealed partial class ActivityLootViewModel : ObservableObject
         OnPropertyChanged(nameof(SummaryText));
         OnPropertyChanged(nameof(PricingProblemText));
         OnPropertyChanged(nameof(LinesWithoutPriceText));
+        OnPropertyChanged(nameof(UnrecognisedText));
         OnPropertyChanged(nameof(HasCharacters));
         OnPropertyChanged(nameof(HasCaptures));
     }
