@@ -57,6 +57,9 @@ public sealed class FleetKillmailSharePublisher : ISingletonService, IDisposable
         } while (!_IsLast(current));
     }
 
+    public Task PublishCurrentAsync(string? serverAddress = null, long? fleetId = null) =>
+        _Enqueue(cancellationToken => _PublishCurrentAsync(serverAddress, fleetId, cancellationToken));
+
     public void Dispose() => _subscription.Dispose();
 
     private bool _IsLast(Task work)
@@ -71,7 +74,7 @@ public sealed class FleetKillmailSharePublisher : ISingletonService, IDisposable
     {
         if (changed.Data.Kind == KillmailsChangeKind.Imported)
         {
-            _ = _Enqueue(token => _PublishAsync(changed.Data.CharacterId, token));
+            _ = _Enqueue(token => _PublishAsync(changed.Data.CharacterId, null, null, token));
         }
 
         return Task.CompletedTask;
@@ -101,9 +104,26 @@ public sealed class FleetKillmailSharePublisher : ISingletonService, IDisposable
         }
     }
 
-    private async Task _PublishAsync(int characterId, CancellationToken cancellationToken)
+    private async Task _PublishCurrentAsync(string? serverAddress, long? fleetId, CancellationToken cancellationToken)
     {
-        FleetParticipant[] participants = [.. _participation.Current.Where(entry => entry.CharacterId == characterId)];
+        int[] characterIds = [.. _participation.Current
+            .Where(participant => _MatchesScope(participant, serverAddress, fleetId))
+            .Select(participant => participant.CharacterId)
+            .Distinct()];
+        foreach (int characterId in characterIds)
+        {
+            await _PublishAsync(characterId, serverAddress, fleetId, cancellationToken);
+        }
+    }
+
+    private async Task _PublishAsync(
+        int characterId,
+        string? serverAddress,
+        long? fleetId,
+        CancellationToken cancellationToken)
+    {
+        FleetParticipant[] participants = [.. _participation.Current.Where(entry =>
+            entry.CharacterId == characterId && _MatchesScope(entry, serverAddress, fleetId))];
         if (participants.Length == 0)
         {
             return;
@@ -116,7 +136,8 @@ public sealed class FleetKillmailSharePublisher : ISingletonService, IDisposable
         foreach (FleetParticipant participant in participants)
         {
             IReadOnlyList<FleetKillmailReference> shared =
-                settings.IsKillmailShared(participant.FleetId, characterId) && participant.ActivatedAt is { } activatedAt
+                settings.IsKillmailShared(participant.ServerAddress, participant.FleetId, characterId)
+                && participant.ActivatedAt is { } activatedAt
                     ? [.. stored
                         .Where(killmail => killmail.KillmailTimeUtc >= activatedAt.UtcDateTime)
                         .Select(killmail => new FleetKillmailReference
@@ -137,4 +158,10 @@ public sealed class FleetKillmailSharePublisher : ISingletonService, IDisposable
             await _eventBus.PublishAsync(new FleetKillmailShareEvent(payload, characterId), target, cancellationToken);
         }
     }
+
+    private static bool _MatchesScope(FleetParticipant participant, string? serverAddress, long? fleetId) =>
+        fleetId is null
+        || participant.FleetId == fleetId
+        && MetricShareSnapshot.KillmailOverrideKeyFor(participant.ServerAddress, participant.FleetId, participant.CharacterId)
+           == MetricShareSnapshot.KillmailOverrideKeyFor(serverAddress, participant.FleetId, participant.CharacterId);
 }

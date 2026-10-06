@@ -1556,6 +1556,8 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
                 EveUtils.Client.Runs.HomefrontDetector.OfferSettingKey, result.OfferHomefrontRuns ? "true" : "false"));
         }
 
+        await _services.GetRequiredService<FleetKillmailSharePublisher>().PublishCurrentAsync();
+
         // Apply the toast position live so the next toast uses it without a restart.
         if (_services.GetService<Notifications.ToastService>() is { } toastService)
             toastService.Position = result.ToastPosition;

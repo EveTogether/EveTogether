@@ -4,8 +4,6 @@ using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Fleet.Events;
 using EveUtils.Shared.Modules.Fleet.Metrics;
 using EveUtils.Shared.Modules.Killmails.Entities;
-using EveUtils.Shared.Modules.Killmails.Enums;
-using EveUtils.Shared.Modules.Killmails.Events;
 using EveUtils.Shared.Modules.Killmails.Repositories;
 using EveUtils.Shared.Modules.Settings.Commands;
 using Microsoft.Extensions.DependencyInjection;
@@ -26,27 +24,36 @@ public class MetricShareGateTests
 {
     private const int Owner = 95000001;
     private const long FleetId = 4242;
+    private const string ServerAddress = "https://alpha.example";
 
     [Theory]
     [InlineData("default", 1)]
     [InlineData("global-off", 0)]
+    [InlineData("global-on", 1)]
     [InlineData("matching-override", 1)]
     [InlineData("other-fleet", 0)]
     [InlineData("other-character", 0)]
+    [InlineData("other-server", 0)]
     public async Task KillmailShare_SettingsScenario_PublishesExpectedFullState(string scenario, int expectedKillmails)
     {
         CancellationToken cancellationToken = TestContext.Current.CancellationToken;
         using TestClientInstance instance = TestClientInstance.Create();
-        if (scenario != "default")
+        if (scenario is not "default")
         {
             await SetSettingAsync(instance, MetricShareSnapshot.KillmailShareKey, "false", cancellationToken);
         }
 
+        if (scenario == "global-on")
+        {
+            await SetSettingAsync(instance, MetricShareSnapshot.KillmailShareKey, "true", cancellationToken);
+        }
+
         string? overrideKey = scenario switch
         {
-            "matching-override" => MetricShareSnapshot.KillmailOverrideKeyFor(FleetId, Owner),
-            "other-fleet" => MetricShareSnapshot.KillmailOverrideKeyFor(FleetId + 1, Owner),
-            "other-character" => MetricShareSnapshot.KillmailOverrideKeyFor(FleetId, Owner + 1),
+            "matching-override" => MetricShareSnapshot.KillmailOverrideKeyFor(ServerAddress, FleetId, Owner),
+            "other-fleet" => MetricShareSnapshot.KillmailOverrideKeyFor(ServerAddress, FleetId + 1, Owner),
+            "other-character" => MetricShareSnapshot.KillmailOverrideKeyFor(ServerAddress, FleetId, Owner + 1),
+            "other-server" => MetricShareSnapshot.KillmailOverrideKeyFor("https://beta.example", FleetId, Owner),
             _ => null,
         };
         if (overrideKey is not null)
@@ -61,6 +68,7 @@ public class MetricShareGateTests
             Owner,
             FleetId,
             ClientOnly: false,
+            ServerAddress: ServerAddress,
             ActivatedAt: new DateTimeOffset(2026, 9, 20, 11, 0, 0, TimeSpan.Zero))]);
         using var publisher = new FleetKillmailSharePublisher(
             bus,
@@ -70,11 +78,7 @@ public class MetricShareGateTests
             TimeProvider.System,
             NullLogger<FleetKillmailSharePublisher>.Instance);
 
-        await bus.PublishAsync(
-            new KillmailsChangedEvent(Owner, KillmailsChangeKind.Imported, [1]),
-            EventTarget.Local,
-            cancellationToken);
-        await publisher.WhenIdleAsync();
+        await publisher.PublishCurrentAsync(ServerAddress, FleetId);
 
         FleetKillmailShareEvent share = Assert.Single(sent);
         Assert.Equal(expectedKillmails, share.Data.Killmails.Count);

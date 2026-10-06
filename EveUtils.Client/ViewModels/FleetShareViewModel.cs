@@ -26,21 +26,28 @@ public sealed partial class FleetShareViewModel : ObservableObject
         (MetricKind.Presence, "Online/offline status"),
     ];
 
-    public FleetShareViewModel(string fleetName, long fleetId, IReadOnlyList<(int Id, string Name)> myCharacters, MetricShareSnapshot current)
+    public FleetShareViewModel(
+        string fleetName,
+        long fleetId,
+        IReadOnlyList<(int Id, string Name)> myCharacters,
+        MetricShareSnapshot current,
+        string? serverAddress = null)
     {
         FleetName = fleetName;
         FleetId = fleetId;
+        ServerAddress = serverAddress;
 
         // The "all characters" set seeds from the first character's current overrides (or Inherit if none).
         var seedId = myCharacters.Count > 0 ? myCharacters[0].Id : 0;
-        AllCharacters = BuildCharacter(seedId, "All my characters in this fleet", fleetId, current);
+        AllCharacters = BuildCharacter(seedId, "All my characters in this fleet", serverAddress, fleetId, current);
 
         foreach (var character in myCharacters)
-            Characters.Add(BuildCharacter(character.Id, character.Name, fleetId, current));
+            Characters.Add(BuildCharacter(character.Id, character.Name, serverAddress, fleetId, current));
     }
 
     public string FleetName { get; }
     public long FleetId { get; }
+    public string? ServerAddress { get; }
 
     /// <summary>Default on: one set of choices applied to every one of my characters in the fleet.</summary>
     [ObservableProperty] private bool _applyToAll = true;
@@ -62,7 +69,7 @@ public sealed partial class FleetShareViewModel : ObservableObject
                     writes.Add((character.CharacterId, MetricShareSnapshot.OverrideKeyFor(FleetId, character.CharacterId, row.Kind), ValueFor(row.ChoiceIndex)));
                 }
 
-                writes.Add((character.CharacterId, MetricShareSnapshot.KillmailOverrideKeyFor(FleetId, character.CharacterId),
+                writes.Add((character.CharacterId, MetricShareSnapshot.KillmailOverrideKeyFor(ServerAddress, FleetId, character.CharacterId),
                     ValueFor(AllCharacters.Killmails.ChoiceIndex)));
             }
         }
@@ -75,7 +82,7 @@ public sealed partial class FleetShareViewModel : ObservableObject
                     writes.Add((character.CharacterId, MetricShareSnapshot.OverrideKeyFor(FleetId, character.CharacterId, row.Kind), ValueFor(row.ChoiceIndex)));
                 }
 
-                writes.Add((character.CharacterId, MetricShareSnapshot.KillmailOverrideKeyFor(FleetId, character.CharacterId),
+                writes.Add((character.CharacterId, MetricShareSnapshot.KillmailOverrideKeyFor(ServerAddress, FleetId, character.CharacterId),
                     ValueFor(character.Killmails.ChoiceIndex)));
             }
         }
@@ -83,7 +90,12 @@ public sealed partial class FleetShareViewModel : ObservableObject
         return writes;
     }
 
-    private static FleetShareCharacterViewModel BuildCharacter(int characterId, string name, long fleetId, MetricShareSnapshot current)
+    private static FleetShareCharacterViewModel BuildCharacter(
+        int characterId,
+        string name,
+        string? serverAddress,
+        long fleetId,
+        MetricShareSnapshot current)
     {
         var rows = Shareable
             .Select(m => new FleetMetricShareRowViewModel(m.Kind, m.Label, current.OverrideChoiceIndex(fleetId, characterId, m.Kind)))
@@ -92,7 +104,7 @@ public sealed partial class FleetShareViewModel : ObservableObject
             characterId,
             name,
             rows,
-            new FleetKillmailShareRowViewModel(current.KillmailOverrideChoiceIndex(fleetId, characterId)));
+            new FleetKillmailShareRowViewModel(current.KillmailOverrideChoiceIndex(serverAddress, fleetId, characterId)));
     }
 
     private static string ValueFor(int choiceIndex) => choiceIndex switch
