@@ -29,6 +29,10 @@ public sealed class LocalKillmail
     /// reconciles only these rows, so own mails and another fleet's history are never removed by it.</summary>
     public long? SharedFromFleetId { get; set; }
 
+    /// <summary>The server that fleet lives on, as <see cref="Fleet.FleetServerIdentity"/> reads it ("local" for a
+    /// client-only fleet); a fleet id alone is only unique per server. Null for an own import.</summary>
+    public string? SharedFromServer { get; set; }
+
     public List<LocalKillmailItem> Items { get; set; } = [];
     public List<LocalKillmailAttacker> Attackers { get; set; } = [];
 }

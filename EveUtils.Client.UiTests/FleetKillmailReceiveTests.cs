@@ -179,15 +179,16 @@ public sealed class FleetKillmailReceiveTests : IDisposable
     }
 
     /// <summary>Only the intended remote fleet row may disappear; own rows and another fleet's history are the
-    /// counterproof. Every row starts from the same state: the mate shared mails 1 and 2 in fleet 42 (UnixMs 10) and
+    /// counterproof, and so is the same fleet id on another server. Every row starts from the same state: the mate shared mails 1 and 2 in fleet 42 (UnixMs 10) and
     /// mail 3 in fleet 43, and the own character holds mail 1 itself.</summary>
     [Theory]
-    [InlineData("newer-without-2", Mate, FleetId, 11, new[] { 1 }, new[] { 1, 3 }, new[] { 1 })]
-    [InlineData("older-without-2", Mate, FleetId, 9, new[] { 1 }, new[] { 1, 2, 3 }, new[] { 1 })]
-    [InlineData("other-fleet-empty", Mate, 43L, 11, new int[0], new[] { 1, 2 }, new[] { 1 })]
-    [InlineData("own-echo", Own, FleetId, 11, new[] { 2 }, new[] { 1, 2, 3 }, new[] { 1 })]
+    [InlineData("newer-without-2", Mate, FleetId, 11, new[] { 1 }, new[] { 1, 3 }, new[] { 1 }, null)]
+    [InlineData("older-without-2", Mate, FleetId, 9, new[] { 1 }, new[] { 1, 2, 3 }, new[] { 1 }, null)]
+    [InlineData("other-fleet-empty", Mate, 43L, 11, new int[0], new[] { 1, 2 }, new[] { 1 }, null)]
+    [InlineData("other-server-empty", Mate, FleetId, 11, new int[0], new[] { 1, 2, 3 }, new[] { 1 }, "other.example:7443")]
+    [InlineData("own-echo", Own, FleetId, 11, new[] { 2 }, new[] { 1, 2, 3 }, new[] { 1 }, null)]
     public async Task NewerShare_RemovesOnlyThatFleetsWithdrawnRemoteRow(string scenario, int sender, long fleetId,
-        long unixMs, int[] killmailIds, int[] expectedMateIds, int[] expectedOwnIds)
+        long unixMs, int[] killmailIds, int[] expectedMateIds, int[] expectedOwnIds, string? server)
     {
         Assert.NotEmpty(scenario);
         using TestClientInstance instance = _Instance();
@@ -205,7 +206,7 @@ public sealed class FleetKillmailReceiveTests : IDisposable
         await _ShareAsync(instance, Mate, 43, 10, 3);
         await receiver.WhenIdleAsync();
 
-        await _ShareAsync(instance, sender, fleetId, unixMs, killmailIds);
+        await _ShareFromAsync(instance, server, sender, fleetId, unixMs, killmailIds);
         await receiver.WhenIdleAsync();
 
         Assert.Equal(expectedMateIds, (await repository.GetForCharacterAsync(Mate, Ct)).Select(killmail => killmail.KillmailId).Order());
@@ -243,6 +244,10 @@ public sealed class FleetKillmailReceiveTests : IDisposable
 
     // The way the server echo arrives: a FleetKillmailShareEvent on the local bus, stamped with the sender.
     private static Task _ShareAsync(TestClientInstance instance, int sender, long fleetId, long unixMs,
+        params int[] killmailIds) => _ShareFromAsync(instance, null, sender, fleetId, unixMs, killmailIds);
+
+    // The server a share arrives from is stamped by the receiving connection; null is a client-only fleet.
+    private static Task _ShareFromAsync(TestClientInstance instance, string? server, int sender, long fleetId, long unixMs,
         params int[] killmailIds) =>
         instance.Services.GetRequiredService<IEventBus>().PublishAsync(new FleetKillmailShareEvent(new FleetKillmailShare
         {
@@ -254,7 +259,7 @@ public sealed class FleetKillmailReceiveTests : IDisposable
                 Hash = _Hash(killmailId),
                 KillmailTimeUtc = StartedAtUtc,
             })],
-        }, sender), EventTarget.Local, Ct);
+        }, sender) { SourceServerAddress = server }, EventTarget.Local, Ct);
 
     private static string _Killmail(int killmailId, int victim, int[] attackers) => $$"""
         {"killmail_id":{{killmailId}},"killmail_time":"{{StartedAtUtc.AddMinutes(10):yyyy-MM-ddTHH:mm:ssZ}}","solar_system_id":{{Jita}},

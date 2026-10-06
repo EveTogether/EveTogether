@@ -17,6 +17,7 @@ using EveUtils.Client.ViewModels.Killmails;
 using EveUtils.Client.ViewModels.Runs;
 using EveUtils.Client.WorldMap;
 using EveUtils.Shared.Identity;
+using EveUtils.Shared.Modules.Fleet;
 using EveUtils.Shared.Modules.Fleet.Dtos;
 using EveUtils.Shared.Modules.Fleet.Entities;
 using EveUtils.Shared.Modules.Fleet.Metrics;
@@ -301,7 +302,7 @@ public sealed partial class FleetsViewModel
                 try
                 {
                     var result = await dispatcher.Query(new GetFleetKillmailSummaryQuery(
-                        row.Id, activatedAt.UtcDateTime, [.. linked.Select(m => m.CharacterId).Distinct()]));
+                        FleetServerIdentity.Of(row.ServerAddress), row.Id, activatedAt.UtcDateTime, [.. linked.Select(m => m.CharacterId).Distinct()]));
                     summary = result.IsSuccess ? result.Value : null;
                 }
                 catch (Exception exception)

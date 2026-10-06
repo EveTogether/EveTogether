@@ -149,7 +149,7 @@ public sealed class EsiKillmailImporter(IEsiClient esi, ILocalKillmailReader kil
     /// and keeps the previous state, so the next share retries. A mail the mate is not on is left out rather than stored
     /// as theirs; that check runs when the mail is first fetched for them, so a mail they already hold is not fetched again. Not <see cref="ImportOneAsync"/>, whose refusal of a mail without an own character stays as it is.
     /// </summary>
-    public async Task<KillmailImportResult> ImportFleetShareAsync(int characterId, long fleetId,
+    public async Task<KillmailImportResult> ImportFleetShareAsync(int characterId, string serverIdentity, long fleetId,
         IReadOnlyList<(int KillmailId, string Hash)> shared, CancellationToken cancellationToken = default)
     {
         var gate = _importGates.GetOrAdd(characterId, _ => new SemaphoreSlim(1, 1));
@@ -184,12 +184,13 @@ public sealed class EsiKillmailImporter(IEsiClient esi, ILocalKillmailReader kil
 
                 LocalKillmail entity = _ToEntity(characterId, hash, killmail);
                 entity.SharedFromFleetId = fleetId;
+                entity.SharedFromServer = serverIdentity;
                 fetched.Add(entity);
             }
 
             await using AsyncServiceScope scope = scopes.CreateAsyncScope();
             IDispatcher dispatcher = scope.ServiceProvider.GetRequiredService<IDispatcher>();
-            Result stored = await dispatcher.Send(new ReconcileFleetKillmailShareCommand(characterId, fleetId,
+            Result stored = await dispatcher.Send(new ReconcileFleetKillmailShareCommand(characterId, serverIdentity, fleetId,
                 [.. shared.Select(entry => entry.KillmailId).Where(id => !notOnMail.Contains(id))], fetched), cancellationToken);
             if (!stored.IsSuccess)
             {

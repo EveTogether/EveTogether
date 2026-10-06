@@ -1,6 +1,5 @@
 using System.Globalization;
-using System.Security.Cryptography;
-using System.Text;
+using EveUtils.Shared.Modules.Fleet;
 using EveUtils.Shared.Modules.Fleet.Metrics;
 
 namespace EveUtils.Client.Fleet;
@@ -78,11 +77,7 @@ public sealed class MetricShareSnapshot(
 
     public static string KillmailOverrideKeyFor(string? serverAddress, long fleetId, int characterId)
     {
-        string identity = string.IsNullOrWhiteSpace(serverAddress)
-            ? "local"
-            : serverAddress.Trim().TrimEnd('/').ToUpperInvariant();
-        string serverKey = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(identity))).ToLowerInvariant();
-        return $"fleet.server.{serverKey}.{fleetId}.{characterId}.share.killmails";
+        return $"fleet.server.{FleetServerIdentity.Of(serverAddress)}.{fleetId}.{characterId}.share.killmails";
     }
 
     /// <summary>What this character offers this fleet right now, as the <see cref="MetricKind.Shares"/> manifest carries

@@ -14,7 +14,7 @@ internal sealed class ReconcileFleetKillmailShareCommandHandler(
     public async Task<Result> Handle(ReconcileFleetKillmailShareCommand command, CancellationToken cancellationToken = default)
     {
         (bool changed, IReadOnlyList<Guid> withdrawnFromRunIds) = await repository.ReconcileFleetShareAsync(
-            command.CharacterId, command.FleetId, command.SharedKillmailIds, command.Fetched, cancellationToken);
+            command.CharacterId, command.ServerIdentity, command.FleetId, command.SharedKillmailIds, command.Fetched, cancellationToken);
         // A withdrawn loss leaves its run's stored totals behind otherwise, the same as an unlink (SetKillmailRunLink).
         foreach (Guid runId in withdrawnFromRunIds)
         {

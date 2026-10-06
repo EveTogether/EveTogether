@@ -11,6 +11,7 @@ public sealed class LocalKillmailConfiguration : IEntityTypeConfiguration<LocalK
         builder.HasKey(killmail => new { killmail.CharacterId, killmail.KillmailId });
         builder.Property(killmail => killmail.CharacterId).ValueGeneratedNever();
         builder.Property(killmail => killmail.KillmailId).ValueGeneratedNever();
+        builder.Property(killmail => killmail.SharedFromServer).HasMaxLength(64);
         builder.HasOne<Run>()
             .WithMany()
             .HasForeignKey(killmail => killmail.RunId)

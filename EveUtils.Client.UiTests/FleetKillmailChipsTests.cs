@@ -12,6 +12,7 @@ using EveUtils.Client.Transport;
 using EveUtils.Client.ViewModels;
 using EveUtils.Client.Views;
 using EveUtils.Shared.Identity;
+using EveUtils.Shared.Modules.Fleet;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Fleet.Entities;
 using EveUtils.Shared.Modules.Killmails.Entities;
@@ -94,9 +95,10 @@ public sealed class FleetKillmailChipsTests
         using (instance)
         {
             ILocalKillmailRepository store = instance.Services.GetRequiredService<ILocalKillmailRepository>();
-            // Not countable: before the fleet went active, and shared in another fleet.
+            // Not countable: before the fleet went active, shared in another fleet, or in the same fleet id on another server.
             await store.AddMissingAsync(Own, [_Mail(Own, 50, Gila, -30, isLoss: false)]);
             await store.AddMissingAsync(MateOne, [_Mail(MateOne, 51, Gila, 15, isLoss: false, shared: true, fleetId: 99)]);
+            await store.AddMissingAsync(MateTwo, [_Mail(MateTwo, 53, Gila, 15, isLoss: false, shared: true, server: "other.example:7443")]);
             await _PublishAndSettleAsync(instance, vm, Own);
             FleetViewModel fleet = vm.ActiveFleets.Single();
             FleetMemberRowViewModel mate = _Member(fleet, MateOne);
@@ -119,7 +121,7 @@ public sealed class FleetKillmailChipsTests
         fleet.Members.Single(member => member.CharacterId == characterId);
 
     private static LocalKillmail _Mail(int characterId, int killmailId, int shipTypeId, int minutesAfterActive,
-        bool isLoss = true, bool shared = false, long fleetId = FleetId) => new()
+        bool isLoss = true, bool shared = false, long fleetId = FleetId, string? server = Server) => new()
     {
         CharacterId = characterId,
         KillmailId = killmailId,
@@ -131,6 +133,7 @@ public sealed class FleetKillmailChipsTests
         VictimCharacterId = isLoss ? characterId : Enemy,
         ImportedAtUtc = DateTime.UtcNow,
         SharedFromFleetId = shared ? fleetId : null,
+        SharedFromServer = shared ? FleetServerIdentity.Of(server) : null,
     };
 
     private static async Task _PublishAndSettleAsync(TestClientInstance instance, FleetsViewModel vm, int characterId)

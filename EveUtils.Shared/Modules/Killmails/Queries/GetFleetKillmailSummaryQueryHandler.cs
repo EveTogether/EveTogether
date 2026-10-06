@@ -20,7 +20,8 @@ internal sealed class GetFleetKillmailSummaryQueryHandler(IDbContextFactory<Clie
             .AsNoTracking()
             .Where(killmail => query.CharacterIds.Contains(killmail.CharacterId)
                                && killmail.KillmailTimeUtc >= query.ActiveFromUtc
-                               && (killmail.SharedFromFleetId == null || killmail.SharedFromFleetId == query.FleetId))
+                               && (killmail.SharedFromFleetId == null
+                                   || (killmail.SharedFromFleetId == query.FleetId && killmail.SharedFromServer == query.ServerIdentity)))
             .Select(killmail => new { killmail.CharacterId, killmail.KillmailId, killmail.IsLoss, killmail.VictimShipTypeId, killmail.KillmailTimeUtc })
             .ToListAsync(cancellationToken);
 

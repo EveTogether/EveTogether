@@ -2,6 +2,7 @@ using EveUtils.Client.Killmails;
 using EveUtils.Shared.DependencyInjection;
 using EveUtils.Shared.Identity;
 using EveUtils.Shared.Messaging;
+using EveUtils.Shared.Modules.Fleet;
 using EveUtils.Shared.Modules.Fleet.Events;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -10,7 +11,7 @@ namespace EveUtils.Client.Fleet;
 
 /// <summary>
 /// Stores what fleet mates share with <c>fleet.killmail-share</c> (ET-371) under their own character, kept across
-/// restarts. Per (fleet, sender) only the newest share counts; an older one arriving late is ignored. The server echo
+/// restarts. Per (server, fleet, sender) only the newest share counts; an older one arriving late is ignored. The server echo
 /// of an own share is ignored too, so an own empty share can never remove an own killmail. The bus callback only
 /// queues the work, so delivery never waits on ESI or the database.
 /// </summary>
@@ -21,7 +22,7 @@ public sealed class FleetKillmailShareReceiver : ISingletonService, IDisposable
     private readonly ILogger<FleetKillmailShareReceiver> _logger;
     private readonly IDisposable _subscription;
     private readonly object _gate = new();
-    private readonly Dictionary<(long FleetId, int CharacterId), long> _newestUnixMs = [];
+    private readonly Dictionary<(string Server, long FleetId, int CharacterId), long> _newestUnixMs = [];
     private Task _work = Task.CompletedTask;
 
     public FleetKillmailShareReceiver(
@@ -94,7 +95,8 @@ public sealed class FleetKillmailShareReceiver : ISingletonService, IDisposable
 
     private async Task _HandleAsync(int sender, FleetKillmailShareEvent share)
     {
-        var key = (share.FleetId, sender);
+        string server = FleetServerIdentity.Of(share.SourceServerAddress);
+        var key = (server, share.FleetId, sender);
         if (_newestUnixMs.TryGetValue(key, out long newest) && share.Data.UnixMs < newest)
         {
             return;
@@ -112,7 +114,7 @@ public sealed class FleetKillmailShareReceiver : ISingletonService, IDisposable
             }
         }
 
-        KillmailImportResult result = await _importer.ImportFleetShareAsync(sender, share.FleetId,
+        KillmailImportResult result = await _importer.ImportFleetShareAsync(sender, server, share.FleetId,
             [.. share.Data.Killmails.Select(killmail => (killmail.KillmailId, killmail.Hash))]);
         if (!result.IsSuccess)
         {
