@@ -12,12 +12,16 @@ using EveUtils.Client.Fleet;
 using EveUtils.Client.Notifications;
 using EveUtils.Client.Runs;
 using EveUtils.Client.ViewModels.Fleets;
+using EveUtils.Client.ViewModels.FitBrowser;
+using EveUtils.Client.ViewModels.Killmails;
 using EveUtils.Client.ViewModels.Runs;
 using EveUtils.Client.WorldMap;
 using EveUtils.Shared.Identity;
 using EveUtils.Shared.Modules.Fleet.Dtos;
 using EveUtils.Shared.Modules.Fleet.Entities;
 using EveUtils.Shared.Modules.Fleet.Metrics;
+using EveUtils.Shared.Modules.Killmails.Dtos;
+using EveUtils.Shared.Modules.Killmails.Queries;
 using EveUtils.Shared.Modules.Settings.Commands;
 using EveUtils.Shared.Modules.Settings.Queries;
 using Microsoft.Extensions.DependencyInjection;
@@ -267,10 +271,58 @@ public sealed partial class FleetsViewModel
             row.Tick(now);
         }
 
+        await RefreshKillmailsAsync();
         BuildLanes(links, now);
         ApplyFilters();
         DescribeTotals(links);
         ApplyLayout();
+    }
+
+    /// <summary>
+    /// Rereads the LOST/KILLS chips and the fleet totals of every active fleet from the local killmail store (ET-372).
+    /// Only linked members count: one who counts for another fleet has their mails there. No roster or server call.
+    /// </summary>
+    private async Task RefreshKillmailsAsync()
+    {
+        if (_services.GetService<CqrsDispatcher>() is not { } dispatcher)
+        {
+            return;
+        }
+
+        var names = FitNameResolverFactory.For(_services);
+        foreach (var row in _allRows)
+        {
+            var linked = row.Members.Where(m => m.LinkState == FleetMemberLinkState.Linked).ToList();
+            FleetKillmailSummaryDto? summary = null;
+            if (row.IsInActiveGroup && row.Info.ActivatedAt is { } activatedAt && linked.Count > 0)
+            {
+                var result = await dispatcher.Query(new GetFleetKillmailSummaryQuery(
+                    row.Id, activatedAt.UtcDateTime, [.. linked.Select(m => m.CharacterId).Distinct()]));
+                summary = result.IsSuccess ? result.Value : null;
+            }
+
+            foreach (var member in row.Members)
+            {
+                var mine = summary?.Members.FirstOrDefault(m => m.CharacterId == member.CharacterId);
+                member.Kills = mine?.Kills ?? 0;
+                if (mine?.LastShipLoss is { } loss)
+                {
+                    int characterId = member.CharacterId;
+                    member.LostShipName = names.TypeName(loss.ShipTypeId);
+                    member.OpenLostCommand = new RelayCommand(() => _dialogs.ShowKillmailDetail(
+                        new KillmailDetailViewModel(dispatcher, _dialogs, _services, characterId, loss.KillmailId)));
+                }
+                else
+                {
+                    member.LostShipName = null;
+                    member.OpenLostCommand = null;
+                }
+            }
+
+            row.KillmailTotalsText = summary is { } totals && totals.Losses + totals.Kills > 0
+                ? $"LOSSES {totals.Losses} · KILLS {totals.Kills}"
+                : null;
+        }
     }
 
     /// <summary>The line under an elsewhere-active member: which fleet they count for instead, and that it is the

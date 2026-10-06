@@ -114,6 +114,13 @@ public sealed partial class FleetViewModel : ObservableObject
         _ => "○ READY",
     };
 
+    /// <summary>"LOSSES n · KILLS m" for an active fleet, each mail counted once (ET-372); null until there is one.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasKillmailTotals))]
+    private string? _killmailTotalsText;
+
+    public bool HasKillmailTotals => KillmailTotalsText is not null;
+
     /// <summary>The row is unfolded to its members. Remembered across reloads by the window, like the fold below.</summary>
     [ObservableProperty] private bool _isExpanded;
 
