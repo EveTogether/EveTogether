@@ -274,6 +274,34 @@ public sealed class RunsChangedSignalCoverageTests
             Guid runId = started.Value;
             return new Act(() => dispatcher.Send(new SetEscalationOutcomeCommand(runId, entryId, EscalationOutcome.Expired),
                 cancellationToken), runId);
+        },
+
+        [typeof(RegisterRunEscalationCommand)] = async (dispatcher, cancellationToken) =>
+        {
+            Guid runId = await _StartAsync(dispatcher, cancellationToken);
+            await dispatcher.Send(new SaveRunCommand(runId, StartedAtUtc.AddMinutes(15), StartedAtUtc.AddMinutes(16),
+                [], [], [], []), cancellationToken);
+            return new Act(() => dispatcher.Send(new RegisterRunEscalationCommand(runId, "Command Relay Outpost", 2406,
+                "Ervekam", 30003867, StartedAtUtc.AddHours(20)), cancellationToken), runId);
+        },
+
+        [typeof(ChangeRunEscalationCommand)] = async (dispatcher, cancellationToken) =>
+        {
+            Guid entryId = Guid.NewGuid();
+            Result<Guid> started = await dispatcher.Send(_Start() with
+            {
+                Parameters =
+                [
+                    new RunParameterInput
+                    {
+                        ParameterKey = RunParameterKey.Escalation, TypedValue = "Command Relay Outpost",
+                        EntryId = entryId, ObservedAtUtc = StartedAtUtc
+                    }
+                ]
+            }, cancellationToken);
+            Guid runId = started.Value;
+            return new Act(() => dispatcher.Send(new ChangeRunEscalationCommand(runId, entryId, "Sansha War Supply Complex",
+                2405, "Amamake", 30003868, StartedAtUtc.AddHours(20)), cancellationToken), runId);
         }
     };
 

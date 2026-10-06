@@ -741,7 +741,11 @@
                     <Border Classes="chip good" Margin="0,0,3,0"><TextBlock Text="online"/></Border>
                     <TextBlock Classes="foot" Text="/" Margin="0,0,3,0"/>
                     <Border Classes="chip dim"><TextBlock Text="offline"/></Border>
-                    <TextBlock Classes="foot" Text="— is this pilot logged in?" Margin="6,0,14,0"/>
+                    <TextBlock Classes="foot" Text="— is this pilot logged in?" Margin="6,0,8,0"/>
+                    <!-- Part of the same axis (ET-455): the answer before a start, when no game status travels yet. -->
+                    <TextBlock Classes="foot" Text="Before the start:" Margin="0,0,6,0"/>
+                    <Border Classes="chip connected"><TextBlock Text="connected"/></Border>
+                    <TextBlock Classes="foot" Text="— their app reaches the server." Margin="6,0,14,0"/>
                     <TextBlock Classes="foot bright mono" Text="linked" FontFamily="{StaticResource MonoFont}"/>
                     <TextBlock Classes="foot" Text="/" Margin="3,0"/>
                     <TextBlock Classes="foot amber" Text="not linked" FontFamily="{StaticResource MonoFont}"/>
@@ -1074,6 +1078,7 @@
                                                             <TextBlock Classes="mtext" Text="{Binding RoleLabel}"
                                                                        IsVisible="{Binding !#FleetsRoot.((vm:FleetsViewModel)DataContext).IsWide}"/>
                                                             <Border Classes="chip" Classes.good="{Binding IsOnline}" Classes.dim="{Binding !IsOnline}"
+                                                                    Classes.connected="{Binding IsConnectedOnly}"
                                                                     HorizontalAlignment="Left" ToolTip.Tip="{Binding PresenceTooltip}"
                                                                     IsVisible="{Binding #FleetsRoot.((vm:FleetsViewModel)DataContext).IsWide}">
                                                                 <TextBlock Text="{Binding PresenceText}"/>

@@ -15,7 +15,8 @@ namespace EveUtils.Client.ViewModels.Runs;
 /// both are what ET-161 AC-3 forbids, and both are what a closed <c>switch</c> over a growing enum ends up doing.
 /// </summary>
 public sealed class ActivityRewardChipViewModel(
-    RunParameterKey key, decimal? amount, string? typedValue = null, DateTime? expiresAtUtc = null, bool isExpected = false)
+    RunParameterKey key, decimal? amount, string? typedValue = null, DateTime? expiresAtUtc = null, bool isExpected = false,
+    EscalationStanding? standing = null)
 {
     /// <summary>Whether the key came from outside what this screen was taught. Drives the chip's tint, so an
     /// unnamed form is visibly set apart instead of passing for a known one.</summary>
@@ -32,6 +33,12 @@ public sealed class ActivityRewardChipViewModel(
     /// pilot, not a figure — its own tint apart from the plain accent every other known chip uses.</summary>
     public bool IsEscalation { get; } = key == RunParameterKey.Escalation;
 
+    /// <summary>The escalation chip once every escalation is flown (green) or one was missed (red) — ET-453. Open, and
+    /// an escalation whose standing is not known, keep the amber of <see cref="IsEscalation"/>.</summary>
+    public bool IsEscalationDone { get; } = key == RunParameterKey.Escalation && standing is EscalationStanding.Done;
+
+    public bool IsEscalationMissed { get; } = key == RunParameterKey.Escalation && standing is EscalationStanding.Missed;
+
     public string Text { get; } = key == RunParameterKey.Escalation
         // The destination site's own name (ET-289) — never the raw key, and never "ESCALATION" once a site is
         // known: the mockup's own wording, "→ Sansha's Command Relay Outpost", is what tells one escalation from
@@ -43,9 +50,21 @@ public sealed class ActivityRewardChipViewModel(
 
     /// <summary>The escalation's expiry, in the reader's own time zone — there is no room on the chip itself, so it
     /// is on hover (ET-289).</summary>
-    public string? Tooltip { get; } = key == RunParameterKey.Escalation && expiresAtUtc is { } expires
-        ? $"Expires {expires.ToLocalTime():HH:mm} on {expires.ToLocalTime():d MMM}"
-        : null;
+    public string? Tooltip { get; } = key == RunParameterKey.Escalation ? _EscalationTooltip(standing, expiresAtUtc) : null;
+
+    private static string? _EscalationTooltip(EscalationStanding? standing, DateTime? expiresAtUtc)
+    {
+        string? settled = standing switch
+        {
+            EscalationStanding.Done => "Done",
+            EscalationStanding.Missed => "Missed",
+            _ => null
+        };
+        string? expires = expiresAtUtc is { } expiry
+            ? $"Expires {expiry.ToLocalTime():HH:mm} on {expiry.ToLocalTime():d MMM}"
+            : null;
+        return settled is not null && expires is not null ? $"{settled} · {expires}" : settled ?? expires;
+    }
 
     private static string _Label(RunParameterKey key) => key switch
     {

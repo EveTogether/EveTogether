@@ -32,4 +32,4 @@ public sealed record SettingsResult(
     bool ChannelChoiceMade = false,
     bool OfferHomefrontRuns = true,
     bool IncludeLocationInLocalApi = false,
-    bool ShareKillmails = true);
+    bool ShareKillmails = true, bool FollowFleetCommanderEnd = false);

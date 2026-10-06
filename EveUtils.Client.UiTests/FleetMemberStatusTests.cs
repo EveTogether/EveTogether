@@ -63,8 +63,52 @@ public class FleetMemberStatusTests
     public void NeverHeard_IsNotConnected_OnlyWhenTheServerSaysSo()
     {
         Assert.Equal(FleetMemberStatusReason.NotConnected, Read(isConnected: false));
-        Assert.Equal(FleetMemberStatusReason.NeverHeard, Read(isConnected: true));
         Assert.Equal(FleetMemberStatusReason.NeverHeard, Read(isConnected: null));
+    }
+
+    [Fact]
+    public void NeverHeard_ButConnectedToTheServer_IsConnected_NotUnknown() =>
+        Assert.Equal(FleetMemberStatusReason.Connected, Read(isConnected: true));
+
+
+    /// <summary>ET-455, as measured: a Forming fleet, so nobody publishes; the mate's client is connected, and the
+    /// server's last-seen is from yesterday's run. The board used to read that as "unknown".</summary>
+    [Fact]
+    public void Board_FormingFleet_ConnectedMateWithAStaleLastSeen_ReadsConnected()
+    {
+        using var board = new FleetMemberBoard(new InProcessEventBus(), new FleetParticipation());
+
+        FleetMateStatus standing = board.StatusOf(FleetId, Owner, isConnected: true, rosterLastSeen: Now.AddHours(-10), Now);
+
+        Assert.Equal(FleetMemberStatusReason.Connected, standing.Reason);
+        Assert.Equal("connected", FleetMemberStatusText.Short(standing));
+    }
+
+    [Fact]
+    public void Board_NotConnectedMate_StillReadsNoLink()
+    {
+        using var board = new FleetMemberBoard(new InProcessEventBus(), new FleetParticipation());
+
+        FleetMateStatus standing = board.StatusOf(FleetId, Owner, isConnected: false, rosterLastSeen: Now.AddHours(-10), Now);
+
+        Assert.Equal("no link", FleetMemberStatusText.Short(standing));
+    }
+
+    [Fact]
+    public async Task Board_ActiveFleet_ConnectedMateReportingFromTheGame_ReadsOnline()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var bus = new InProcessEventBus();
+        using var board = new FleetMemberBoard(bus, new FleetParticipation());
+        await bus.PublishAsync(new FleetMetricEvent(
+            new MetricSample(Owner, FleetId, MetricKind.Presence, (int)PresenceState.InGame, 1), Owner), cancellationToken: cancellationToken);
+        await bus.PublishAsync(new FleetMetricEvent(
+            new MetricSample(Owner, FleetId, MetricKind.Location, 0, 1, "Amarr"), Owner), cancellationToken: cancellationToken);
+
+        FleetMateStatus standing = board.StatusOf(FleetId, Owner, isConnected: true, rosterLastSeen: null, DateTimeOffset.UtcNow);
+
+        Assert.Equal(FleetMemberStatusReason.InSystem, standing.Reason);
+        Assert.Equal("online", FleetMemberStatusText.Short(standing));
     }
 
     [Fact]

@@ -29,6 +29,7 @@ internal sealed class DeleteRunCommandHandler(
         // A never-saved run (e.g. thrown away from the UNFINISHED band) has no ActivitySummary to begin with, so
         // this is a harmless no-op for that path — the rebuild only ever touches Saved rows.
         await dispatcher.Send(new RebuildActivitySummariesCommand(command.RunId), cancellationToken);
+        await EscalationRunLinks.ReopenSourcesOfAsync(db, dispatcher, [command.RunId], cancellationToken);
         await eventBus.PublishAsync(new RunDeletedEvent(command.RunId), EventTarget.Local, cancellationToken);
         await eventBus.PublishAsync(new RunsChangedEvent(command.RunId), EventTarget.Local, cancellationToken);
         return Result.Success();

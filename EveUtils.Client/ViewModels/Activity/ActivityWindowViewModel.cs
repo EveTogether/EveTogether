@@ -86,6 +86,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     private readonly IDisposable? _fleetRunStartedSubscription;
     private readonly IDisposable? _fleetRunStoppedSubscription;
     private readonly IDisposable? _fleetRunDiscardedSubscription;
+    private readonly IDisposable? _fleetRunSavedSubscription;
     private readonly IDisposable? _fleetRunAbyssalUpdatedSubscription;
     private readonly IDisposable? _fleetRunPreparedSubscription;
     private readonly IDisposable? _fleetPilotStoppedSubscription;
@@ -167,6 +168,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         _fleetRunStartedSubscription = services.GetService<IEventBus>()?.Subscribe<FleetRunGroupCodeEvent>(_OnFleetRunStarted);
         _fleetRunStoppedSubscription = services.GetService<IEventBus>()?.Subscribe<FleetRunStoppedEvent>(_OnFleetRunStopped);
         _fleetRunDiscardedSubscription = services.GetService<IEventBus>()?.Subscribe<FleetRunDiscardedEvent>(_OnFleetRunDiscarded);
+        _fleetRunSavedSubscription = services.GetService<IEventBus>()?.Subscribe<FleetRunSavedEvent>(_OnFleetRunSaved);
         // The commander changed the pocket's tier or weather after this member already joined (ET-241) — same
         // shape as the three subscriptions above, kept in step for as long as the run runs.
         _fleetRunAbyssalUpdatedSubscription = services.GetService<IEventBus>()?
@@ -1432,6 +1434,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             if (RunLoot is not null)
                 _ = RunLoot.RefreshAsync();
             Refresh(DateTime.UtcNow);
+            _BeginFollowingFleetCommander(FleetEnd.Discard, discard.FleetId);
         });
     }
 
@@ -2730,6 +2733,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
             RunNoticeText = null;
             RunState = ActivityRunState.Saved;
+            _AnnounceSaveToFleet(nowUtc);
             // Toons of the same pilot save together (ET-210): STOP and SAVE apply to the whole group, unlike ET-105
             // where each fleet member commits their own part on their own machine — Participants here is always this
             // pilot's own other local runs (a remote member's row is never in this database), never somebody else's
@@ -2760,11 +2764,37 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             // Saving is one of the two answers to a waiting copy, so it hands it on the same way DISCARD does; until
             // 2026-09-04 the copy simply went with the window.
             _SendPendingCopyToANewWindow();
+            await _OfferEscalationTickOffAsync(dispatcher, runId);
             CloseRequested?.Invoke();
         }
         finally
         {
             IsSaving = false;
+        }
+    }
+
+    /// <summary>A plain site run saved at the site, system and character of a registered, still open escalation is
+    /// most likely that escalation, flown without starting it from its source (ET-453). The pilot is asked rather than
+    /// told: the match is a guess, and ticking it off is theirs to say.</summary>
+    private async Task _OfferEscalationTickOffAsync(CqrsDispatcher dispatcher, Guid runId)
+    {
+        if (_services.GetService<IDialogService>() is not { } dialogs)
+            return;
+
+        Result<IReadOnlyList<OpenEscalationDto>> matches =
+            await Task.Run(() => dispatcher.Query(new FindMatchingEscalationsQuery(runId)));
+        foreach (OpenEscalationDto match in matches.Value ?? [])
+        {
+            string site = OpsecText.Mark(match.Escalation.SiteName) ?? match.Escalation.SiteName;
+            string source = OpsecText.Mark(match.SourceSiteName) ?? "an earlier run";
+            if (!await dialogs.ConfirmAsync("Open escalation",
+                    $"This run matches the escalation {site} you registered from {source}. Mark that escalation as done?",
+                    "Mark done"))
+                continue;
+
+            await Task.Run(() => dispatcher.Send(new SetEscalationOutcomeCommand(
+                match.SourceRunId, match.Escalation.EntryId, EscalationOutcome.Completed, runId)));
+            return;
         }
     }
 
@@ -3439,6 +3469,9 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         _fleetRunStartedSubscription?.Dispose();
         _fleetRunStoppedSubscription?.Dispose();
         _fleetRunDiscardedSubscription?.Dispose();
+        _fleetRunSavedSubscription?.Dispose();
+        _followTimer?.Stop();
+        _followTimer = null;
         _fleetRunAbyssalUpdatedSubscription?.Dispose();
         _fleetRunPreparedSubscription?.Dispose();
         _fleetPilotStoppedSubscription?.Dispose();

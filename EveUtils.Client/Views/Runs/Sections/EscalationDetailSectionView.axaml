@@ -55,6 +55,9 @@
                             <Button Classes="link" Content="reopen" Margin="0,0,12,0"
                                     IsVisible="{Binding CanReopen}"
                                     Command="{Binding ReopenCommand}"/>
+                            <Button Classes="link" Content="change" Margin="0,0,12,0"
+                                    IsVisible="{Binding CanAct}"
+                                    Command="{Binding ChangeCommand}"/>
                         </WrapPanel>
                         <TextBlock Classes="hint" TextWrapping="Wrap" Margin="0"
                                    IsVisible="{Binding ActionMessage, Converter={x:Static ObjectConverters.IsNotNull}}"
@@ -66,5 +69,10 @@
         <TextBlock x:Name="EscalationEmpty" Classes="hint" TextWrapping="Wrap"
                    IsVisible="{Binding EscalationEmptyText, Converter={x:Static ObjectConverters.IsNotNull}}"
                    Text="{Binding EscalationEmptyText}"/>
+        <Button Classes="link" Content="register escalation" Margin="0,8,0,0" HorizontalAlignment="Left"
+                IsVisible="{Binding CanRegister}" Command="{Binding RegisterCommand}"/>
+        <TextBlock Classes="hint" TextWrapping="Wrap" Margin="0"
+                   IsVisible="{Binding RegisterMessage, Converter={x:Static ObjectConverters.IsNotNull}}"
+                   Text="{Binding RegisterMessage}"/>
     </StackPanel>
 </UserControl>

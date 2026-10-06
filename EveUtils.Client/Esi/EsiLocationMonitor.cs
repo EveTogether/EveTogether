@@ -77,10 +77,14 @@ public sealed class EsiLocationMonitor(
 
     public void Stop(int characterId)
     {
-        if (!_running.TryRemove(characterId, out var cts))
-            return;
-        cts.Cancel();
-        cts.Dispose();
+        // A watch that already gave up is gone from the running set but its warning is still on screen.
+        if (_running.TryRemove(characterId, out var cts))
+        {
+            cts.Cancel();
+            cts.Dispose();
+        }
+
+        ClearWarned(characterId);
     }
 
     /// <summary>Whether a watch for this character is active right now — for diagnostics without a debugger
@@ -88,16 +92,30 @@ public sealed class EsiLocationMonitor(
     public bool IsWatching(int characterId) => _running.ContainsKey(characterId);
 
     /// <summary>
-    /// Forgets this character's warnings, and takes a card down that no longer names anyone — a pilot who signed in
-    /// again should not have to dismiss a message about a problem that is already gone (ET-308).
+    /// Forgets this character's warnings, takes a card down that no longer names anyone and re-shows one that still
+    /// names others without them — a pilot who signed in again, or was removed, should not have to dismiss a message
+    /// about a problem that is already gone (ET-308, ET-456).
     /// </summary>
     private void ClearWarned(int characterId)
     {
         lock (_warnGate)
             foreach (var (reason, byId) in _warned)
-                if (byId.Remove(characterId) && byId.Count == 0)
+            {
+                if (!byId.Remove(characterId))
+                    continue;
+
+                if (byId.Count == 0)
                     toasts.Dismiss(ReplacementKey(reason));
+                else
+                    ShowAccessWarning(reason, _Affected(byId));
+            }
     }
+
+    // Sorted by name so the message reads the same whichever watch answered first.
+    private static (int Id, string Name)[] _Affected(Dictionary<int, string> byId) => byId
+        .Select(entry => (Id: entry.Key, Name: entry.Value))
+        .OrderBy(character => character.Name, StringComparer.CurrentCultureIgnoreCase)
+        .ToArray();
 
     private static string ReplacementKey(EsiErrorKind reason) => "location-access-" + reason;
 
@@ -122,7 +140,7 @@ public sealed class EsiLocationMonitor(
                 }
                 else if (Fatal(result.Error?.Kind))
                 {
-                    Warn(characterId, characterName, result.Error?.Kind);
+                    Warn(characterId, characterName, result.Error?.Kind, cancellationToken);
                     Lost(characterId, result.Error?.Kind, onReading);
                     return;
                 }
@@ -141,7 +159,7 @@ public sealed class EsiLocationMonitor(
                     logger.LogWarning("Abyssal monitor for {CharacterId} gave up after {Failures} failed location reads.",
                         characterId, failures);
                     if (result.Error?.Kind is EsiErrorKind.ScopeForbidden)
-                        Warn(characterId, characterName, EsiErrorKind.ScopeForbidden);
+                        Warn(characterId, characterName, EsiErrorKind.ScopeForbidden, cancellationToken);
                     Lost(characterId, result.Error?.Kind, onReading);
                     return;
                 }
@@ -174,7 +192,7 @@ public sealed class EsiLocationMonitor(
     /// and "cannot sign in" are two, and they need different sentences. The card is re-shown under a fixed key as
     /// characters arrive, so a second pilot joins the message already on screen instead of raising a second card.
     /// </remarks>
-    private void Warn(int characterId, string characterName, EsiErrorKind? kind)
+    private void Warn(int characterId, string characterName, EsiErrorKind? kind, CancellationToken cancellationToken)
     {
         logger.LogWarning("Location watch for {CharacterId} stopped: {Kind}.", characterId, kind);
 
@@ -190,15 +208,11 @@ public sealed class EsiLocationMonitor(
         {
             if (!_warned.TryGetValue(reason, out var byId))
                 _warned[reason] = byId = [];
-            if (!byId.TryAdd(characterId, characterName))
+            // A watch stopped because its character was removed can still be mid-poll: its refusal must not name them.
+            if (cancellationToken.IsCancellationRequested || !byId.TryAdd(characterId, characterName))
                 return;
 
-            // Sorted by name so the message reads the same whichever watch answered first.
-            var affected = byId
-                .Select(entry => (Id: entry.Key, Name: entry.Value))
-                .OrderBy(character => character.Name, StringComparer.CurrentCultureIgnoreCase)
-                .ToArray();
-            ShowAccessWarning(reason, affected);
+            ShowAccessWarning(reason, _Affected(byId));
         }
     }
 

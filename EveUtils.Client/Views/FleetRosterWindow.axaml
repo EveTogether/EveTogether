@@ -269,6 +269,7 @@
                                              reading, whichever screen or half of this window you are looking at. -->
                                         <Border Classes="chip" Classes.good="{Binding Node.IsOnline, FallbackValue=False}"
                                                 Classes.dim="{Binding !Node.IsOnline, FallbackValue=True}"
+                                                Classes.connected="{Binding Node.IsConnectedOnly, FallbackValue=False}"
                                                 IsVisible="{Binding Node, Converter={x:Static ObjectConverters.IsNotNull}}"
                                                 ToolTip.Tip="{Binding Node.PresenceTooltip, FallbackValue={x:Null}}">
                                             <TextBlock Text="{Binding Node.PresenceText, FallbackValue={x:Null}}"/>
@@ -483,6 +484,7 @@
                                     </TextBlock>
                                     <!-- The same chips as the member list and the Fleets screen (ET-444). -->
                                     <Border Classes="chip" Classes.good="{Binding IsOnline}" Classes.dim="{Binding !IsOnline}"
+                                            Classes.connected="{Binding IsConnectedOnly}"
                                             VerticalAlignment="Center" ToolTip.Tip="{Binding PresenceTooltip}">
                                         <TextBlock Text="{Binding PresenceText}"/>
                                     </Border>

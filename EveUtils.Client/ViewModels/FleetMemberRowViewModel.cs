@@ -156,6 +156,14 @@ public sealed partial class FleetMemberRowViewModel : ObservableObject, IFleetMe
 
     [ObservableProperty] private string? _presenceTooltip;
 
+    /// <summary>The reason behind <see cref="StatusText"/>; null for an own character or an external.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsConnectedOnly))]
+    private FleetMemberStatusReason? _statusReason;
+
+    /// <summary>Connected to the server with no word from the game yet (ET-455) — its own chip colour, apart from online.</summary>
+    public bool IsConnectedOnly => StatusReason is FleetMemberStatusReason.Connected;
+
     /// <summary>Whether the server holds a connection for this character; null from a server too old to say.</summary>
     public bool? IsConnected { get; init; }
 

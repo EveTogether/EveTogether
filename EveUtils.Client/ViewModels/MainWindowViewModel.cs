@@ -1427,6 +1427,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         bool checkUpdatesOnStartup;
         bool includeNightlyBuilds;
         bool openFleetRunWindow;
+        bool followFleetCommanderEnd;
         bool autoPublishFleetRuns;
         bool autoStartMissions;
         bool autoStartSites;
@@ -1451,6 +1452,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
                 settings.FirstOrDefault(s => s.Key == UpdateChannelSettingKey)?.Value,
                 EveUtils.Shared.App.AppInfo.Version) == EveUtils.Client.Updates.UpdateChannel.Nightly;
             openFleetRunWindow = settings.FirstOrDefault(s => s.Key == EveUtils.Client.Runs.FleetRunWindowPresenter.AutoOpenSettingKey)?.Value == "true"; // default off: a toast is offered instead
+            followFleetCommanderEnd = EveUtils.Client.Runs.FollowFleetCommanderEnd.Resolve(settings.ToDictionary(s => s.Key, s => s.Value, StringComparer.Ordinal), fleetId: 0); // follows the auto-join default until chosen
             autoPublishFleetRuns = settings.FirstOrDefault(s => s.Key == EveUtils.Client.Runs.FleetRunAutoPublisher.EnabledSettingKey)?.Value != "false"; // default on
             autoStartMissions = settings.FirstOrDefault(s => s.Key == EveUtils.Client.Clipboard.ClipboardMissionOffer.AutoStartSettingKey)?.Value != "false"; // default on
             autoStartSites = settings.FirstOrDefault(s => s.Key == EveUtils.Client.Clipboard.ClipboardSignatureOffer.AutoStartSettingKey)?.Value != "false"; // default on
@@ -1466,8 +1468,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
             loadImages, _theme?.Current ?? FactionTheme.Gallente, SdeVersionLabel(), ApplySettingsAsync, openDetailAfterImport, toastPosition,
             localApiEnabled, localApiPort, localApiStatusLabel, localApi, checkUpdatesOnStartup, _clipboardWatch, initialCategory, openFleetRunWindow,
             autoPublishFleetRuns, shares.IsShared(MetricKind.Loot), shares.IsShared(MetricKind.MiningYield), autoStartMissions, autoStartSites,
-            _weekStart?.FirstDay ?? Calendar.WeekStartService.SystemDefault(), includeNightlyBuilds, _services.GetService<IUpdateService>(), offerHomefrontRuns, RunSetupAgainAsync, includeLocationInLocalApi, OpenWidgetManager,
-            shares.IsKillmailShared());
+            _weekStart?.FirstDay ?? Calendar.WeekStartService.SystemDefault(), includeNightlyBuilds, _services.GetService<IUpdateService>(), offerHomefrontRuns, RunSetupAgainAsync, includeLocationInLocalApi, OpenWidgetManager, shares.IsKillmailShared(), followFleetCommanderEnd);
     }
 
     /// <summary>Opens the About dialog: app identity + version, creator credits with portraits,
@@ -1546,6 +1547,13 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
             }
             await dispatcher.Send(new SetSettingCommand(
                 EveUtils.Client.Runs.FleetRunWindowPresenter.AutoOpenSettingKey, result.OpenFleetRunWindowImmediately ? "true" : "false"));
+            // Written only once it differs from what it would follow anyway, so a pilot who never touched it keeps
+            // tracking the auto-join setting (ET-458).
+            var storedSettings = await dispatcher.Query(new GetSettingsQuery());
+            bool followIsChosen = storedSettings.Any(s => s.Key == EveUtils.Client.Runs.FollowFleetCommanderEnd.SettingKey);
+            if (followIsChosen || result.FollowFleetCommanderEnd != result.OpenFleetRunWindowImmediately)
+                await dispatcher.Send(new SetSettingCommand(
+                    EveUtils.Client.Runs.FollowFleetCommanderEnd.SettingKey, result.FollowFleetCommanderEnd ? "true" : "false"));
             await dispatcher.Send(new SetSettingCommand(
                 EveUtils.Client.Runs.FleetRunAutoPublisher.EnabledSettingKey, result.AutoPublishFleetRuns ? "true" : "false"));
             await dispatcher.Send(new SetSettingCommand(

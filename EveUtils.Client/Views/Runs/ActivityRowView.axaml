@@ -44,6 +44,8 @@
                                         <Border Classes="chip" Classes.dim="{Binding IsKnownKind}"
                                                 Classes.warn="{Binding IsUnknownKind}"
                                                 Classes.esc="{Binding IsEscalation}"
+                                                Classes.escdone="{Binding IsEscalationDone}"
+                                                Classes.escmissed="{Binding IsEscalationMissed}"
                                                 ToolTip.Tip="{Binding Tooltip}">
                                             <TextBlock Text="{Binding Text}"/>
                                         </Border>

@@ -185,7 +185,308 @@ public sealed class EscalationRunTests
             (chained.Escalation.SourceRunId, chained.Escalation.Escalation.DungeonId));
 
         await dispatcher.Send(new DeleteRunCommand(relayRunId, DateTime.UtcNow));
+        // The deleted run's own escalation is gone with it, and the escalation it had flown is open again (ET-453).
+        OpenEscalationRowViewModel reopened = Assert.Single((await _BandAsync(harness)).OpenEscalations);
+        Assert.Equal((refugeRunId, RelayOutpost.DungeonId),
+            (reopened.Escalation.SourceRunId, reopened.Escalation.Escalation.DungeonId));
+    }
+
+    [Fact]
+    public void Escalation_WithoutADeadline_IsOpenForADayAfterRegistering_ThenMissed()
+    {
+        DateTime registeredAtUtc = new(2026, 10, 6, 12, 0, 0, DateTimeKind.Utc);
+        var undated = new RunEscalationDto(Guid.NewGuid(), "Command Relay Outpost", 2406, "Ervekam", ErvekamId,
+            null, registeredAtUtc, null, null);
+
+        Assert.Equal(EscalationStanding.Open, undated.StandingAt(registeredAtUtc.AddHours(23)));
+        Assert.Equal(EscalationStanding.Missed, undated.StandingAt(registeredAtUtc.AddHours(24)));
+        Assert.False(undated.IsOpenAt(registeredAtUtc.AddHours(25)));
+    }
+
+    [Theory]
+    [InlineData(EscalationOutcome.Completed, EscalationStanding.Done)]
+    [InlineData(EscalationOutcome.Expired, EscalationStanding.Missed)]
+    [InlineData(EscalationOutcome.Declined, EscalationStanding.Missed)]
+    public void Escalation_WithAnOutcome_StandsByItsOutcome_WhateverItsDeadline(
+        EscalationOutcome outcome, EscalationStanding expected)
+    {
+        DateTime nowUtc = new(2026, 10, 6, 12, 0, 0, DateTimeKind.Utc);
+        var escalation = new RunEscalationDto(Guid.NewGuid(), "Command Relay Outpost", 2406, "Ervekam", ErvekamId,
+            nowUtc.AddHours(5), nowUtc.AddHours(-1), outcome, null);
+
+        Assert.Equal(expected, escalation.StandingAt(nowUtc));
+        Assert.False(escalation.IsOpenAt(nowUtc));
+    }
+
+    [AvaloniaFact]
+    public async Task WontDo_TakesTheEscalationOffTheBand_AndItsBadgeOnTheSourceRunTurnsRed()
+    {
+        using var harness = await _CreateHarnessAsync();
+        var dispatcher = harness.Services.GetRequiredService<IDispatcher>();
+        Guid sourceRunId = await _FlySourceRunAsync(harness, "Sansha Refuge", (RelayOutpost, "Ervekam", "23:00:00"));
+        Assert.Equal(EscalationStanding.Open, await _BadgeAsync(dispatcher, sourceRunId));
+
+        await Assert.Single((await _BandAsync(harness)).OpenEscalations).DeclineCommand.ExecuteAsync(null);
+
         Assert.Empty((await _BandAsync(harness)).OpenEscalations);
+        Assert.Equal(EscalationStanding.Missed, await _BadgeAsync(dispatcher, sourceRunId));
+        Assert.Equal(EscalationOutcome.Declined, (await _OutcomeAsync(dispatcher, sourceRunId, RelayOutpost)).Outcome);
+    }
+
+    [AvaloniaFact]
+    public async Task SavedEscalationRun_TurnsTheBadgeGreen_AndPassedDeadlineTurnsItRed()
+    {
+        using var harness = await _CreateHarnessAsync();
+        var dispatcher = harness.Services.GetRequiredService<IDispatcher>();
+        Guid flownRunId = await _FlySourceRunAsync(harness, "Sansha Refuge", (RelayOutpost, "Ervekam", "23:00:00"));
+        Guid lapsedRunId = await _FlySourceRunAsync(harness, "Angel Hideaway", (AngelShipyard, "Ervekam", "5:00:00"));
+        await _PassDeadlineAsync(harness, AngelShipyard);
+
+        await _Band(await _BandAsync(harness), RelayOutpost).StartCommand.ExecuteAsync(null);
+        await _SaveShownWindowAsync(harness);
+
+        Assert.Equal(EscalationStanding.Done, await _BadgeAsync(dispatcher, flownRunId));
+        Assert.Equal(EscalationStanding.Missed, await _BadgeAsync(dispatcher, lapsedRunId));
+    }
+
+    [AvaloniaFact]
+    public async Task DeletingASavedEscalationRun_ReopensItsEscalation_ButNotOneSettledAnotherWay()
+    {
+        using var harness = await _CreateHarnessAsync();
+        var dispatcher = harness.Services.GetRequiredService<IDispatcher>();
+        Guid sourceRunId = await _FlySourceRunAsync(harness, "Sansha Refuge",
+            (RelayOutpost, "Ervekam", "23:00:00"), (WarSupplyComplex, "Amamake", "23:00:00"));
+        await _Band(await _BandAsync(harness), RelayOutpost).StartCommand.ExecuteAsync(null);
+        Run relayRun = await _SingleRunAsync(harness, run => run.SiteTypeId == RelayOutpost.DungeonId);
+        await _SaveShownWindowAsync(harness);
+        await _Band(await _BandAsync(harness), WarSupplyComplex).StartCommand.ExecuteAsync(null);
+        Run supplyRun = await _SingleRunAsync(harness, run => run.SiteTypeId == WarSupplyComplex.DungeonId);
+        await _SaveShownWindowAsync(harness);
+        Assert.Empty(await _OpenEscalationsAsync(dispatcher));
+        await dispatcher.Send(new SetEscalationOutcomeCommand(
+            sourceRunId, await _EntryIdAsync(harness, WarSupplyComplex), EscalationOutcome.Expired));
+
+        await dispatcher.Send(new DeleteRunCommand(relayRun.Id, DateTime.UtcNow));
+        await dispatcher.Send(new DeleteRunCommand(supplyRun.Id, DateTime.UtcNow));
+
+        Assert.Equal(RelayOutpost.DungeonId, Assert.Single(await _OpenEscalationsAsync(dispatcher)).Escalation.DungeonId);
+        Assert.Equal(EscalationOutcome.Expired, (await _OutcomeAsync(dispatcher, sourceRunId, WarSupplyComplex)).Outcome);
+    }
+
+    [AvaloniaFact]
+    public async Task EscalationRegisteredAfterSave_JoinsTheBand_BesideTheOnesOfOtherRuns()
+    {
+        using var harness = await _CreateHarnessAsync();
+        var dispatcher = harness.Services.GetRequiredService<IDispatcher>();
+        await _FlySourceRunAsync(harness, "Sansha Refuge", (RelayOutpost, "Ervekam", "23:00:00"));
+        Guid bareRunId = await _FlySourceRunAsync(harness, "Angel Hideaway");
+        ActivityDetailViewModel detail = await _SourceDetailAsync(dispatcher, bareRunId, harness);
+        harness.Dialogs.OnShowEscalationDialog = dialog =>
+        {
+            dialog.SiteQuery = WarSupplyComplex.Name;
+            dialog.SelectedOption = Assert.Single(dialog.SiteResults);
+            dialog.DestinationSystem = "Ervekam";
+            dialog.RemainingTimeText = "12:00:00";
+            dialog.RegisterCommand.Execute(null);
+            return Task.FromResult(true);
+        };
+
+        Assert.True(detail.Escalation().CanRegister);
+        await detail.Escalation().RegisterCommand.ExecuteAsync(null);
+
+        Assert.Equal([WarSupplyComplex.DungeonId, RelayOutpost.DungeonId],
+            (await _OpenEscalationsAsync(dispatcher)).Select(row => row.Escalation.DungeonId));
+        Assert.False((await _SourceDetailAsync(dispatcher, bareRunId, harness)).Escalation().CanRegister);
+    }
+
+    [AvaloniaFact]
+    public async Task RunWithAnEscalation_OffersChangeInsteadOfRegister()
+    {
+        using var harness = await _CreateHarnessAsync();
+        var dispatcher = harness.Services.GetRequiredService<IDispatcher>();
+        Guid sourceRunId = await _FlySourceRunAsync(harness, "Sansha Refuge", (RelayOutpost, "Ervekam", "23:00:00"));
+
+        EscalationDetailSectionViewModel section = (await _SourceDetailAsync(dispatcher, sourceRunId, harness)).Escalation();
+
+        Assert.False(section.CanRegister);
+        Assert.True(Assert.Single(section.Entries).CanAct);
+    }
+
+    [AvaloniaFact]
+    public async Task ChangingTheEscalation_PrefillsTheDialog_AndReplacesItInPlace()
+    {
+        using var harness = await _CreateHarnessAsync();
+        var dispatcher = harness.Services.GetRequiredService<IDispatcher>();
+        Guid sourceRunId = await _FlySourceRunAsync(harness, "Sansha Refuge", (RelayOutpost, "Ervekam", "23:00:00"));
+        Guid? entryId = await _EntryIdAsync(harness, RelayOutpost);
+        EscalationDetailSectionViewModel section = (await _SourceDetailAsync(dispatcher, sourceRunId, harness)).Escalation();
+        await section.Entries[0].MarkExpiredCommand.ExecuteAsync(null);
+        section = (await _SourceDetailAsync(dispatcher, sourceRunId, harness)).Escalation();
+        int? prefilledSite = null;
+        harness.Dialogs.OnShowEscalationDialog = dialog =>
+        {
+            prefilledSite = dialog.SelectedSite?.DungeonId;
+            dialog.SiteQuery = WarSupplyComplex.Name;
+            dialog.SelectedOption = Assert.Single(dialog.SiteResults);
+            dialog.DestinationSystem = "Ervekam";
+            dialog.RemainingTimeText = "6:00:00";
+            dialog.RegisterCommand.Execute(null);
+            return Task.FromResult(true);
+        };
+
+        await section.Entries[0].ChangeCommand.ExecuteAsync(null);
+
+        Assert.Equal(RelayOutpost.DungeonId, prefilledSite);
+        EscalationEntryViewModel changed = Assert.Single((await _SourceDetailAsync(dispatcher, sourceRunId)).Escalation().Entries);
+        Assert.Equal((entryId, WarSupplyComplex.DungeonId, EscalationOutcome.Expired),
+            (changed.Escalation.EntryId, changed.Escalation.DungeonId, changed.Escalation.Outcome));
+        Assert.InRange(changed.Escalation.ExpiresAtUtc!.Value, DateTime.UtcNow.AddHours(5), DateTime.UtcNow.AddHours(7));
+    }
+
+    [Fact]
+    public void EscalationDialog_PrefilledFromARegisteredEscalation_ShowsItsSiteSystemAndRemainingTime()
+    {
+        var sde = new FakeSdeAccessor().AddSolarSystem(new SdeSolarSystem(ErvekamId, "Ervekam", 0.69)).AddSite(RelayOutpost);
+        var dialog = new EscalationDialogViewModel(sde);
+
+        dialog.Prefill(RelayOutpost.Name, RelayOutpost.DungeonId, "Ervekam", DateTime.UtcNow.AddHours(5).AddMinutes(30));
+
+        Assert.Equal(RelayOutpost.DungeonId, dialog.SelectedSite?.DungeonId);
+        Assert.Equal("Ervekam", dialog.DestinationSystem);
+        Assert.StartsWith("05:2", dialog.RemainingTimeText);
+        Assert.True(dialog.RegisterCommand.CanExecute(null));
+    }
+
+    [AvaloniaFact]
+    public async Task ChangingAnEscalationThatIsGone_IsRefused_AndAddsNothing()
+    {
+        using var harness = await _CreateHarnessAsync();
+        var dispatcher = harness.Services.GetRequiredService<IDispatcher>();
+        Guid sourceRunId = await _FlySourceRunAsync(harness, "Sansha Refuge");
+
+        Result refused = await dispatcher.Send(new ChangeRunEscalationCommand(sourceRunId, Guid.NewGuid(),
+            RelayOutpost.Name, RelayOutpost.DungeonId, "Ervekam", ErvekamId, DateTime.UtcNow.AddHours(5)));
+
+        Assert.False(refused.IsSuccess);
+        await using ClientDbContext db = await harness.Services
+            .GetRequiredService<IDbContextFactory<ClientDbContext>>().CreateDbContextAsync();
+        Assert.False(await db.Set<RunParameter>().AnyAsync(parameter => parameter.ParameterKey == RunParameterKey.Escalation));
+    }
+
+    [AvaloniaFact]
+    public async Task RegisteringOnARunStillInItsWindow_IsRefused_AndWritesNothing()
+    {
+        using var harness = await _CreateHarnessAsync();
+        var dispatcher = harness.Services.GetRequiredService<IDispatcher>();
+        Result<Guid> started = await dispatcher.Send(new StartRunCommand(ActivityWindowHarness.CharacterId,
+            ActivityKind.Site, DateTime.UtcNow, 0, "Sansha Refuge", null, Origin: RunOrigin.Manual));
+
+        Result refused = await dispatcher.Send(new RegisterRunEscalationCommand(started.Value, RelayOutpost.Name,
+            RelayOutpost.DungeonId, "Ervekam", ErvekamId, DateTime.UtcNow.AddHours(5)));
+
+        Assert.False(refused.IsSuccess);
+        await using ClientDbContext db = await harness.Services
+            .GetRequiredService<IDbContextFactory<ClientDbContext>>().CreateDbContextAsync();
+        Assert.False(await db.Set<RunParameter>().AnyAsync(parameter => parameter.ParameterKey == RunParameterKey.Escalation));
+    }
+
+    [AvaloniaFact]
+    public async Task PlainSiteRun_AtAnOpenEscalationsSiteSystemAndPilot_OffersToTickItOff_AndYesDoes()
+    {
+        using var harness = await _CreateHarnessAsync();
+        var dispatcher = harness.Services.GetRequiredService<IDispatcher>();
+        Guid sourceRunId = await _FlySourceRunAsync(harness, "Sansha Refuge", (RelayOutpost, "Ervekam", "23:00:00"));
+        Guid plainRunId = await _StartPlainSiteRunAsync(harness, RelayOutpost, ErvekamId);
+        harness.Dialogs.OnConfirm = (_, _) => Task.FromResult(true);
+
+        await _SaveShownWindowAsync(harness);
+
+        Assert.Single(harness.Dialogs.ConfirmPrompts);
+        Assert.Equal((EscalationOutcome.Completed, plainRunId), await _OutcomeAsync(dispatcher, sourceRunId, RelayOutpost));
+        Assert.Empty(await _OpenEscalationsAsync(dispatcher));
+    }
+
+    [AvaloniaFact]
+    public async Task PlainSiteRun_WhenThePilotAnswersNo_LeavesTheEscalationOpen()
+    {
+        using var harness = await _CreateHarnessAsync();
+        var dispatcher = harness.Services.GetRequiredService<IDispatcher>();
+        await _FlySourceRunAsync(harness, "Sansha Refuge", (RelayOutpost, "Ervekam", "23:00:00"));
+        await _StartPlainSiteRunAsync(harness, RelayOutpost, ErvekamId);
+        harness.Dialogs.OnConfirm = (_, _) => Task.FromResult(false);
+
+        await _SaveShownWindowAsync(harness);
+
+        Assert.Single(harness.Dialogs.ConfirmPrompts);
+        Assert.Single(await _OpenEscalationsAsync(dispatcher));
+    }
+
+    [AvaloniaTheory]
+    [InlineData(true, false, false)]
+    [InlineData(false, true, false)]
+    [InlineData(true, true, true)]
+    public async Task PlainSiteRun_ThatDiffersInSystemSiteOrPilot_MatchesNothing(bool sameSite, bool sameSystem, bool otherPilot)
+    {
+        using var harness = await _CreateHarnessAsync();
+        var dispatcher = harness.Services.GetRequiredService<IDispatcher>();
+        await _FlySourceRunAsync(harness, "Sansha Refuge", (RelayOutpost, "Ervekam", "23:00:00"));
+        SdeSite site = sameSite ? RelayOutpost : WarSupplyComplex;
+        long pilot = otherPilot ? ActivityWindowHarness.CharacterId + 1 : ActivityWindowHarness.CharacterId;
+        Result<Guid> started = await dispatcher.Send(new StartRunCommand(pilot, ActivityKind.Site, DateTime.UtcNow,
+            site.DungeonId, site.Name, sameSystem ? ErvekamId : ErvekamId + 1, Origin: RunOrigin.Manual));
+        await dispatcher.Send(new SaveRunCommand(started.Value, DateTime.UtcNow, DateTime.UtcNow, [], [], [], []));
+
+        Result<IReadOnlyList<OpenEscalationDto>> matches = await dispatcher.Query(new FindMatchingEscalationsQuery(started.Value));
+
+        Assert.Empty(matches.Value ?? []);
+    }
+
+    [AvaloniaFact]
+    public async Task PlainSiteRun_AtTheSameSiteSystemAndPilot_MatchesTheEscalation()
+    {
+        using var harness = await _CreateHarnessAsync();
+        var dispatcher = harness.Services.GetRequiredService<IDispatcher>();
+        await _FlySourceRunAsync(harness, "Sansha Refuge", (RelayOutpost, "Ervekam", "23:00:00"));
+        Result<Guid> started = await dispatcher.Send(new StartRunCommand(ActivityWindowHarness.CharacterId,
+            ActivityKind.Site, DateTime.UtcNow, RelayOutpost.DungeonId, RelayOutpost.Name, ErvekamId, Origin: RunOrigin.Manual));
+        await dispatcher.Send(new SaveRunCommand(started.Value, DateTime.UtcNow, DateTime.UtcNow, [], [], [], []));
+
+        Result<IReadOnlyList<OpenEscalationDto>> matches = await dispatcher.Query(new FindMatchingEscalationsQuery(started.Value));
+
+        Assert.Equal(RelayOutpost.DungeonId, Assert.Single(matches.Value ?? []).Escalation.DungeonId);
+    }
+
+    /// <summary>A site run started the plain way (no source), left running in a window that adopts it.</summary>
+    private static async Task<Guid> _StartPlainSiteRunAsync(ActivityWindowHarness harness, SdeSite site, int solarSystemId)
+    {
+        var dispatcher = harness.Services.GetRequiredService<IDispatcher>();
+        Result<Guid> started = await dispatcher.Send(new StartRunCommand(ActivityWindowHarness.CharacterId,
+            ActivityKind.Site, DateTime.UtcNow, site.DungeonId, site.Name, solarSystemId,
+            CharacterNameSnapshot: ActivityWindowHarness.CharacterName, SiteTypeSource: SiteTypeSource.Site,
+            Origin: RunOrigin.Manual));
+        var window = new ActivityWindowViewModel(ActivityKind.Site, harness.Services);
+        window.UseCharacter(ActivityWindowHarness.CharacterId, ActivityWindowHarness.CharacterName);
+        harness.Dialogs.ShowActivityWindow(window);
+        return started.Value;
+    }
+
+    private static OpenEscalationRowViewModel _Band(RunsOverviewViewModel band, SdeSite escalation) =>
+        Assert.Single(band.OpenEscalations, row => row.Escalation.Escalation.DungeonId == escalation.DungeonId);
+
+    private static async Task<Guid?> _EntryIdAsync(ActivityWindowHarness harness, SdeSite escalation)
+    {
+        await using ClientDbContext db = await harness.Services
+            .GetRequiredService<IDbContextFactory<ClientDbContext>>().CreateDbContextAsync();
+        return (await db.Set<RunParameter>().SingleAsync(parameter =>
+            parameter.ParameterKey == RunParameterKey.EscalationDungeonId
+            && parameter.TypedValue == escalation.DungeonId.ToString())).EntryId;
+    }
+
+    private static async Task<EscalationStanding?> _BadgeAsync(IDispatcher dispatcher, Guid runId)
+    {
+        Result<IReadOnlyList<ActivityOverviewRowDto>> rows = await dispatcher.Query(new GetActivityOverviewQuery());
+        return Assert.Single(rows.Value ?? [], row => row.RunId == runId).Rewards
+            .Single(reward => reward.ParameterKey == RunParameterKey.Escalation).Standing;
     }
 
     private static async Task<RunsOverviewViewModel> _BandAsync(ActivityWindowHarness harness)
@@ -272,11 +573,15 @@ public sealed class EscalationRunTests
         return open.Value ?? throw new InvalidOperationException("The open escalations could not be read.");
     }
 
-    private static async Task<ActivityDetailViewModel> _SourceDetailAsync(IDispatcher dispatcher, Guid sourceRunId)
+    private static async Task<ActivityDetailViewModel> _SourceDetailAsync(
+        IDispatcher dispatcher, Guid sourceRunId, ActivityWindowHarness? harness = null)
     {
         Result<Guid?> found = await dispatcher.Query(new FindActivitySummaryIdQuery(null, sourceRunId));
         Guid activitySummaryId = found.Value ?? throw new InvalidOperationException("The source activity is missing.");
-        var detail = new ActivityDetailViewModel(dispatcher, activitySummaryId);
+        var detail = harness is null
+            ? new ActivityDetailViewModel(dispatcher, activitySummaryId)
+            : new ActivityDetailViewModel(dispatcher, activitySummaryId, sde: harness.Services.GetRequiredService<ISdeAccessor>(),
+                dialogs: harness.Dialogs, services: harness.Services);
         await detail.LoadAsync();
         return detail;
     }

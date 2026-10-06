@@ -5,5 +5,7 @@ namespace EveUtils.Shared.Modules.Runs.Enums;
 public enum EscalationOutcome
 {
     Completed,
-    Expired
+    Expired,
+    /// <summary>The pilot chose not to fly it (ET-453) — "Won't do" in the open escalations list.</summary>
+    Declined
 }

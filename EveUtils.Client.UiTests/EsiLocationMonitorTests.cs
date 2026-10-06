@@ -238,6 +238,30 @@ public class EsiLocationMonitorTests
         Assert.Equal(2, toasts.ActionToasts.Count);
     }
 
+    /// <summary>
+    /// ET-456: a character removed from the client takes its warning with it. The watch had already given up, so the
+    /// card stayed on screen naming a pilot who no longer exists, and kept naming them after a restart of the card.
+    /// </summary>
+    [Fact]
+    public async Task ARemovedCharacter_LeavesTheSignInWarning()
+    {
+        var locations = new FakeLocationClient { Error = EsiErrorKind.AuthRequired };
+        var monitor = Build(locations, out var toasts);
+        await monitor.WatchAsync(1, "Jithran", _ => { }, CancellationToken.None);
+        await monitor.WatchAsync(2, "Abnoba Auscent", _ => { }, CancellationToken.None);
+
+        monitor.Stop(1);
+
+        var latest = toasts.ActionToasts[^1];
+        Assert.DoesNotContain("Jithran", latest.Message);
+        Assert.Contains("Abnoba Auscent", latest.Message);
+        Assert.Empty(toasts.Dismissed);
+
+        monitor.Stop(2);
+
+        Assert.Equal(["location-access-AuthRequired"], toasts.Dismissed);
+    }
+
     /// <summary>Whether a watch is active is now something other than a debugger can see (ET-96) — this is the
     /// fact that investigation needed one for.</summary>
     [Fact]
