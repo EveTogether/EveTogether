@@ -89,9 +89,13 @@ public sealed class EventBusStreamService(
                 if (evt is FleetMetricEvent metric && !presenceGuard.Admit(key, metric.Data, DateTimeOffset.UtcNow))
                     continue;
 
-                // Relay what the server attributed, not what the client claimed: a client that left CharacterId 0 would
-                // otherwise reach every receiver (and its own echo) without the sender a fleet handler keys on (ET-370).
-                envelope.Event.CharacterId = attachedCharacterId;
+                // An echoed event relays what the server attributed, not what the client claimed: a client that left
+                // CharacterId 0 would otherwise reach every receiver (and its own echo) without a sender (ET-370).
+                // Older event types keep relaying the claim, because their handlers read a missing sender as "nobody".
+                if (evt is IEchoToSenderEvent)
+                {
+                    envelope.Event.CharacterId = attachedCharacterId;
+                }
 
                 // Server local bus: server handlers + the SignalR bridge pick it up.
                 var bus = services.GetRequiredService<IEventBus>();

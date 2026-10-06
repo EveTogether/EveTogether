@@ -137,6 +137,10 @@ public sealed class FleetKillmailShareRelayTests
 
         Assert.Equal(expectedSenderMessages, CountKillmailShares(senderWriter));
         Assert.Equal(expectedFleetMateMessages, CountKillmailShares(fleetMateWriter));
+        // Every relayed copy carries the server-attributed sender, not the 0 the client sent.
+        Assert.All(
+            senderWriter.Written.Concat(fleetMateWriter.Written).Where(IsKillmailShare),
+            message => Assert.Equal(attachedCharacterId, message.Event.CharacterId));
     }
 
     private static ServiceProvider BuildServices(
@@ -181,10 +185,9 @@ public sealed class FleetKillmailShareRelayTests
         return (sessions, accessToken);
     }
 
-    // Every relayed copy must carry the server-attributed sender, not the 0 the client sent.
-    private static int CountKillmailShares(RecordingWriter writer) =>
-        writer.Written.Count(message => message.Event.EventType == "fleet.killmail-share"
-                                        && message.Event.CharacterId == Sender);
+    private static int CountKillmailShares(RecordingWriter writer) => writer.Written.Count(IsKillmailShare);
+
+    private static bool IsKillmailShare(ServerEnvelope message) => message.Event.EventType == "fleet.killmail-share";
 
     private sealed class FleetMetricsPolicy(bool allowed) : IAccessPolicy
     {

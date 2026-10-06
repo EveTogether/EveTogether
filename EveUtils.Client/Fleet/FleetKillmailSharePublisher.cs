@@ -72,7 +72,8 @@ public sealed class FleetKillmailSharePublisher : ISingletonService, IDisposable
 
     private Task _OnKillmailsChangedAsync(KillmailsChangedEvent changed, CancellationToken cancellationToken)
     {
-        if (changed.Data.Kind == KillmailsChangeKind.Imported)
+        // An import that stored nothing new (a pasted link already on file) changes no share, so it sends nothing.
+        if (changed.Data.Kind == KillmailsChangeKind.Imported && changed.Data.AddedKillmailIds.Count > 0)
         {
             _ = _Enqueue(token => _PublishAsync(changed.Data.CharacterId, null, null, token));
         }

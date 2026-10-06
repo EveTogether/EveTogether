@@ -31,6 +31,7 @@ public class MetricShareGateTests
     [InlineData("global-off", 0)]
     [InlineData("global-on", 1)]
     [InlineData("matching-override", 1)]
+    [InlineData("matching-override-other-spelling", 1)]
     [InlineData("other-fleet", 0)]
     [InlineData("other-character", 0)]
     [InlineData("other-server", 0)]
@@ -51,6 +52,7 @@ public class MetricShareGateTests
         string? overrideKey = scenario switch
         {
             "matching-override" => MetricShareSnapshot.KillmailOverrideKeyFor(ServerAddress, FleetId, Owner),
+            "matching-override-other-spelling" => MetricShareSnapshot.KillmailOverrideKeyFor(" HTTPS://ALPHA.EXAMPLE/ ", FleetId, Owner),
             "other-fleet" => MetricShareSnapshot.KillmailOverrideKeyFor(ServerAddress, FleetId + 1, Owner),
             "other-character" => MetricShareSnapshot.KillmailOverrideKeyFor(ServerAddress, FleetId, Owner + 1),
             "other-server" => MetricShareSnapshot.KillmailOverrideKeyFor("https://beta.example", FleetId, Owner),
