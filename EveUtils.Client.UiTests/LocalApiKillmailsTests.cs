@@ -9,6 +9,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using EveUtils.Client.LocalApi;
+using EveUtils.Shared.Identity;
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Modules.Killmails.Commands;
 using EveUtils.Shared.Modules.Killmails.Entities;
@@ -31,6 +32,7 @@ public sealed class LocalApiKillmailsTests : IDisposable
     [InlineData(KillmailsLatestKind.Losses, new[] { 2 })]
     public async Task Latest_KindFilter_ReturnsOnlyThatKind_NewestFirst(KillmailsLatestKind kind, int[] expectedIds)
     {
+        await _RegisterPilotAsync();
         await _StoreAsync(_Killmail(1, isLoss: false, DateTime.UtcNow.AddHours(-3)), _Killmail(2, isLoss: true, DateTime.UtcNow.AddHours(-2)),
             _Killmail(3, isLoss: false, DateTime.UtcNow.AddHours(-1)));
 
@@ -43,6 +45,7 @@ public sealed class LocalApiKillmailsTests : IDisposable
     [Fact]
     public async Task Latest_LocationIsNullUntilIncludeLocationIsOn()
     {
+        await _RegisterPilotAsync();
         await _StoreAsync(_Killmail(1, isLoss: false, DateTime.UtcNow.AddMinutes(-5)));
 
         var hidden = await _Queries(includeLocation: false).GetLatestKillmailsAsync(KillmailsLatestKind.All, 1, TestContext.Current.CancellationToken);
@@ -55,6 +58,7 @@ public sealed class LocalApiKillmailsTests : IDisposable
     [Fact]
     public async Task Push_ImportOfOldMails_AnnouncesNothing_ButANewMailIs()
     {
+        await _RegisterPilotAsync();
         var server = new LocalApiServer(_instance.Services.GetRequiredService<ISettingRepository>(), _instance.Services,
             NullLogger<LocalApiServer>.Instance);
         var port = _FreePort();
@@ -107,6 +111,11 @@ public sealed class LocalApiKillmailsTests : IDisposable
 
     private LocalApiQueries _Queries(bool includeLocation) =>
         new(_instance.Services, new LocalApiPrivacy(_instance.Services, includeLocation));
+
+    // An own import only ever exists for a registered character, and the local API reads only those (ET-371). Done
+    // first, before any socket opens, so the registry change is not part of what a push test listens to.
+    private Task _RegisterPilotAsync() => _instance.Services.GetRequiredService<ICharacterRegistry>()
+        .AddOrUpdateAsync(new Character("Pilot", CharacterId), TestContext.Current.CancellationToken);
 
     private async Task _StoreAsync(params LocalKillmail[] killmails)
     {

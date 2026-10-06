@@ -24,6 +24,26 @@ internal sealed class LocalKillmailRepository(IDbContextFactory<SharedDbContext>
         return added;
     }
 
+    public async Task<(bool Changed, IReadOnlyList<Guid> WithdrawnFromRunIds)> ReconcileFleetShareAsync(int characterId, long fleetId, IReadOnlyCollection<int> sharedKillmailIds,
+        IReadOnlyList<LocalKillmail> fetched, CancellationToken cancellationToken = default)
+    {
+        await using var db = await contextFactory.CreateDbContextAsync(cancellationToken);
+        var known = await _KnownIdsAsync(db, characterId, fetched.Select(killmail => killmail.KillmailId).ToList(), cancellationToken);
+        db.Set<LocalKillmail>().AddRange(fetched.Where(killmail => !known.Contains(killmail.KillmailId)));
+
+        // ponytail: one fleet per row; a mail shared in two fleets returns on the other's next share. Per-fleet table if needed.
+        // Items and attackers are loaded so EF removes them too.
+        List<LocalKillmail> withdrawn = await db.Set<LocalKillmail>()
+            .Include(killmail => killmail.Items)
+            .Include(killmail => killmail.Attackers)
+            .Where(killmail => killmail.CharacterId == characterId && killmail.SharedFromFleetId == fleetId
+                               && !sharedKillmailIds.Contains(killmail.KillmailId))
+            .ToListAsync(cancellationToken);
+        db.Set<LocalKillmail>().RemoveRange(withdrawn);
+        bool changed = await db.SaveChangesAsync(cancellationToken) > 0;
+        return (changed, [.. withdrawn.Select(killmail => killmail.RunId).OfType<Guid>().Distinct()]);
+    }
+
     public async Task<IReadOnlyList<LocalKillmail>> GetForCharacterAsync(int characterId, CancellationToken cancellationToken = default)
     {
         await using var db = await contextFactory.CreateDbContextAsync(cancellationToken);
