@@ -24,6 +24,24 @@ internal sealed class LocalKillmailRepository(IDbContextFactory<SharedDbContext>
         return added;
     }
 
+    public async Task<bool> ReconcileFleetShareAsync(int characterId, long fleetId, IReadOnlyCollection<int> sharedKillmailIds,
+        IReadOnlyList<LocalKillmail> fetched, CancellationToken cancellationToken = default)
+    {
+        await using var db = await contextFactory.CreateDbContextAsync(cancellationToken);
+        var known = await _KnownIdsAsync(db, characterId, fetched.Select(killmail => killmail.KillmailId).ToList(), cancellationToken);
+        db.Set<LocalKillmail>().AddRange(fetched.Where(killmail => !known.Contains(killmail.KillmailId)));
+
+        // Loaded with their items and attackers, so EF removes those too instead of leaning on the database cascade.
+        List<LocalKillmail> withdrawn = await db.Set<LocalKillmail>()
+            .Include(killmail => killmail.Items)
+            .Include(killmail => killmail.Attackers)
+            .Where(killmail => killmail.CharacterId == characterId && killmail.SharedFromFleetId == fleetId
+                               && !sharedKillmailIds.Contains(killmail.KillmailId))
+            .ToListAsync(cancellationToken);
+        db.Set<LocalKillmail>().RemoveRange(withdrawn);
+        return await db.SaveChangesAsync(cancellationToken) > 0;
+    }
+
     public async Task<IReadOnlyList<LocalKillmail>> GetForCharacterAsync(int characterId, CancellationToken cancellationToken = default)
     {
         await using var db = await contextFactory.CreateDbContextAsync(cancellationToken);

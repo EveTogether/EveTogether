@@ -384,12 +384,17 @@ public sealed partial class KillmailsOverviewViewModel : ViewModelBase, IRefresh
         try
         {
             int? characterId = character.IsAll ? null : character.CharacterId;
+            // "All characters" is every own character in the dropdown, read here on the UI thread that owns the list —
+            // not every character in the database, which since ET-371 also holds fleet mates' shared mails.
+            List<int> characterIds = character.IsAll
+                ? [.. CharacterOptions.Where(option => !option.IsAll).Select(option => option.CharacterId)]
+                : [character.CharacterId];
             // The dispatcher call, the SDE lookups and KillmailNames.HydrateAsync are all synchronous-under-the-hood
             // SQLite work (plus HydrateAsync's own ESI calls) — one Task.Run for the whole read, the same reason
             // RunsOverviewViewModel keeps its own reads off the UI thread entirely.
             (Result<IReadOnlyList<KillmailOverviewRowDto>> result, IReadOnlyList<KillmailRowViewModel> rows,
                 IReadOnlyList<KillmailRowViewModel> provisionalRows) =
-                await Task.Run(() => _ReadAndBuildAsync(characterId, cancellationToken), cancellationToken);
+                await Task.Run(() => _ReadAndBuildAsync(characterId, characterIds, cancellationToken), cancellationToken);
 
             if (version != _readVersion)
             {
@@ -436,10 +441,11 @@ public sealed partial class KillmailsOverviewViewModel : ViewModelBase, IRefresh
     }
 
     private async Task<(Result<IReadOnlyList<KillmailOverviewRowDto>> Result, IReadOnlyList<KillmailRowViewModel> Rows,
-        IReadOnlyList<KillmailRowViewModel> ProvisionalRows)> _ReadAndBuildAsync(int? characterId, CancellationToken cancellationToken)
+        IReadOnlyList<KillmailRowViewModel> ProvisionalRows)> _ReadAndBuildAsync(int? characterId, IReadOnlyCollection<int> characterIds,
+        CancellationToken cancellationToken)
     {
         Result<IReadOnlyList<KillmailOverviewRowDto>> result =
-            await _dispatcher.Query(new GetKillmailsOverviewQuery(characterId), cancellationToken);
+            await _dispatcher.Query(new GetKillmailsOverviewQuery(characterIds), cancellationToken);
         if (!result.IsSuccess)
         {
             return (result, [], []);

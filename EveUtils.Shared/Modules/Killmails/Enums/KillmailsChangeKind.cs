@@ -10,5 +10,9 @@ public enum KillmailsChangeKind
     Imported,
 
     /// <summary>A provisional killmail was added or replaced by the real mail for the character (ET-340).</summary>
-    ProvisionalChanged
+    ProvisionalChanged,
+
+    /// <summary>A fleet mate's shared killmails were stored or withdrawn under their character (ET-371). Deliberately
+    /// not <see cref="Imported"/>: that one means "your own new mails" to the Local API and to fleet sharing.</summary>
+    FleetShareChanged
 }

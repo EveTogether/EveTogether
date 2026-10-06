@@ -142,6 +142,67 @@ public sealed class EsiKillmailImporter(IEsiClient esi, ILocalKillmailReader kil
         return KillmailImportResult.Ok(stored);
     }
 
+    /// <summary>
+    /// Stores a fleet mate's latest full killmail share for one fleet under their character (ET-371). Every mail not yet
+    /// stored for them is fetched from the public <c>/killmails/{id}/{hash}/</c> (immutable and cached, so a kill several
+    /// mates share costs one request) — never their <c>/recent</c> feed. All or nothing: one failed fetch stores nothing
+    /// and keeps the previous state, so the next share retries. A mail the mate is not on is left out rather than stored
+    /// as theirs. Not <see cref="ImportOneAsync"/>, whose refusal of a mail without an own character stays as it is.
+    /// </summary>
+    public async Task<KillmailImportResult> ImportFleetShareAsync(int characterId, long fleetId,
+        IReadOnlyList<(int KillmailId, string Hash)> shared, CancellationToken cancellationToken = default)
+    {
+        var gate = _importGates.GetOrAdd(characterId, _ => new SemaphoreSlim(1, 1));
+        await gate.WaitAsync(cancellationToken);
+        try
+        {
+            var known = await killmails.GetKnownIdsAsync(characterId, [.. shared.Select(entry => entry.KillmailId)], cancellationToken);
+            var fetched = new List<LocalKillmail>();
+            var notOnMail = new HashSet<int>();
+            foreach (var (killmailId, hash) in shared.Where(entry => !known.Contains(entry.KillmailId)).DistinctBy(entry => entry.KillmailId))
+            {
+                var detail = await esi.GetAsync<EsiKillmail>($"/killmails/{killmailId}/{hash}/", cancellationToken: cancellationToken);
+                if (!detail.IsSuccess || detail.Value is null)
+                {
+                    return _Failure(detail.Error);
+                }
+
+                EsiKillmail killmail = detail.Value;
+                if (killmail.Victim.CharacterId != characterId
+                    && killmail.Attackers.All(attacker => attacker.CharacterId != characterId))
+                {
+                    notOnMail.Add(killmailId);
+                    continue;
+                }
+
+                LocalKillmail entity = _ToEntity(characterId, hash, killmail);
+                entity.SharedFromFleetId = fleetId;
+                fetched.Add(entity);
+            }
+
+            await using AsyncServiceScope scope = scopes.CreateAsyncScope();
+            IDispatcher dispatcher = scope.ServiceProvider.GetRequiredService<IDispatcher>();
+            Result stored = await dispatcher.Send(new ReconcileFleetKillmailShareCommand(characterId, fleetId,
+                [.. shared.Select(entry => entry.KillmailId).Where(id => !notOnMail.Contains(id))], fetched), cancellationToken);
+            if (!stored.IsSuccess)
+            {
+                return new KillmailImportResult(KillmailImportStatus.Failed, 0,
+                    stored.Messages.FirstOrDefault()?.Text ?? "Storing the shared killmails failed.");
+            }
+
+            // The mate's group run is synced to this client, so their loss links to it the same way an own loss does.
+            Result<int> linked = await dispatcher.Send(new LinkKillmailsToRunsCommand(characterId), cancellationToken);
+            return linked.IsSuccess
+                ? KillmailImportResult.Ok(fetched.Count)
+                : new KillmailImportResult(KillmailImportStatus.Failed, fetched.Count,
+                    linked.Messages.FirstOrDefault()?.Text ?? "Linking losses to their runs failed.");
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
     // Shared by ImportAsync and ImportOneAsync (ET-374): store, replace any matching provisional row (ET-340), then
     // run the ET-331 link pass for the same character, so a pasted link joins a run exactly like the feed does.
     private async Task<KillmailImportResult> _StoreAndLinkAsync(IDispatcher dispatcher, int characterId,

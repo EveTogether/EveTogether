@@ -214,7 +214,11 @@ public sealed class CommandSignalCoverageTests
             () => dispatcher.Send(new StoreKillmailsCommand(Owner, [_Killmail()]), cancellationToken),
             published => published is KillmailsChangedEvent { Data: { CharacterId: Owner, Kind: KillmailsChangeKind.Imported } })),
 
-        [typeof(StoreProvisionalKillmailCommand)] = (dispatcher, cancellationToken) => Task.FromResult(new Act(
+        [typeof(ReconcileFleetKillmailShareCommand)] = (dispatcher, cancellationToken) => Task.FromResult(new Act(
+            () => dispatcher.Send(new ReconcileFleetKillmailShareCommand(Owner, 42, [_Killmail().KillmailId], [_Killmail()]), cancellationToken),
+            published => published is KillmailsChangedEvent { Data: { CharacterId: Owner, Kind: KillmailsChangeKind.FleetShareChanged } })),
+
+        [typeof(StoreProvisionalKillmailCommand)] =(dispatcher, cancellationToken) => Task.FromResult(new Act(
             () => dispatcher.Send(new StoreProvisionalKillmailCommand(Owner, _ProvisionalKillmail()), cancellationToken),
             published => published is KillmailsChangedEvent { Data: { CharacterId: Owner, Kind: KillmailsChangeKind.ProvisionalChanged } })),
 
