@@ -71,6 +71,12 @@ public sealed class KillmailImportTests : IDisposable
     {
         CancellationToken cancellationToken = TestContext.Current.CancellationToken;
         IEventBus bus = _instance.Services.GetRequiredService<IEventBus>();
+        var localShares = new List<FleetKillmailShareEvent>();
+        using IDisposable localSubscription = bus.Subscribe<FleetKillmailShareEvent>((share, _) =>
+        {
+            localShares.Add(share);
+            return Task.CompletedTask;
+        });
         IFleetParticipation participation = _instance.Services.GetRequiredService<IFleetParticipation>();
         DateTimeOffset activatedAt = new(2026, 9, 20, 11, 0, 0, TimeSpan.Zero);
         if (hasFleet && FleetParticipationRefresher.Participates(state, activation))
@@ -110,6 +116,8 @@ public sealed class KillmailImportTests : IDisposable
 
         await publisher.WhenIdleAsync();
 
+        // The sender sees its share only as the server's echo: no unauthorized local copy is published.
+        Assert.Empty(localShares);
         Assert.Equal(expectedShares, _remoteShares.Count);
         if (expectedShares == 0)
         {
