@@ -5,6 +5,8 @@ using System.Net;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
+using Avalonia.Headless.XUnit;
+using Avalonia.Media.Imaging;
 using EveUtils.Client.Imaging;
 using EveUtils.Shared.Modules.Sde;
 using EveUtils.Shared.Modules.Sde.Dtos;
@@ -93,23 +95,40 @@ public class TypeImageProviderTests
         }
     }
 
-    [Theory]
-    [InlineData(91, "SK")]
-    [InlineData(7, null)]
-    public void GetFallbackGlyph_SkinCategoryOnly(int categoryId, string? expected)
+    [AvaloniaFact]
+    public async Task GetImage_SkinType_ReturnsBundledPlaceholder_WithoutTheNetwork()
     {
-        var provider = new TypeImageProvider(new StubHttpClientFactory(new NotFoundHandler()), new EmptySettings(), "unused",
-            new CategoryOnlyDogma(categoryId));
+        var handler = new CountingHandler();
+        var provider = new TypeImageProvider(new StubHttpClientFactory(handler), new EmptySettings(), "unused",
+            new CategoryOnlyDogma(91));
 
-        Assert.Equal(expected, provider.GetFallbackGlyph(43519));
+        Bitmap? first = await provider.GetImageAsync(43519, TypeImageKind.Icon, 32, TestContext.Current.CancellationToken);
+        Bitmap? second = await provider.GetImageAsync(43520, TypeImageKind.Icon, 64, TestContext.Current.CancellationToken);
+
+        Assert.NotNull(first);
+        Assert.Same(first, second);
+        Assert.Equal(0, handler.Calls);
     }
 
-    [Fact]
-    public void GetFallbackGlyph_WithoutSde_IsNull()
+    [AvaloniaFact]
+    public async Task GetImage_OrdinaryType_StillComesFromTheImageServer()
     {
-        var provider = new TypeImageProvider(new StubHttpClientFactory(new NotFoundHandler()), new EmptySettings(), "unused");
+        var dir = Path.Combine(Path.GetTempPath(), "eveutils-img-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var handler = new CountingHandler();
+            var provider = new TypeImageProvider(new StubHttpClientFactory(handler), new EmptySettings(), dir,
+                new CategoryOnlyDogma(7));
 
-        Assert.Null(provider.GetFallbackGlyph(43519));
+            Bitmap? image = await provider.GetImageAsync(587, TypeImageKind.Icon, 32, TestContext.Current.CancellationToken);
+
+            Assert.NotNull(image);
+            Assert.Equal(1, handler.Calls);
+        }
+        finally
+        {
+            if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
+        }
     }
 
     private static readonly byte[] PngBytes = Convert.FromBase64String(
