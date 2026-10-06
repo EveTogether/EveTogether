@@ -6,6 +6,8 @@ using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using EveUtils.Client.Imaging;
+using EveUtils.Shared.Modules.Sde;
+using EveUtils.Shared.Modules.Sde.Dtos;
 using EveUtils.Shared.Modules.Settings.Entities;
 using EveUtils.Shared.Modules.Settings.Repositories;
 using Xunit;
@@ -70,6 +72,46 @@ public class TypeImageProviderTests
         }
     }
 
+    [Fact]
+    public async Task GetImage_NotFound_ReturnsNull_AndIsNotRequestedAgainThisSession()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "eveutils-img-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var handler = new NotFoundHandler();
+            var provider = new TypeImageProvider(new StubHttpClientFactory(handler), new EmptySettings(), dir);
+
+            Assert.Null(await provider.GetImageAsync(43519, TypeImageKind.Icon, 32, TestContext.Current.CancellationToken));
+            Assert.Null(await provider.GetImageAsync(43519, TypeImageKind.Icon, 32, TestContext.Current.CancellationToken));
+
+            Assert.Equal(1, handler.Calls);
+            Assert.False(File.Exists(Path.Combine(dir, "type-images", "43519_Icon_32.png")));
+        }
+        finally
+        {
+            if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Theory]
+    [InlineData(91, "SK")]
+    [InlineData(7, null)]
+    public void GetFallbackGlyph_SkinCategoryOnly(int categoryId, string? expected)
+    {
+        var provider = new TypeImageProvider(new StubHttpClientFactory(new NotFoundHandler()), new EmptySettings(), "unused",
+            new CategoryOnlyDogma(categoryId));
+
+        Assert.Equal(expected, provider.GetFallbackGlyph(43519));
+    }
+
+    [Fact]
+    public void GetFallbackGlyph_WithoutSde_IsNull()
+    {
+        var provider = new TypeImageProvider(new StubHttpClientFactory(new NotFoundHandler()), new EmptySettings(), "unused");
+
+        Assert.Null(provider.GetFallbackGlyph(43519));
+    }
+
     private static readonly byte[] PngBytes = Convert.FromBase64String(
         "iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAYAAACp8Z5+AAAAMUlEQVR4nBXIMREAMBDDsAALsB8NKvzcq0YlwQYvuGBSbPGK64/DHt7h7sewwxtu+AA5yCMxCGZNswAAAABJRU5ErkJggg==");
 
@@ -111,5 +153,37 @@ public class TypeImageProviderTests
                 throw new HttpRequestException("simulated offline");
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(PngBytes) });
         }
+    }
+
+    private sealed class NotFoundHandler : HttpMessageHandler
+    {
+        private int _calls;
+        public int Calls => _calls;
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            Interlocked.Increment(ref _calls);
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound));
+        }
+    }
+
+    private sealed class CategoryOnlyDogma(int categoryId) : IDogmaDataAccessor
+    {
+        public int? GetCategoryId(int typeId) => categoryId;
+
+        public DogmaAttributeMeta? GetAttributeMeta(int attributeId) => throw new NotSupportedException();
+        public IReadOnlyList<SdeDogmaAttribute> GetBaseAttributes(int typeId) => throw new NotSupportedException();
+        public IReadOnlyList<DogmaTypeEffect> GetTypeEffects(int typeId) => throw new NotSupportedException();
+        public DogmaEffectDef? GetEffect(int effectId) => throw new NotSupportedException();
+        public int? GetGroupId(int typeId) => throw new NotSupportedException();
+        public IReadOnlyList<int> GetSkillTypeIds() => throw new NotSupportedException();
+        public double? GetMass(int typeId) => throw new NotSupportedException();
+        public int? GetDefaultTacticalModeTypeId(int shipTypeId) => throw new NotSupportedException();
+        public IReadOnlyList<SdeNamedType> GetTacticalModes(int shipTypeId) => throw new NotSupportedException();
+        public double? GetCapacity(int typeId) => throw new NotSupportedException();
+        public double? GetVolume(int typeId) => throw new NotSupportedException();
+        public Task PrefetchAsync(IReadOnlyCollection<int> typeIds, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+        public void Reopen() => throw new NotSupportedException();
     }
 }
