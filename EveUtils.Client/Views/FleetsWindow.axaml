@@ -491,6 +491,13 @@
             <Style Selector="DockPanel.wide StackPanel.mnamerow">
                 <Setter Property="Margin" Value="17,0,0,0"/>
             </Style>
+            <!-- The member's name row wraps its chips (ET-372): narrow, LOST and KILLS would otherwise run into the next cell. -->
+            <Style Selector="WrapPanel.mnamerow">
+                <Setter Property="Margin" Value="14,0,0,0"/>
+            </Style>
+            <Style Selector="DockPanel.wide WrapPanel.mnamerow">
+                <Setter Property="Margin" Value="17,0,0,0"/>
+            </Style>
             <Style Selector="TextBlock.mname">
                 <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
                 <Setter Property="FontSize" Value="10.5"/>
@@ -935,6 +942,8 @@
                                     <StackPanel>
                                         <TextBlock Classes="who" Text="{Binding MemberCountText}"/>
                                         <TextBlock Classes="sub" Text="{Binding MemberCountSubText}" ToolTip.Tip="{Binding ReadinessTooltip}"/>
+                                        <TextBlock Classes="sub" TextWrapping="Wrap" Text="{Binding KillmailTotalsText}" IsVisible="{Binding HasKillmailTotals}"
+                                                   ToolTip.Tip="Ships lost and killmails taken while this fleet has been active, each mail counted once."/>
                                     </StackPanel>
                                 </Border>
                                 <Border Grid.Column="3" Classes="cell fc">
@@ -1040,7 +1049,7 @@
                                                         <TextBlock Classes="tick" Text="&#x2514;"/>
                                                     </Border>
                                                     <Border Grid.Column="1" Classes="cell" HorizontalAlignment="Stretch">
-                                                        <StackPanel Orientation="Horizontal" Spacing="7" Classes="mnamerow">
+                                                        <WrapPanel Orientation="Horizontal" ItemSpacing="7" LineSpacing="3" Classes="mnamerow">
                                                             <TextBlock Classes="mname" Text="{Binding CharacterName}"/>
                                                             <Border Classes="chip ok" IsVisible="{Binding IsFleetCommander}"><TextBlock Text="FC"/></Border>
                                                             <Border Classes="chip dim" IsVisible="{Binding IsMine}"><TextBlock Text="your character"/></Border>
@@ -1050,7 +1059,12 @@
                                                                 <TextBlock Text="SIGNED OFF"/>
                                                             </Border>
                                                             <Border Classes="chip dim" IsVisible="{Binding IsExternal}"><TextBlock Text="external"/></Border>
-                                                        </StackPanel>
+                                                            <Button Classes="chip warn" IsVisible="{Binding HasLost}" Content="{Binding LostText}"
+                                                                    Command="{Binding OpenLostCommand}"
+                                                                    ToolTip.Tip="Latest ship lost in this fleet, and any pod lost with it. Opens the killmail."/>
+                                                            <Border Classes="chip dim" IsVisible="{Binding HasKills}"
+                                                                    ToolTip.Tip="Killmails this pilot was an attacker on in this fleet."><TextBlock Text="{Binding KillsText}"/></Border>
+                                                        </WrapPanel>
                                                     </Border>
                                                     <Border Grid.Column="2" Classes="cell members">
                                                         <TextBlock Classes="mtext" Text="{Binding ShipText}"/>

@@ -68,6 +68,44 @@ public sealed partial class FleetMemberRowViewModel : ObservableObject, IFleetMe
     /// <summary>The shared fleet-member information block, plus the removal when this viewer owns the fleet.</summary>
     public IReadOnlyList<FleetMemberMenuItemViewModel> MemberMenu { get; }
 
+    // ── Killmail chips (ET-372): filled from the local killmail store, never from the roster. ──
+
+    /// <summary>The ship of this member's latest non-capsule loss in the active period, or null when there is none.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasLost))]
+    [NotifyPropertyChangedFor(nameof(LostText))]
+    private string? _lostShipName;
+
+    /// <summary>How many capsules this member lost; each is a loss on the fleet line, so the chip names them.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasLost))]
+    [NotifyPropertyChangedFor(nameof(LostText))]
+    private int _podLosses;
+
+    public bool HasLost => LostShipName is not null || PodLosses > 0;
+
+    /// <summary>"LOST Gila", "LOST Gila + pod", or "LOST pod" when only the capsule went.</summary>
+    public string LostText
+    {
+        get
+        {
+            string pods = PodLosses switch { 0 => "", 1 => "pod", _ => $"{PodLosses} pods" };
+            return LostShipName is null ? $"LOST {pods}" : PodLosses == 0 ? $"LOST {LostShipName}" : $"LOST {LostShipName} + {pods}";
+        }
+    }
+
+    /// <summary>Opens the killmail detail of the loss the LOST chip names; null while there is no such loss.</summary>
+    [ObservableProperty] private IRelayCommand? _openLostCommand;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasKills))]
+    [NotifyPropertyChangedFor(nameof(KillsText))]
+    private int _kills;
+
+    public bool HasKills => Kills > 0;
+
+    public string KillsText => $"KILLS {Kills}";
+
     // ── The overview's sub-row (ET-170): who this is to me, whether they are here, and whether they count. ──
 
     /// <summary>One of this client's own characters — the reason the fleet row concerns me at all.</summary>
