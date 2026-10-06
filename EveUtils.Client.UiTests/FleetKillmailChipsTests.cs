@@ -58,6 +58,8 @@ public sealed class FleetKillmailChipsTests
             // member as victim stays a loss even though a fleet mate attacked on it.
             await store.AddMissingAsync(Own, [_Mail(Own, 1, Gila, 10), _Mail(Own, 2, Capsule, 11), _Mail(Own, 3, Rifter, 30, isLoss: false)]);
             await store.AddMissingAsync(MateThree, [_Mail(MateThree, 3, Rifter, 30, shared: true)]);
+            // A pod and nothing else: it is a loss on the fleet line, so the chip names it instead of staying silent.
+            await store.AddMissingAsync(MateTwo, [_Mail(MateTwo, 4, Capsule, 25, shared: true)]);
             // One kill, three fleet members as attackers: KILLS 1 on each of them, and 1 on the fleet row.
             foreach (int pilot in new[] { MateOne, MateTwo, MateThree })
             {
@@ -67,15 +69,15 @@ public sealed class FleetKillmailChipsTests
             await _PublishAndSettleAsync(instance, vm, Own);
 
             FleetViewModel fleet = vm.ActiveFleets.Single();
-            Assert.Equal("LOSSES 3 · KILLS 1", fleet.KillmailTotalsText);
+            Assert.Equal("LOSSES 4 · KILLS 1", fleet.KillmailTotalsText);
             FleetMemberRowViewModel own = _Member(fleet, Own);
-            Assert.Equal("LOST Gila", own.LostText);
+            Assert.Equal("LOST Gila + pod", own.LostText);
             Assert.Equal(1, own.Kills);
             Assert.False(_Member(fleet, MateOne).HasLost);
             Assert.Equal(1, _Member(fleet, MateOne).Kills);
             Assert.Equal("LOST Rifter", _Member(fleet, MateThree).LostText);
             Assert.Equal(1, _Member(fleet, MateThree).Kills);
-            Assert.False(_Member(fleet, MateTwo).HasLost);
+            Assert.Equal("LOST pod", _Member(fleet, MateTwo).LostText);
 
             own.OpenLostCommand?.Execute(null);
             Assert.Equal($"killmail-{Own}-1", dialogs.LastKillmailDetail?.ModuleId);

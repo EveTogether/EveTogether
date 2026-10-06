@@ -76,9 +76,23 @@ public sealed partial class FleetMemberRowViewModel : ObservableObject, IFleetMe
     [NotifyPropertyChangedFor(nameof(LostText))]
     private string? _lostShipName;
 
-    public bool HasLost => LostShipName is not null;
+    /// <summary>How many capsules this member lost; each is a loss on the fleet line, so the chip names them.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasLost))]
+    [NotifyPropertyChangedFor(nameof(LostText))]
+    private int _podLosses;
 
-    public string LostText => $"LOST {LostShipName}";
+    public bool HasLost => LostShipName is not null || PodLosses > 0;
+
+    /// <summary>"LOST Gila", "LOST Gila + pod", or "LOST pod" when only the capsule went.</summary>
+    public string LostText
+    {
+        get
+        {
+            string pods = PodLosses switch { 0 => "", 1 => "pod", _ => $"{PodLosses} pods" };
+            return LostShipName is null ? $"LOST {pods}" : PodLosses == 0 ? $"LOST {LostShipName}" : $"LOST {LostShipName} + {pods}";
+        }
+    }
 
     /// <summary>Opens the killmail detail of the loss the LOST chip names; null while there is no such loss.</summary>
     [ObservableProperty] private IRelayCommand? _openLostCommand;

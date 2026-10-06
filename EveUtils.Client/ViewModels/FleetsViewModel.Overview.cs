@@ -314,16 +314,18 @@ public sealed partial class FleetsViewModel
             {
                 var mine = summary?.Members.FirstOrDefault(m => m.CharacterId == member.CharacterId);
                 member.Kills = mine?.Kills ?? 0;
-                if (mine?.LastShipLoss is { } loss)
+                // The chip opens the ship loss, or the capsule when that is all the member lost.
+                int? openId = mine?.LastShipLoss?.KillmailId ?? mine?.LastPodLossKillmailId;
+                member.LostShipName = mine?.LastShipLoss is { } loss ? names.TypeName(loss.ShipTypeId) : null;
+                member.PodLosses = mine?.PodLosses ?? 0;
+                if (openId is { } killmailId)
                 {
                     int characterId = member.CharacterId;
-                    member.LostShipName = names.TypeName(loss.ShipTypeId);
                     member.OpenLostCommand = new RelayCommand(() => _dialogs.ShowKillmailDetail(
-                        new KillmailDetailViewModel(dispatcher, _dialogs, _services, characterId, loss.KillmailId)));
+                        new KillmailDetailViewModel(dispatcher, _dialogs, _services, characterId, killmailId)));
                 }
                 else
                 {
-                    member.LostShipName = null;
                     member.OpenLostCommand = null;
                 }
             }

@@ -36,8 +36,11 @@ internal sealed class GetFleetKillmailSummaryQueryHandler(IDbContextFactory<Clie
                 .OrderByDescending(row => row.KillmailTimeUtc)
                 .Select(row => new FleetMemberShipLossDto(row.KillmailId, row.VictimShipTypeId))
                 .FirstOrDefault();
+            var pods = group.Where(row => row.IsLoss && KillmailRunLinker.IsCapsule(row.VictimShipTypeId)).ToList();
             members.Add(new FleetMemberKillmailDto(group.Key,
-                group.Where(row => !row.IsLoss).Select(row => row.KillmailId).Distinct().Count(), lastShipLoss));
+                group.Where(row => !row.IsLoss).Select(row => row.KillmailId).Distinct().Count(), lastShipLoss,
+                pods.Select(row => row.KillmailId).Distinct().Count(),
+                pods.OrderByDescending(row => row.KillmailTimeUtc).Select(row => (int?)row.KillmailId).FirstOrDefault()));
         }
 
         return Result<FleetKillmailSummaryDto>.Success(new FleetKillmailSummaryDto(lossIds.Count, kills, members));

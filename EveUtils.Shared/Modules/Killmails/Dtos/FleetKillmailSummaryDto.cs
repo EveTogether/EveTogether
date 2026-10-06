@@ -5,6 +5,9 @@ public sealed record FleetKillmailSummaryDto(int Losses, int Kills, IReadOnlyLis
 
 /// <param name="Kills">Distinct mails this member was an attacker on.</param>
 /// <param name="LastShipLoss">The latest loss of a ship other than a capsule, or null when there is none.</param>
-public sealed record FleetMemberKillmailDto(int CharacterId, int Kills, FleetMemberShipLossDto? LastShipLoss);
+/// <param name="PodLosses">Distinct capsule losses; they count in LOSSES, so the chip names them as a pod.</param>
+/// <param name="LastPodLossKillmailId">The latest capsule loss, the mail a pod-only chip opens.</param>
+public sealed record FleetMemberKillmailDto(
+    int CharacterId, int Kills, FleetMemberShipLossDto? LastShipLoss, int PodLosses = 0, int? LastPodLossKillmailId = null);
 
 public sealed record FleetMemberShipLossDto(int KillmailId, int ShipTypeId);

@@ -1061,7 +1061,7 @@
                                                             <Border Classes="chip dim" IsVisible="{Binding IsExternal}"><TextBlock Text="external"/></Border>
                                                             <Button Classes="chip warn" IsVisible="{Binding HasLost}" Content="{Binding LostText}"
                                                                     Command="{Binding OpenLostCommand}"
-                                                                    ToolTip.Tip="Latest ship lost in this fleet. Opens the killmail."/>
+                                                                    ToolTip.Tip="Latest ship lost in this fleet, and any pod lost with it. Opens the killmail."/>
                                                             <Border Classes="chip dim" IsVisible="{Binding HasKills}"
                                                                     ToolTip.Tip="Killmails this pilot was an attacker on in this fleet."><TextBlock Text="{Binding KillsText}"/></Border>
                                                         </WrapPanel>
