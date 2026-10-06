@@ -84,6 +84,8 @@ public sealed class RunFleetKillsTests
             _Loss(Own, 20, Gila, StartedAtUtc.AddMinutes(8), ownRun)
         ]);
         await store.AddMissingAsync(MateOne, [_Loss(MateOne, 21, Gila, StartedAtUtc.AddMinutes(9), mateRun)]);
+        await instance.Services.GetRequiredService<IMarketPriceRepository>().ReplaceAllAsync(
+            [_Price(Gila, 95_000_000), _Price(Rifter, 1_800_000), _Price(Capsule, 0)], Ct);
         await dispatcher.Send(new RebuildActivitySummariesCommand(), Ct);
 
         ActivityDetailViewModel group = await _LoadAsync(instance, dispatcher, ownRun);
@@ -158,7 +160,7 @@ public sealed class RunFleetKillsTests
         TestClientInstance.Create(services =>
         {
             services.AddSingleton<EveUtils.Client.Dialogs.IDialogService>(new RecordingDialogService());
-            services.AddSingleton<IExternalCharacterLookup>(new FakeExternalLookup { [Enemy] = "Hostile Drifter" });
+            services.AddSingleton<IExternalCharacterLookup>(new FakeExternalLookup { [Enemy] = "Hostile Drifter", [Enemy + 1] = "Kara Voss" });
             services.AddSingleton<ISdeAccessor>(new FakeSdeAccessor()
                 .Add(Gila, "Gila", 26, 6).Add(Rifter, "Rifter", 25, 6).Add(Capsule, "Capsule", 29, 6)
                 .Add(Repairer, "Large Armor Repairer", 62, 7).Add(Salvage, "Salvage Drone", 100, 18).Add(Unpriced, "Odd Charge", 86, 8)
@@ -224,7 +226,7 @@ public sealed class RunFleetKillsTests
             return;
         }
 
-        var window = new ActivityDetailWindow(viewModel) { Width = 900, Height = 2200 };
+        var window = new ActivityDetailWindow(viewModel) { Width = 900, Height = 1560 };
         window.Show();
         Directory.CreateDirectory(directory);
         for (int i = 0; i < 16; i++)
