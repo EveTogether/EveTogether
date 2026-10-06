@@ -66,8 +66,10 @@
                             <StackPanel Spacing="3" Margin="0,0,0,10">
                                 <TextBlock Text="{Binding Name}" FontWeight="SemiBold"
                                            Foreground="{StaticResource TextBrightBrush}"/>
-                                <ItemsControl ItemsSource="{Binding Metrics}" ItemTemplate="{StaticResource MetricRow}"/>
-                                <ContentControl Content="{Binding Killmails}" ContentTemplate="{StaticResource KillmailRow}"/>
+                                <StackPanel>
+                                    <ItemsControl ItemsSource="{Binding Metrics}" ItemTemplate="{StaticResource MetricRow}"/>
+                                    <ContentControl Content="{Binding Killmails}" ContentTemplate="{StaticResource KillmailRow}"/>
+                                </StackPanel>
                             </StackPanel>
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
