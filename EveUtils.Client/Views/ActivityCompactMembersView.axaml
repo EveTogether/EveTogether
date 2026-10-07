@@ -12,7 +12,7 @@
          here — that stays the full view's. -->
     <Panel>
         <Border Classes="chip ok" IsVisible="{Binding !IsCompactFleet}">
-            <TextBlock Text="{Binding CompactSoloName}"/>
+            <TextBlock Text="{Binding CompactSoloName}" TextTrimming="CharacterEllipsis"/>
         </Border>
 
         <StackPanel x:Name="FleetHexes" Orientation="Horizontal" Spacing="5" Background="Transparent"

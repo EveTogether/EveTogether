@@ -22,7 +22,7 @@ public partial class ActivityWindow : OverlayWindow
     // The compact views have a width of their own and grow in height with what they show (ET-478). The size the pilot
     // gave the full window is kept apart, so the compact shape neither replaces it nor is lost when going back.
     private const double CardWidth = 360;
-    private const double HudWidth = 560;
+    private const double HudWidth = 720;
     private const double CompactMinHeight = 34;
 
     private readonly ActivityWindowViewModel? _viewModel;

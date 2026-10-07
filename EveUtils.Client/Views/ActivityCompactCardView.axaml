@@ -27,7 +27,7 @@
             </Grid>
         </Border>
 
-        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="16" Margin="12,9,12,4">
+        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="16" Margin="12,9,12,4">
             <StackPanel Grid.Column="0" Spacing="3">
                 <TextBlock Classes="label" Text="{Binding ClockLabel}"/>
                 <StackPanel Orientation="Horizontal" Spacing="6">
@@ -45,8 +45,12 @@
                 <TextBlock x:Name="CompactTotal" Classes="ctotal" Text="{Binding GroupTotalIskText}"/>
             </StackPanel>
 
-            <StackPanel Grid.Column="2" Spacing="2" MinWidth="112" VerticalAlignment="Bottom">
-                <Grid x:Name="CompactLootRow" ColumnDefinitions="Auto,*" Background="Transparent">
+        </Grid>
+
+        <!-- Loot and bounty get a row of their own, half each: a ten-digit figure next to the clock and the total would
+             not fit the card's width. -->
+        <Grid ColumnDefinitions="*,*" ColumnSpacing="16" Margin="12,0,12,0">
+            <Grid x:Name="CompactLootRow" ColumnDefinitions="Auto,*" ColumnSpacing="6" Background="Transparent">
                     <ToolTip.Tip>
                         <StackPanel x:Name="LootTip" Spacing="2" MinWidth="200">
                             <TextBlock Classes="label" Text="{Binding CompactLootCaption}"/>
@@ -67,11 +71,10 @@
                     <TextBlock Classes="label" VerticalAlignment="Center" Text="LOOT"/>
                     <TextBlock x:Name="CompactLoot" Grid.Column="1" Classes="cfig" Text="{Binding CompactLootText}"/>
                 </Grid>
-                <Grid ColumnDefinitions="Auto,*">
-                    <TextBlock Classes="label" VerticalAlignment="Center" Text="BOUNTY"/>
-                    <TextBlock x:Name="CompactBounty" Grid.Column="1" Classes="cfig" Text="{Binding CompactBountyText}"/>
-                </Grid>
-            </StackPanel>
+            <Grid x:Name="CompactBountyRow" Grid.Column="1" ColumnDefinitions="Auto,*" ColumnSpacing="6">
+                <TextBlock Classes="label" VerticalAlignment="Center" Text="BOUNTY"/>
+                <TextBlock x:Name="CompactBounty" Grid.Column="1" Classes="cfig" Text="{Binding CompactBountyText}"/>
+            </Grid>
         </Grid>
 
         <TextBlock x:Name="CompactWhere" Classes="chint" Margin="12,2,12,0" Text="{Binding CompactWhereText}"/>

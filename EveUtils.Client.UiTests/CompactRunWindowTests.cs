@@ -575,7 +575,7 @@ public sealed class CompactRunWindowTests
         model.UseCompactStyle(CompactRunStyle.Hud);
         UiDispatcher.UIThread.RunJobs();
 
-        Assert.Equal(560, window.Bounds.Width, 1);
+        Assert.Equal(720, window.Bounds.Width, 1);
         Assert.InRange(window.Bounds.Height, 32, 40);
 
         await model.ToggleCompactCommand.ExecuteAsync(null);
@@ -681,7 +681,92 @@ public sealed class CompactRunWindowTests
         window.Close();
     }
 
+    // ── Long values (ET-480) ────────────────────────────────────────────────────────────────────────
+
+    [AvaloniaTheory]
+    [InlineData(CompactRunStyle.Hud)]
+    [InlineData(CompactRunStyle.Card)]
+    public async Task LongValues_NeverOverlapEachOther_AndEveryButtonStaysInsideTheWindow(CompactRunStyle style)
+    {
+        using var harness = await ActivityWindowHarness.CreateAsync();
+        ActivityWindowViewModel model = await harness.OpenAsync();
+        var window = new ActivityWindow(model);
+        window.Show();
+        UiDispatcher.UIThread.RunJobs();
+        model.UseCompactStyle(style);
+        await model.ToggleCompactCommand.ExecuteAsync(null);
+        UiDispatcher.UIThread.RunJobs();
+
+        using (TestOpsec.On())
+        {
+            model.SignatureName = new string('S', 60);
+            model.SolarSystem = new string('E', 30);
+            model.HasGroupTotalIsk = true;
+            model.GroupTotalIskText = "9.876.543.210 ISK";
+            model.CompactWhereText = OpsecText.Mark(new string('S', 60)) + " · " + OpsecText.Mark(new string('E', 30));
+            model.CompactLootText = "1.234.567.890";
+            model.CompactBountyText = "1.234.567.890";
+            string prefix = style is CompactRunStyle.Hud ? "Hud" : "Compact";
+            string[] buttonNames = ["StartButton", "StopButton", "KeepButton", "SaveButton", "DiscardButton"];
+            List<Button> buttons = buttonNames.Select(name => _Named<Button>(window, prefix + name)).ToList();
+            foreach (Button button in buttons)
+                button.IsVisible = true;
+            UiDispatcher.UIThread.RunJobs();
+
+            OverlayChromeButtons chrome = Assert.Single(_Descendants<OverlayChromeButtons>(window), c => c.IsEffectivelyVisible);
+            List<Control> parts =
+            [
+                .. _Descendants<ActivityCompactMembersView>(window).Where(view => view.IsEffectivelyVisible),
+                _Named<TextBlock>(window, prefix + "Clock"),
+                _Named<TextBlock>(window, prefix + "Total"),
+                _Named<Control>(window, prefix + "LootRow"),
+                _Named<Control>(window, prefix + "BountyRow"),
+                _Named<Control>(window, style is CompactRunStyle.Hud ? "HudWhereLabel" : "CompactWhere"),
+                .. buttons,
+                chrome,
+            ];
+            Rect windowArea = new(window.Bounds.Size);
+            List<(Control Part, Rect Area)> placed = parts
+                .Where(part => part.IsEffectivelyVisible)
+                .Select(part => (part, _AreaIn(part, window)))
+                .Where(placement => placement.Item2.Width > 0)
+                .ToList();
+
+            foreach ((Control part, Rect area) in placed)
+                Assert.True(windowArea.Contains(area.TopLeft) && windowArea.Contains(area.BottomRight - new Vector(0.01, 0.01)),
+                    $"{part.Name ?? part.GetType().Name} {area} is outside the window {windowArea}");
+
+            for (int first = 0; first < placed.Count; first++)
+            for (int second = first + 1; second < placed.Count; second++)
+            {
+                Rect overlap = placed[first].Area.Intersect(placed[second].Area);
+                Assert.True(overlap.Width < 0.5 || overlap.Height < 0.5,
+                    $"{placed[first].Part.Name ?? placed[first].Part.GetType().Name} {placed[first].Area} overlaps " +
+                    $"{placed[second].Part.Name ?? placed[second].Part.GetType().Name} {placed[second].Area}");
+            }
+
+            foreach (string name in new[] { prefix + "Total", prefix + "Loot", prefix + "Bounty" })
+            {
+                TextBlock figure = _Named<TextBlock>(window, name);
+                var whole = new TextBlock
+                {
+                    Text = figure.Text, FontFamily = figure.FontFamily, FontSize = figure.FontSize, FontWeight = figure.FontWeight,
+                };
+                whole.Measure(Size.Infinity);
+                double leastShown = style is CompactRunStyle.Hud ? 40 : whole.DesiredSize.Width - 0.5;
+                Assert.True(figure.Bounds.Width >= leastShown,
+                    $"{name} is cut to {figure.Bounds.Width} of {whole.DesiredSize.Width}");
+            }
+        }
+
+        window.Close();
+    }
+
     // ── Helpers ─────────────────────────────────────────────────────────────────────────────────────
+
+    private static Rect _AreaIn(Control control, Visual root) =>
+        new(control.TranslatePoint(default, root) ?? throw new InvalidOperationException($"{control.Name} is not under the window"),
+            control.Bounds.Size);
 
     private static T _Named<T>(Control root, string name) where T : Control =>
         _Descendants<T>(root).FirstOrDefault(control => control.Name == name)

@@ -42,6 +42,7 @@
         <Setter Property="Foreground" Value="{DynamicResource TextBrightBrush}"/>
         <Setter Property="FontSize" Value="11.5"/>
         <Setter Property="TextAlignment" Value="Right"/>
+        <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
     </Style>
 
     <Style Selector="TextBlock.chint">

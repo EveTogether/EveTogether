@@ -15,22 +15,34 @@
          properties and commands as the card and the full view. -->
     <StackPanel>
         <Border x:Name="HudLine" Height="32" Padding="10,0,6,0" Background="Transparent" PointerPressed="OnLinePressed">
-            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-                <StackPanel Orientation="Horizontal" Spacing="11" VerticalAlignment="Center">
-                    <TextBlock Classes="diamond" Text="&#x25C6;" VerticalAlignment="Center"/>
-                    <v:ActivityCompactMembersView VerticalAlignment="Center"/>
-                    <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                        <Ellipse Classes="cdot" Classes.running="{Binding CompactIsRunning}"/>
-                        <TextBlock x:Name="HudClock" Classes="cclock hud"
-                                   Classes.warn="{Binding IsClockWarning}"
-                                   Classes.crit="{Binding IsClockCritical}"
-                                   Classes.stopped="{Binding !CompactIsRunning}"
-                                   Text="{Binding ClockText}"/>
-                    </StackPanel>
-                    <TextBlock x:Name="HudTotal" Classes="ctotal hud" VerticalAlignment="Center"
-                               IsVisible="{Binding HasGroupTotalIsk}" Text="{Binding GroupTotalIskText}"/>
-                    <StackPanel x:Name="HudLootRow" Orientation="Horizontal" Spacing="5" VerticalAlignment="Center"
-                                Background="Transparent">
+            <!-- One column per field. The clock, the buttons and the window buttons keep their own width; the three
+                 figures and the site label share what is left, the site label with so little weight that it is the
+                 first to go and the figures are cut with an ellipsis only after that. -->
+            <Grid ColumnSpacing="10">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="5*" MinWidth="64"/>
+                    <ColumnDefinition Width="4*" MinWidth="56"/>
+                    <ColumnDefinition Width="4*" MinWidth="56"/>
+                    <ColumnDefinition Width="0.3*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Classes="diamond" Text="&#x25C6;" VerticalAlignment="Center"/>
+                <v:ActivityCompactMembersView Grid.Column="1" VerticalAlignment="Center"/>
+                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                    <Ellipse Classes="cdot" Classes.running="{Binding CompactIsRunning}"/>
+                    <TextBlock x:Name="HudClock" Classes="cclock hud"
+                               Classes.warn="{Binding IsClockWarning}"
+                               Classes.crit="{Binding IsClockCritical}"
+                               Classes.stopped="{Binding !CompactIsRunning}"
+                               Text="{Binding ClockText}"/>
+                </StackPanel>
+                <TextBlock x:Name="HudTotal" Grid.Column="3" Classes="ctotal hud" VerticalAlignment="Center"
+                           IsVisible="{Binding HasGroupTotalIsk}" Text="{Binding GroupTotalIskText}"/>
+                <Grid x:Name="HudLootRow" Grid.Column="4" ColumnDefinitions="Auto,*" ColumnSpacing="5" VerticalAlignment="Center"
+                      Background="Transparent">
                         <ToolTip.Tip>
                             <StackPanel x:Name="LootTip" Spacing="2" MinWidth="200">
                                 <TextBlock Classes="label" Text="{Binding CompactLootCaption}"/>
@@ -49,18 +61,17 @@
                             </StackPanel>
                         </ToolTip.Tip>
                         <TextBlock Classes="label" VerticalAlignment="Center" Text="L"/>
-                        <TextBlock x:Name="HudLoot" Classes="cfig" VerticalAlignment="Center" Text="{Binding CompactLootText}"/>
-                    </StackPanel>
-                    <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
-                        <TextBlock Classes="label" VerticalAlignment="Center" Text="B"/>
-                        <TextBlock x:Name="HudBounty" Classes="cfig" VerticalAlignment="Center" Text="{Binding CompactBountyText}"/>
-                    </StackPanel>
-                    <!-- A plain string tip: marked for OPSEC like every other location, masked where it is drawn. -->
-                    <TextBlock x:Name="HudWhereLabel" Classes="chint" VerticalAlignment="Center" Text="SITE"
-                               Background="Transparent" ToolTip.Tip="{Binding CompactWhereText}"/>
-                </StackPanel>
+                        <TextBlock x:Name="HudLoot" Grid.Column="1" Classes="cfig" VerticalAlignment="Center" Text="{Binding CompactLootText}"/>
+                </Grid>
+                <Grid x:Name="HudBountyRow" Grid.Column="5" ColumnDefinitions="Auto,*" ColumnSpacing="5" VerticalAlignment="Center">
+                    <TextBlock Classes="label" VerticalAlignment="Center" Text="B"/>
+                    <TextBlock x:Name="HudBounty" Grid.Column="1" Classes="cfig" VerticalAlignment="Center" Text="{Binding CompactBountyText}"/>
+                </Grid>
+                <!-- A plain string tip: marked for OPSEC like every other location, masked where it is drawn. -->
+                <TextBlock x:Name="HudWhereLabel" Grid.Column="6" Classes="chint" VerticalAlignment="Center" Text="SITE"
+                           Background="Transparent" ToolTip.Tip="{Binding CompactWhereText}"/>
 
-                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
+                <StackPanel Grid.Column="7" Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
                     <StackPanel x:Name="HudControls" Orientation="Horizontal" Spacing="4" IsVisible="{Binding !IsFollowShown}">
                         <Button x:Name="HudStartButton" Classes="cbtn sq" Content="&#x25B6;" ToolTip.Tip="START"
                                 IsVisible="{Binding IsStartButtonVisible}" IsEnabled="{Binding !IsSaving}"
