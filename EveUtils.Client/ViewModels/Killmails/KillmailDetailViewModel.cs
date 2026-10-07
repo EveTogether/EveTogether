@@ -126,6 +126,10 @@ public sealed partial class KillmailDetailViewModel : ViewModelBase, IDisposable
 
     public ObservableCollection<KillmailFitGroupViewModel> FitGroups { get; } = [];
 
+    [ObservableProperty] private string _totalDroppedText = string.Empty;
+    [ObservableProperty] private string _totalDestroyedText = string.Empty;
+    [ObservableProperty] private string _totalText = string.Empty;
+
     [ObservableProperty] private string _attackersSummaryText = string.Empty;
 
     public ObservableCollection<KillmailDetailAttackerRowViewModel> Attackers { get; } = [];
@@ -394,24 +398,49 @@ public sealed partial class KillmailDetailViewModel : ViewModelBase, IDisposable
 
         FitGroups.Clear();
         var shipLine = new KillmailDetailItemLineDto(0, detail.VictimShipTypeId, false, true, 1, detail.ShipValue);
-        FitGroups.Add(new KillmailFitGroupViewModel("SHIP",
-            detail.ShipValue is { } shipValue ? IskFormat.Compact(shipValue) : "no price",
-            [new KillmailDetailItemRowViewModel(shipLine, ShipName, null, isTopValue: true)]));
+        FitGroups.Add(_Group("HULL", [shipLine], hullName: ShipName));
 
         foreach (IGrouping<string, KillmailDetailItemLineDto> group in detail.Items
                      .GroupBy(_GroupKey)
                      .OrderBy(group => Array.IndexOf(_groupOrder, group.Key) is var index && index < 0 ? _groupOrder.Length : index))
         {
-            List<KillmailDetailItemLineDto> lines = [.. group];
-            decimal? topValue = lines.Select(line => line.Value).Max();
-            List<KillmailDetailItemRowViewModel> rows = [.. lines.Select(line => new KillmailDetailItemRowViewModel(
-                line, _sde.GetType(line.TypeId)?.Name ?? $"type {line.TypeId}", _MetaHint(line.Flag, line.TypeId),
-                line.Value is not null && line.Value == topValue))];
-
-            decimal? groupValue = _SumKnown(lines.Select(line => line.Value));
-            FitGroups.Add(new KillmailFitGroupViewModel(group.Key,
-                $"{lines.Count} · {(groupValue is { } value ? IskFormat.Compact(value) : "no price")}", rows));
+            FitGroups.Add(_Group(group.Key, [.. group]));
         }
+
+        IReadOnlyList<KillmailDetailItemLineDto> allLines = [shipLine, .. detail.Items];
+        decimal? totalDropped = _SumKnown(allLines.Where(line => !line.IsDestroyed).Select(line => line.Value));
+        decimal? totalDestroyed = _SumKnown(allLines.Where(line => line.IsDestroyed).Select(line => line.Value));
+        TotalDroppedText = _AmountText(allLines.Where(line => !line.IsDestroyed));
+        TotalDestroyedText = _AmountText(allLines.Where(line => line.IsDestroyed));
+        TotalText = totalDropped is null && totalDestroyed is null
+            ? "no price"
+            : IskFormat.Number(totalDropped.GetValueOrDefault() + totalDestroyed.GetValueOrDefault());
+    }
+
+    // One row per (flag, type, nested) — a stack that is partly dropped, partly destroyed shows both amounts on it.
+    private KillmailFitGroupViewModel _Group(string header, IReadOnlyList<KillmailDetailItemLineDto> lines, string? hullName = null)
+    {
+        List<IReadOnlyList<KillmailDetailItemLineDto>> stacks =
+            [.. lines.GroupBy(line => (line.Flag, line.TypeId, line.IsNested)).Select(stack => (IReadOnlyList<KillmailDetailItemLineDto>)[.. stack])];
+        decimal? topValue = stacks.Select(stack => _SumKnown(stack.Select(line => line.Value))).Max();
+        List<KillmailDetailItemRowViewModel> rows = [.. stacks.Select(stack =>
+        {
+            decimal? value = _SumKnown(stack.Select(line => line.Value));
+            return new KillmailDetailItemRowViewModel(stack,
+                hullName ?? _sde.GetType(stack[0].TypeId)?.Name ?? $"type {stack[0].TypeId}",
+                hullName is null ? _MetaHint(stack[0].Flag, stack[0].TypeId) : null,
+                value is not null && value == topValue);
+        })];
+
+        return new KillmailFitGroupViewModel(header, rows.Count.ToString(CultureInfo.InvariantCulture),
+            _AmountText(lines.Where(line => !line.IsDestroyed)), _AmountText(lines.Where(line => line.IsDestroyed)), rows);
+    }
+
+    // "0" for no lines at all, "no price" for lines none of which is priced — never a priced-looking 0 for those.
+    private static string _AmountText(IEnumerable<KillmailDetailItemLineDto> lines)
+    {
+        List<KillmailDetailItemLineDto> list = [.. lines];
+        return list.Count == 0 ? "0" : IskFormat.NumberOrNoPrice(_SumKnown(list.Select(line => line.Value)));
     }
 
     // "loaded" tells a charge apart from the module in the same slot (both share the flag) — the same
@@ -482,7 +511,10 @@ public sealed partial class KillmailDetailViewModel : ViewModelBase, IDisposable
     {
         if (attacker.CharacterId is not null)
         {
-            return _CorpAllianceText(names, attacker.CorporationId, attacker.AllianceId);
+            string corpAlliance = _CorpAllianceText(names, attacker.CorporationId, attacker.AllianceId);
+            return attacker.SecurityStatus is { } security
+                ? $"{corpAlliance} · sec {security.ToString("0.0", CultureInfo.InvariantCulture)}"
+                : corpAlliance;
         }
 
         if (attacker.FactionId is { } factionId)

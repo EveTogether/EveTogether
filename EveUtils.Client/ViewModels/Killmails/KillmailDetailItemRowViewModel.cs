@@ -6,23 +6,35 @@ using EveUtils.Shared.Modules.Killmails.Dtos;
 
 namespace EveUtils.Client.ViewModels.Killmails;
 
-/// <summary>One FIT-section item line on the killmail detail screen (ET-333) — the loot-line look
-/// (icon, name, quantity, value), plus a DESTROYED/DROPPED badge. A stack that is partly destroyed and partly
-/// dropped is already two <see cref="KillmailDetailItemLineDto"/> lines by the time it reaches this row.</summary>
+/// <summary>One item row of the killmail detail screen's FIT section (ET-333): icon, name, quantity and the ISK that
+/// dropped and that was destroyed, each in its own column. A stack that is partly dropped and partly destroyed is
+/// two <see cref="KillmailDetailItemLineDto"/> lines but one row, with an amount in both columns (ET-475).</summary>
 public sealed partial class KillmailDetailItemRowViewModel : ObservableObject
 {
-    public KillmailDetailItemRowViewModel(KillmailDetailItemLineDto line, string name, string? metaHint, bool isTopValue)
+    public KillmailDetailItemRowViewModel(IReadOnlyList<KillmailDetailItemLineDto> lines, string name, string? metaHint,
+        bool isTopValue)
     {
+        KillmailDetailItemLineDto? dropped = lines.FirstOrDefault(line => !line.IsDestroyed);
+        KillmailDetailItemLineDto? destroyed = lines.FirstOrDefault(line => line.IsDestroyed);
+
         Name = name;
-        TypeId = line.TypeId;
+        TypeId = lines[0].TypeId;
         Initial = name.Length > 0 ? name[..1].ToUpperInvariant() : "?";
         MetaHint = metaHint;
-        IsDestroyed = line.IsDestroyed;
-        BadgeText = line.IsDestroyed ? "DESTROYED" : "DROPPED";
-        QuantityText = line.Quantity.ToString("N0", System.Globalization.CultureInfo.InvariantCulture);
-        ValueText = line.Value is { } value ? IskFormat.Compact(value) : "no price";
+        QuantityText = IskFormat.Number(lines.Sum(line => line.Quantity));
+        DroppedText = _AmountText(dropped);
+        DestroyedText = _AmountText(destroyed);
         IsTopValue = isTopValue;
-        Value = line.Value;
+        Value = _Sum(lines);
+    }
+
+    private static string _AmountText(KillmailDetailItemLineDto? line) =>
+        line is null ? string.Empty : IskFormat.NumberOrNoPrice(line.Value);
+
+    private static decimal? _Sum(IEnumerable<KillmailDetailItemLineDto> lines)
+    {
+        List<decimal> known = [.. lines.Select(line => line.Value).OfType<decimal>()];
+        return known.Count == 0 ? null : known.Sum();
     }
 
     public string Name { get; }
@@ -40,16 +52,16 @@ public sealed partial class KillmailDetailItemRowViewModel : ObservableObject
     public async Task LoadIconAsync(ITypeImageProvider images) =>
         Icon = await images.GetImageAsync(TypeId, TypeImageKind.Icon, 32);
 
-    /// <summary>"loaded" for a charge sitting in a slot, "cargo" for an item in the cargo hold, null otherwise.</summary>
+    /// <summary>"loaded" for a charge sitting in a slot, null otherwise.</summary>
     public string? MetaHint { get; }
-
-    public bool IsDestroyed { get; }
-
-    public string BadgeText { get; }
 
     public string QuantityText { get; }
 
-    public string ValueText { get; }
+    /// <summary>Empty when nothing of the stack dropped.</summary>
+    public string DroppedText { get; }
+
+    /// <summary>Empty when nothing of the stack was destroyed.</summary>
+    public string DestroyedText { get; }
 
     /// <summary>The single highest-value row in its own group, highlighted like <c>ActivityLootLineViewModel</c>'s
     /// own top-value loot line.</summary>

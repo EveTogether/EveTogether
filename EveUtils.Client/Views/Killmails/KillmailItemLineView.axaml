@@ -4,14 +4,15 @@
              x:Class="EveUtils.Client.Views.Killmails.KillmailItemLineView"
              x:DataType="vk:KillmailDetailItemRowViewModel">
 
-    <!-- One FIT-section item line (ET-333): the ActivityLootLineView look (icon, name, quantity, value), with a
-         DESTROYED/DROPPED badge instead of SPENT/EXCLUDED. Styles: LootItemStyles.axaml. -->
+    <!-- One FIT-section item row (ET-333, columns ET-475): the ActivityLootLineView look (icon, name, quantity), then
+         the ISK that dropped (green) and that was destroyed (red) in their own columns. No stripe — a hairline under
+         every row instead. The column widths match KillmailFitGroupView's header and the column captions. -->
     <UserControl.Styles>
         <StyleInclude Source="avares://EveUtils.Client/Views/Runs/LootItemStyles.axaml"/>
     </UserControl.Styles>
 
-    <Border Classes="itemrow detailrow" Classes.top="{Binding IsTopValue}">
-        <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="6">
+    <Border Classes="itemrow detailrow" Classes.top="{Binding IsTopValue}" BorderBrush="{DynamicResource DividerBrush}">
+        <Grid ColumnDefinitions="20,*,56,128,128" ColumnSpacing="6">
             <Border Classes="icontile">
                 <Panel>
                     <TextBlock Text="{Binding Initial}" FontSize="10" FontWeight="SemiBold"
@@ -25,15 +26,10 @@
                 <TextBlock Classes="itemname" Text="{Binding Name}"/>
                 <TextBlock Classes="meta" Text="{Binding MetaHint}"
                            IsVisible="{Binding MetaHint, Converter={x:Static ObjectConverters.IsNotNull}}"/>
-                <Border Classes="badge destroyed" IsVisible="{Binding IsDestroyed}">
-                    <TextBlock Text="DESTROYED"/>
-                </Border>
-                <Border Classes="badge dropped" IsVisible="{Binding !IsDestroyed}">
-                    <TextBlock Text="DROPPED"/>
-                </Border>
             </StackPanel>
-            <TextBlock Grid.Column="2" Classes="money" MinWidth="44" Text="{Binding QuantityText}"/>
-            <TextBlock Grid.Column="3" Classes="money" MinWidth="104" Text="{Binding ValueText}"/>
+            <TextBlock Grid.Column="2" Classes="money" Text="{Binding QuantityText}"/>
+            <TextBlock Grid.Column="3" Classes="money" Foreground="{StaticResource GreenBrush}" Text="{Binding DroppedText}"/>
+            <TextBlock Grid.Column="4" Classes="money" Foreground="{StaticResource RedBrush}" Text="{Binding DestroyedText}"/>
         </Grid>
     </Border>
 </UserControl>

@@ -13,4 +13,5 @@ public sealed class EsiKillmailAttacker
     [JsonPropertyName("weapon_type_id")] public int? WeaponTypeId { get; set; }
     [JsonPropertyName("damage_done")] public int DamageDone { get; set; }
     [JsonPropertyName("final_blow")] public bool FinalBlow { get; set; }
+    [JsonPropertyName("security_status")] public double? SecurityStatus { get; set; }
 }

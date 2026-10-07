@@ -338,7 +338,8 @@ public sealed class EsiKillmailImporter(IEsiClient esi, ILocalKillmailReader kil
             ShipTypeId = attacker.ShipTypeId,
             WeaponTypeId = attacker.WeaponTypeId,
             DamageDone = attacker.DamageDone,
-            FinalBlow = attacker.FinalBlow
+            FinalBlow = attacker.FinalBlow,
+            SecurityStatus = attacker.SecurityStatus
         }).ToList()
     };
 

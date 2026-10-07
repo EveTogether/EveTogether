@@ -46,7 +46,7 @@ internal sealed class GetKillmailDetailQueryHandler(
         IReadOnlyList<KillmailDetailAttackerLineDto> attackers = [.. attackersByEsiOrder
             .Select(attacker => new KillmailDetailAttackerLineDto(attacker.Ordinal, attacker.AttackerCharacterId,
                 attacker.CorporationId, attacker.AllianceId, attacker.FactionId, attacker.ShipTypeId, attacker.WeaponTypeId,
-                attacker.DamageDone, attacker.FinalBlow, attacker.Ordinal == topDamageOrdinal))];
+                attacker.DamageDone, attacker.FinalBlow, attacker.Ordinal == topDamageOrdinal, attacker.SecurityStatus))];
 
         KillmailLinkedRunDto? linkedRun = killmail.IsLoss && killmail.RunId is { } runId
             ? await _LinkedRunAsync(db, runId, killmail.KillmailId, killmail.LinkSource, cancellationToken)

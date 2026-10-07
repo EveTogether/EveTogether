@@ -12,7 +12,7 @@ public sealed record KillmailDetailItemLineDto(
 /// <see cref="DamageDone"/>, ESI order breaking a tie).</summary>
 public sealed record KillmailDetailAttackerLineDto(
     int Ordinal, int? CharacterId, int? CorporationId, int? AllianceId, int? FactionId,
-    int? ShipTypeId, int? WeaponTypeId, int DamageDone, bool FinalBlow, bool TopDamage);
+    int? ShipTypeId, int? WeaponTypeId, int DamageDone, bool FinalBlow, bool TopDamage, double? SecurityStatus = null);
 
 /// <summary>The run a loss is linked to, as far as the killmail detail screen's LINKED RUN section needs it (ET-333):
 /// its own identity for OPEN RUN, plus the move-to-another-run candidates <see cref="Queries.GetRunLossesQuery"/>
