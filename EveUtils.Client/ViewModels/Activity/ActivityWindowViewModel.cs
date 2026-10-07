@@ -878,6 +878,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
         foreach (RunWindowSection section in _AllSections())
             section.Load(settings);
+        _LoadCompact(settings);
         await _ResolveCharacterAsync(mayAsk: false);
         await _LoadRunCharactersAsync();
         await _AdoptRunningRunAsync();
@@ -1795,6 +1796,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             section.Refresh(nowUtc);
         _RefreshGroupTotalIsk(nowUtc);
         _RefreshSummaries();
+        _RefreshCompact(nowUtc);
         _ = _RefreshActingCharacterAsync();
         _ = _RefreshRunCharactersAsync();
         _ = _RefreshParticipantsAsync();
@@ -3691,9 +3693,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
                     // yesterday's in the same fleet — reads nothing here. The larger of the two, because after a restart
                     // the tally starts empty while the rows still hold what the run earned. An own-toon group with no
                     // fleet at all (ET-257) reads the rows alone.
-                    decimal bountyIsk = FleetId is not null && _gamelog is not null
-                        ? Math.Max(_gamelog.GetRunBounty(participant.RunId), participant.BountyIsk)
-                        : participant.BountyIsk;
+                    decimal bountyIsk = _ParticipantBountyIsk(participant);
                     RunLootViewModel? loot = LootOverview?.Characters
                         .FirstOrDefault(character => character.RunId == participant.RunId)?.Loot;
                     (decimal? cost, bool has) = _ConsumableFacts(consumables, participant.RunId);
@@ -3737,6 +3737,16 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     }
 
     public IReadOnlyDictionary<long, IskBreakdown> CharacterIsk { get; private set; } = new Dictionary<long, IskBreakdown>();
+
+    /// <summary>One participant's bounty exactly as TOTAL ISK counts it, so the compact window's BOUNTY figure is the
+    /// very number TOTAL ISK is built from.</summary>
+    private decimal _ParticipantBountyIsk(RunParticipantViewModel participant) =>
+        FleetId is not null && _gamelog is not null
+            ? Math.Max(_gamelog.GetRunBounty(participant.RunId), participant.BountyIsk)
+            : participant.BountyIsk;
+
+    private decimal _GroupBountyIsk() =>
+        Participants.Count > 1 ? Participants.Sum(_ParticipantBountyIsk) : BountyIsk;
 
     private (long CharacterId, RunIskFacts Facts) _SoloRunIskFacts(ConsumablesWindowSectionViewModel? consumables,
         MiningWindowSectionViewModel? mining, IReadOnlyList<RunIskParameter> parameters, HomefrontWindowSectionViewModel? homefront)

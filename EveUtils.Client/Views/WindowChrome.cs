@@ -81,13 +81,13 @@ internal static class WindowChrome
     {
         window.PointerMoved += (_, e) =>
         {
-            if (window.WindowState != WindowState.Normal) { window.Cursor = null; return; }
+            if (window.WindowState != WindowState.Normal || !window.CanResize) { window.Cursor = null; return; }
             window.Cursor = CursorFor(EdgeAt(window, e.GetPosition(window), border));
         };
 
         window.AddHandler(InputElement.PointerPressedEvent, (_, e) =>
         {
-            if (window.WindowState != WindowState.Normal) return;
+            if (window.WindowState != WindowState.Normal || !window.CanResize) return;
             if (!e.GetCurrentPoint(window).Properties.IsLeftButtonPressed) return;
 
             if (EdgeAt(window, e.GetPosition(window), border) is { } edge)

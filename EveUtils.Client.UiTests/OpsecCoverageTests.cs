@@ -59,6 +59,8 @@ public sealed class OpsecCoverageTests
         "Clipboard/ClipboardSignatureOffer.cs|DescribeSignature",
         "ViewModels/Activity/ActivityWindowViewModel.cs|Copied signature {Signature}",
         "ViewModels/Map/MapFleetSystemChip.cs|SystemName",
+        "ViewModels/Activity/ActivityWindowViewModel.Compact.cs|CompactWhereText",
+        "ViewModels/Activity/ActivityWindowViewModel.Compact.cs|CompactAlertWhereText",
     ];
 
     /// <summary>Places proven masked, each with the test (Class.Method) that proves it.</summary>
@@ -105,6 +107,8 @@ public sealed class OpsecCoverageTests
         ["Runs/HomefrontDetector.cs|Could not offer a homefront run on {Site}"] = "OpsecSourceMarkingTests.HomefrontLogLine_MarksTheSite",
         ["Clipboard/ClipboardSignatureOffer.cs|DescribeSignature"] = "OpsecSourceMarkingTests.SignatureOffer_Toast_MarksSignatureIdAndName",
         ["ViewModels/Activity/ActivityWindowViewModel.cs|Copied signature {Signature}"] = "OpsecSourceMarkingTests.SignatureDecisionLog_MarksTheSiteName",
+        ["ViewModels/Activity/ActivityWindowViewModel.Compact.cs|CompactWhereText"] = "CompactRunWindowTests.CompactWhereText_MarksSiteAndSystem_SoOpsecCanMaskThem",
+        ["ViewModels/Activity/ActivityWindowViewModel.Compact.cs|CompactAlertWhereText"] = "CompactRunWindowTests.AnEscalationRegisteredOnTheRun_IsAChip_ThatUnfoldsSiteSystemAndDeadline_Masked",
 
         // Killmails
         ["Views/Killmails/KillmailRowView.axaml|SystemLineText"] = "OpsecScreenMarkingTests.KillmailRow_MarksSystemRegionAndSecurity",

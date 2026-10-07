@@ -174,6 +174,22 @@
                     </StackPanel>
 
                     <StackPanel Spacing="3">
+                        <TextBlock Text="RUN WINDOW" Classes="label" FontSize="9"/>
+                        <TextBlock Text="Compact view style" FontSize="11"/>
+                        <WrapPanel>
+                            <RadioButton x:Name="CompactStyleCardRadio" GroupName="compactstyle" Margin="0,0,16,4"
+                                         Content="Card"/>
+                            <RadioButton x:Name="CompactStyleHudRadio" GroupName="compactstyle" Margin="0,0,0,4"
+                                         Content="HUD line"/>
+                        </WrapPanel>
+                        <TextBlock Text="Which compact version of the run window the compact button opens. The card shows the clock, total, loot, bounty and the run buttons in 360 px; the HUD line puts them on one line and keeps the detail behind hover."
+                                   FontSize="10" Opacity="0.6" TextWrapping="Wrap"/>
+                        <CheckBox x:Name="OpenRunsCompactBox" Content="Open runs in compact view"/>
+                        <TextBlock Text="Off by default: the run window opens the way you left it. Check this to open every run window compact."
+                                   FontSize="10" Opacity="0.6" TextWrapping="Wrap"/>
+                    </StackPanel>
+
+                    <StackPanel Spacing="3">
                         <TextBlock Text="FITTINGS" Classes="label" FontSize="9"/>
                         <CheckBox x:Name="OpenFitDetailAfterImportBox" Content="Open the fit detail right after importing a fit"/>
                         <TextBlock Text="On by default. After importing from EFT/DNA text or an eveship.fit link, the full radial detail opens so you can check the import. Uncheck if you'd rather stay in the browser."

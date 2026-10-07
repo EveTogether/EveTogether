@@ -1,0 +1,112 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:v="using:EveUtils.Client.Views"
+             xmlns:va="using:EveUtils.Client.ViewModels.Activity"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="360" d:DesignHeight="158"
+             x:Class="EveUtils.Client.Views.ActivityCompactCardView"
+             x:DataType="va:ActivityWindowViewModel">
+    <UserControl.Styles>
+        <StyleInclude Source="avares://EveUtils.Client/Views/ActivityCompactStyles.axaml"/>
+    </UserControl.Styles>
+
+    <!-- The compact run window, card version (ET-478): the same window's view model read by a smaller view. Every
+         figure and every button here is one the full view binds to as well; nothing is worked out in this file. -->
+    <StackPanel>
+        <Border x:Name="CardHeader" Padding="10,6,8,6" Background="Transparent" BorderThickness="0,0,0,1"
+                BorderBrush="{DynamicResource DividerBrush}" PointerPressed="OnHeaderPressed">
+            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
+                <TextBlock Classes="diamond" Text="&#x25C6;" VerticalAlignment="Center"/>
+                <v:ActivityCompactMembersView Grid.Column="1" VerticalAlignment="Center"/>
+                <v:OverlayChromeButtons Grid.Column="2" VerticalAlignment="Top"
+                                        ShowCompactToggle="True"
+                                        IsCompact="{Binding IsCompact}"
+                                        ToggleCompactCommand="{Binding ToggleCompactCommand}"
+                                        FillOpacity="{Binding $parent[v:OverlayWindow].FillOpacity, Mode=TwoWay}"/>
+            </Grid>
+        </Border>
+
+        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="16" Margin="12,9,12,4">
+            <StackPanel Grid.Column="0" Spacing="3">
+                <TextBlock Classes="label" Text="{Binding ClockLabel}"/>
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                    <Ellipse Classes="cdot" Classes.running="{Binding CompactIsRunning}"/>
+                    <TextBlock x:Name="CompactClock" Classes="cclock"
+                               Classes.warn="{Binding IsClockWarning}"
+                               Classes.crit="{Binding IsClockCritical}"
+                               Classes.stopped="{Binding !CompactIsRunning}"
+                               Text="{Binding ClockText}"/>
+                </StackPanel>
+            </StackPanel>
+
+            <StackPanel Grid.Column="1" Spacing="3" VerticalAlignment="Bottom" IsVisible="{Binding HasGroupTotalIsk}">
+                <TextBlock Classes="label" Text="TOTAL ISK"/>
+                <TextBlock x:Name="CompactTotal" Classes="ctotal" Text="{Binding GroupTotalIskText}"/>
+            </StackPanel>
+
+            <StackPanel Grid.Column="2" Spacing="2" MinWidth="112" VerticalAlignment="Bottom">
+                <Grid x:Name="CompactLootRow" ColumnDefinitions="Auto,*" Background="Transparent">
+                    <ToolTip.Tip>
+                        <StackPanel x:Name="LootTip" Spacing="2" MinWidth="200">
+                            <TextBlock Classes="label" Text="{Binding CompactLootCaption}"/>
+                            <ItemsControl ItemsSource="{Binding CompactTopLoot}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="va:CompactLootLineViewModel">
+                                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="14">
+                                            <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis"/>
+                                            <TextBlock Grid.Column="1" Classes="cfig" Text="{Binding ValueText}"/>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <TextBlock Classes="chint" Text="{Binding CompactLootMoreText}"
+                                       IsVisible="{Binding CompactLootMoreText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                        </StackPanel>
+                    </ToolTip.Tip>
+                    <TextBlock Classes="label" VerticalAlignment="Center" Text="LOOT"/>
+                    <TextBlock x:Name="CompactLoot" Grid.Column="1" Classes="cfig" Text="{Binding CompactLootText}"/>
+                </Grid>
+                <Grid ColumnDefinitions="Auto,*">
+                    <TextBlock Classes="label" VerticalAlignment="Center" Text="BOUNTY"/>
+                    <TextBlock x:Name="CompactBounty" Grid.Column="1" Classes="cfig" Text="{Binding CompactBountyText}"/>
+                </Grid>
+            </StackPanel>
+        </Grid>
+
+        <TextBlock x:Name="CompactWhere" Classes="chint" Margin="12,2,12,0" Text="{Binding CompactWhereText}"/>
+
+        <v:ActivityCompactNoticesView Margin="12,6,12,0"/>
+
+        <!-- The commander saved or discarded the shared run (ET-458): the countdown takes the buttons' place, since
+             a pilot who follows has no use for them. -->
+        <Grid x:Name="CompactFollow" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6" Margin="12,6,12,8"
+              IsVisible="{Binding IsFollowShown}">
+            <TextBlock x:Name="CompactFollowText" TextWrapping="Wrap" VerticalAlignment="Center" FontSize="11"
+                       Text="{Binding FollowText}"/>
+            <Button x:Name="CompactFollowNow" Grid.Column="1" Classes="cbtn acc"
+                    Content="{Binding FollowActionLabel}" Command="{Binding FollowNowCommand}"/>
+            <Button x:Name="CompactFollowCancel" Grid.Column="2" Classes="cbtn"
+                    Content="{Binding FollowCancelLabel}" Command="{Binding CancelFollowCommand}"/>
+        </Grid>
+
+        <StackPanel x:Name="CompactControls" Orientation="Horizontal" Spacing="5" Margin="12,6,12,8"
+                    HorizontalAlignment="Right" IsVisible="{Binding !IsFollowShown}">
+            <Button x:Name="CompactStartButton" Classes="cbtn" Content="START"
+                    IsVisible="{Binding IsStartButtonVisible}" IsEnabled="{Binding !IsSaving}"
+                    Command="{Binding StartRunCommand}"/>
+            <Button x:Name="CompactStopButton" Classes="cbtn" Content="STOP"
+                    IsVisible="{Binding IsStopButtonVisible}" IsEnabled="{Binding !IsSaving}"
+                    Command="{Binding StopRunCommand}"/>
+            <Button x:Name="CompactKeepButton" Classes="cbtn" Content="KEEP"
+                    IsVisible="{Binding IsKeepRunButtonVisible}" IsEnabled="{Binding !IsSaving}"
+                    Command="{Binding KeepRunCommand}"/>
+            <Button x:Name="CompactSaveButton" Classes="cbtn acc" Content="{Binding SaveButtonText}"
+                    IsVisible="{Binding IsSaveButtonVisible}" IsEnabled="{Binding !IsSaving}"
+                    ToolTip.Tip="{Binding SaveButtonTooltip}" Command="{Binding SaveRunCommand}"/>
+            <Button x:Name="CompactDiscardButton" Classes="cbtn danger" Content="DISCARD"
+                    IsVisible="{Binding IsDiscardButtonVisible}" IsEnabled="{Binding !IsSaving}"
+                    Command="{Binding DiscardRunCommand}"/>
+        </StackPanel>
+    </StackPanel>
+</UserControl>

@@ -1,0 +1,99 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:va="using:EveUtils.Client.ViewModels.Activity"
+             xmlns:vs="using:EveUtils.Client.ViewModels.Runs.Sections"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="336" d:DesignHeight="40"
+             x:Class="EveUtils.Client.Views.ActivityCompactNoticesView"
+             x:DataType="va:ActivityWindowViewModel"
+             IsVisible="{Binding HasCompactNoticeContent}">
+    <UserControl.Styles>
+        <StyleInclude Source="avares://EveUtils.Client/Views/ActivityCompactStyles.axaml"/>
+    </UserControl.Styles>
+
+    <!-- What the compact window says only while it applies (ET-478). Each chip exists for as long as its situation does
+         and unfolds in the window itself on a click — one at a time, and never into the full view. -->
+    <StackPanel Spacing="4">
+        <WrapPanel ItemSpacing="5" LineSpacing="4">
+            <Button x:Name="AlertChip" Classes="cchip" IsVisible="{Binding HasCompactAlert}"
+                    Command="{Binding ToggleNoticeCommand}" CommandParameter="{x:Static va:CompactNotice.OpenEscalation}">
+                <Border Classes="chip esc"><TextBlock Text="{Binding CompactAlertChipText}"/></Border>
+            </Button>
+            <Button x:Name="PricingChip" Classes="cchip" IsVisible="{Binding HasCompactPricingNotice}"
+                    Command="{Binding ToggleNoticeCommand}" CommandParameter="{x:Static va:CompactNotice.LootPricing}">
+                <Border Classes="chip warn"><TextBlock Text="{Binding CompactPricingChipText}"/></Border>
+            </Button>
+            <Button x:Name="TierChip" Classes="cchip" IsVisible="{Binding NeedsWeatherAndTier}"
+                    Command="{Binding ToggleNoticeCommand}" CommandParameter="{x:Static va:CompactNotice.TierWeather}">
+                <Border Classes="chip warn"><TextBlock Text="SET TIER + WEATHER"/></Border>
+            </Button>
+        </WrapPanel>
+
+        <Border x:Name="AlertPanel" Classes="cexp" IsVisible="{Binding IsAlertNoticeOpen}">
+            <StackPanel Spacing="4">
+                <TextBlock Classes="label" Text="OPEN ESCALATIONS"/>
+                <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
+                    <TextBlock Classes="cfig" TextAlignment="Left" TextTrimming="CharacterEllipsis"
+                               VerticalAlignment="Center" Text="{Binding CompactAlertWhereText}"/>
+                    <TextBlock Grid.Column="1" Classes="chint" VerticalAlignment="Center" Text="{Binding CompactAlertExpiresText}"/>
+                    <Button x:Name="StartAlertButton" Grid.Column="2" Classes="cbtn acc" Content="START"
+                            IsVisible="{Binding CanStartCompactAlert}" Command="{Binding StartCompactAlertCommand}"/>
+                </Grid>
+                <TextBlock Classes="chint" TextWrapping="Wrap"
+                           IsVisible="{Binding CompactAlertMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                           Text="{Binding CompactAlertMessage}"/>
+            </StackPanel>
+        </Border>
+
+        <Border x:Name="PricingPanel" Classes="cexp" IsVisible="{Binding IsPricingNoticeOpen}">
+            <StackPanel Spacing="4">
+                <TextBlock Classes="label" Text="NEEDS A LOOK"/>
+                <TextBlock Classes="chint" TextWrapping="Wrap"
+                           IsVisible="{Binding CompactPricingDetailText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                           Text="{Binding CompactPricingDetailText}"/>
+                <TextBlock Classes="chint" TextWrapping="Wrap"
+                           IsVisible="{Binding CompactUnrecognisedDetailText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                           Text="{Binding CompactUnrecognisedDetailText}"/>
+            </StackPanel>
+        </Border>
+
+        <Border x:Name="TierPanel" Classes="cexp" IsVisible="{Binding IsTierNoticeOpen}">
+            <StackPanel Spacing="2" DataContext="{Binding CompactActivity}" x:DataType="vs:ActivityWindowSectionViewModel">
+                <TextBlock Classes="label" Text="WEATHER"/>
+                <ItemsControl ItemsSource="{Binding WeatherChoices}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="va:ActivityChoice">
+                            <Button Classes="cpick" Classes.on="{Binding IsSelected}" Content="{Binding Label}"
+                                    Command="{Binding $parent[ItemsControl].((vs:ActivityWindowSectionViewModel)DataContext).SelectWeatherCommand}"
+                                    CommandParameter="{Binding Index}"/>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <TextBlock Classes="label" Text="TIER"/>
+                <ItemsControl ItemsSource="{Binding TierChoices}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="va:ActivityChoice">
+                            <Button Classes="cpick" Classes.on="{Binding IsSelected}" Content="{Binding Label}"
+                                    Command="{Binding $parent[ItemsControl].((vs:ActivityWindowSectionViewModel)DataContext).SelectTierCommand}"
+                                    CommandParameter="{Binding Index}"/>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </Border>
+
+        <!-- Why the window is still here after SAVE, and why there are no run buttons when there are none: the
+             full view says both, and a compact window that stayed silent about them would hide a failed save. -->
+        <TextBlock x:Name="CompactRunNotice" Classes="chint" TextWrapping="Wrap"
+                   IsVisible="{Binding HasRunNotice}" Text="{Binding RunNoticeText}"/>
+        <TextBlock x:Name="CompactCommandStatus" Classes="chint" TextWrapping="Wrap"
+                   IsVisible="{Binding IsCommandStatusShown}" Text="{Binding CommandStatusText}"/>
+    </StackPanel>
+</UserControl>

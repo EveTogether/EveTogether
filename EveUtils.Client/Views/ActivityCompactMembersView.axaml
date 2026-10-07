@@ -1,0 +1,45 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:va="using:EveUtils.Client.ViewModels.Activity"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="120" d:DesignHeight="24"
+             x:Class="EveUtils.Client.Views.ActivityCompactMembersView"
+             x:DataType="va:ActivityWindowViewModel">
+
+    <!-- Who is on the run, for the card and the HUD (ET-478). Flying alone: only the name of the account that flies.
+         In a fleet: the first three as hexes and "+N" for the rest, the whole list on hover. Picking a toon is not
+         here — that stays the full view's. -->
+    <Panel>
+        <Border Classes="chip ok" IsVisible="{Binding !IsCompactFleet}">
+            <TextBlock Text="{Binding CompactSoloName}"/>
+        </Border>
+
+        <StackPanel x:Name="FleetHexes" Orientation="Horizontal" Spacing="5" Background="Transparent"
+                    IsVisible="{Binding IsCompactFleet}"
+                    ToolTip.Tip="{Binding CompactRosterText}">
+            <ItemsControl ItemsSource="{Binding CompactMembers}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <StackPanel Orientation="Horizontal" Spacing="-3"/>
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="va:CompactMemberViewModel">
+                        <Panel Width="22" Height="24">
+                            <Path Fill="{DynamicResource HexBrandBrush}" Data="M11,0 L22,6 L22,18 L11,24 L0,18 L0,6 Z"/>
+                            <Path HorizontalAlignment="Center" VerticalAlignment="Center"
+                                  Fill="{DynamicResource BgPanelBrush}" Data="M9.5,0 L19,5.25 L19,15.75 L9.5,21 L0,15.75 L0,5.25 Z"/>
+                            <TextBlock Text="{Binding Initials}" FontSize="8.5" FontWeight="Bold"
+                                       Foreground="{DynamicResource AccentBrightBrush}"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Panel>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <TextBlock x:Name="MoreMembers" Classes="chint" VerticalAlignment="Center"
+                       IsVisible="{Binding CompactMoreMembersText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                       Text="{Binding CompactMoreMembersText}"/>
+        </StackPanel>
+    </Panel>
+</UserControl>

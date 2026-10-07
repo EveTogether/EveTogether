@@ -227,6 +227,12 @@ public sealed partial class ActivityWindowSectionViewModel : RunWindowSection
     // What each registration showed, in the order registered — one line per escalation.
     private readonly List<string> _registeredEscalations = [];
 
+    /// <summary>The escalations registered on this run so far, as they will be stored at SAVE — read the way the stored
+    /// ones are, so the compact window shows them with the same site, system and deadline.</summary>
+    public IReadOnlyList<RunEscalationDto> RegisteredEscalations => RunEscalations.Read(_escalationParameters.Select(parameter =>
+        new RunParameterDto(Guid.Empty, parameter.ParameterKey, parameter.TypedValue, parameter.Amount, parameter.ItemTypeId,
+            parameter.BonusWindowSeconds, parameter.ObservedAtUtc, parameter.EntryId)));
+
     /// <summary>Every escalation registered this session, or null before the pilot has registered one — shown beside
     /// the button so pressing it again does not read as the only way to tell whether it worked.</summary>
     [ObservableProperty] private string? _escalationRegisteredText;

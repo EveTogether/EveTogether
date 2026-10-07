@@ -19,7 +19,10 @@
         Background="Transparent">
 
     <Border x:Name="Backdrop" Classes="panel">
-      <DockPanel>
+      <Panel>
+      <!-- The full view and the two compact views (ET-478) are three readings of one view model: the window shows one
+           of them at a time, and none of them keeps a run state of its own. -->
+      <DockPanel IsVisible="{Binding IsFullShown}">
         <!-- Resources and styles on the content, not on the window: a style declared on a Window is the thing that
              silently goes missing here (ET-30/ET-43), and this window inherits nothing from the shell that opened it.
 
@@ -439,6 +442,9 @@
                 </WrapPanel>
 
                 <v:OverlayChromeButtons Grid.Column="2" Margin="8,0,0,0" VerticalAlignment="Top"
+                                        ShowCompactToggle="True"
+                                        IsCompact="{Binding IsCompact}"
+                                        ToggleCompactCommand="{Binding ToggleCompactCommand}"
                                         FillOpacity="{Binding #OverlayRoot.FillOpacity, Mode=TwoWay}"/>
             </Grid>
         </Border>
@@ -697,5 +703,8 @@
             </ItemsControl>
         </ScrollViewer>
       </DockPanel>
+      <v:ActivityCompactCardView IsVisible="{Binding IsCardShown}"/>
+      <v:ActivityCompactHudView IsVisible="{Binding IsHudShown}"/>
+      </Panel>
     </Border>
 </v:OverlayWindow>

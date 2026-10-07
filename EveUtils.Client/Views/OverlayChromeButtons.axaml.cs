@@ -1,3 +1,4 @@
+using System.Windows.Input;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Data;
@@ -27,7 +28,53 @@ public partial class OverlayChromeButtons : UserControl
         set => SetValue(FillOpacityProperty, value);
     }
 
+    /// <summary>Whether the overlay has a compact view to switch to (ET-478). Off for the overlays that do not, so only
+    /// the activity window carries the fourth button.</summary>
+    public static readonly StyledProperty<bool> ShowCompactToggleProperty =
+        AvaloniaProperty.Register<OverlayChromeButtons, bool>(nameof(ShowCompactToggle));
+
+    /// <summary>Whether the overlay is in its compact view now: the button then offers the way back.</summary>
+    public static readonly StyledProperty<bool> IsCompactProperty =
+        AvaloniaProperty.Register<OverlayChromeButtons, bool>(nameof(IsCompact));
+
+    public static readonly StyledProperty<ICommand?> ToggleCompactCommandProperty =
+        AvaloniaProperty.Register<OverlayChromeButtons, ICommand?>(nameof(ToggleCompactCommand));
+
+    public static readonly StyledProperty<string> CompactToggleTipProperty =
+        AvaloniaProperty.Register<OverlayChromeButtons, string>(nameof(CompactToggleTip), "Compact view");
+
+    public bool ShowCompactToggle
+    {
+        get => GetValue(ShowCompactToggleProperty);
+        set => SetValue(ShowCompactToggleProperty, value);
+    }
+
+    public bool IsCompact
+    {
+        get => GetValue(IsCompactProperty);
+        set => SetValue(IsCompactProperty, value);
+    }
+
+    public ICommand? ToggleCompactCommand
+    {
+        get => GetValue(ToggleCompactCommandProperty);
+        set => SetValue(ToggleCompactCommandProperty, value);
+    }
+
+    public string CompactToggleTip
+    {
+        get => GetValue(CompactToggleTipProperty);
+        private set => SetValue(CompactToggleTipProperty, value);
+    }
+
     public OverlayChromeButtons() => InitializeComponent();
+
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+        if (change.Property == IsCompactProperty)
+            CompactToggleTip = IsCompact ? "Full view" : "Compact view";
+    }
 
     private void OnClose(object? sender, RoutedEventArgs e) => (TopLevel.GetTopLevel(this) as Window)?.Close();
 }

@@ -1434,6 +1434,8 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         bool autoStartSites;
         bool offerHomefrontRuns;
         bool includeLocationInLocalApi;
+        EveUtils.Client.ViewModels.Activity.CompactRunStyle compactRunStyle;
+        bool openRunsCompact;
         using (var scope = _services.CreateScope())
         {
             var settings = await scope.ServiceProvider.GetRequiredService<IDispatcher>().Query(new GetSettingsQuery());
@@ -1459,6 +1461,8 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
             autoStartSites = settings.FirstOrDefault(s => s.Key == EveUtils.Client.Clipboard.ClipboardSignatureOffer.AutoStartSettingKey)?.Value != "false"; // default on
             offerHomefrontRuns = settings.FirstOrDefault(s => s.Key == EveUtils.Client.Runs.HomefrontDetector.OfferSettingKey)?.Value != "false"; // default on
             includeLocationInLocalApi = settings.FirstOrDefault(s => s.Key == LocalApi.LocalApiServer.IncludeLocationSettingKey)?.Value == "true"; // default off
+            compactRunStyle = EveUtils.Client.Runs.CompactRunSettings.ReadStyle(settings);
+            openRunsCompact = EveUtils.Client.Runs.CompactRunSettings.ReadOpenCompact(settings);
         }
 
         var localApi = _services.GetService<LocalApi.ILocalApiServer>();
@@ -1469,7 +1473,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
             loadImages, _theme?.Current ?? FactionTheme.Gallente, SdeVersionLabel(), ApplySettingsAsync, openDetailAfterImport, toastPosition,
             localApiEnabled, localApiPort, localApiStatusLabel, localApi, checkUpdatesOnStartup, _clipboardWatch, initialCategory, openFleetRunWindow,
             autoPublishFleetRuns, shares.IsShared(MetricKind.Loot), shares.IsShared(MetricKind.MiningYield), autoStartMissions, autoStartSites,
-            _weekStart?.FirstDay ?? Calendar.WeekStartService.SystemDefault(), includeNightlyBuilds, _services.GetService<IUpdateService>(), offerHomefrontRuns, RunSetupAgainAsync, includeLocationInLocalApi, OpenWidgetManager, shares.IsKillmailShared(), followFleetCommanderEnd);
+            _weekStart?.FirstDay ?? Calendar.WeekStartService.SystemDefault(), includeNightlyBuilds, _services.GetService<IUpdateService>(), offerHomefrontRuns, RunSetupAgainAsync, includeLocationInLocalApi, OpenWidgetManager, shares.IsKillmailShared(), followFleetCommanderEnd, compactRunStyle, openRunsCompact);
     }
 
     /// <summary>Opens the About dialog: app identity + version, creator credits with portraits,
@@ -1555,6 +1559,12 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
             if (followIsChosen || result.FollowFleetCommanderEnd != result.OpenFleetRunWindowImmediately)
                 await dispatcher.Send(new SetSettingCommand(
                     EveUtils.Client.Runs.FollowFleetCommanderEnd.SettingKey, result.FollowFleetCommanderEnd ? "true" : "false"));
+            await dispatcher.Send(new SetSettingCommand(
+                EveUtils.Client.Runs.CompactRunSettings.StyleKey, result.CompactRunStyle.ToString()));
+            await dispatcher.Send(new SetSettingCommand(
+                EveUtils.Client.Runs.CompactRunSettings.OpenCompactKey, result.OpenRunsCompact ? "true" : "false"));
+            // A run window that is up and compact changes with the preference at once.
+            _activityWindow?.UseCompactStyle(result.CompactRunStyle);
             await dispatcher.Send(new SetSettingCommand(
                 EveUtils.Client.Runs.FleetRunAutoPublisher.EnabledSettingKey, result.AutoPublishFleetRuns ? "true" : "false"));
             await dispatcher.Send(new SetSettingCommand(

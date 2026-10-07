@@ -1,0 +1,146 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- What the card and the HUD of the compact run window (ET-478) are made of. Declared here and included by each of
+         the views rather than on the window: a style on a Window is the thing that silently goes missing in the overlay
+         windows, and these views inherit nothing from the full view's own styles. Resource keys only, DynamicResource
+         throughout, so a faction change re-tints them like the rest of the window. -->
+
+    <!-- The clock: amber at five minutes, red at two, white once stopped. The same three states as the full view. -->
+    <Style Selector="TextBlock.cclock">
+        <Setter Property="FontFamily" Value="{DynamicResource MonoFont}"/>
+        <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+        <Setter Property="FontSize" Value="23"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+    </Style>
+    <Style Selector="TextBlock.cclock.hud">
+        <Setter Property="FontSize" Value="15"/>
+    </Style>
+    <Style Selector="TextBlock.cclock.warn">
+        <Setter Property="Foreground" Value="{DynamicResource ValueBrush}"/>
+    </Style>
+    <Style Selector="TextBlock.cclock.crit">
+        <Setter Property="Foreground" Value="{DynamicResource RedBrush}"/>
+    </Style>
+    <Style Selector="TextBlock.cclock.stopped">
+        <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+    </Style>
+
+    <Style Selector="TextBlock.ctotal">
+        <Setter Property="FontFamily" Value="{DynamicResource MonoFont}"/>
+        <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+        <Setter Property="FontSize" Value="19"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+    </Style>
+    <Style Selector="TextBlock.ctotal.hud">
+        <Setter Property="FontSize" Value="13"/>
+    </Style>
+
+    <Style Selector="TextBlock.cfig">
+        <Setter Property="FontFamily" Value="{DynamicResource MonoFont}"/>
+        <Setter Property="Foreground" Value="{DynamicResource TextBrightBrush}"/>
+        <Setter Property="FontSize" Value="11.5"/>
+        <Setter Property="TextAlignment" Value="Right"/>
+    </Style>
+
+    <Style Selector="TextBlock.chint">
+        <Setter Property="Foreground" Value="{DynamicResource TextDimBrush}"/>
+        <Setter Property="FontSize" Value="11"/>
+        <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+    </Style>
+
+    <Style Selector="Ellipse.cdot">
+        <Setter Property="Width" Value="7"/>
+        <Setter Property="Height" Value="7"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+        <Setter Property="Fill" Value="{DynamicResource TextDimBrush}"/>
+    </Style>
+    <Style Selector="Ellipse.cdot.running">
+        <Setter Property="Fill" Value="#4ADE80"/>
+    </Style>
+
+    <!-- The run buttons: small, square-cornered, one look for START, STOP, KEEP, SAVE and DISCARD. -->
+    <Style Selector="Button.cbtn">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="CornerRadius" Value="0"/>
+        <Setter Property="Padding" Value="9,3"/>
+        <Setter Property="MinHeight" Value="0"/>
+        <Setter Property="FontSize" Value="10.5"/>
+        <Setter Property="LetterSpacing" Value="1.1"/>
+        <Setter Property="HorizontalContentAlignment" Value="Center"/>
+        <Setter Property="VerticalContentAlignment" Value="Center"/>
+    </Style>
+    <Style Selector="Button.cbtn:pointerover /template/ ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource BgRowHoverBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+        <Setter Property="Foreground" Value="{DynamicResource TextBrightBrush}"/>
+    </Style>
+    <Style Selector="Button.cbtn.acc /template/ ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+        <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+    </Style>
+    <Style Selector="Button.cbtn.danger">
+        <Setter Property="Foreground" Value="{DynamicResource RedBrush}"/>
+    </Style>
+    <Style Selector="Button.cbtn.danger:pointerover /template/ ContentPresenter">
+        <Setter Property="BorderBrush" Value="{DynamicResource RedBrush}"/>
+        <Setter Property="Foreground" Value="{DynamicResource RedBrush}"/>
+    </Style>
+    <!-- The HUD's icon buttons: a glyph and nothing else, so the line stays one line. -->
+    <Style Selector="Button.cbtn.sq">
+        <Setter Property="Padding" Value="0"/>
+        <Setter Property="Width" Value="26"/>
+        <Setter Property="Height" Value="22"/>
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="LetterSpacing" Value="0"/>
+    </Style>
+
+    <!-- A notice chip is a button with no chrome of its own: the Border.chip inside it is what is drawn. -->
+    <Style Selector="Button.cchip">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Padding" Value="0"/>
+        <Setter Property="MinHeight" Value="0"/>
+        <Setter Property="Cursor" Value="Hand"/>
+    </Style>
+    <Style Selector="Button.cchip /template/ ContentPresenter">
+        <Setter Property="Background" Value="Transparent"/>
+    </Style>
+    <Style Selector="Button.cchip:pointerover /template/ ContentPresenter">
+        <Setter Property="Background" Value="Transparent"/>
+    </Style>
+
+    <!-- The unfolded notice: one framed block under the chips. -->
+    <Style Selector="Border.cexp">
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Background" Value="{DynamicResource BgRowBrush}"/>
+        <Setter Property="Padding" Value="8,6"/>
+    </Style>
+
+    <Style Selector="Button.cpick">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="CornerRadius" Value="0"/>
+        <Setter Property="Padding" Value="7,2"/>
+        <Setter Property="MinHeight" Value="0"/>
+        <Setter Property="FontSize" Value="10.5"/>
+        <Setter Property="Margin" Value="0,0,4,4"/>
+    </Style>
+    <Style Selector="Button.cpick:pointerover /template/ ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource BgRowHoverBrush}"/>
+        <Setter Property="Foreground" Value="{DynamicResource TextBrightBrush}"/>
+    </Style>
+    <Style Selector="Button.cpick.on /template/ ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+        <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+    </Style>
+</Styles>
