@@ -251,7 +251,20 @@ public sealed class FakeSdeAccessor : ISdeAccessor
         return _map;
     }
 
-    public IReadOnlyList<SdeCelestial> GetCelestials(int solarSystemId) => [];
+    private readonly Dictionary<int, List<SdeCelestial>> _celestials = new();
+
+    public FakeSdeAccessor AddCelestial(int solarSystemId, SdeCelestial celestial)
+    {
+        if (!_celestials.TryGetValue(solarSystemId, out List<SdeCelestial>? inSystem))
+        {
+            _celestials[solarSystemId] = inSystem = [];
+        }
+
+        inSystem.Add(celestial);
+        return this;
+    }
+
+    public IReadOnlyList<SdeCelestial> GetCelestials(int solarSystemId) => _celestials.GetValueOrDefault(solarSystemId) ?? [];
 
     public string? GetNpcCorporationName(int corporationId) => _npcCorporations.GetValueOrDefault(corporationId);
 

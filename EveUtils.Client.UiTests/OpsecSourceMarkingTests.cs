@@ -1,6 +1,10 @@
 using System.Reflection;
+using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
+using EveUtils.Client.Views;
+using EveUtils.Shared.Modules.Sde.Enums;
 using EveUtils.Client.Clipboard;
 using EveUtils.Client.Dialogs;
 using EveUtils.Client.Fleet;
@@ -165,6 +169,44 @@ public sealed class OpsecSourceMarkingTests
         Assert.Equal($"{OpsecText.Mark("Jita")} · {OpsecText.Mark("The Forge")} · {OpsecText.Mark("0.9")}", killmail.SystemLineText);
         Assert.NotNull(killmail.LinkedRun);
         Assert.Equal($"{OpsecText.Mark("Angel Hideaway")} · Gila", killmail.LinkedRun.SiteText);
+    }
+
+    [AvaloniaFact]
+    public async Task KillmailDetail_LocationSection_MarksTheNearestCelestialsAndTheStargateSecurity()
+    {
+        using TestClientInstance instance = _KillmailInstance();
+        await _SeedLinkedLossAsync(instance, withPosition: true);
+
+        KillmailDetailViewModel killmail = await _LoadKillmailAsync(instance);
+
+        Assert.Equal($"1 km from {OpsecText.Mark("Stargate (Perimeter)")}", killmail.LocationSummaryText);
+        Assert.Equal([OpsecText.Mark("Stargate (Perimeter)"), OpsecText.Mark("Jita - Star")],
+            killmail.NearestCelestials.Select(row => row.Name));
+        Assert.Equal(OpsecText.Mark("1.0"), killmail.NearestCelestials[0].SecurityText);
+        Assert.Null(killmail.NearestCelestials[1].SecurityText);
+    }
+
+    [AvaloniaFact]
+    public async Task KillmailDetailWindow_OpsecOn_ShowsNoSystemRegionOrCelestialName()
+    {
+        using TestClientInstance instance = _KillmailInstance();
+        await _SeedLinkedLossAsync(instance, withPosition: true);
+        await instance.Services.GetRequiredService<IOpsecService>().SetEnabledAsync(true);
+        KillmailDetailViewModel killmail = await _LoadKillmailAsync(instance);
+        var window = new KillmailDetailWindow(killmail) { Width = 900, Height = 900 };
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+
+        using (TestOpsec.On())
+        {
+            Dispatcher.UIThread.RunJobs();
+            string[] shown = window.GetVisualDescendants().OfType<TextBlock>().Select(block => block.Text ?? string.Empty).ToArray();
+
+            Assert.True(killmail.IsMapHiddenByOpsec);
+            Assert.All(["Jita", "The Forge", "Perimeter"], place => Assert.DoesNotContain(shown, text => text.Contains(place)));
+        }
+
+        window.Close();
     }
 
     [AvaloniaFact]
@@ -359,12 +401,16 @@ public sealed class OpsecSourceMarkingTests
             services.AddSingleton<IDialogService>(new RecordingDialogService());
             services.AddSingleton<ISdeAccessor>(new FakeSdeAccessor()
                 .Add(Gila, "Gila", 26, 6)
-                .AddSolarSystem(new SdeSolarSystem(Jita, "Jita", 0.946, "The Forge")));
+                .AddSolarSystem(new SdeSolarSystem(Jita, "Jita", 0.946, "The Forge"))
+                .AddCelestial(Jita, new SdeCelestial(1, CelestialKind.Star, "Jita - Star", 0, 0, 0))
+                .AddCelestial(Jita, new SdeCelestial(2, CelestialKind.Stargate, "Stargate (Perimeter)", 5_000, 0, 0,
+                    30000144, "Perimeter", 0.95)));
         });
 
     /// <summary>A Gila lost on the Angel Hideaway run, while a Serpentis Lookout run of the same pilot was also going —
     /// the run the loss could be moved to.</summary>
-    private static async Task<(Guid LinkedRunId, DateTime OtherStartedAtUtc)> _SeedLinkedLossAsync(TestClientInstance instance)
+    private static async Task<(Guid LinkedRunId, DateTime OtherStartedAtUtc)> _SeedLinkedLossAsync(TestClientInstance instance,
+        bool withPosition = false)
     {
         ICqrsDispatcher dispatcher = instance.Services.GetRequiredService<ICqrsDispatcher>();
         await instance.Services.GetRequiredService<ICharacterRegistry>().AddOrUpdateAsync(new Character("Ra Vinter", (int)Pilot), Ct);
@@ -377,7 +423,8 @@ public sealed class OpsecSourceMarkingTests
             {
                 CharacterId = (int)Pilot, KillmailId = 1, Hash = "hash1", KillmailTimeUtc = StartedAtUtc.AddMinutes(10),
                 SolarSystemId = Jita, IsLoss = true, VictimShipTypeId = Gila, VictimCharacterId = (int)Pilot,
-                RunId = linkedRunId, LinkSource = KillmailLinkSource.Auto, ImportedAtUtc = DateTime.UtcNow
+                RunId = linkedRunId, LinkSource = KillmailLinkSource.Auto, ImportedAtUtc = DateTime.UtcNow,
+                PositionX = withPosition ? 4_000 : null, PositionY = withPosition ? 0 : null, PositionZ = withPosition ? 0 : null
             }
         ], Ct);
         await dispatcher.Send(new RebuildActivitySummariesCommand(), Ct);

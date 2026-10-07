@@ -114,6 +114,9 @@ public sealed class OpsecCoverageTests
         ["Views/Killmails/KillmailRowView.axaml|SystemLineText"] = "OpsecScreenMarkingTests.KillmailRow_MarksSystemRegionAndSecurity",
         ["Views/Killmails/KillmailRowView.axaml|SecurityText"] = "OpsecScreenMarkingTests.KillmailRow_MarksSystemRegionAndSecurity",
         ["Views/KillmailDetailWindow.axaml|SystemLineText"] = "OpsecSourceMarkingTests.KillmailDetail_MarksSystemRegionSecurityAndTheLinkedSite",
+        ["Views/KillmailDetailWindow.axaml|LocationSummaryText"] = "OpsecSourceMarkingTests.KillmailDetail_LocationSection_MarksTheNearestCelestialsAndTheStargateSecurity",
+        ["Views/KillmailDetailWindow.axaml|SecurityText"] = "OpsecSourceMarkingTests.KillmailDetail_LocationSection_MarksTheNearestCelestialsAndTheStargateSecurity",
+        ["Views/KillmailDetailWindow.axaml|Location"] = "OpsecSourceMarkingTests.KillmailDetailWindow_OpsecOn_ShowsNoSystemRegionOrCelestialName",
         ["Views/Killmails/KillmailLinkedRunView.axaml|SiteText"] = "OpsecSourceMarkingTests.KillmailDetail_MarksSystemRegionSecurityAndTheLinkedSite",
         ["ViewModels/Killmails/KillmailDetailViewModel.cs|linkedRun.SiteName"] = "OpsecSourceMarkingTests.KillmailDetail_MarksSystemRegionSecurityAndTheLinkedSite",
 
@@ -177,6 +180,7 @@ public sealed class OpsecCoverageTests
         ["Views/Runs/Sections/EscalationDetailSectionView.axaml|EscalationExpiresAtText"] = "when the escalation expires, a time",
         ["Views/Runs/Sections/EscalationDetailSectionView.axaml|EscalationObservedText"] = "when the escalation was read from the Agency, a time",
         ["Views/Runs/Sections/EscalationDetailSectionView.axaml|EscalationJumpsEmptyText"] = "why the jump count could not be read, never a count or a place",
+        ["Views/KillmailDetailWindow.axaml|LocationHintText"] = "fixed sentences saying why no map is shown (abyssal, no position yet, no SDE data), never a place",
         ["Views/Runs/RunsSummaryPane.axaml|TopSites"] = "an item source; what its rows show is bound, and listed here, as Site",
     };
 
