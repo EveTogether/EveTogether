@@ -117,6 +117,34 @@ public sealed class HomeRefreshTests
         Assert.Equal(fleetsBefore, home.Fleets.ReadCount);
     }
 
+    /// <summary>ET-476: the run being saved is still on the home's running band when its change arrives, so the change
+    /// looked like a bounty on a running run and only the band was read — the saved run never reached LATEST RUNS.</summary>
+    [AvaloniaFact]
+    public async Task SavingTheRunningRun_ShowsItInLatestRuns()
+    {
+        using var instance = TestClientInstance.Create(services =>
+            services.AddSingleton(provider => new RunChangeFeed(provider.GetRequiredService<IEventBus>(),
+                provider.GetRequiredService<ILogger<RunChangeFeed>>(), TimeSpan.FromMilliseconds(20))));
+        IDispatcher dispatcher = instance.Services.GetRequiredService<IDispatcher>();
+        await instance.Services.GetRequiredService<ICharacterRegistry>().AddOrUpdateAsync(new Character("Noahmarr", (int)CharacterId), TestContext.Current.CancellationToken);
+        DateTime startedAtUtc = DateTime.UtcNow.AddMinutes(-20);
+        Result<Guid> started = await dispatcher.Send(new StartRunCommand(CharacterId, ActivityKind.Site, startedAtUtc, 1234, "Homefront", 30002187));
+
+        using var home = new HomeDashboardViewModel(instance.Services, HomeNavigation.None, []);
+        await home.LoadAsync();
+        Assert.Empty(home.LatestRuns.Items);
+
+        await dispatcher.Send(new SaveRunCommand(started.Value, startedAtUtc.AddMinutes(15), startedAtUtc.AddMinutes(16), [],
+            [new RunBountyEntryInput { OccurredAtUtc = startedAtUtc.AddMinutes(5), Isk = 1_000_000m }], [], []));
+        for (int settle = 0; settle < 40 && home.LatestRuns.Items.Count == 0; settle++)
+        {
+            Dispatcher.UIThread.RunJobs();
+            await Task.Delay(25, TestContext.Current.CancellationToken);
+        }
+
+        Assert.NotEmpty(home.LatestRuns.Items);
+    }
+
     private static async Task _SaveRunAsync(IDispatcher dispatcher, DateTime startedAtUtc)
     {
         Result<Guid> started = await dispatcher.Send(new StartRunCommand(CharacterId, ActivityKind.Site, startedAtUtc, 1234, "Homefront", 30002187));

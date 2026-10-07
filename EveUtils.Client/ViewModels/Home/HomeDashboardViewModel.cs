@@ -205,12 +205,13 @@ public sealed partial class HomeDashboardViewModel : ObservableObject, IRefresha
                 bool readAll = isFull;
                 Dictionary<Guid, ActivityOverviewRowViewModel> shownRows = LatestRuns.Items.OfType<HomeRunLine>()
                     .ToDictionary(line => line.Row.ActivitySummaryId, line => line.Row);
-                if (readAll)
-                    RunsReadCount++;
-                else
-                    RunningReadCount++;
+                HashSet<Guid> runningBefore = [.. Running?.Lanes.Select(lane => lane.Run?.Id).OfType<Guid>() ?? []];
                 HomeRunsRead read = await Task.Run(() =>
-                    _ReadRunsOffThreadAsync(dispatcher, registry, nowLocal, firstDay, readAll, shownRows));
+                    _ReadRunsOffThreadAsync(dispatcher, registry, nowLocal, firstDay, readAll, shownRows, runningBefore));
+                if (read.Facts is null)
+                    RunningReadCount++;
+                else
+                    RunsReadCount++;
                 _ShowRuns(read, nowLocal, firstDay);
                 isFull = _isOwedReadFull;
             }
@@ -233,10 +234,15 @@ public sealed partial class HomeDashboardViewModel : ObservableObject, IRefresha
     }
 
     private async Task<HomeRunsRead> _ReadRunsOffThreadAsync(CqrsDispatcher dispatcher, ICharacterRegistry registry,
-        DateTime nowLocal, DayOfWeek firstDay, bool readAll, IReadOnlyDictionary<Guid, ActivityOverviewRowViewModel> shownRows)
+        DateTime nowLocal, DayOfWeek firstDay, bool readAll, IReadOnlyDictionary<Guid, ActivityOverviewRowViewModel> shownRows,
+        IReadOnlySet<Guid> runningBefore)
     {
         IReadOnlyList<Character> characters = await registry.GetAllAsync();
         IReadOnlyList<RunningRunFacts>? running = await RunningBandViewModel.ReadAsync(dispatcher, _facts);
+        // A change on a running run is either a bounty landing or the run being stopped, saved or discarded — only the
+        // band tells them apart, and a run that has left it is a saved one the other blocks have not seen yet.
+        if (!readAll && running is not null && runningBefore.Any(id => running.All(now => now.Run.Id != id)))
+            readAll = true;
         if (!readAll)
             return new HomeRunsRead(characters, running, null);
 
