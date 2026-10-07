@@ -1,0 +1,110 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:v="using:EveUtils.Client.Views"
+             xmlns:va="using:EveUtils.Client.ViewModels.Activity"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="560" d:DesignHeight="34"
+             x:Class="EveUtils.Client.Views.ActivityCompactHudView"
+             x:DataType="va:ActivityWindowViewModel">
+    <UserControl.Styles>
+        <StyleInclude Source="avares://EveUtils.Client/Views/ActivityCompactStyles.axaml"/>
+    </UserControl.Styles>
+
+    <!-- The compact run window, HUD version (ET-478): one line, the detail behind hover. Same view model, same
+         properties and commands as the card and the full view. -->
+    <StackPanel>
+        <Border x:Name="HudLine" Height="32" Padding="10,0,6,0" Background="Transparent" PointerPressed="OnLinePressed">
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                <StackPanel Orientation="Horizontal" Spacing="11" VerticalAlignment="Center">
+                    <TextBlock Classes="diamond" Text="&#x25C6;" VerticalAlignment="Center"/>
+                    <v:ActivityCompactMembersView VerticalAlignment="Center"/>
+                    <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                        <Ellipse Classes="cdot" Classes.running="{Binding CompactIsRunning}"/>
+                        <TextBlock x:Name="HudClock" Classes="cclock hud"
+                                   Classes.warn="{Binding IsClockWarning}"
+                                   Classes.crit="{Binding IsClockCritical}"
+                                   Classes.stopped="{Binding !CompactIsRunning}"
+                                   Text="{Binding ClockText}"/>
+                    </StackPanel>
+                    <TextBlock x:Name="HudTotal" Classes="ctotal hud" VerticalAlignment="Center"
+                               IsVisible="{Binding HasGroupTotalIsk}" Text="{Binding GroupTotalIskText}"/>
+                    <StackPanel x:Name="HudLootRow" Orientation="Horizontal" Spacing="5" VerticalAlignment="Center"
+                                Background="Transparent">
+                        <ToolTip.Tip>
+                            <StackPanel x:Name="LootTip" Spacing="2" MinWidth="200">
+                                <TextBlock Classes="label" Text="{Binding CompactLootCaption}"/>
+                                <ItemsControl ItemsSource="{Binding CompactTopLoot}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="va:CompactLootLineViewModel">
+                                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="14">
+                                                <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis"/>
+                                                <TextBlock Grid.Column="1" Classes="cfig" Text="{Binding ValueText}"/>
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <TextBlock Classes="chint" Text="{Binding CompactLootMoreText}"
+                                           IsVisible="{Binding CompactLootMoreText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                            </StackPanel>
+                        </ToolTip.Tip>
+                        <TextBlock Classes="label" VerticalAlignment="Center" Text="L"/>
+                        <TextBlock x:Name="HudLoot" Classes="cfig" VerticalAlignment="Center" Text="{Binding CompactLootText}"/>
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
+                        <TextBlock Classes="label" VerticalAlignment="Center" Text="B"/>
+                        <TextBlock x:Name="HudBounty" Classes="cfig" VerticalAlignment="Center" Text="{Binding CompactBountyText}"/>
+                    </StackPanel>
+                    <!-- A plain string tip: marked for OPSEC like every other location, masked where it is drawn. -->
+                    <TextBlock x:Name="HudWhereLabel" Classes="chint" VerticalAlignment="Center" Text="SITE"
+                               Background="Transparent" ToolTip.Tip="{Binding CompactWhereText}"/>
+                </StackPanel>
+
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
+                    <StackPanel x:Name="HudControls" Orientation="Horizontal" Spacing="4" IsVisible="{Binding !IsFollowShown}">
+                        <Button x:Name="HudStartButton" Classes="cbtn sq" Content="&#x25B6;" ToolTip.Tip="START"
+                                IsVisible="{Binding IsStartButtonVisible}" IsEnabled="{Binding !IsSaving}"
+                                Command="{Binding StartRunCommand}"/>
+                        <Button x:Name="HudStopButton" Classes="cbtn sq" Content="&#x25A0;" ToolTip.Tip="STOP"
+                                IsVisible="{Binding IsStopButtonVisible}" IsEnabled="{Binding !IsSaving}"
+                                Command="{Binding StopRunCommand}"/>
+                        <Button x:Name="HudKeepButton" Classes="cbtn sq" Content="&#x21A9;"
+                                ToolTip.Tip="KEEP — drop the copy that is waiting and carry on"
+                                IsVisible="{Binding IsKeepRunButtonVisible}" IsEnabled="{Binding !IsSaving}"
+                                Command="{Binding KeepRunCommand}"/>
+                        <Button x:Name="HudSaveButton" Classes="cbtn sq acc" Content="&#x2713;"
+                                ToolTip.Tip="{Binding SaveButtonTooltip}"
+                                IsVisible="{Binding IsSaveButtonVisible}" IsEnabled="{Binding !IsSaving}"
+                                Command="{Binding SaveRunCommand}"/>
+                        <Button x:Name="HudDiscardButton" Classes="cbtn sq danger" Content="&#x2715;"
+                                ToolTip.Tip="DISCARD — asks to confirm"
+                                IsVisible="{Binding IsDiscardButtonVisible}" IsEnabled="{Binding !IsSaving}"
+                                Command="{Binding DiscardRunCommand}"/>
+                    </StackPanel>
+                    <v:OverlayChromeButtons VerticalAlignment="Center"
+                                            ShowCompactToggle="True"
+                                            IsCompact="{Binding IsCompact}"
+                                            ToggleCompactCommand="{Binding ToggleCompactCommand}"
+                                            FillOpacity="{Binding $parent[v:OverlayWindow].FillOpacity, Mode=TwoWay}"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- A second line, only while there is something to say on it. -->
+        <Border BorderThickness="0,1,0,0" BorderBrush="{DynamicResource DividerBrush}" Padding="10,4"
+                IsVisible="{Binding HasCompactNotice}">
+            <StackPanel Spacing="6">
+                <v:ActivityCompactNoticesView/>
+                <Grid x:Name="HudFollow" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6"
+                      IsVisible="{Binding IsFollowShown}">
+                    <TextBlock x:Name="HudFollowText" TextWrapping="Wrap" VerticalAlignment="Center" FontSize="11"
+                               Text="{Binding FollowText}"/>
+                    <Button x:Name="HudFollowNow" Grid.Column="1" Classes="cbtn acc"
+                            Content="{Binding FollowActionLabel}" Command="{Binding FollowNowCommand}"/>
+                    <Button x:Name="HudFollowCancel" Grid.Column="2" Classes="cbtn"
+                            Content="{Binding FollowCancelLabel}" Command="{Binding CancelFollowCommand}"/>
+                </Grid>
+            </StackPanel>
+        </Border>
+    </StackPanel>
+</UserControl>

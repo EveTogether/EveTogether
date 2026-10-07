@@ -244,8 +244,7 @@ public sealed partial class LootWindowSectionViewModel : RunWindowSection
 
     private string _LootItemCount()
     {
-        int items = LootOverview?.Characters.Sum(block => block.Loot.Captures
-            .Where(capture => !capture.IsExcluded).Sum(capture => capture.Entries.Count)) ?? 0;
+        int items = LootOverview?.CountedItemCount ?? 0;
         return items == 1 ? "1 item" : $"{items} items";
     }
 

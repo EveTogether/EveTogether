@@ -25,6 +25,18 @@
             </Style>
         </StackPanel.Styles>
 
+        <!-- Compact view on and off (ET-478), left of opacity so the other three keep their place against the right
+             edge. Arrows pointing in while the window is full, out while it is compact. -->
+        <Button x:Name="CompactToggleButton" Classes="overlaybtn"
+                IsVisible="{Binding #ChromeRoot.ShowCompactToggle}"
+                Command="{Binding #ChromeRoot.ToggleCompactCommand}"
+                ToolTip.Tip="{Binding #ChromeRoot.CompactToggleTip}">
+            <Panel>
+                <mi:MaterialIcon Classes="chrome" Kind="ArrowCollapseAll" IsVisible="{Binding !#ChromeRoot.IsCompact}"/>
+                <mi:MaterialIcon Classes="chrome" Kind="ArrowExpandAll" IsVisible="{Binding #ChromeRoot.IsCompact}"/>
+            </Panel>
+        </Button>
+
         <!-- A half-filled disc: how solid the backdrop is. Material's own "Opacity" is a droplet, which says liquid
              rather than transparency; CircleHalfFull is the disc this button has shown since it existed. -->
         <Button Classes="overlaybtn" ToolTip.Tip="Overlay opacity">

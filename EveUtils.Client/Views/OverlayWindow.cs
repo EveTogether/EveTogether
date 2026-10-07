@@ -83,7 +83,21 @@ public abstract class OverlayWindow : Window
 
         _lastPosition = Position;
         _ready = true;
+        OnGeometryRestored(geometry is not null);
     }
+
+    /// <summary>Called once the remembered geometry has been applied, or found to be none. A window with a shape of its
+    /// own to take on (the activity window's compact view) lays itself out here, on top of what was restored.</summary>
+    protected virtual void OnGeometryRestored(bool wasRemembered)
+    {
+    }
+
+    /// <summary>The size to remember. What is on screen, unless the window is showing a shape that must not replace the
+    /// one the pilot sized (the compact view next to the full one).</summary>
+    protected virtual Size PersistedSize => Bounds.Size;
+
+    /// <summary>The position to remember for a window currently at <paramref name="position"/>.</summary>
+    protected virtual PixelPoint PersistedPosition(PixelPoint position) => position;
 
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs e)
     {
@@ -106,19 +120,24 @@ public abstract class OverlayWindow : Window
         _saveDebounce.Start();
     }
 
-    private Task PersistAsync() =>
-        string.IsNullOrEmpty(GeometryKey)
-            ? Task.CompletedTask
-            : OverlayGeometryStore.SaveAsync(GeometryKey, new OverlayGeometry
-            {
-                HasPosition = true,
-                X = _lastPosition.X,
-                Y = _lastPosition.Y,
-                Width = Bounds.Width,
-                Height = Bounds.Height,
-                Opacity = FillOpacity,
-                Pinned = Topmost
-            });
+    private Task PersistAsync()
+    {
+        if (string.IsNullOrEmpty(GeometryKey))
+            return Task.CompletedTask;
+
+        PixelPoint position = PersistedPosition(_lastPosition);
+        Size size = PersistedSize;
+        return OverlayGeometryStore.SaveAsync(GeometryKey, new OverlayGeometry
+        {
+            HasPosition = true,
+            X = position.X,
+            Y = position.Y,
+            Width = size.Width,
+            Height = size.Height,
+            Opacity = FillOpacity,
+            Pinned = Topmost
+        });
+    }
 
     protected override void OnClosing(WindowClosingEventArgs e)
     {

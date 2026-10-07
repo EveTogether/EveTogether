@@ -1,4 +1,6 @@
 using System;
+using System.ComponentModel;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using EveUtils.Client.Input;
@@ -17,21 +19,41 @@ namespace EveUtils.Client.Views;
 /// </summary>
 public partial class ActivityWindow : OverlayWindow
 {
+    // The compact views have a width of their own and grow in height with what they show (ET-478). The size the pilot
+    // gave the full window is kept apart, so the compact shape neither replaces it nor is lost when going back.
+    private const double CardWidth = 360;
+    private const double HudWidth = 560;
+    private const double CompactMinHeight = 34;
+
     private readonly ActivityWindowViewModel? _viewModel;
+    private readonly Size _fullMinSize;
+    private Size _fullSize;
+    private double? _compactWidth;
     private bool _closeApproved;
 
     protected override string GeometryKey => OverlayGeometryStore.ForActivity();
+
+    protected override Size PersistedSize => _compactWidth is null ? base.PersistedSize : _fullSize;
+
+    /// <summary>The compact window is anchored by its right edge, so what is remembered is where the full window would
+    /// stand with that same right edge.</summary>
+    protected override PixelPoint PersistedPosition(PixelPoint position) => _compactWidth is null
+        ? position
+        : new PixelPoint(position.X + (int)Math.Round((Bounds.Width - _fullSize.Width) * RenderScaling), position.Y);
 
     public ActivityWindow()
     {
         InitializeComponent();
         UseBackdrop(Backdrop);
+        _fullMinSize = new Size(MinWidth, MinHeight);
+        _fullSize = new Size(Width, Height);
     }
 
     public ActivityWindow(ActivityWindowViewModel viewModel) : this()
     {
         _viewModel = viewModel;
         DataContext = viewModel;
+        viewModel.PropertyChanged += _OnViewModelChanged;
         // Only when the run is done with: a save that landed, or a discard by the pilot who commands it (ET-155). A
         // failed one leaves the window standing with the reason on it, and a group member's save never reaches this
         // window — it is raised by the view model this window owns.
@@ -85,16 +107,83 @@ public partial class ActivityWindow : OverlayWindow
         Close();
     }
 
+    private void _OnViewModelChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(ActivityWindowViewModel.IsCompact) or nameof(ActivityWindowViewModel.CompactStyle))
+            _ApplyShape();
+    }
+
+    /// <summary>What was remembered is the full window's geometry, so a window that restores into the compact view is
+    /// laid out again from that.</summary>
+    protected override void OnGeometryRestored(bool wasRemembered)
+    {
+        base.OnGeometryRestored(wasRemembered);
+        if (wasRemembered)
+        {
+            _fullSize = new Size(Width, Height);
+            _compactWidth = null;
+        }
+
+        _ApplyShape();
+    }
+
+    /// <summary>Takes the window to the shape the view model asks for. The right edge stays where it was, so the
+    /// toggle button is still under the pointer afterwards and the window does not jump.</summary>
+    private void _ApplyShape()
+    {
+        if (_viewModel is null)
+            return;
+
+        double? wanted = !_viewModel.IsCompact ? null
+            : _viewModel.CompactStyle is CompactRunStyle.Hud ? HudWidth : CardWidth;
+        if (wanted == _compactWidth)
+            return;
+
+        double currentWidth = double.IsNaN(Width) ? Bounds.Width : Width;
+        int rightEdge = Position.X + (int)Math.Round(currentWidth * RenderScaling);
+        if (_compactWidth is null && wanted is not null)
+            _fullSize = new Size(currentWidth, double.IsNaN(Height) ? Bounds.Height : Height);
+
+        _compactWidth = wanted;
+        if (wanted is { } width)
+        {
+            CanResize = false;
+            MinWidth = width;
+            MinHeight = CompactMinHeight;
+            Width = width;
+            Height = double.NaN;
+            SizeToContent = SizeToContent.Height;
+        }
+        else
+        {
+            SizeToContent = SizeToContent.Manual;
+            CanResize = true;
+            MinWidth = _fullMinSize.Width;
+            MinHeight = _fullMinSize.Height;
+            Width = _fullSize.Width;
+            Height = _fullSize.Height;
+        }
+
+        double newWidth = wanted ?? _fullSize.Width;
+        Position = new PixelPoint(rightEdge - (int)Math.Round(newWidth * RenderScaling), Position.Y);
+    }
+
     protected override void OnClosed(EventArgs e)
     {
         if (_viewModel is not null)
+        {
             _viewModel.CloseRequested -= _CloseFromViewModel;
+            _viewModel.PropertyChanged -= _OnViewModelChanged;
+        }
 
         _viewModel?.Dispose();
         base.OnClosed(e);
     }
 
     private void OnHeaderPressed(object? sender, PointerPressedEventArgs e) => BeginHeaderDrag(e);
+
+    /// <summary>The compact views' own header and line are drag handles like the full view's header.</summary>
+    internal void BeginDrag(PointerPressedEventArgs e) => BeginHeaderDrag(e);
 
     // ET-319: Ctrl+Shift+S saves the running run, the exact route the SAVE button's own Command already takes — not
     // a second save path. While ET-320's global registration holds this same combination, Windows delivers it here

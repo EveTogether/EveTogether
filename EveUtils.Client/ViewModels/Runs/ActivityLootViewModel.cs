@@ -121,16 +121,39 @@ public sealed partial class ActivityLootViewModel : ObservableObject
 
     /// <summary>Counted, not hidden: a row the lookup has no price for is not worth nothing, it is worth something
     /// nobody has told us (ET-159 AC-2).</summary>
-    public string? LinesWithoutPriceText => Characters.Sum(block => block.Loot.EntriesWithoutPrice) switch
+    public string? LinesWithoutPriceText => EntriesWithoutPriceCount switch
     {
         0 => null,
         1 => "1 line has no price in the cache and counts towards nothing.",
         var count => $"{count} lines have no price in the cache and count towards nothing."
     };
 
+    public int EntriesWithoutPriceCount => Characters.Sum(block => block.Loot.EntriesWithoutPrice);
+
+    public int UnrecognisedCount => Characters.Sum(block => block.Loot.UnrecognisedCount);
+
+    /// <summary>The loot kinds that count, over every block and every capture that is not excluded.</summary>
+    public int CountedItemCount => Characters.Sum(block => block.Loot.Captures
+        .Where(capture => !capture.IsExcluded).Sum(capture => capture.Entries.Count));
+
+    /// <summary>The most valuable items the group picked up, the same type added up across the blocks. Priced lines
+    /// first, by value; the ones with no price after them.</summary>
+    public IReadOnlyList<(string Name, long Quantity, decimal? Value)> TopItems(int count) =>
+    [
+        .. Characters
+            .SelectMany(block => block.Loot.ItemRows)
+            .Where(row => !row.IsExcluded && !row.IsLost)
+            .GroupBy(row => row.ItemTypeId)
+            .Select(rows => (Name: rows.First().Name, Quantity: rows.Sum(row => row.Quantity ?? 1),
+                Value: rows.Any(row => row.Value is not null) ? rows.Sum(row => row.Value ?? 0m) : (decimal?)null))
+            .OrderByDescending(item => item.Value.HasValue)
+            .ThenByDescending(item => item.Value)
+            .Take(count)
+    ];
+
     /// <summary>Names that were copied but no SDE type carries yet (ET-460): they count as 0 in every figure above, and
     /// that is said here instead of the lines quietly missing from the total.</summary>
-    public string? UnrecognisedText => Characters.Sum(block => block.Loot.UnrecognisedCount) switch
+    public string? UnrecognisedText => UnrecognisedCount switch
     {
         0 => null,
         1 => "1 copied name is not recognised yet and counts as 0 until the EVE static data knows it.",
