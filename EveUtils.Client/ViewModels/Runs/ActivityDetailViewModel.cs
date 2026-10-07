@@ -500,6 +500,8 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
         RunDetailSectionInput input = _Apply(detail);
         foreach (RunDetailSection section in _sections)
             await section.LoadAsync(input, followUp, cancellationToken);
+        // A section whose content only a read tells (FLEET KILLS, ET-373) is placed once that read is in.
+        _ApplySectionsPerType(input.RunType);
     }
 
     private RunDetailSectionInput _Apply(ActivityDetailDto detail)

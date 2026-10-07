@@ -612,6 +612,13 @@ namespace EveUtils.Migrations.Client.Sqlite.Migrations
                     b.Property<Guid?>("RunId")
                         .HasColumnType("TEXT");
 
+                    b.Property<long?>("SharedFromFleetId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("SharedFromServer")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
                     b.Property<int>("SolarSystemId")
                         .HasColumnType("INTEGER");
 

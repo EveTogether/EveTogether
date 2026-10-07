@@ -60,7 +60,7 @@ public sealed partial class LossDetailSectionViewModel(RunDetailSectionServices 
 
         if (!_namesBuilt)
         {
-            _names = _BuildNames();
+            _names = DetailKillmailNames.Build(services);
             _namesBuilt = true;
         }
 
@@ -85,7 +85,8 @@ public sealed partial class LossDetailSectionViewModel(RunDetailSectionServices 
                 _ChangedAsync,
                 services.Services is not null ? () => _OpenKillmail(lossCharacterId, lossKillmailId) : null)
             {
-                ShipText = _TypeName(loss.VictimShipTypeId),
+                PilotText = input.NameOf(loss.CharacterId),
+                ShipText = _ShipName(loss.VictimShipTypeId),
                 FitText = run?.FitNameSnapshot ?? "no fit recorded",
                 TimeText = $"{loss.KillmailTimeUtc.ToLocalTime():d MMM HH:mm:ss}",
                 FinalBlowText = loss.FinalBlow is { } finalBlow ? _FinalBlowText(finalBlow) : "unknown",
@@ -121,43 +122,9 @@ public sealed partial class LossDetailSectionViewModel(RunDetailSectionServices 
         _ => "the only run of this pilot at that time, place and hull"
     };
 
-    // The one place a final blow is named: a player through KillmailNames (ET-336, hydrated above), an NPC
-    // corporation or faction from the SDE — the same split KillmailsOverviewViewModel draws (ET-332).
-    private string _FinalBlowText(KillmailFinalBlowDto finalBlow)
-    {
-        string who = finalBlow switch
-        {
-            { CharacterId: { } character } => _names?.NameOf(character) ?? $"character {character}",
-            { CorporationId: { } corporation } =>
-                _names?.NameOf(corporation) ?? services.Sde?.GetNpcCorporationName(corporation) ?? $"corporation {corporation}",
-            { FactionId: { } faction } => services.Sde?.GetFactionName(faction) ?? $"faction {faction}",
-            _ => "unknown"
-        };
-        return finalBlow.ShipTypeId is { } ship ? $"{who} in {_TypeName(ship)}" : who;
-    }
+    private string _FinalBlowText(KillmailFinalBlowDto finalBlow) => DetailKillmailNames.FinalBlowText(finalBlow, _names, services.Sde);
 
-    private string _TypeName(int typeId) => services.Sde?.GetType(typeId)?.Name ?? $"type {typeId}";
-
-    // Every dependency here is optional, like the rest of this section (RunDetailSectionServices' own rule): missing
-    // any one of them means no live player-name resolution, not a crash — _FinalBlowText falls back to the bare id.
-    private KillmailNames? _BuildNames()
-    {
-        if (services.Services is not { } provider || services.Sde is not { } sde)
-        {
-            return null;
-        }
-
-        IEsiAffiliationResolver? affiliation = provider.GetService<IEsiAffiliationResolver>();
-        IKillmailEntityNameRepository? repository = provider.GetService<IKillmailEntityNameRepository>();
-        ISettingRepository? settings = provider.GetService<ISettingRepository>();
-        if (affiliation is null || repository is null || settings is null)
-        {
-            return null;
-        }
-
-        Dictionary<int, string> ownNames = (services.OwnCharacterIds ?? new HashSet<long>())
-            .ToDictionary(id => (int)id, id => services.NameOf?.Invoke(id) ?? id.ToString());
-        return new KillmailNames(ownNames, provider.GetService<IExternalCharacterLookup>(), affiliation, sde, repository,
-            settings, provider.GetService<TimeProvider>() ?? TimeProvider.System);
-    }
+    // A pod is named the way the fleet overview names it (ET-372), not as the Capsule hull.
+    private string _ShipName(int typeId) =>
+        KillmailRunLinker.IsCapsule(typeId) ? "pod" : DetailKillmailNames.TypeName(services.Sde, typeId);
 }

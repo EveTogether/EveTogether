@@ -18,6 +18,7 @@ using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Transport;
 using EveUtils.Shared.Identity;
 using EveUtils.Shared.Modules.Fleet.Dtos;
+using EveUtils.Client.Killmails;
 using EveUtils.Shared.Modules.Settings.Commands;
 using EveUtils.Shared.Modules.Settings.Queries;
 using EveUtils.Shared.Modules.Fleet.Entities;
@@ -67,6 +68,7 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
     private readonly ILocalCharacterPresence? _presence;   // whether one of MY pilots has an EVE client up (ET-70)
     private readonly FleetMemberBoard? _board;             // what the fleet stream says about everyone else (ET-440)
     private readonly IDisposable? _presenceSubscription;
+    private readonly IDisposable? _killmailSubscription;
 
     /// <param name="runClock">Whether the band and the started rows keep a ticking clock. A test hands it the time
     /// itself through <see cref="Tick"/>; a DispatcherTimer there would go on ticking for the rest of the session.</param>
@@ -102,6 +104,9 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
         _presence = services.GetService<ILocalCharacterPresence>();
         _board = services.GetService<FleetMemberBoard>();
         _presenceSubscription = _presence?.Subscribe(() => _ = RebuildOverviewAsync());
+
+        // Killmails are local data: a change refreshes only the killmail fields, not the roster (ET-372).
+        _killmailSubscription = services.GetService<KillmailsChangeFeed>()?.Subscribe(_ => RefreshKillmailsAsync());
 
         StartClock(runClock);
         _initialized = InitializeAsync();
@@ -160,6 +165,7 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
     {
         _rosterSubscription.Dispose();
         _presenceSubscription?.Dispose();
+        _killmailSubscription?.Dispose();
         StopClock();
         _busConnector.CouplingChanged -= _OnCouplingChanged;
     }
@@ -1103,7 +1109,8 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
 
         // My characters in this fleet: the same fleet can appear once per coupled character.
         var myCharacters = ServerGroups.SelectMany(g => g.Fleets).Concat(LocalFleets)
-            .Where(r => r.Id == row.Id)
+            .Where(r => r.Id == row.Id
+                        && string.Equals(r.ServerAddress, row.ServerAddress, StringComparison.OrdinalIgnoreCase))
             .Select(r => (Id: r.ActingCharacterId, Name: string.IsNullOrWhiteSpace(r.CharacterName) ? $"Char {r.ActingCharacterId}" : r.CharacterName))
             .DistinctBy(c => c.Id)
             .ToList();
@@ -1117,7 +1124,7 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
             snapshot = new MetricShareSnapshot(settings.ToDictionary(s => s.Key, s => s.Value, StringComparer.Ordinal));
         }
 
-        var vm = new FleetShareViewModel(row.Name, row.Id, myCharacters, snapshot);
+        var vm = new FleetShareViewModel(row.Name, row.Id, myCharacters, snapshot, row.ServerAddress);
         if (!await _dialogs.ShowFleetSharingAsync(vm))
             return;
 
@@ -1127,6 +1134,9 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
             foreach (var (_, key, value) in vm.BuildOverrides())
                 await dispatcher.Send(new SetSettingCommand(key, value));
         }
+
+        await _services.GetRequiredService<FleetKillmailSharePublisher>()
+            .PublishCurrentAsync(row.ServerAddress, row.Id);
 
         StatusMessage = $"Sharing updated for '{row.Name}'.";
     }

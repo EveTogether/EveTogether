@@ -25,6 +25,14 @@ public sealed class LocalKillmail
     public KillmailLinkSource LinkSource { get; set; }
     public DateTime ImportedAtUtc { get; set; }
 
+    /// <summary>The fleet a fleet mate shared this mail in (ET-371); null for an own import. A newer share of that fleet
+    /// reconciles only these rows, so own mails and another fleet's history are never removed by it.</summary>
+    public long? SharedFromFleetId { get; set; }
+
+    /// <summary>The server that fleet lives on, as <see cref="Fleet.FleetServerIdentity"/> reads it ("local" for a
+    /// client-only fleet); a fleet id alone is only unique per server. Null for an own import.</summary>
+    public string? SharedFromServer { get; set; }
+
     public List<LocalKillmailItem> Items { get; set; } = [];
     public List<LocalKillmailAttacker> Attackers { get; set; } = [];
 }

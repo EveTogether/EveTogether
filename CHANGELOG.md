@@ -17,6 +17,11 @@ entries under `[Unreleased]` below that were not there yet at the previous night
 
 ## [Unreleased]
 
+- **Added: see what your fleet destroyed in the run info of a group run.** A new FLEET KILLS section lists every kill the fleet made while the group ran, once per killmail however many fleet members were on it: who was killed and in what, which of your fleet shot, the final blow and what it was worth. Click OPEN KILLMAIL for the full killmail. The "destroyed" sum in its header is information only: a kill is no income or cost of the run, so TOTAL ISK stays the same. LINKED LOSS now also names the pilot who lost the ship, for your own characters and for fleet mates, and a lost capsule reads "pod".
+- **Fixed: killmails shared in a fleet are kept apart per server.** Two servers can both have a fleet with the same number; a fleet mate's killmails from one no longer count for, or get removed by, the other.
+- **Added: see who lost a ship and what the fleet destroyed, in the fleet overview.** An active fleet now shows "LOSSES n · KILLS m" on its row, and each member under it can carry a LOST chip with the ship they lost last (click it for the killmail) and a KILLS chip with the mails they were an attacker on. Only mails from the time the fleet has been active count, a mail is counted once however many fleet members were on it, and a lost capsule is named on the chip ("LOST Gila + pod") without replacing the ship. It reads what is already on this machine, so it updates as soon as a fleet mate's killmails arrive.
+- **Added: share your kills and losses with the fleet as they arrive.** Killmails from the current active fleet period are shared by default, including pasted killmail links, and the fleet's SHARING screen can override that choice per character. Turning sharing off sends an empty current list so an earlier share can be withdrawn. This needs the updated server.
+- **Added: see the kills and losses your fleet mates share.** When a fleet mate shares a killmail, ET fetches it from the public EVE killmail page (no extra login needed) and keeps it on this machine, so a loss shows up in LINKED LOSS of that pilot's group run, also after a restart. When a mate stops sharing a mail, or turns sharing off, it disappears again for that fleet only. Your own KILLMAILS screen and the local API keep showing only your own characters' mails.
 - **Fixed: starting EVE Together a second time brings the open one to the front.** Two copies running on the same data at once each recorded your copied loot, and saving a run in one left the other's run window and runs list behind: its window stayed open on a run that was already saved, and SAVE there answered "A saved run cannot be saved again". A second start now shows the window that is already open, or says "EVE Together is already running" when it cannot, and closes again without touching your data. Copies started with their own `EVETOGETHER_INSTANCE` still run side by side.
 - **Changed: a run keeps the value it had when the loot came in.** Loot, mined ore and the filament are now priced the moment they are stored, and that price stays with the run, so a run that made 5M still says 5M a year from now and the runs list, the calendar, Home and the activity screen always agree. Something without a price yet takes the first one there is, once; until then it is valued at today's price and marked "live". Runs you already had are fixed at today's prices when you update. Needs the server updated to the same version for published runs to carry the fixed prices.
 - **Added: "Re-value at current prices" on the activity screen.** Values your own runs in that activity again at today's prices, after asking, since it replaces what they were worth when the loot came in. A published activity is then marked as changed since it was published.
@@ -173,7 +178,6 @@ entries under `[Unreleased]` below that were not there yet at the previous night
 - **Changed: the fleet list is easier to scan.** The ACTIVE, STANDING BY and FINISHED headings are larger and stand out from the rows, with space between the sections. A started fleet now always has a METRICS button, also in a narrow window, and the "⋯" menu uses normal sentence case instead of capitals.
 - **Fixed: the map in the Fleet metrics card fills the whole card.** Its header and summary now lie over the map instead of leaving a grey bar above and below it.
 - **Changed: Killmails now opens on all your characters at once.** Every kill and loss of every character is in one list, each row starting with the character's portrait and name, and a killmail two of your characters were on shows up once (with a +1 and the names on hover) and counts once in the totals. The row of character chips, which ran off the edge with five or more characters, is now a dropdown: "All characters" first, then each character, with Grant access right in the entry of a character that has not shared its killmails yet.
-
 - **Added: a map of New Eden.** MAP in the left rail (Ctrl+M) opens the whole of k-space as a tab. Zoom with the wheel, a double-click or the buttons and drag to move around: zoomed out you see the regions, closer in the constellations, and closest the systems with their security. Plan a route between any two systems — shortest, safer or less secure, avoiding lowsec or nullsec if you like — and see its jumps and how much of it runs through high, low and null; click a jump in the list to fly there. FIND SYSTEM takes you to a system, clicking one shows where it is and lets you route from or to it, and your own characters show where the game log last saw them. Routes are worked out on your own PC from the game data, so they need no ESI access and work offline. Pochven and the Jove regions have no gate route in, and the map says so.
 - **Added: the map can follow one of your characters and draw where it has been.** Pick FOLLOW › CHARACTER and choose who; the map recentres on every jump at system zoom. Drag, zoom, search or plan a route and it pauses ("PAUSED · you moved the map") until you press RESUME. The TRAIL shows the last 5, 10, 20 or 50 jumps, or everything since 15 minutes ago, an hour ago, downtime or app start, as a fading dashed line; a jump the app did not see is dotted rather than guessed. RESET TRAIL starts again from where the character is now. Trails live in memory only and are gone when the app closes. The status bar says "Map: following …" while it is on.
 - **Added: your fleet on the map, and a map that follows it.** Members of your active fleets show as a numbered badge on the system they are in; hover it to see who is there and how recent each position is ("12s ago"). With FOLLOW › FLEET you pick one of your active fleets and the map keeps every member in view: all in one system brings you in close, spreading out zooms out as far as it takes — by how far apart they are on the map, not by jumps. Moving the map pauses it until RESUME, just like following a character. Fleet mates only show when they share their location, and if you are the in-game fleet boss, pilots in the in-game fleet who do not use EVE Together show too. A position not confirmed for 10 minutes drops off the map (except your own game log, which only speaks up when you jump). Nothing is stored and no new ESI access is asked for.
@@ -437,7 +441,6 @@ entries under `[Unreleased]` below that were not there yet at the previous night
   range totals and the activity strip's shading all follow. Turning off even one character also hides an activity
   none of your own characters flew — a fleet mate's run pulled in by sync, say — since with everything on that kind of
   activity stays visible on purpose.
-
 - **Added: an activity strip over the runs list — twelve weeks of evenings at a glance.** Where the month bar used to
   be, each day of the last twelve weeks is a small cell, shaded by the ISK it earned (or, with the switch under it, by
   how many activities it had), with today outlined, days before your first saved run hatched, and a bar of week
@@ -446,7 +449,6 @@ entries under `[Unreleased]` below that were not there yet at the previous night
   whole month — nothing is filtered out, and the days you folded or unfolded stay that way. Click the same day again,
   or ✕, to go back to the month. ◀ and ▶ step a month, or with a day or week picked, to the previous or next one that
   has runs. The weeks follow your "Week starts on" setting and re-arrange the moment you change it.
-
 - **Added: the run you click now reads out beside the list, instead of taking over the screen.** On a wide runs
   window it opens in a panel down the right-hand side: the site and when and where you flew it, the ISK written out
   in full and split by where it came from, every pilot on it with their own time and their own share, the enemy count
@@ -945,7 +947,6 @@ entries under `[Unreleased]` below that were not there yet at the previous night
   known ("entered from Dresi"), and the LOCATION row is left out entirely when it is not.
 - **Copying an important mission now starts a run.** The warning sentence EVE shows above an important mission's own header — "This is an important mission, which will have significant impact on your faction standings." — used to sit in front of the name and stop the run from starting at all. Its item reward is now also read correctly, even written as "1 x …" rather than "1 × …", and gets its item type looked up the same way any other item reward does. MISSION now shows when a run came from an important mission.
 - **MISSION no longer reads "nothing recorded" for a mission run window did not itself start.** Reopening the run window after restarting the app while a mission was still going, or opening a second window on the same run, used to lose the agent, the level and every reward line — they were only ever handed to a window at the moment it started the run, and adopting an already-running one carried none of it over, even though it was sitting in the store the whole time. The saved activity screen was never affected.
-
 ### Added
 - **A run now shows what it actually was.** A Data Site, a Relic Site, a Gas Site, an Ore Site or a Wormhole used
   to be saved and shown as "Combat Site" regardless — now each reads under its own name, with its own icon, the
@@ -1233,7 +1234,6 @@ entries under `[Unreleased]` below that were not there yet at the previous night
   `ghcr.io/evetogether/eve-together-server` on each GitHub Release — tagged `:latest` (always the
   newest build) and with the release version (`:X.Y.Z`) — so self-hosters can pull the image that
   `docker-compose.yml` already references instead of building it from source.
-
 ### Changed
 - **The run window and the saved activity screen are now built from the sections each kind of activity
   needs.** Nothing looks or works differently yet: combat, data and relic sites, abyssal runs, missions,
@@ -1338,7 +1338,6 @@ entries under `[Unreleased]` below that were not there yet at the previous night
   `Microsoft.IdentityModel.Protocols.OpenIdConnect`/`System.IdentityModel.Tokens.Jwt` to 8.22.0,
   and `Google.Protobuf` to 3.36.0. `xunit.v3`/`xunit.runner.visualstudio` 4.0.0 (major) held back
   pending review.
-
 ### Fixed
 - **The runs screen, the home dashboard and an open activity now keep up with everything that happens to a
   run, without being reopened.** Until now each of them only followed a handful of actions, and every other

@@ -28,6 +28,8 @@ public sealed partial class LinkedLossViewModel(
     private void OpenKillmail() => openKillmail?.Invoke();
 
 
+    public required string PilotText { get; init; }
+
     public required string ShipText { get; init; }
 
     public required string FitText { get; init; }

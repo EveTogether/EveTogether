@@ -22,5 +22,8 @@ public enum RunSectionId
     Homefront,
 
     /// <summary>The own losses linked to the activity's runs (ET-331).</summary>
-    Loss
+    Loss,
+
+    /// <summary>What the fleet of a group run destroyed, information only and never part of TOTAL ISK (ET-373).</summary>
+    FleetKills
 }

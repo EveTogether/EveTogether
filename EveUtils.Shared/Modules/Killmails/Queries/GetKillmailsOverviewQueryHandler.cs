@@ -28,7 +28,7 @@ internal sealed class GetKillmailsOverviewQueryHandler(
             .AsNoTracking()
             .Include(killmail => killmail.Items)
             .Include(killmail => killmail.Attackers)
-            .Where(killmail => query.CharacterId == null || killmail.CharacterId == query.CharacterId)
+            .Where(killmail => query.CharacterIds.Contains(killmail.CharacterId))
             .OrderByDescending(killmail => killmail.KillmailTimeUtc)
             .AsSplitQuery()
             .ToListAsync(cancellationToken);
@@ -43,7 +43,7 @@ internal sealed class GetKillmailsOverviewQueryHandler(
 
         List<LocalKillmail> linkedShipLosses = [.. killmails.Where(killmail => killmail.RunId is not null)];
         IReadOnlyList<LinkableRun> runs = killmails.Any(killmail => killmail.IsLoss && killmail.RunId is null)
-            ? await _RunsAsync(db, query.CharacterId, cancellationToken)
+            ? await _RunsAsync(db, query.CharacterIds, cancellationToken)
             : [];
         DateTime nowUtc = DateTime.UtcNow;
 
@@ -74,13 +74,14 @@ internal sealed class GetKillmailsOverviewQueryHandler(
     private static decimal? _Value(LocalKillmail killmail, IReadOnlyDictionary<int, double> prices) =>
         RunIskFactsReader.KnownLootValue(RunIskFactsReader.LossLines([killmail]), LootKind.Lost, prices);
 
-    // Every run still there to match against (of one character, or of all when none is given) — unlike the link pass
+    // Every run of these characters still there to match against — unlike the link pass
     // (LinkKillmailsToRunsCommandHandler), this read is not windowed: it only runs once per screen read.
-    private async Task<IReadOnlyList<LinkableRun>> _RunsAsync(ClientDbContext db, long? characterId, CancellationToken cancellationToken)
+    private async Task<IReadOnlyList<LinkableRun>> _RunsAsync(ClientDbContext db, IReadOnlyCollection<int> characterIds, CancellationToken cancellationToken)
     {
+        List<long> ids = [.. characterIds.Select(id => (long)id)];
         var runs = await db.Set<Run>()
             .AsNoTracking()
-            .Where(run => (characterId == null || run.CharacterId == characterId) && !run.DeletedAtUtc.HasValue)
+            .Where(run => ids.Contains(run.CharacterId) && !run.DeletedAtUtc.HasValue)
             .Select(run => new
             {
                 run.Id, run.CharacterId, run.ActivityKind, run.SolarSystemId, run.StartedAtUtc, run.StoppedAtUtc,

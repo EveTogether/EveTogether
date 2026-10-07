@@ -181,21 +181,24 @@ public sealed class RemoteBusConnectionManager(
         // A character-agnostic event (CharacterId 0) keeps the dedupe: one connection per server is enough, and sending
         // it up every character's stream would make the server reroute the same event once per stream.
         var claimedCharacter = integrationEvent.CharacterId ?? 0;
+        string? targetServer = integrationEvent is IRemoteServerTargetedEvent targeted
+            ? targeted.ServerAddress
+            : null;
 
         ServerConnection[] live;
         lock (_gate)
         {
             var connected = _connections.Values.Where(c => c.State == ServerConnectionState.Connected).ToList();
             var chosen = SelectTargets(connected.Select(c => new ConnectionRef(c.ServerAddress, c.CharacterId)).ToList(),
-                claimedCharacter).ToHashSet();
+                claimedCharacter, targetServer).ToHashSet();
             live = connected.Where(c => chosen.Contains(new ConnectionRef(c.ServerAddress, c.CharacterId))).ToArray();
         }
 
         if (live.Length == 0)
             return; // no stream for this character/server attached — deliberate no-op
 
-        // Build the wire envelope once, broadcast to every connected server (POC; per-server event
-        // scoping is a later seam, still an open point).
+        // Untargeted events retain the existing broadcast-to-every-server behavior. Server-targeted events only use
+        // the matching connection, so equal fleet ids on independent servers cannot cross that transport boundary.
         var envelope = new ClientEnvelope { Event = ToEnvelope(integrationEvent) };
         await Task.WhenAll(live.Select(c => c.SendEnvelopeAsync(envelope, cancellationToken)));
     }
@@ -208,14 +211,22 @@ public sealed class RemoteBusConnectionManager(
     /// own connection(s) — so multiboxing several characters does not funnel all their metrics through one stream that
     /// the server would reject for every other character. A character-agnostic event (<paramref name="claimedCharacter"/>
     /// 0) is deduped to one connection per server (sending it up every stream would reroute it once per stream).
+    /// A <paramref name="targetServer"/> (an <see cref="IRemoteServerTargetedEvent"/>) narrows that to one server: a
+    /// fleet id is only unique within its server, so the same character coupled to two servers must not carry it to both.
     /// </summary>
-    public static IReadOnlyList<ConnectionRef> SelectTargets(IReadOnlyList<ConnectionRef> connected, int claimedCharacter) =>
-        claimedCharacter != 0
-            ? connected.Where(c => c.CharacterId == claimedCharacter).ToList()
-            : connected
+    public static IReadOnlyList<ConnectionRef> SelectTargets(
+        IReadOnlyList<ConnectionRef> connected, int claimedCharacter, string? targetServer = null)
+    {
+        var onServer = targetServer is null
+            ? connected
+            : connected.Where(c => string.Equals(c.ServerAddress, targetServer, StringComparison.OrdinalIgnoreCase)).ToList();
+        return claimedCharacter != 0
+            ? onServer.Where(c => c.CharacterId == claimedCharacter).ToList()
+            : onServer
                 .GroupBy(c => c.ServerAddress, StringComparer.OrdinalIgnoreCase)
                 .Select(g => g.First())
                 .ToList();
+    }
 
     /// <summary>Per-server state = the best of its characters' connection states (connected if any character is).</summary>
     private static ServerConnectionState Aggregate(IEnumerable<ServerConnectionState> states)

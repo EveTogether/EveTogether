@@ -62,8 +62,13 @@ public sealed partial class LocalApiQueries
     private async Task<IReadOnlyList<KillmailOverviewRowDto>> _KillmailRowsAsync(int? characterId, CancellationToken cancellationToken)
     {
         await using var scope = rootServices.CreateAsyncScope();
+        // Only own characters, also for "all": fleet mates' shared mails sit in the same table (ET-371).
+        List<int> own = [.. (await scope.ServiceProvider.GetRequiredService<ICharacterRegistry>().GetAllAsync(cancellationToken))
+            .Select(character => character.EsiCharacterId)
+            .OfType<int>()
+            .Where(id => characterId is null || id == characterId)];
         var result = await scope.ServiceProvider.GetRequiredService<IDispatcher>()
-            .Query(new GetKillmailsOverviewQuery(characterId), cancellationToken);
+            .Query(new GetKillmailsOverviewQuery(own), cancellationToken);
         return result.IsSuccess && result.Value is not null ? result.Value : [];
     }
 
