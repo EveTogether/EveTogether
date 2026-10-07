@@ -283,7 +283,7 @@ public sealed class KillmailImportTests : IDisposable
             {"killmail_id":1,"killmail_time":"2026-09-20T12:00:00Z","solar_system_id":30000142,
              "victim":{"character_id":99,"ship_type_id":587,"damage_taken":6000,"items":[]},
              "attackers":[
-               {"character_id":11,"corporation_id":1001,"alliance_id":2001,"ship_type_id":621,"weapon_type_id":2873,"damage_done":1500,"final_blow":false},
+               {"character_id":11,"corporation_id":1001,"alliance_id":2001,"ship_type_id":621,"weapon_type_id":2873,"damage_done":1500,"final_blow":false,"security_status":-4.7},
                {"character_id":12,"corporation_id":1002,"ship_type_id":622,"weapon_type_id":2874,"damage_done":1400,"final_blow":true},
                {"character_id":77,"corporation_id":1003,"ship_type_id":623,"weapon_type_id":2875,"damage_done":1300,"final_blow":false},
                {"corporation_id":1000125,"faction_id":500010,"ship_type_id":30189,"weapon_type_id":30189,"damage_done":1000,"final_blow":false},
@@ -307,6 +307,7 @@ public sealed class KillmailImportTests : IDisposable
         Assert.Equal(expected, killmail.Attackers.Select(attacker => (attacker.Ordinal, attacker.AttackerCharacterId, attacker.CorporationId,
                 attacker.AllianceId, attacker.FactionId, attacker.ShipTypeId, attacker.WeaponTypeId, attacker.DamageDone,
                 attacker.FinalBlow)));
+        Assert.Equal([-4.7, null, null, null, null, null], killmail.Attackers.OrderBy(attacker => attacker.Ordinal).Select(attacker => attacker.SecurityStatus));
     }
 
     [Fact]

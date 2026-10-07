@@ -108,9 +108,77 @@ public sealed class KillmailDetailTests
         KillmailDetailViewModel viewModel = await _LoadDetailAsync(instance, Pilot, 1);
 
         KillmailFitGroupViewModel highSlots = viewModel.FitGroups.Single(group => group.Header == "HIGH SLOTS");
-        Assert.Equal(2, highSlots.Rows.Count);
-        Assert.Contains(highSlots.Rows, row => row.IsDestroyed && row.QuantityText == "2" && row.BadgeText == "DESTROYED");
-        Assert.Contains(highSlots.Rows, row => !row.IsDestroyed && row.QuantityText == "1" && row.BadgeText == "DROPPED");
+        KillmailDetailItemRowViewModel row = Assert.Single(highSlots.Rows);
+        Assert.Equal("3", row.QuantityText);
+        Assert.Equal("1,000,000", row.DroppedText);
+        Assert.Equal("2,000,000", row.DestroyedText);
+    }
+
+    /// <summary>ET-475: items sit per slot group under HULL first, each group totals its dropped and destroyed ISK in
+    /// full, a line lands in one column or the other, and the closing totals add up to the header's killmail value.
+    /// Red if a group is missing, a stack lands in the wrong column, or the totals drift from the lines.</summary>
+    [Fact]
+    public async Task FitGroups_ShowDroppedAndDestroyedInFull_PerSlotGroup_WithTotalsThatAddUp()
+    {
+        using TestClientInstance instance = _NewInstance();
+        await _PriceAsync(instance, (Gila, 100_000_000), (ModuleTypeId, 1_000_000), (ModuleTypeId + 1, 250));
+        await _AddAsync(instance, _LossWithItems(1,
+            new LocalKillmailItem { Flag = 27, TypeId = ModuleTypeId, QuantityDestroyed = 2, QuantityDropped = 1 }, // HiSlot0
+            new LocalKillmailItem { Flag = 5, TypeId = ModuleTypeId + 1, QuantityDropped = 10 },                    // Cargo
+            new LocalKillmailItem { Flag = 19, TypeId = ModuleTypeId + 2, QuantityDestroyed = 1 }));                // MedSlot0, unpriced
+
+        KillmailDetailViewModel viewModel = await _LoadDetailAsync(instance, Pilot, 1);
+
+        Assert.Equal(["HULL", "HIGH SLOTS", "MID SLOTS", "CARGO"], viewModel.FitGroups.Select(group => group.Header));
+        KillmailFitGroupViewModel hull = viewModel.FitGroups[0];
+        Assert.Equal(("0", "100,000,000"), (hull.DroppedText, hull.DestroyedText));
+        KillmailFitGroupViewModel high = viewModel.FitGroups[1];
+        Assert.Equal(("1,000,000", "2,000,000"), (high.DroppedText, high.DestroyedText));
+        KillmailFitGroupViewModel mid = viewModel.FitGroups[2];
+        Assert.Equal(("0", "no price"), (mid.DroppedText, mid.DestroyedText));
+        Assert.Equal(("", "no price"), (mid.Rows.Single().DroppedText, mid.Rows.Single().DestroyedText));
+        KillmailFitGroupViewModel cargo = viewModel.FitGroups[3];
+        Assert.Equal(("2,500", "0"), (cargo.DroppedText, cargo.DestroyedText));
+        Assert.Equal(("2,500", ""), (cargo.Rows.Single().DroppedText, cargo.Rows.Single().DestroyedText));
+
+        Assert.Equal("1,002,500", viewModel.TotalDroppedText);
+        Assert.Equal("102,000,000", viewModel.TotalDestroyedText);
+        Assert.Equal("103,002,500", viewModel.TotalText);
+        Assert.Equal(viewModel.TotalText, _Sum(viewModel.FitGroups.SelectMany(group => new[] { group.DroppedText, group.DestroyedText })));
+    }
+
+    private static string _Sum(IEnumerable<string> amounts) => amounts
+        .Where(amount => decimal.TryParse(amount, System.Globalization.NumberStyles.AllowThousands,
+            System.Globalization.CultureInfo.InvariantCulture, out _))
+        .Sum(amount => decimal.Parse(amount, System.Globalization.NumberStyles.AllowThousands,
+            System.Globalization.CultureInfo.InvariantCulture))
+        .ToString("N0", System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>ET-475: a fixture killmail's attackers each carry their ship, weapon, corp and alliance, damage with
+    /// its share of the total, the final blow and the security status; an NPC has none of the pilot fields.</summary>
+    [Fact]
+    public async Task Attackers_ShowShipWeaponCorpAllianceDamageShareAndSecurityStatus()
+    {
+        FakeSdeAccessor sde = new FakeSdeAccessor()
+            .Add(Gila, "Gila", 1, 6).Add(20185, "Garmur", 1, 6).Add(3001, "Heavy Neutron Blaster II", 2, 7);
+        using TestClientInstance instance = _NewInstance(services => services.AddSingleton<EveUtils.Shared.Modules.Sde.ISdeAccessor>(sde));
+        await _AddAsync(instance, _KillWithAttackers(1,
+            new LocalKillmailAttacker
+            {
+                Ordinal = 0, AttackerCharacterId = 100, CorporationId = 555, AllianceId = 777, ShipTypeId = 20185,
+                WeaponTypeId = 3001, DamageDone = 750, FinalBlow = true, SecurityStatus = -5.1
+            },
+            new LocalKillmailAttacker { Ordinal = 1, ShipTypeId = 20185, DamageDone = 250 }));
+
+        KillmailDetailViewModel viewModel = await _LoadDetailAsync(instance, Pilot, 1);
+
+        KillmailDetailAttackerRowViewModel pilot = viewModel.Attackers[0];
+        Assert.Equal(("Garmur", "Heavy Neutron Blaster II", "750", "75%"),
+            (pilot.ShipText, pilot.WeaponText, pilot.DamageText, pilot.PercentText));
+        Assert.True(pilot.IsFinalBlow);
+        Assert.EndsWith(" · sec -5.1", pilot.SubText);
+        KillmailDetailAttackerRowViewModel npc = viewModel.Attackers[1];
+        Assert.Equal(("25%", true, "NPC"), (npc.PercentText, npc.IsNpc, npc.SubText));
     }
 
     /// <summary>Criterion 2. Red if a frozen value or a 0 ISK figure appears, or the total is not the sum of what is

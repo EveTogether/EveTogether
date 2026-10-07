@@ -17,4 +17,7 @@ public sealed class LocalKillmailAttacker
     public int? WeaponTypeId { get; set; }
     public int DamageDone { get; set; }
     public bool FinalBlow { get; set; }
+
+    /// <summary>Null for an NPC, and for a mail stored before the field was kept (ET-475).</summary>
+    public double? SecurityStatus { get; set; }
 }

@@ -183,17 +183,30 @@
                                 <Button Grid.Column="2" Classes="small" Content="OPEN FIT" Command="{Binding OpenFitCommand}"/>
                             </Grid>
                         </Border>
+                        <!-- The columns of every item row below: icon · item · quantity · dropped · destroyed. -->
+                        <Grid ColumnDefinitions="20,*,56,128,128" ColumnSpacing="6" Margin="6,2,6,0">
+                            <TextBlock Grid.Column="1" Classes="label" Text="ITEM"/>
+                            <TextBlock Grid.Column="2" Classes="label" TextAlignment="Right" Text="QTY"/>
+                            <TextBlock Grid.Column="3" Classes="label" TextAlignment="Right" Text="DROPPED"/>
+                            <TextBlock Grid.Column="4" Classes="label" TextAlignment="Right" Text="DESTROYED"/>
+                        </Grid>
                         <ItemsControl ItemsSource="{Binding FitGroups}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate DataType="vk:KillmailFitGroupViewModel">
                                     <StackPanel Margin="0,6,0,0">
-                                        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8" Margin="0,0,0,3">
-                                            <TextBlock Classes="label" Text="{Binding Header}"/>
-                                            <Border Grid.Column="2">
-                                                <TextBlock FontFamily="{StaticResource MonoFont}" FontSize="10"
-                                                           Foreground="{StaticResource TextDimBrush}" Text="{Binding SummaryText}"/>
-                                            </Border>
-                                        </Grid>
+                                        <Border BorderThickness="0,0,0,1" BorderBrush="{DynamicResource BorderBrush}" Padding="6,0,6,3">
+                                            <Grid ColumnDefinitions="20,*,56,128,128" ColumnSpacing="6">
+                                                <StackPanel Grid.Column="0" Grid.ColumnSpan="3" Orientation="Horizontal" Spacing="8">
+                                                    <TextBlock Classes="label" Text="{Binding Header}"/>
+                                                    <TextBlock FontFamily="{StaticResource MonoFont}" FontSize="10"
+                                                               Foreground="{StaticResource TextDimBrush}" Text="{Binding CountText}"/>
+                                                </StackPanel>
+                                                <TextBlock Grid.Column="3" Classes="money" FontSize="10.5"
+                                                           Foreground="{StaticResource GreenBrush}" Text="{Binding DroppedText}"/>
+                                                <TextBlock Grid.Column="4" Classes="money" FontSize="10.5"
+                                                           Foreground="{StaticResource RedBrush}" Text="{Binding DestroyedText}"/>
+                                            </Grid>
+                                        </Border>
                                         <ItemsControl ItemsSource="{Binding Rows}">
                                             <ItemsControl.ItemTemplate>
                                                 <DataTemplate DataType="vk:KillmailDetailItemRowViewModel">
@@ -205,6 +218,21 @@
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
+                        <Border Classes="totals" Margin="0,10,0,0" Padding="6,5">
+                            <StackPanel Spacing="4">
+                                <Grid ColumnDefinitions="20,*,56,128,128" ColumnSpacing="6">
+                                    <TextBlock Grid.Column="1" Classes="label" VerticalAlignment="Center" Text="TOTAL DROPPED · DESTROYED"/>
+                                    <TextBlock Grid.Column="3" Classes="money" FontWeight="SemiBold"
+                                               Foreground="{StaticResource GreenBrush}" Text="{Binding TotalDroppedText}"/>
+                                    <TextBlock Grid.Column="4" Classes="money" FontWeight="SemiBold"
+                                               Foreground="{StaticResource RedBrush}" Text="{Binding TotalDestroyedText}"/>
+                                </Grid>
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+                                    <TextBlock Classes="label" VerticalAlignment="Center" Text="TOTAL"/>
+                                    <TextBlock Grid.Column="1" Classes="money total" Text="{Binding TotalText}"/>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
                         <TextBlock Classes="hint" TextWrapping="Wrap" Margin="0,8,0,0" IsVisible="{Binding IsAbyssal}"
                                    Text="An abyssal wreck cannot be reached, so what dropped there is lost as well — it is still listed as ESI reports it."/>
                     </StackPanel>
