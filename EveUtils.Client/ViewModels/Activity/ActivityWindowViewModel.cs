@@ -1145,6 +1145,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
         foreach (GameLogEvent gameEvent in events)
         {
+            enemiesSection?.RecordCatchUpTelemetry(characterId, gameEvent);
             switch (gameEvent)
             {
                 case BountyEvent bounty:
@@ -2723,7 +2724,8 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
                 IsTimeCorrected ? nowUtc : null,
                 LootStrategy: own.LootStrategy,
                 RebuildSummaries: false,
-                FleetSizeAtStop: own.FleetSizeAtStop)));
+                FleetSizeAtStop: own.FleetSizeAtStop,
+                CombatEvents: own.CombatEvents)));
             if (!result.IsSuccess)
             {
                 RunNoticeText = result.Messages.FirstOrDefault()?.Text ?? "Could not save this run.";
@@ -2744,7 +2746,8 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
                 Result siblingResult = await Task.Run(() => dispatcher.Send(new SaveRunCommand(
                     sibling.RunId, EffectiveStopUtc ?? nowUtc, nowUtc, [], [],
                     theirs.Enemies, theirs.Parameters,
-                    LootStrategy: theirs.LootStrategy, RebuildSummaries: false, FleetSizeAtStop: theirs.FleetSizeAtStop)));
+                    LootStrategy: theirs.LootStrategy, RebuildSummaries: false, FleetSizeAtStop: theirs.FleetSizeAtStop,
+                    CombatEvents: theirs.CombatEvents)));
                 if (!siblingResult.IsSuccess)
                     _services.GetService<IToastService>()?.Show("A run in this group was not saved",
                         siblingResult.Messages.FirstOrDefault()?.Text ?? "Could not save one of the other characters' runs.",

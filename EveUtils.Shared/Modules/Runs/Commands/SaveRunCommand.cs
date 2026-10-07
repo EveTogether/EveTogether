@@ -1,5 +1,6 @@
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Messaging;
+using EveUtils.Shared.Modules.Gamelog.Models;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Enums;
 
@@ -34,4 +35,7 @@ public sealed record SaveRunCommand(
     bool RebuildSummaries = true,
     /// <summary>How many characters were on the fleet's roster at STOP (ET-230), or null to leave the row's own
     /// answer alone — a solo run, or the app's own save of a run nobody had a window open on.</summary>
-    int? FleetSizeAtStop = null) : ICommand<Result>;
+    int? FleetSizeAtStop = null,
+    /// <summary>The pilot's combat, repair, neut and capacitor lines while the run was watched, kept as its
+    /// timeline (ET-467). Null when nothing recorded them, which keeps no timeline at all.</summary>
+    IReadOnlyList<GameLogEvent>? CombatEvents = null) : ICommand<Result>;

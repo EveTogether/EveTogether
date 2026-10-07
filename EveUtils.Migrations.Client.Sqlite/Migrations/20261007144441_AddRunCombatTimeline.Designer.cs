@@ -3,6 +3,7 @@ using System;
 using EveUtils.Shared.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -10,9 +11,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace EveUtils.Migrations.Client.Sqlite.Migrations
 {
     [DbContext(typeof(ClientDbContext))]
-    partial class ClientDbContextModelSnapshot : ModelSnapshot
+    [Migration("20261007144441_AddRunCombatTimeline")]
+    partial class AddRunCombatTimeline
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.12");
@@ -678,9 +681,6 @@ namespace EveUtils.Migrations.Client.Sqlite.Migrations
 
                     b.Property<bool>("FinalBlow")
                         .HasColumnType("INTEGER");
-
-                    b.Property<double?>("SecurityStatus")
-                        .HasColumnType("REAL");
 
                     b.Property<int?>("ShipTypeId")
                         .HasColumnType("INTEGER");
