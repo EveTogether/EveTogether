@@ -194,7 +194,10 @@ public sealed partial class KillmailDetailViewModel : ViewModelBase, IDisposable
             ICharacterPortraitProvider? portraits = _services.GetService<ICharacterPortraitProvider>();
             if (portraits is not null)
             {
-                await Task.WhenAll(Attackers.Select(attacker => attacker.LoadImageAsync(images, portraits)));
+                await Task.WhenAll(Attackers.Select(async attacker =>
+                {
+                    await Task.WhenAll(attacker.LoadImageAsync(images, portraits), attacker.LoadLogosAsync(portraits));
+                }));
             }
 
             await Task.WhenAll(FitGroups.SelectMany(group => group.Rows).Select(row => row.LoadIconAsync(images)));
@@ -422,15 +425,9 @@ public sealed partial class KillmailDetailViewModel : ViewModelBase, IDisposable
     {
         List<IReadOnlyList<KillmailDetailItemLineDto>> stacks =
             [.. lines.GroupBy(line => (line.Flag, line.TypeId, line.IsNested)).Select(stack => (IReadOnlyList<KillmailDetailItemLineDto>)[.. stack])];
-        decimal? topValue = stacks.Select(stack => _SumKnown(stack.Select(line => line.Value))).Max();
-        List<KillmailDetailItemRowViewModel> rows = [.. stacks.Select(stack =>
-        {
-            decimal? value = _SumKnown(stack.Select(line => line.Value));
-            return new KillmailDetailItemRowViewModel(stack,
-                hullName ?? _sde.GetType(stack[0].TypeId)?.Name ?? $"type {stack[0].TypeId}",
-                hullName is null ? _MetaHint(stack[0].Flag, stack[0].TypeId) : null,
-                value is not null && value == topValue);
-        })];
+        List<KillmailDetailItemRowViewModel> rows = [.. stacks.Select(stack => new KillmailDetailItemRowViewModel(stack,
+            hullName ?? _sde.GetType(stack[0].TypeId)?.Name ?? $"type {stack[0].TypeId}",
+            hullName is null ? _MetaHint(stack[0].Flag, stack[0].TypeId) : null))];
 
         return new KillmailFitGroupViewModel(header, rows.Count.ToString(CultureInfo.InvariantCulture),
             _AmountText(lines.Where(line => !line.IsDestroyed)), _AmountText(lines.Where(line => line.IsDestroyed)), rows);
@@ -498,7 +495,7 @@ public sealed partial class KillmailDetailViewModel : ViewModelBase, IDisposable
                 attacker.ShipTypeId is { } shipTypeId ? _sde.GetType(shipTypeId)?.Name ?? $"type {shipTypeId}" : "unknown ship",
                 weapon, attacker.DamageDone, totalDamage > 0 ? attacker.DamageDone * 100.0 / totalDamage : 0,
                 attacker.FinalBlow, attacker.TopDamage, ownCharacterIds.Contains(attacker.CharacterId ?? 0), isNpc,
-                attacker.CharacterId, attacker.ShipTypeId, attacker.CorporationId));
+                attacker.CharacterId, attacker.ShipTypeId, attacker.CorporationId, attacker.AllianceId));
         }
     }
 

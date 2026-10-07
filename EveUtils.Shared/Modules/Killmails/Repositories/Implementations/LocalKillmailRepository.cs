@@ -89,6 +89,45 @@ internal sealed class LocalKillmailRepository(IDbContextFactory<SharedDbContext>
         return [.. rows.Select(row => row.CharacterId).Distinct()];
     }
 
+    public async Task<IReadOnlyList<(int KillmailId, string Hash)>> GetWithoutAttackerSecurityStatusAsync(int limit,
+        CancellationToken cancellationToken = default)
+    {
+        await using var db = await contextFactory.CreateDbContextAsync(cancellationToken);
+        var missing = await db.Set<LocalKillmail>()
+            .AsNoTracking()
+            .Where(killmail => killmail.Attackers.Any(attacker => attacker.AttackerCharacterId != null && attacker.SecurityStatus == null))
+            .OrderBy(killmail => killmail.KillmailId)
+            .Select(killmail => new { killmail.KillmailId, killmail.Hash })
+            .ToListAsync(cancellationToken);
+        return [.. missing.DistinctBy(killmail => killmail.KillmailId).Take(limit).Select(killmail => (killmail.KillmailId, killmail.Hash))];
+    }
+
+    public async Task<IReadOnlyList<int>> SetAttackerSecurityStatusesAsync(
+        IReadOnlyDictionary<int, IReadOnlyList<KillmailAttackerSecurityStatus>> statusesByKillmailId, CancellationToken cancellationToken = default)
+    {
+        await using var db = await contextFactory.CreateDbContextAsync(cancellationToken);
+        List<int> killmailIds = [.. statusesByKillmailId.Keys];
+        List<LocalKillmailAttacker> rows = await db.Set<LocalKillmailAttacker>()
+            .Where(attacker => killmailIds.Contains(attacker.KillmailId) && attacker.SecurityStatus == null)
+            .ToListAsync(cancellationToken);
+
+        HashSet<int> changedCharacterIds = [];
+        foreach (LocalKillmailAttacker row in rows)
+        {
+            KillmailAttackerSecurityStatus? status = statusesByKillmailId[row.KillmailId].FirstOrDefault(entry => entry.Ordinal == row.Ordinal);
+            if (status is null)
+            {
+                continue;
+            }
+
+            row.SecurityStatus = status.SecurityStatus;
+            changedCharacterIds.Add(row.CharacterId);
+        }
+
+        await db.SaveChangesAsync(cancellationToken);
+        return [.. changedCharacterIds];
+    }
+
     private static async Task<IReadOnlySet<int>> _KnownIdsAsync(SharedDbContext db, int characterId, IReadOnlyCollection<int> killmailIds,
         CancellationToken cancellationToken)
     {

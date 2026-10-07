@@ -24,6 +24,8 @@ namespace EveUtils.Client.Killmails;
 /// </summary>
 public sealed class EsiKillmailImporter(IEsiClient esi, ILocalKillmailReader killmails, IServiceScopeFactory scopes)
 {
+    internal const int SecurityStatusBatchSize = 50;
+
     // One import per character at a time, shared across instances, so two callers never add the same mail twice.
     private static readonly ConcurrentDictionary<int, SemaphoreSlim> _importGates = new();
 
@@ -244,6 +246,47 @@ public sealed class EsiKillmailImporter(IEsiClient esi, ILocalKillmailReader kil
         await using AsyncServiceScope scope = scopes.CreateAsyncScope();
         await scope.ServiceProvider.GetRequiredService<IDispatcher>()
             .Send(new SetKillmailPositionsCommand(positions), cancellationToken);
+    }
+
+    /// <summary>
+    /// Fills in the attacker security status of mails stored before it was kept (ET-477), re-reading each from the public
+    /// <c>/killmails/{id}/{hash}/</c> — immutable, so a mail with every player attacker filled is never asked for again.
+    /// At most <see cref="SecurityStatusBatchSize"/> mails per call, one at a time, so a large library drains over several
+    /// refreshes instead of one burst; stops at the first failed read (the ESI client has already backed off) and stores
+    /// what it has. Returns how many mails were filled.
+    /// </summary>
+    public async Task<int> BackfillSecurityStatusesAsync(CancellationToken cancellationToken = default)
+    {
+        IReadOnlyList<(int KillmailId, string Hash)> missing =
+            await killmails.GetWithoutAttackerSecurityStatusAsync(SecurityStatusBatchSize, cancellationToken);
+        Dictionary<int, IReadOnlyList<KillmailAttackerSecurityStatus>> statuses = [];
+        foreach ((int killmailId, string hash) in missing)
+        {
+            var detail = await esi.GetAsync<EsiKillmail>($"/killmails/{killmailId}/{hash}/", cancellationToken: cancellationToken);
+            if (!detail.IsSuccess || detail.Value is null)
+            {
+                break;
+            }
+
+            List<KillmailAttackerSecurityStatus> read = [.. detail.Value.Attackers
+                .Select((attacker, ordinal) => (attacker.SecurityStatus, ordinal))
+                .Where(entry => entry.SecurityStatus is not null)
+                .Select(entry => new KillmailAttackerSecurityStatus(entry.ordinal, entry.SecurityStatus.GetValueOrDefault()))];
+            if (read.Count > 0)
+            {
+                statuses[killmailId] = read;
+            }
+        }
+
+        if (statuses.Count == 0)
+        {
+            return 0;
+        }
+
+        await using AsyncServiceScope scope = scopes.CreateAsyncScope();
+        Result stored = await scope.ServiceProvider.GetRequiredService<IDispatcher>()
+            .Send(new SetKillmailAttackerSecurityStatusesCommand(statuses), cancellationToken);
+        return stored.IsSuccess ? statuses.Count : 0;
     }
 
     // Shared by ImportAsync and ImportOneAsync (ET-374): store, replace any matching provisional row (ET-340), then

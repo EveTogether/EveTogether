@@ -136,6 +136,9 @@ public class FitCardTests
 
         public Task<Bitmap?> GetCorporationLogoAsync(int corporationId, int size,
             CancellationToken cancellationToken = default) => Task.FromResult<Bitmap?>(null);
+
+        public Task<Bitmap?> GetAllianceLogoAsync(int allianceId, int size,
+            CancellationToken cancellationToken = default) => Task.FromResult<Bitmap?>(null);
     }
 
     /// <summary>

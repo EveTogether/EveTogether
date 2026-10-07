@@ -508,6 +508,81 @@ public sealed class KillmailImportTests : IDisposable
         Assert.Empty(await Repository.GetForCharacterAsync(CharacterId, TestContext.Current.CancellationToken));
     }
 
+    [Fact]
+    public async Task BackfillSecurityStatuses_FillsMissingOnly_AndAsksOnce()
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        await Repository.AddMissingAsync(CharacterId, [_StoredWithAttackers(1, existingSecondStatus: 9.9)], cancellationToken);
+        List<KillmailsChangedEvent> heard = [];
+        _instance.Services.GetRequiredService<IEventBus>().Subscribe<KillmailsChangedEvent>(published => heard.Add(published));
+        _routes["/killmails/1/hash1/"] = () => Json(200, _KillmailWithSecurityStatuses(1));
+        var (client, _, stub) = _Pipeline(EsiAuthorization.Authorized("token"));
+        var importer = new EsiKillmailImporter(client, Repository, Scopes);
+
+        int first = await importer.BackfillSecurityStatusesAsync(cancellationToken);
+        int second = await importer.BackfillSecurityStatusesAsync(cancellationToken);
+
+        Assert.Equal((1, 0), (first, second));
+        Assert.Equal(1, stub.Calls);
+        LocalKillmail stored = Assert.Single(await Repository.GetForCharacterAsync(CharacterId, cancellationToken));
+        Assert.Equal([-4.7, 9.9, null], stored.Attackers.OrderBy(attacker => attacker.Ordinal).Select(attacker => attacker.SecurityStatus));
+        KillmailsChangedEvent change = Assert.Single(heard);
+        Assert.Equal((CharacterId, KillmailsChangeKind.SecurityStatusFilled), (change.Data.CharacterId, change.Data.Kind));
+    }
+
+    [Fact]
+    public async Task BackfillSecurityStatuses_MailWithOnlyNpcAttackers_IsNotAskedFor()
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        LocalKillmail npcOnly = _Stored(1);
+        npcOnly.Attackers = [new LocalKillmailAttacker { CharacterId = CharacterId, KillmailId = 1, Ordinal = 0, FactionId = 500010, DamageDone = 1 }];
+        await Repository.AddMissingAsync(CharacterId, [npcOnly], cancellationToken);
+        var (client, _, stub) = _Pipeline(EsiAuthorization.Authorized("token"));
+
+        int filled = await new EsiKillmailImporter(client, Repository, Scopes).BackfillSecurityStatusesAsync(cancellationToken);
+
+        Assert.Equal((0, 0), (filled, stub.Calls));
+    }
+
+    [Fact]
+    public async Task BackfillSecurityStatuses_OnEsiFailure_StoresNothing_AndRetriesNextTime()
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        await Repository.AddMissingAsync(CharacterId, [_StoredWithAttackers(1, existingSecondStatus: null)], cancellationToken);
+        _routes["/killmails/1/hash1/"] = () => Json(404, "{\"error\":\"Killmail not found\"}");
+        var (client, _, _) = _Pipeline(EsiAuthorization.Authorized("token"));
+        var importer = new EsiKillmailImporter(client, Repository, Scopes);
+
+        int failed = await importer.BackfillSecurityStatusesAsync(cancellationToken);
+        _routes["/killmails/1/hash1/"] = () => Json(200, _KillmailWithSecurityStatuses(1));
+        int retried = await importer.BackfillSecurityStatusesAsync(cancellationToken);
+
+        Assert.Equal((0, 1), (failed, retried));
+        LocalKillmail stored = Assert.Single(await Repository.GetForCharacterAsync(CharacterId, cancellationToken));
+        Assert.Equal([-4.7, 2.3, null], stored.Attackers.OrderBy(attacker => attacker.Ordinal).Select(attacker => attacker.SecurityStatus));
+    }
+
+    [Fact]
+    public async Task BackfillSecurityStatuses_ReadsAtMostOneBatchPerCall()
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        int total = EsiKillmailImporter.SecurityStatusBatchSize + 5;
+        for (int id = 1; id <= total; id++)
+        {
+            await Repository.AddMissingAsync(CharacterId, [_StoredWithAttackers(id, existingSecondStatus: null)], cancellationToken);
+            int killmailId = id;
+            _routes[$"/killmails/{id}/hash{id}/"] = () => Json(200, _KillmailWithSecurityStatuses(killmailId));
+        }
+
+        var (client, _, _) = _Pipeline(EsiAuthorization.Authorized("token"));
+        var importer = new EsiKillmailImporter(client, Repository, Scopes);
+
+        int first = await importer.BackfillSecurityStatusesAsync(cancellationToken);
+        int second = await importer.BackfillSecurityStatusesAsync(cancellationToken);
+
+        Assert.Equal((EsiKillmailImporter.SecurityStatusBatchSize, 5), (first, second));
+    }
+
     public void Dispose()
     {
         _instance.Dispose();
@@ -542,6 +617,28 @@ public sealed class KillmailImportTests : IDisposable
          "victim":{"character_id":99,"ship_type_id":587,"damage_taken":1,"items":[]},
          "attackers":[{"character_id":77,"damage_done":1,"final_blow":true}]}
         """;
+
+    private static string _KillmailWithSecurityStatuses(int killmailId) => $$"""
+        {"killmail_id":{{killmailId}},"killmail_time":"2026-09-20T12:00:00Z","solar_system_id":30000142,
+         "victim":{"character_id":99,"ship_type_id":587,"damage_taken":1,"items":[]},
+         "attackers":[
+           {"character_id":11,"damage_done":1,"final_blow":true,"security_status":-4.7},
+           {"character_id":12,"damage_done":1,"final_blow":false,"security_status":2.3},
+           {"corporation_id":1000125,"faction_id":500010,"damage_done":1,"final_blow":false}]}
+        """;
+
+    // A player with no status, a player whose status may already be known, and an NPC that never has one.
+    private static LocalKillmail _StoredWithAttackers(int killmailId, double? existingSecondStatus)
+    {
+        LocalKillmail killmail = _Stored(killmailId);
+        killmail.Attackers =
+        [
+            new LocalKillmailAttacker { CharacterId = CharacterId, KillmailId = killmailId, Ordinal = 0, AttackerCharacterId = 11, DamageDone = 1 },
+            new LocalKillmailAttacker { CharacterId = CharacterId, KillmailId = killmailId, Ordinal = 1, AttackerCharacterId = 12, DamageDone = 1, SecurityStatus = existingSecondStatus },
+            new LocalKillmailAttacker { CharacterId = CharacterId, KillmailId = killmailId, Ordinal = 2, FactionId = 500010, DamageDone = 1 }
+        ];
+        return killmail;
+    }
 
     private static LocalKillmail _Stored(int killmailId) => new()
     {

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.IO;
+using System.Net;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
@@ -23,6 +24,7 @@ public sealed class CharacterPortraitProvider(IHttpClientFactory httpClientFacto
 
     private readonly string _cacheDirectory = Path.Combine(dataDirectory, "character-portraits");
     private readonly ConcurrentDictionary<string, Bitmap> _cache = new();
+    private readonly ConcurrentDictionary<string, byte> _notFound = new();
 
     private async Task<bool> AreImagesEnabledAsync(CancellationToken cancellationToken)
     {
@@ -38,6 +40,9 @@ public sealed class CharacterPortraitProvider(IHttpClientFactory httpClientFacto
     public Task<Bitmap?> GetCorporationLogoAsync(int corporationId, int size, CancellationToken cancellationToken = default) =>
         _GetImageAsync(corporationId, size, "corporations", "logo", cancellationToken);
 
+    public Task<Bitmap?> GetAllianceLogoAsync(int allianceId, int size, CancellationToken cancellationToken = default) =>
+        _GetImageAsync(allianceId, size, "alliances", "logo", cancellationToken);
+
     private async Task<Bitmap?> _GetImageAsync(int id, int size, string category, string asset, CancellationToken cancellationToken)
     {
         if (id <= 0)
@@ -45,9 +50,18 @@ public sealed class CharacterPortraitProvider(IHttpClientFactory httpClientFacto
             return null;
         }
 
-        var key = category == "characters" ? $"{id}_{size}" : $"corporation_{id}_{size}";
+        var key = category switch
+        {
+            "characters" => $"{id}_{size}",
+            "corporations" => $"corporation_{id}_{size}",
+            _ => $"alliance_{id}_{size}"
+        };
         if (_cache.TryGetValue(key, out var cached))
             return cached;
+
+        // A 404 means the image server has no such logo (an NPC corp, say); asking again this session only repeats the miss.
+        if (_notFound.ContainsKey(key))
+            return null;
 
         if (!await AreImagesEnabledAsync(cancellationToken))
             return null;
@@ -68,6 +82,11 @@ public sealed class CharacterPortraitProvider(IHttpClientFactory httpClientFacto
             // Decode eagerly and add the value (not a factory closure over the using-scoped stream): the stream is
             // disposed when this method returns, so a deferred factory could read a disposed stream.
             return _cache.GetOrAdd(key, new Bitmap(stream));
+        }
+        catch (HttpRequestException exception) when (exception.StatusCode == HttpStatusCode.NotFound)
+        {
+            _notFound[key] = 0;
+            return null;
         }
         catch
         {

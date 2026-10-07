@@ -75,6 +75,7 @@ public sealed class KillmailDetailTests
     {
         public List<int> PortraitIds { get; } = [];
         public List<int> CorporationIds { get; } = [];
+        public List<int> AllianceIds { get; } = [];
         public Task<Avalonia.Media.Imaging.Bitmap?> GetPortraitAsync(int characterId, int size,
             CancellationToken cancellationToken = default)
         {
@@ -86,6 +87,13 @@ public sealed class KillmailDetailTests
             CancellationToken cancellationToken = default)
         {
             CorporationIds.Add(corporationId);
+            return Task.FromResult<Avalonia.Media.Imaging.Bitmap?>(null);
+        }
+
+        public Task<Avalonia.Media.Imaging.Bitmap?> GetAllianceLogoAsync(int allianceId, int size,
+            CancellationToken cancellationToken = default)
+        {
+            AllianceIds.Add(allianceId);
             return Task.FromResult<Avalonia.Media.Imaging.Bitmap?>(null);
         }
     }

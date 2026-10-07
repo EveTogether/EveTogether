@@ -22,4 +22,9 @@ public interface ILocalKillmailRepository : ILocalKillmailReader
     /// <summary>Fills in the victim position on every row of each killmail that has none yet, whichever character it is
     /// stored under (ET-473). Returns the characters whose rows changed.</summary>
     Task<IReadOnlyList<int>> SetPositionsAsync(IReadOnlyDictionary<int, KillmailPosition> positionsByKillmailId, CancellationToken cancellationToken = default);
+
+    /// <summary>Fills in the security status on every stored attacker (by killmail id and ordinal, whichever character the
+    /// mail is stored under) that has none yet (ET-477). Returns the characters whose rows changed.</summary>
+    Task<IReadOnlyList<int>> SetAttackerSecurityStatusesAsync(
+        IReadOnlyDictionary<int, IReadOnlyList<KillmailAttackerSecurityStatus>> statusesByKillmailId, CancellationToken cancellationToken = default);
 }

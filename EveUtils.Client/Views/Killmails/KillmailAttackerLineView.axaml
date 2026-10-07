@@ -27,7 +27,15 @@
                     <Border Classes="badge top" IsVisible="{Binding IsTopDamage}"><TextBlock Text="TOP DAMAGE"/></Border>
                     <Border Classes="badge me" IsVisible="{Binding IsYou}"><TextBlock Text="YOU"/></Border>
                 </StackPanel>
-                <TextBlock Classes="hint" Margin="0" FontSize="9.5" Text="{Binding SubText}"/>
+                <StackPanel Orientation="Horizontal" Spacing="4">
+                    <Border Classes="logotile" IsVisible="{Binding HasCorporation}">
+                        <Image Source="{Binding CorporationLogo}" IsVisible="{Binding HasCorporationLogo}" Stretch="Uniform"/>
+                    </Border>
+                    <Border Classes="logotile" IsVisible="{Binding HasAlliance}">
+                        <Image Source="{Binding AllianceLogo}" IsVisible="{Binding HasAllianceLogo}" Stretch="Uniform"/>
+                    </Border>
+                    <TextBlock Classes="hint" Margin="0" FontSize="9.5" VerticalAlignment="Center" Text="{Binding SubText}"/>
+                </StackPanel>
             </StackPanel>
             <StackPanel Grid.Column="2" VerticalAlignment="Center">
                 <TextBlock FontSize="10.5" Text="{Binding ShipText}"/>

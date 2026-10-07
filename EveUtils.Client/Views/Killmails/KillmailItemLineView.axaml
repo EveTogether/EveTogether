@@ -11,7 +11,7 @@
         <StyleInclude Source="avares://EveUtils.Client/Views/Runs/LootItemStyles.axaml"/>
     </UserControl.Styles>
 
-    <Border Classes="itemrow detailrow" Classes.top="{Binding IsTopValue}" BorderBrush="{DynamicResource DividerBrush}">
+    <Border Classes="itemrow detailrow" BorderBrush="{DynamicResource DividerBrush}">
         <Grid ColumnDefinitions="20,*,56,128,128" ColumnSpacing="6">
             <Border Classes="icontile">
                 <Panel>
