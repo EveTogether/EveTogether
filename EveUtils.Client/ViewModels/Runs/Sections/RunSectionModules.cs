@@ -36,6 +36,8 @@ public static class RunSectionModules
             services => new ActivityDetailSectionViewModel(services.Sde)),
         // B2 (ET-466): the run's combat in summary, straight under ACTIVITY and before every list. Detail only: the
         // run window has the live meter, and the stored combat exists from SAVE on (ET-467).
+        new(RunSectionId.Combat, null, services => new CombatDetailSectionViewModel(services)),
+        new(RunSectionId.Timeline, null, services => new TimelineDetailSectionViewModel(services)),
         // Straight under ACTIVITY, where the money of a homefront is decided (ET-230, mockup pin 4). The fixed
         // payout per ticked character — the table's, or a FixedPayout typed over it (ET-271) — is
         // HomefrontPayoutIskContributor's own share (ET-231).
@@ -50,8 +52,6 @@ public static class RunSectionModules
         new(RunSectionId.Enemies,
             context => new EnemiesWindowSectionViewModel(context),
             _ => new EnemiesDetailSectionViewModel()),
-        new(RunSectionId.Combat, null, services => new CombatDetailSectionViewModel(services)),
-        new(RunSectionId.Timeline, null, services => new TimelineDetailSectionViewModel(services)),
         new(RunSectionId.Fit, context => new FitWindowSectionViewModel(context), null),
         new(RunSectionId.Fleet,
             context => new FleetWindowSectionViewModel(context),

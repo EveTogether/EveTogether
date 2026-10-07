@@ -12,7 +12,7 @@
                    IsVisible="{Binding LootEmptyText, Converter={x:Static ObjectConverters.IsNotNull}}"
                    Text="{Binding LootEmptyText}"/>
         <TextBlock x:Name="LootContainers" Classes="hint" TextWrapping="Wrap"
-                   IsVisible="False"
+                   IsVisible="{Binding ContainersText, Converter={x:Static ObjectConverters.IsNotNull}}"
                    Text="{Binding ContainersText}"/>
     </StackPanel>
 </UserControl>
