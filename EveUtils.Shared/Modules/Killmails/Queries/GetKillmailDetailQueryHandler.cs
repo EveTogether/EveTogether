@@ -55,7 +55,8 @@ internal sealed class GetKillmailDetailQueryHandler(
         return Result<KillmailDetailDto>.Success(new KillmailDetailDto(
             killmail.CharacterId, killmail.KillmailId, killmail.Hash, killmail.KillmailTimeUtc, killmail.SolarSystemId,
             killmail.IsLoss, killmail.VictimShipTypeId, shipValue, killmail.VictimCharacterId, killmail.VictimCorporationId,
-            killmail.VictimAllianceId, killmail.DamageTaken, items, attackers, linkedRun));
+            killmail.VictimAllianceId, killmail.DamageTaken, items, attackers, linkedRun,
+            killmail is { PositionX: { } x, PositionY: { } y, PositionZ: { } z } ? new KillmailPosition(x, y, z) : null));
     }
 
     // A stack that is partly destroyed and partly dropped becomes two lines (AC1) — each priced on its own quantity,

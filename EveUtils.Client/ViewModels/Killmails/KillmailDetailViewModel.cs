@@ -24,6 +24,9 @@ using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Sde;
 using EveUtils.Shared.Modules.Sde.Dtos;
 using EveUtils.Shared.Modules.Sde.Enums;
+using EveUtils.Shared.Modules.Settings.Commands;
+using EveUtils.Shared.Modules.Settings.Dtos;
+using EveUtils.Shared.Modules.Settings.Queries;
 using EveUtils.Shared.Modules.Settings.Repositories;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -39,13 +42,14 @@ namespace EveUtils.Client.ViewModels.Killmails;
 /// <para>Reads nothing from ESI itself (AC8): the query, the SDE lookups and <see cref="KillmailNames.HydrateAsync"/>
 /// are the only sources, and the last one only ever asks for a player name that is missing or stale.</para>
 /// </summary>
-public sealed partial class KillmailDetailViewModel : ViewModelBase
+public sealed partial class KillmailDetailViewModel : ViewModelBase, IDisposable
 {
     private readonly CqrsDispatcher _dispatcher;
     private readonly IDialogService _dialogs;
     private readonly IServiceProvider _services;
     private readonly ISdeAccessor _sde;
     private readonly ILogger<KillmailDetailViewModel>? _logger;
+    private readonly IOpsecService? _opsec;
     private readonly int _characterId;
     private readonly int _killmailId;
 
@@ -57,6 +61,12 @@ public sealed partial class KillmailDetailViewModel : ViewModelBase
         _services = services;
         _sde = services.GetRequiredService<ISdeAccessor>();
         _logger = services.GetService<ILogger<KillmailDetailViewModel>>();
+        _opsec = services.GetService<IOpsecService>();
+        if (_opsec is not null)
+        {
+            IsMapHiddenByOpsec = _opsec.IsEnabled;
+            _opsec.Changed += _OnOpsecChanged;
+        }
         _characterId = characterId;
         _killmailId = killmailId;
         ModuleId = $"killmail-{characterId}-{killmailId}";
@@ -93,6 +103,24 @@ public sealed partial class KillmailDetailViewModel : ViewModelBase
     [ObservableProperty] private string _linkedRunSummaryText = "kills are not linked to runs";
     [ObservableProperty] private KillmailLinkedRunViewModel? _linkedRun;
 
+    /// <summary>Whether LOCATION is folded shut, remembered across killmails and restarts like the map's side panel.</summary>
+    public const string LocationCollapsedSettingKey = "ui.killmail.location-collapsed";
+
+    [ObservableProperty] private bool _isLocationExpanded = true;
+    private bool _isRestoringLocationState;
+
+    [ObservableProperty] private string _locationSummaryText = string.Empty;
+    /// <summary>Null when there is nothing to draw — no position yet, abyssal space, or no celestials known.</summary>
+    [ObservableProperty] private KillmailLocation? _location;
+    [ObservableProperty] private string? _locationHintText;
+    [ObservableProperty] private string _celestialCountsText = string.Empty;
+
+    /// <summary>OPSEC is on (ET-417): the system and grid maps are not drawn, as on the world map — the shape of a
+    /// system gives it away even with its names masked.</summary>
+    [ObservableProperty] private bool _isMapHiddenByOpsec;
+
+    public ObservableCollection<KillmailNearestRowViewModel> NearestCelestials { get; } = [];
+
     [ObservableProperty] private string _fitHeaderText = string.Empty;
     [ObservableProperty] private string _fitSummaryText = string.Empty;
 
@@ -122,6 +150,8 @@ public sealed partial class KillmailDetailViewModel : ViewModelBase
             _services.GetRequiredService<IEsiAffiliationResolver>(), _sde,
             _services.GetRequiredService<IKillmailEntityNameRepository>(), _services.GetRequiredService<ISettingRepository>(),
             _services.GetService<TimeProvider>() ?? TimeProvider.System);
+
+        await _RestoreLocationStateAsync(cancellationToken);
 
         Result<KillmailDetailDto> result =
             await _dispatcher.Query(new GetKillmailDetailQuery(_characterId, _killmailId), cancellationToken);
@@ -220,6 +250,7 @@ public sealed partial class KillmailDetailViewModel : ViewModelBase
         }
 
         _ApplyLinkedRun(detail);
+        _ApplyLocation(detail);
         _ApplyFit(detail);
         _ApplyAttackers(detail, names, ownCharacterIds);
 
@@ -271,6 +302,90 @@ public sealed partial class KillmailDetailViewModel : ViewModelBase
         _ when KillmailRunLinker.IsCapsule(victimShipTypeId) => "the pod followed its ship within a minute",
         _ => "the only run of this pilot at that time, place and hull"
     };
+
+    private void _ApplyLocation(KillmailDetailDto detail)
+    {
+        NearestCelestials.Clear();
+        Location = null;
+        CelestialCountsText = string.Empty;
+        if (IsAbyssal)
+        {
+            LocationSummaryText = "Abyssal deadspace";
+            LocationHintText = "An abyssal pocket has no sun, planets or gates, so there is no system map.";
+            return;
+        }
+
+        if (detail.VictimPosition is not { } position)
+        {
+            LocationSummaryText = "position not known yet";
+            LocationHintText = "Where the ship died is read from ESI with the next killmail refresh.";
+            return;
+        }
+
+        IReadOnlyList<SdeCelestial> celestials = _sde.GetCelestials(detail.SolarSystemId);
+        if (KillmailLocation.Create(celestials, position) is not { } location)
+        {
+            LocationSummaryText = "no system map";
+            LocationHintText = "The static data has no sun, planets or gates for this system.";
+            return;
+        }
+
+        Location = location;
+        LocationHintText = null;
+        LocationSummaryText = location.PlaceText(OpsecText.Mark);
+        (CelestialKind Kind, string Label)[] counted =
+        [
+            (CelestialKind.Planet, "planets"), (CelestialKind.Moon, "moons"), (CelestialKind.Stargate, "gates"),
+            (CelestialKind.Station, "stations"), (CelestialKind.AsteroidBelt, "belts")
+        ];
+        CelestialCountsText = string.Join(" · ",
+            counted.Select(entry => $"{celestials.Count(celestial => celestial.Kind == entry.Kind)} {entry.Label}"));
+        foreach ((SdeCelestial celestial, double metres) in location.ByDistance.Take(5))
+        {
+            NearestCelestials.Add(new KillmailNearestRowViewModel(
+                OpsecText.Mark(celestial.Name), _KindText(celestial.Kind), SpaceDistance.Text(metres),
+                celestial.Kind == CelestialKind.Stargate && celestial.DestinationSecurity is { } security
+                    ? OpsecText.Mark(RunRowFacts.SecurityText(security))
+                    : null,
+                ReferenceEquals(celestial, location.Nearest)));
+        }
+    }
+
+    private static string _KindText(CelestialKind kind) => kind switch
+    {
+        CelestialKind.Star => "SUN",
+        CelestialKind.Planet => "PLANET",
+        CelestialKind.Moon => "MOON",
+        CelestialKind.AsteroidBelt => "BELT",
+        CelestialKind.Stargate => "GATE",
+        _ => "STATION"
+    };
+
+    private async Task _RestoreLocationStateAsync(CancellationToken cancellationToken)
+    {
+        IReadOnlyList<SettingDto> settings = await _dispatcher.Query(new GetSettingsQuery(), cancellationToken);
+        _isRestoringLocationState = true;
+        IsLocationExpanded = !settings.Any(setting => setting.Key == LocationCollapsedSettingKey && setting.Value == "true");
+        _isRestoringLocationState = false;
+    }
+
+    partial void OnIsLocationExpandedChanged(bool value)
+    {
+        if (!_isRestoringLocationState)
+        {
+            _ = _dispatcher.Send(new SetSettingCommand(LocationCollapsedSettingKey, value ? "false" : "true"));
+        }
+    }
+
+    private void _OnOpsecChanged() => IsMapHiddenByOpsec = _opsec?.IsEnabled ?? false;
+
+    public void Dispose()
+    {
+        if (_opsec is not null)
+        {
+            _opsec.Changed -= _OnOpsecChanged;
+        }
+    }
 
     private void _ApplyFit(KillmailDetailDto detail)
     {

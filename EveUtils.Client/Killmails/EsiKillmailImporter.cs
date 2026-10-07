@@ -10,6 +10,7 @@ using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Esi.Http;
 using EveUtils.Shared.Modules.Killmails;
 using EveUtils.Shared.Modules.Killmails.Commands;
+using EveUtils.Shared.Modules.Killmails.Dtos;
 using EveUtils.Shared.Modules.Killmails.Entities;
 using EveUtils.Shared.Modules.Killmails.Repositories;
 using Microsoft.Extensions.DependencyInjection;
@@ -211,6 +212,40 @@ public sealed class EsiKillmailImporter(IEsiClient esi, ILocalKillmailReader kil
         }
     }
 
+    /// <summary>
+    /// Fills in the victim position of mails stored before it was kept (ET-473), re-reading each from the public
+    /// <c>/killmails/{id}/{hash}/</c> — immutable and cached, so a mail is asked for once. One at a time, never in
+    /// parallel. Stops at the first failed read and stores what it has; the rest follow on the next refresh.
+    /// </summary>
+    public async Task BackfillPositionsAsync(CancellationToken cancellationToken = default)
+    {
+        IReadOnlyList<(int KillmailId, string Hash)> missing = await killmails.GetWithoutPositionAsync(cancellationToken);
+        Dictionary<int, KillmailPosition> positions = [];
+        foreach ((int killmailId, string hash) in missing)
+        {
+            var detail = await esi.GetAsync<EsiKillmail>($"/killmails/{killmailId}/{hash}/", cancellationToken: cancellationToken);
+            // ponytail: a mail that fails for good holds back the ones after it; skip-and-log it if that ever happens.
+            if (!detail.IsSuccess || detail.Value is null)
+            {
+                break;
+            }
+
+            if (detail.Value.Victim.Position is { } position)
+            {
+                positions[killmailId] = new KillmailPosition(position.X, position.Y, position.Z);
+            }
+        }
+
+        if (positions.Count == 0)
+        {
+            return;
+        }
+
+        await using AsyncServiceScope scope = scopes.CreateAsyncScope();
+        await scope.ServiceProvider.GetRequiredService<IDispatcher>()
+            .Send(new SetKillmailPositionsCommand(positions), cancellationToken);
+    }
+
     // Shared by ImportAsync and ImportOneAsync (ET-374): store, replace any matching provisional row (ET-340), then
     // run the ET-331 link pass for the same character, so a pasted link joins a run exactly like the feed does.
     private async Task<KillmailImportResult> _StoreAndLinkAsync(IDispatcher dispatcher, int characterId,
@@ -285,6 +320,9 @@ public sealed class EsiKillmailImporter(IEsiClient esi, ILocalKillmailReader kil
         VictimCorporationId = killmail.Victim.CorporationId,
         VictimAllianceId = killmail.Victim.AllianceId,
         DamageTaken = killmail.Victim.DamageTaken,
+        PositionX = killmail.Victim.Position?.X,
+        PositionY = killmail.Victim.Position?.Y,
+        PositionZ = killmail.Victim.Position?.Z,
         LinkSource = KillmailLinkSource.None,
         ImportedAtUtc = DateTime.UtcNow,
         Items = _ToItems(characterId, killmail),

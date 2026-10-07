@@ -17,6 +17,7 @@ using EveUtils.Shared.Modules.Fleet.Events;
 using EveUtils.Shared.Modules.Fleet.Queries;
 using EveUtils.Shared.Modules.Gamelog.Commands;
 using EveUtils.Shared.Modules.Killmails.Commands;
+using EveUtils.Shared.Modules.Killmails.Dtos;
 using EveUtils.Shared.Modules.Killmails.Entities;
 using EveUtils.Shared.Modules.Killmails.Enums;
 using EveUtils.Shared.Modules.Killmails.Events;
@@ -234,6 +235,14 @@ public sealed class CommandSignalCoverageTests
         [typeof(ReconcileFleetKillmailShareCommand)] = (dispatcher, cancellationToken) => Task.FromResult(new Act(
             () => dispatcher.Send(new ReconcileFleetKillmailShareCommand(Owner, "local", 42, [_Killmail().KillmailId], [_Killmail()]), cancellationToken),
             published => published is KillmailsChangedEvent { Data: { CharacterId: Owner, Kind: KillmailsChangeKind.FleetShareChanged } })),
+
+        [typeof(SetKillmailPositionsCommand)] = async (dispatcher, cancellationToken) =>
+        {
+            Assert.True((await dispatcher.Send(new StoreKillmailsCommand(Owner, [_Killmail()]), cancellationToken)).IsSuccess);
+            return new Act(() => dispatcher.Send(new SetKillmailPositionsCommand(
+                    new Dictionary<int, KillmailPosition> { [_Killmail().KillmailId] = new(1, 2, 3) }), cancellationToken),
+                published => published is KillmailsChangedEvent { Data: { CharacterId: Owner, Kind: KillmailsChangeKind.PositionFilled } });
+        },
 
         [typeof(StoreProvisionalKillmailCommand)] =(dispatcher, cancellationToken) => Task.FromResult(new Act(
             () => dispatcher.Send(new StoreProvisionalKillmailCommand(Owner, _ProvisionalKillmail()), cancellationToken),

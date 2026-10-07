@@ -146,6 +146,11 @@ public interface ISdeAccessor
     /// must wrap it in <c>Task.Run</c> (ET-298). <see cref="SdeMapSnapshot.Empty"/> when the SDE is unavailable.</summary>
     SdeMapSnapshot GetMapSnapshot();
 
+    /// <summary>The sun, planets, moons, asteroid belts, stargates and NPC stations of one system with their positions
+    /// (ET-473), named as the game names them. Empty when the SDE is unavailable or the system has none — abyssal
+    /// pockets, or a store built before schema v12.</summary>
+    IReadOnlyList<SdeCelestial> GetCelestials(int solarSystemId);
+
     /// <summary>SDE name for an NPC corporation id (ET-335), for a killmail's attacker/victim corporation. Null
     /// when the SDE is unavailable or the id belongs to a player rather than an NPC — the importer's signal to
     /// ask ESI instead.</summary>

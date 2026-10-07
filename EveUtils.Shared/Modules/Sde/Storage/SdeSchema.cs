@@ -5,7 +5,7 @@ namespace EveUtils.Shared.Modules.Sde.Storage;
 /// (CREATE INDEX after the inserts is far cheaper than maintaining indexes per row). The store holds only the
 /// minimal subset we use (data-minimalisation): types/groups/categories, dogma attributes/effects and
 /// per-type dogma, a pre-computed slot/hardpoint table for the fit parsers, the site catalogue and the universe map
-/// (regions, constellations, systems with 2D position, stargate connections). Heavy datasets (typeMaterials,
+/// (regions, constellations, systems with 2D position, stargate connections, and each system's celestials). Heavy datasets (typeMaterials,
 /// blueprints) are skipped entirely.
 /// </summary>
 public static class SdeSchema
@@ -29,9 +29,10 @@ public static class SdeSchema
     /// (ET-335) so a killmail's system, region, attacker corporation and faction resolve from the SDE instead of ESI;
     /// v10 added <c>Type.description</c> for the skill catalogue (ET-351);
     /// v11 added the <c>Constellation</c> and <c>Jump</c> tables, <c>SolarSystem.constellationId/x2d/y2d</c> and
-    /// <c>Region.factionId</c> for the world map (ET-391).
+    /// <c>Region.factionId</c> for the world map (ET-391);
+    /// v12 added the <c>Celestial</c> and <c>StationOperation</c> tables for a killmail's system map (ET-473).
     /// </summary>
-    public const int SchemaVersion = 11;
+    public const int SchemaVersion = 12;
 
     /// <summary>Schema-creating statements, run before the bulk load.</summary>
     public static readonly string[] CreateTables =
@@ -200,6 +201,32 @@ public static class SdeSchema
         // wants both directions mirrors the row itself — the primary key serves lookups by the lower id, the
         // IX_Jump_toSystemId index those by the higher id.
         "CREATE TABLE Jump (fromSystemId INTEGER NOT NULL, toSystemId INTEGER NOT NULL, PRIMARY KEY (fromSystemId, toSystemId)) WITHOUT ROWID;",
+        // Everything a killmail's system map draws (ET-473): one row per sun, planet, moon, asteroid belt, stargate and
+        // NPC station, keyed by system first so one system's rows sit together and need no extra index. kind is
+        // CelestialKind. x/y/z are metres from the sun, which mapStars.jsonl gives no position because it is the
+        // origin. Names are not stored — the reader builds them like the game does (verified against ESI for 391
+        // objects): a planet is "<system> <celestialIndex as roman>", a moon or belt "<orbit> - Moon|Asteroid Belt
+        // <orbitIndex>", a gate "Stargate (<destination>)", a station "<orbit> - <owner>[ <operation>]".
+        // operationId is null when the station's name leaves the operation out (useOperationName false).
+        """
+        CREATE TABLE Celestial (
+            solarSystemId       INTEGER NOT NULL,
+            itemId              INTEGER NOT NULL,
+            kind                INTEGER NOT NULL,
+            orbitId             INTEGER,
+            celestialIndex      INTEGER,
+            orbitIndex          INTEGER,
+            x                   REAL NOT NULL,
+            y                   REAL NOT NULL,
+            z                   REAL NOT NULL,
+            destinationSystemId INTEGER,
+            ownerId             INTEGER,
+            operationId         INTEGER,
+            PRIMARY KEY (solarSystemId, itemId)
+        ) WITHOUT ROWID;
+        """,
+        // The operation half of an NPC station's name ("Bureau", "Retail Center"), from stationOperations.jsonl.
+        "CREATE TABLE StationOperation (operationId INTEGER PRIMARY KEY, nameEn TEXT NOT NULL) WITHOUT ROWID;",
         // Id + English name only (ET-335) — a killmail's attacker/victim corporation or faction id resolves here
         // when it belongs to an NPC; a miss means the id is a player's and must go to ESI instead (see
         // ISdeAccessor.GetNpcCorporationName/GetFactionName).

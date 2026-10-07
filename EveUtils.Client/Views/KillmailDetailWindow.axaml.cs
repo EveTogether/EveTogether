@@ -12,5 +12,9 @@ public partial class KillmailDetailWindow : ChromedWindow
 {
     public KillmailDetailWindow() => AvaloniaXamlLoader.Load(this);
 
-    public KillmailDetailWindow(KillmailDetailViewModel viewModel) : this() => DataContext = viewModel;
+    public KillmailDetailWindow(KillmailDetailViewModel viewModel) : this()
+    {
+        DataContext = viewModel;
+        Closed += (_, _) => viewModel.Dispose();
+    }
 }

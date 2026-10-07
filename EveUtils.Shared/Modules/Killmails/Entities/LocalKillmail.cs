@@ -21,6 +21,12 @@ public sealed class LocalKillmail
     public int? VictimAllianceId { get; set; }
     public int DamageTaken { get; set; }
 
+    /// <summary>Where the victim died, in metres in the system's own frame (ESI <c>victim.position</c>, ET-473). Null for a
+    /// mail stored before the position was kept, until the killmail refresh fills it in from ESI.</summary>
+    public double? PositionX { get; set; }
+    public double? PositionY { get; set; }
+    public double? PositionZ { get; set; }
+
     public Guid? RunId { get; set; }
     public KillmailLinkSource LinkSource { get; set; }
     public DateTime ImportedAtUtc { get; set; }

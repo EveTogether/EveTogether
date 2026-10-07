@@ -23,12 +23,13 @@ public sealed record KillmailLinkedRunDto(
 
 /// <summary>Everything the killmail detail screen (ET-333) reads in one call: the mail, its item and attacker lines,
 /// today's value, and the run it is linked to (a loss only). Ids only for names — the reader resolves the SDE and
-/// <c>KillmailNames</c> the same way <see cref="Queries.GetKillmailsOverviewQuery"/>'s rows already do.</summary>
+/// <c>KillmailNames</c> the same way <see cref="Queries.GetKillmailsOverviewQuery"/>'s rows already do.
+/// <see cref="VictimPosition"/> is null until the mail's position is known (ET-473).</summary>
 public sealed record KillmailDetailDto(
     int CharacterId, int KillmailId, string Hash, DateTime KillmailTimeUtc, int SolarSystemId, bool IsLoss,
     int VictimShipTypeId, decimal? ShipValue, int? VictimCharacterId, int? VictimCorporationId, int? VictimAllianceId,
     int DamageTaken, IReadOnlyList<KillmailDetailItemLineDto> Items, IReadOnlyList<KillmailDetailAttackerLineDto> Attackers,
-    KillmailLinkedRunDto? LinkedRun)
+    KillmailLinkedRunDto? LinkedRun, KillmailPosition? VictimPosition = null)
 {
     /// <summary>The hull plus every destroyed item at today's average prices, null when none of them is priced (the one
     /// formula behind ISK DESTROYED here and in a run's FLEET KILLS, ET-373); dropped items never count.</summary>

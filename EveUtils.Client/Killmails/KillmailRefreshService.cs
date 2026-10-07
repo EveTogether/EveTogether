@@ -13,7 +13,7 @@ namespace EveUtils.Client.Killmails;
 /// <c>/characters/{id}/killmails/recent/</c>. Characters without the killmail scope are skipped quietly. A character
 /// that just granted the scope is imported immediately via <see cref="ICharacterRegistry.RegistryChanged"/> (ET-363)
 /// — the same seam <c>SkillRefreshService</c> and <c>ImplantRefreshService</c> use — instead of waiting up to 5
-/// minutes for the next tick.
+/// minutes for the next tick. Each pass ends by filling in the victim position of mails stored before it was kept (ET-473).
 /// </summary>
 public sealed class KillmailRefreshService(
     EsiKillmailImporter importer,
@@ -89,6 +89,8 @@ public sealed class KillmailRefreshService(
                         break;
                 }
             }
+
+            await importer.BackfillPositionsAsync(cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {

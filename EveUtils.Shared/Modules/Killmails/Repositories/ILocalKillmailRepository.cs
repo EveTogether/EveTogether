@@ -1,3 +1,4 @@
+using EveUtils.Shared.Modules.Killmails.Dtos;
 using EveUtils.Shared.Modules.Killmails.Entities;
 
 namespace EveUtils.Shared.Modules.Killmails.Repositories;
@@ -17,4 +18,8 @@ public interface ILocalKillmailRepository : ILocalKillmailReader
     /// touched. Returns whether anything changed, and the runs a withdrawn row was linked to.</summary>
     Task<(bool Changed, IReadOnlyList<Guid> WithdrawnFromRunIds)> ReconcileFleetShareAsync(int characterId, string serverIdentity, long fleetId, IReadOnlyCollection<int> sharedKillmailIds,
         IReadOnlyList<LocalKillmail> fetched, CancellationToken cancellationToken = default);
+
+    /// <summary>Fills in the victim position on every row of each killmail that has none yet, whichever character it is
+    /// stored under (ET-473). Returns the characters whose rows changed.</summary>
+    Task<IReadOnlyList<int>> SetPositionsAsync(IReadOnlyDictionary<int, KillmailPosition> positionsByKillmailId, CancellationToken cancellationToken = default);
 }
