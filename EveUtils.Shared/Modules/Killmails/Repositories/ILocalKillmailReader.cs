@@ -16,4 +16,9 @@ public interface ILocalKillmailReader
 
     /// <summary>Every stored mail, of any character, that has no victim position yet (ET-473): one entry per killmail id.</summary>
     Task<IReadOnlyList<(int KillmailId, string Hash)>> GetWithoutPositionAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Up to <paramref name="limit"/> stored mails, of any character, with a player attacker that has no security
+    /// status yet (ET-477): one entry per killmail id. NPC attackers are not asked for, so a mail ESI gives no value for
+    /// is not read again forever.</summary>
+    Task<IReadOnlyList<(int KillmailId, string Hash)>> GetWithoutAttackerSecurityStatusAsync(int limit, CancellationToken cancellationToken = default);
 }

@@ -11,8 +11,7 @@ namespace EveUtils.Client.ViewModels.Killmails;
 /// two <see cref="KillmailDetailItemLineDto"/> lines but one row, with an amount in both columns (ET-475).</summary>
 public sealed partial class KillmailDetailItemRowViewModel : ObservableObject
 {
-    public KillmailDetailItemRowViewModel(IReadOnlyList<KillmailDetailItemLineDto> lines, string name, string? metaHint,
-        bool isTopValue)
+    public KillmailDetailItemRowViewModel(IReadOnlyList<KillmailDetailItemLineDto> lines, string name, string? metaHint)
     {
         KillmailDetailItemLineDto? dropped = lines.FirstOrDefault(line => !line.IsDestroyed);
         KillmailDetailItemLineDto? destroyed = lines.FirstOrDefault(line => line.IsDestroyed);
@@ -24,18 +23,10 @@ public sealed partial class KillmailDetailItemRowViewModel : ObservableObject
         QuantityText = IskFormat.Number(lines.Sum(line => line.Quantity));
         DroppedText = _AmountText(dropped);
         DestroyedText = _AmountText(destroyed);
-        IsTopValue = isTopValue;
-        Value = _Sum(lines);
     }
 
     private static string _AmountText(KillmailDetailItemLineDto? line) =>
         line is null ? string.Empty : IskFormat.NumberOrNoPrice(line.Value);
-
-    private static decimal? _Sum(IEnumerable<KillmailDetailItemLineDto> lines)
-    {
-        List<decimal> known = [.. lines.Select(line => line.Value).OfType<decimal>()];
-        return known.Count == 0 ? null : known.Sum();
-    }
 
     public string Name { get; }
 
@@ -62,10 +53,4 @@ public sealed partial class KillmailDetailItemRowViewModel : ObservableObject
 
     /// <summary>Empty when nothing of the stack was destroyed.</summary>
     public string DestroyedText { get; }
-
-    /// <summary>The single highest-value row in its own group, highlighted like <c>ActivityLootLineViewModel</c>'s
-    /// own top-value loot line.</summary>
-    public bool IsTopValue { get; }
-
-    internal decimal? Value { get; }
 }

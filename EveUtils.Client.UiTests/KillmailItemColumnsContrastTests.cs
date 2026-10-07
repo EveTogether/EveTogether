@@ -62,6 +62,46 @@ public sealed class KillmailItemColumnsContrastTests
         }
     }
 
+    [AvaloniaTheory]
+    [InlineData(FactionTheme.Caldari)]
+    [InlineData(FactionTheme.Amarr)]
+    [InlineData(FactionTheme.Gallente)]
+    [InlineData(FactionTheme.Minmatar)]
+    public void GroupHeaderBand_Reads_InEveryTheme(FactionTheme faction)
+    {
+        using var instance = TestClientInstance.Create();
+        var theme = instance.Services.GetRequiredService<IThemeService>();
+        try
+        {
+            theme.Apply(faction);
+            Color panel = _Resource("BgPanelBrush");
+            Color band = _Resource("BgRowHoverBrush");
+
+            if (!Application.Current!.TryGetResource("WindowBackgroundBrush", null, out object? value)
+                || value is not LinearGradientBrush gradient)
+                throw new Xunit.Sdk.XunitException("WindowBackgroundBrush is not a linear gradient");
+
+            List<string> failures = [];
+            foreach (string inkName in new[] { "TextBrightBrush", "TextBrush", "GreenBrush", "RedBrush" })
+            {
+                Color ink = _Resource(inkName);
+                foreach (var stop in gradient.GradientStops)
+                {
+                    Color surface = _Composite(band, _Composite(panel, stop.Color));
+                    double contrast = _Contrast(ink, surface);
+                    if (contrast < TextFloor)
+                        failures.Add($"{inkName} on header band over {stop.Color}: {contrast:F2}:1");
+                }
+            }
+
+            Assert.True(failures.Count == 0, $"[{faction}] under {TextFloor}:1 — {string.Join("; ", failures)}");
+        }
+        finally
+        {
+            theme.Apply(FactionTheme.Gallente);
+        }
+    }
+
     private static Color _Resource(string key) =>
         Application.Current!.TryGetResource(key, null, out object? value) && value is ISolidColorBrush brush
             ? brush.Color

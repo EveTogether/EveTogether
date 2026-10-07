@@ -10,8 +10,10 @@ namespace EveUtils.Client.ViewModels.Killmails;
 public sealed partial class KillmailDetailAttackerRowViewModel(
     string name, string subText, string shipText, string? weaponText, int damageDone, double sharePercent,
     bool isFinalBlow, bool isTopDamage, bool isYou, bool isNpc, int? characterId, int? shipTypeId,
-    int? corporationId) : ObservableObject
+    int? corporationId, int? allianceId = null) : ObservableObject
 {
+    private const int LogoSize = 32;
+
     public string Name { get; } = name;
 
     public string Initial => Name.Length > 0 ? Name[..1].ToUpperInvariant() : "?";
@@ -35,6 +37,37 @@ public sealed partial class KillmailDetailAttackerRowViewModel(
             {
                 Image = await portraits.GetCorporationLogoAsync(corporation, 64);
             }
+        }
+    }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasCorporationLogo))]
+    private Bitmap? _corporationLogo;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasAllianceLogo))]
+    private Bitmap? _allianceLogo;
+
+    public bool HasCorporationLogo => CorporationLogo is not null;
+
+    public bool HasAllianceLogo => AllianceLogo is not null;
+
+    /// <summary>The logo slots show a bordered empty tile while the logo is missing (an NPC corp has none), so the
+    /// rows keep one alignment.</summary>
+    public bool HasCorporation { get; } = corporationId is not null;
+
+    public bool HasAlliance { get; } = allianceId is not null;
+
+    public async Task LoadLogosAsync(ICharacterPortraitProvider portraits)
+    {
+        if (corporationId is { } corporation)
+        {
+            CorporationLogo = await portraits.GetCorporationLogoAsync(corporation, LogoSize);
+        }
+
+        if (allianceId is { } alliance)
+        {
+            AllianceLogo = await portraits.GetAllianceLogoAsync(alliance, LogoSize);
         }
     }
 

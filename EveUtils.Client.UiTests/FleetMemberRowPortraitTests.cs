@@ -29,6 +29,9 @@ public class FleetMemberRowPortraitTests
 
         public Task<Bitmap?> GetCorporationLogoAsync(int corporationId, int size,
             CancellationToken cancellationToken = default) => Task.FromResult<Bitmap?>(null);
+
+        public Task<Bitmap?> GetAllianceLogoAsync(int allianceId, int size,
+            CancellationToken cancellationToken = default) => Task.FromResult<Bitmap?>(null);
     }
 
     private static FleetMemberRowViewModel Row(int characterId) => new(

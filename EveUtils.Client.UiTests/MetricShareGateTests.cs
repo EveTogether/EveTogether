@@ -286,6 +286,11 @@ public class MetricShareGateTests
             CancellationToken cancellationToken = default) =>
             Task.FromResult<IReadOnlyList<(int KillmailId, string Hash)>>([]);
 
+        public Task<IReadOnlyList<(int KillmailId, string Hash)>> GetWithoutAttackerSecurityStatusAsync(
+            int limit,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<(int KillmailId, string Hash)>>([]);
+
         public Task<IReadOnlyList<LocalKillmail>> GetForCharacterAsync(
             int characterId,
             CancellationToken cancellationToken = default) =>

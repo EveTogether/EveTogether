@@ -244,6 +244,22 @@ public sealed class CommandSignalCoverageTests
                 published => published is KillmailsChangedEvent { Data: { CharacterId: Owner, Kind: KillmailsChangeKind.PositionFilled } });
         },
 
+        [typeof(SetKillmailAttackerSecurityStatusesCommand)] = async (dispatcher, cancellationToken) =>
+        {
+            LocalKillmail killmail = _Killmail();
+            killmail.Attackers = [new LocalKillmailAttacker
+            {
+                CharacterId = Owner, KillmailId = killmail.KillmailId, Ordinal = 0, AttackerCharacterId = Other, DamageDone = 1
+            }];
+            Assert.True((await dispatcher.Send(new StoreKillmailsCommand(Owner, [killmail]), cancellationToken)).IsSuccess);
+            return new Act(() => dispatcher.Send(new SetKillmailAttackerSecurityStatusesCommand(
+                    new Dictionary<int, IReadOnlyList<KillmailAttackerSecurityStatus>>
+                    {
+                        [killmail.KillmailId] = [new KillmailAttackerSecurityStatus(0, -5.1)]
+                    }), cancellationToken),
+                published => published is KillmailsChangedEvent { Data: { CharacterId: Owner, Kind: KillmailsChangeKind.SecurityStatusFilled } });
+        },
+
         [typeof(StoreProvisionalKillmailCommand)] =(dispatcher, cancellationToken) => Task.FromResult(new Act(
             () => dispatcher.Send(new StoreProvisionalKillmailCommand(Owner, _ProvisionalKillmail()), cancellationToken),
             published => published is KillmailsChangedEvent { Data: { CharacterId: Owner, Kind: KillmailsChangeKind.ProvisionalChanged } })),

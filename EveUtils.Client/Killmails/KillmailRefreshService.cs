@@ -91,6 +91,12 @@ public sealed class KillmailRefreshService(
             }
 
             await importer.BackfillPositionsAsync(cancellationToken);
+
+            int filled = await importer.BackfillSecurityStatusesAsync(cancellationToken);
+            if (filled > 0)
+            {
+                logger.LogInformation("Filled in the attacker security status of {Count} stored killmails.", filled);
+            }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {

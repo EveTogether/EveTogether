@@ -17,5 +17,8 @@ public enum KillmailsChangeKind
     FleetShareChanged,
 
     /// <summary>A stored mail got its victim position from ESI (ET-473).</summary>
-    PositionFilled
+    PositionFilled,
+
+    /// <summary>Stored attackers got their security status from ESI (ET-477).</summary>
+    SecurityStatusFilled
 }
