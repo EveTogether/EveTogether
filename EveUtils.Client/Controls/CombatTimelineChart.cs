@@ -20,7 +20,7 @@ public sealed class CombatTimelineChart : Control
     public static readonly StyledProperty<CombatChartModel?> ModelProperty =
         AvaloniaProperty.Register<CombatTimelineChart, CombatChartModel?>(nameof(Model));
 
-    private const double Left = 44, Right = 10, Top = 22, Bottom = 20, LaneGap = 14, CapacitorShare = 0.28;
+    private const double Left = 58, Right = 10, Top = 22, Bottom = 20, LaneGap = 14, CapacitorShare = 0.28;
 
     private static readonly CombatSeriesKind[] HitPointSeries =
         [CombatSeriesKind.RepIn, CombatSeriesKind.RepOut, CombatSeriesKind.DmgIn, CombatSeriesKind.DmgOut];
@@ -111,8 +111,8 @@ public sealed class CombatTimelineChart : Control
         }
 
         Pen gridPen = new(divider, 1);
-        _Lane(context, model, hitPoints, HitPointSeries, 100, "HP/s", gridPen, X, Label, dim);
-        _Lane(context, model, capacitor, CapacitorSeries, 10, "GJ/s", gridPen, X, Label, dim);
+        _Lane(context, model, hitPoints, HitPointSeries, 100, 4, "HP/s", gridPen, X, Label, dim);
+        _Lane(context, model, capacitor, CapacitorSeries, 10, 2, "GJ/s", gridPen, X, Label, dim);
 
         // A tick a minute, or every two once the run is longer than twenty.
         int step = model.Seconds > 1200 ? 120 : 60;
@@ -132,39 +132,55 @@ public sealed class CombatTimelineChart : Control
     }
 
     private static void _Lane(DrawingContext context, CombatChartModel model, Rect lane, CombatSeriesKind[] series,
-        double floor, string unit, Pen gridPen, Func<double, double> x, Action<string, double, double, IBrush, TextAlignment> label,
+        double floor, int steps, string unit, Pen gridPen, Func<double, double> x, Action<string, double, double, IBrush, TextAlignment> label,
         IBrush dim)
     {
-        double observed = series.Where(model.Buckets.ContainsKey)
-            .SelectMany(kind => model.Buckets[kind])
-            .DefaultIfEmpty()
-            .Max() / (double)model.BucketSeconds;
-        double max = DpsGraph.NiceCeiling(observed, floor);
+        Dictionary<CombatSeriesKind, double[]> lines = series.Where(model.Buckets.ContainsKey)
+            .ToDictionary(kind => kind, kind => _Smoothed(model.Buckets[kind], model.BucketSeconds));
+        double max = _Ceiling(lines.Values.SelectMany(rates => rates).DefaultIfEmpty().Max(), floor);
         double Y(double rate) => lane.Bottom - lane.Height * Math.Min(rate, max) / max;
 
-        foreach (double rate in new[] { 0, max / 2, max })
+        foreach (double rate in Enumerable.Range(0, steps + 1).Select(step => max * step / steps))
         {
             context.DrawLine(gridPen, new Point(lane.Left, Y(rate)), new Point(lane.Right, Y(rate)));
             label(rate.ToString("0", CultureInfo.InvariantCulture), lane.Left - 6, Y(rate), dim, TextAlignment.Right);
         }
-        label(unit, lane.Left - 6, lane.Top + lane.Height / 2, dim, TextAlignment.Right);
+        label(unit, lane.Left - 56, Y(max * (2 * steps - 1) / (2 * steps)), dim, TextAlignment.Left);
 
-        foreach (CombatSeriesKind kind in series.Where(model.Buckets.ContainsKey))
+        foreach ((CombatSeriesKind kind, double[] rates) in lines)
         {
-            long[] sums = model.Buckets[kind];
             Pen pen = new(InkOf(kind), 1.5, IsDashed(kind) ? new DashStyle([4, 3], 0) : null);
             StreamGeometry line = new();
             using (StreamGeometryContext path = line.Open())
             {
-                path.BeginFigure(new Point(x(0.5), Y(sums[0] / (double)model.BucketSeconds)), false);
-                for (int bucket = 1; bucket < sums.Length; bucket++)
+                path.BeginFigure(new Point(x(0.5), Y(rates[0])), false);
+                for (int bucket = 1; bucket < rates.Length; bucket++)
                 {
-                    path.LineTo(new Point(x(bucket + 0.5), Y(sums[bucket] / (double)model.BucketSeconds)));
+                    path.LineTo(new Point(x(bucket + 0.5), Y(rates[bucket])));
                 }
                 path.EndFigure(false);
             }
             context.DrawGeometry(null, pen, line);
         }
+    }
+
+    // The light smoothing the drawn line gets (1-2-1 over neighbouring buckets); the readout keeps the exact values.
+    private static double[] _Smoothed(long[] sums, int bucketSeconds) =>
+    [
+        .. sums.Select((_, bucket) => (sums[Math.Max(0, bucket - 1)] + 2 * sums[bucket]
+            + sums[Math.Min(sums.Length - 1, bucket + 1)]) / (4.0 * bucketSeconds))
+    ];
+
+    // A top that quarters into round figures (150 · 300 · 450 · 600), closer to the peak than a decade step.
+    private static double _Ceiling(double value, double floor)
+    {
+        if (value <= floor)
+        {
+            return floor;
+        }
+
+        double magnitude = Math.Pow(10, Math.Floor(Math.Log10(value)));
+        return new[] { 1, 1.2, 1.6, 2, 3, 4, 6, 8, 10 }.Select(step => step * magnitude).First(top => top >= value);
     }
 
     // Short diagonal strokes on the baseline under every idle stretch, the way the mockup hatches it.

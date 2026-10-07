@@ -21,7 +21,7 @@ public sealed partial class TimelineDetailSectionViewModel : RunDetailSection
     {
         _choice = services.Combat ?? new CombatTelemetryChoice(services.Dispatcher, services.OwnCharacterIds);
         _choice.PropertyChanged += _OnChoiceChanged;
-        HeaderSummary = "not recorded";
+        HeaderSummary = "no combat recorded";
         TimelineEmptyText = CombatDetailSectionViewModel.NotRecordedText;
     }
 
@@ -47,7 +47,7 @@ public sealed partial class TimelineDetailSectionViewModel : RunDetailSection
         if (_choice.Shown is not { } timeline)
         {
             Chart = null;
-            HeaderSummary = "not recorded";
+            HeaderSummary = "no combat recorded";
             TimelineEmptyText = CombatDetailSectionViewModel.NotRecordedText;
             return;
         }
