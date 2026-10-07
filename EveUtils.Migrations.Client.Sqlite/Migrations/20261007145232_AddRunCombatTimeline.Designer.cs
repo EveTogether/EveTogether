@@ -11,7 +11,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace EveUtils.Migrations.Client.Sqlite.Migrations
 {
     [DbContext(typeof(ClientDbContext))]
-    [Migration("20261007144441_AddRunCombatTimeline")]
+    [Migration("20261007145232_AddRunCombatTimeline")]
     partial class AddRunCombatTimeline
     {
         /// <inheritdoc />
@@ -681,6 +681,9 @@ namespace EveUtils.Migrations.Client.Sqlite.Migrations
 
                     b.Property<bool>("FinalBlow")
                         .HasColumnType("INTEGER");
+
+                    b.Property<double?>("SecurityStatus")
+                        .HasColumnType("REAL");
 
                     b.Property<int?>("ShipTypeId")
                         .HasColumnType("INTEGER");
