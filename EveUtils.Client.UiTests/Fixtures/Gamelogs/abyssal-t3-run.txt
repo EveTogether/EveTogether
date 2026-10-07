@@ -1,3 +1,4 @@
+[ 2026.09.18 18:29:53 ] (combat) <color=0xff00ffff><b>888</b> <color=0x77ffffff><font size=10>to</font> <b><color=0xffffffff>Bathyic Abyssal Overmind</b><font size=10><color=0x77ffffff> - Mjolnir Fury Light Missile - Hits
 [ 2026.09.18 18:29:53 ] (combat) <color=0xff00ffff><b>592</b> <color=0x77ffffff><font size=10>to</font> <b><color=0xffffffff>Bathyic Abyssal Overmind</b><font size=10><color=0x77ffffff> - Mjolnir Fury Light Missile - Hits
 [ 2026.09.18 18:29:57 ] (combat) <color=0xff00ffff><b>888</b> <color=0x77ffffff><font size=10>to</font> <b><color=0xffffffff>Bathyic Abyssal Overmind</b><font size=10><color=0x77ffffff> - Mjolnir Fury Light Missile - Hits
 [ 2026.09.18 18:29:57 ] (combat) <color=0xff00ffff><b>592</b> <color=0x77ffffff><font size=10>to</font> <b><color=0xffffffff>Bathyic Abyssal Overmind</b><font size=10><color=0x77ffffff> - Mjolnir Fury Light Missile - Hits
