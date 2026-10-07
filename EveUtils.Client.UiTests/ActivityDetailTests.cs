@@ -7,9 +7,11 @@ using Avalonia.VisualTree;
 using EveUtils.Client.Dialogs;
 using EveUtils.Client.Opsec;
 using EveUtils.Client.ViewModels.Runs;
+using EveUtils.Client.ViewModels.Runs.Sections;
 using EveUtils.Client.Views;
 using EveUtils.Shared.Data;
 using EveUtils.Shared.Messaging;
+using EveUtils.Shared.Modules.Gamelog.Models;
 using EveUtils.Shared.Modules.Market.Entities;
 using EveUtils.Shared.Modules.Market.Repositories;
 using EveUtils.Shared.Modules.Market.Services;
@@ -566,6 +568,51 @@ public sealed class ActivityDetailTests
         host.SwitchMode();
 
         Assert.Same(docked, window.Content);
+    }
+
+    public static TheoryData<GameLogEvent[]?, string[], string[]> AbyssalCombat => new()
+    {
+        // Run 5 of 18 Sep 2026 as it was saved, with its real combat: the figures are the game log's own (AC1, AC6).
+        {
+            RunCombatTelemetryTests.RealRunEvents(),
+            ["65,732 hp", "1,999 hp", "998 hp", "Nova Fury Light Missile on Ephialtes Dissipator", "74 hp",
+                "Ephialtes Dissipator · Wrecks", "115 GJ", "109", "no rep line in this run", "reps in · none in this run"],
+            [CombatDetailSectionViewModel.NotRecordedText]
+        },
+        // The same run saved before combat was kept: one line in each, never a zero or an empty chart (AC2).
+        {
+            null,
+            [CombatDetailSectionViewModel.NotRecordedText],
+            ["0 hp", "DAMAGE DEALT", "DPS out"]
+        }
+    };
+
+    /// <summary>
+    /// ET-468: COMBAT and TIMELINE stand straight under ACTIVITY and before ENEMIES (B2), with no boundary-damage tile
+    /// (B5), and LOOT says why containers are not counted (B6).
+    /// </summary>
+    [AvaloniaTheory]
+    [MemberData(nameof(AbyssalCombat))]
+    public async Task AbyssalDetail_ShowsItsStoredCombat_OrSaysWhyNot(GameLogEvent[]? combat, string[] shown, string[] absent)
+    {
+        using var instance = TestClientInstance.Create();
+        ICqrsDispatcher dispatcher = instance.Services.GetRequiredService<ICqrsDispatcher>();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        Result<Guid> started = await dispatcher.Send(new StartRunCommand(90000001, ActivityKind.Abyssal,
+            RunCombatTelemetryTests.RunStart, 0, null, 30004079), cancellationToken);
+        await dispatcher.Send(new SaveRunCommand(started.Value, RunCombatTelemetryTests.RunStop,
+            RunCombatTelemetryTests.RunStop.AddMinutes(1), [], [], [],
+            [new RunParameterInput { ParameterKey = RunParameterKey.AbyssalFilament, TypedValue = "3|Dark", ObservedAtUtc = RunCombatTelemetryTests.RunStart }],
+            CombatEvents: combat), cancellationToken);
+
+        List<string> texts = await _RenderAsync(instance, cancellationToken);
+
+        Assert.All(shown, text => Assert.Contains(text, texts));
+        Assert.All(absent, text => Assert.DoesNotContain(text, texts));
+        Assert.DoesNotContain(texts, text => text.Contains("BOUNDARY", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(texts, text => text.StartsWith("Containers opened: not counted", StringComparison.Ordinal));
+        Assert.Equal(["ACTIVITY", "COMBAT", "TIMELINE", "ENEMIES"],
+            texts.Where(text => text is "ACTIVITY" or "COMBAT" or "TIMELINE" or "ENEMIES"));
     }
 
     private static async Task<List<string>> _RenderAsync(TestClientInstance instance, CancellationToken cancellationToken)

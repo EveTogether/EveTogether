@@ -33,6 +33,9 @@ public sealed partial class LootDetailSectionViewModel : RunDetailSection
 
     [ObservableProperty] private string? _lootEmptyText;
 
+    /// <summary>B6 (ET-466): why an abyssal run says nothing about its containers, in place of a count nobody has.</summary>
+    [ObservableProperty] private string? _containersText;
+
     public override bool HasContent => _hasCaptures;
 
     /// <summary>What the summary says about the loot. The figure in the header is this section's share of TOTAL ISK as
@@ -40,6 +43,9 @@ public sealed partial class LootDetailSectionViewModel : RunDetailSection
     public override void Apply(RunDetailSectionInput input)
     {
         ActivityDetailDto detail = input.Detail;
+        ContainersText = input.RunType.Space is RunSpace.AbyssalPocket
+            ? "Containers opened: not counted. Opening or looting a container writes no line to the game log."
+            : null;
         RunLootCaptureDto[] captures = [.. detail.Runs
             .SelectMany(run => run.LootCaptures)
             .Where(capture => capture.Role is not LootCaptureRole.Consumed)];

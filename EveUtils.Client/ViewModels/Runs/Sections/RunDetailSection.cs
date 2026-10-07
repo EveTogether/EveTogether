@@ -60,6 +60,7 @@ public sealed record RunDetailSectionInput(ActivityDetailDto Detail, RunTypeDefi
 
 /// <summary>What the detail screen was given to build its sections with. Every one but the dispatcher is optional, the
 /// same "no service, no action" rule the screen itself follows.</summary>
+/// <param name="Combat">Whose stored combat COMBAT and TIMELINE show, shared by both (ET-468).</param>
 /// <param name="Services">The app's services, for a section that reads the live fleet (HOMEFRONT's roster, presence
 /// and commander, ET-230) — null leaves it without, and it then shows no live fleet view at all.</param>
 public sealed record RunDetailSectionServices(
@@ -72,4 +73,5 @@ public sealed record RunDetailSectionServices(
     ICharacterPortraitProvider? Portraits,
     ITypeImageProvider? Images,
     IReadOnlySet<long>? OwnCharacterIds,
-    IServiceProvider? Services = null);
+    IServiceProvider? Services = null,
+    CombatTelemetryChoice? Combat = null);

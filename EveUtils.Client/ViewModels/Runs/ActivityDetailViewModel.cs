@@ -91,8 +91,9 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
         _republish = republish;
         _dialogs = dialogs;
         _sde = sde;
+        Combat = new CombatTelemetryChoice(dispatcher, ownCharacterIds);
         var sectionServices = new RunDetailSectionServices(dispatcher, appraisal, nameOf, esi, locations, sde, portraits,
-            images, ownCharacterIds, services);
+            images, ownCharacterIds, services, Combat);
         _sections = [.. RunSectionModules.All
             .Select(module => module.CreateForDetail?.Invoke(sectionServices))
             .OfType<RunDetailSection>()];
@@ -103,6 +104,12 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
 
     /// <summary>The sections on screen: the ones the activity's type claims, and any other it has data for.</summary>
     public ObservableCollection<RunDetailSection> Sections { get; } = [];
+
+    /// <summary>The pilot COMBAT and TIMELINE show; its idle time stands under DURATION (ET-468).</summary>
+    public CombatTelemetryChoice Combat { get; }
+
+    /// <summary>"loot X − consumed Y" under TOTAL ISK (ET-468), only where both figures are known.</summary>
+    [ObservableProperty] private string? _lootConsumedText;
 
     [ObservableProperty] private string _siteText = string.Empty;
     [ObservableProperty] private string _kindText = string.Empty;
@@ -560,6 +567,10 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
     {
         HasTotalIsk = detail.Isk.HasFigure;
         TotalIskText = IskFormat.Whole(detail.Isk.Total) + IskFormat.ExpectedPart(detail.Isk);
+        LootConsumedText = detail.Isk.Of(IskSource.Loot) is { Certainty: not IskCertainty.Unknown } loot
+                           && detail.Isk.Of(IskSource.Consumables) is { Certainty: not IskCertainty.Unknown } consumables
+            ? $"loot {IskFormat.Number(loot.Amount)} − consumed {IskFormat.Number(-consumables.Amount)}"
+            : null;
         _ApplyOwnShare(detail);
     }
 

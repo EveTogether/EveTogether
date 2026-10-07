@@ -1,0 +1,56 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vs="using:EveUtils.Client.ViewModels.Runs.Sections"
+             x:Class="EveUtils.Client.Views.Runs.Sections.CombatDetailSectionView"
+             x:DataType="vs:CombatDetailSectionViewModel">
+    <StackPanel>
+        <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,4,0,6"
+                    IsVisible="{Binding CombatEmptyText, Converter={x:Static ObjectConverters.IsNull}}">
+            <TextBlock Classes="label" Text="PILOT" VerticalAlignment="Center" Margin="0,0,6,0"/>
+            <ItemsControl x:Name="CombatPilots" ItemsSource="{Binding Pilots}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <StackPanel Orientation="Horizontal" Spacing="5"/>
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="vs:CombatPilotChipViewModel">
+                        <Button Classes="chipaction" Classes.actionable="{Binding IsAvailable}"
+                                Command="{Binding ShowCommand}">
+                            <Border Classes="chip" Classes.ok="{Binding IsSelected}"
+                                    Classes.dim="{Binding !IsAvailable}">
+                                <TextBlock Text="{Binding Text}"/>
+                            </Border>
+                        </Button>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </StackPanel>
+        <!-- Four across, as in the mockup; a long weapon or target name is cut rather than widening the grid. -->
+        <ItemsControl x:Name="CombatTiles" ItemsSource="{Binding Tiles}">
+            <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <UniformGrid Columns="4"/>
+                </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+                <DataTemplate DataType="vs:CombatTileViewModel">
+                    <Border BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1" Background="#2E000000"
+                            Padding="9,6,9,7" Margin="0,0,6,6">
+                        <StackPanel Spacing="2">
+                            <TextBlock Classes="label" FontSize="9.5" Text="{Binding Label}"/>
+                            <TextBlock FontFamily="{StaticResource MonoFont}" FontSize="15" FontWeight="SemiBold"
+                                       Foreground="{StaticResource TextBrightBrush}" Text="{Binding Value}"/>
+                            <TextBlock FontSize="9.5" Foreground="{StaticResource TextDimBrush}"
+                                       TextTrimming="CharacterEllipsis" Text="{Binding Note}"
+                                       ToolTip.Tip="{Binding Note}"/>
+                        </StackPanel>
+                    </Border>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+        <TextBlock x:Name="CombatEmpty" Classes="hint" TextWrapping="Wrap"
+                   IsVisible="{Binding CombatEmptyText, Converter={x:Static ObjectConverters.IsNotNull}}"
+                   Text="{Binding CombatEmptyText}"/>
+    </StackPanel>
+</UserControl>
