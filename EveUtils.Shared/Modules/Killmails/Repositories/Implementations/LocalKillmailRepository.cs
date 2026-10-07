@@ -1,5 +1,6 @@
 using EveUtils.Shared.Data;
 using EveUtils.Shared.DependencyInjection;
+using EveUtils.Shared.Modules.Killmails.Dtos;
 using EveUtils.Shared.Modules.Killmails.Entities;
 using Microsoft.EntityFrameworkCore;
 
@@ -55,6 +56,37 @@ internal sealed class LocalKillmailRepository(IDbContextFactory<SharedDbContext>
             .Where(killmail => killmail.CharacterId == characterId)
             .OrderByDescending(killmail => killmail.KillmailTimeUtc)
             .ToListAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<(int KillmailId, string Hash)>> GetWithoutPositionAsync(CancellationToken cancellationToken = default)
+    {
+        await using var db = await contextFactory.CreateDbContextAsync(cancellationToken);
+        var missing = await db.Set<LocalKillmail>()
+            .AsNoTracking()
+            .Where(killmail => killmail.PositionX == null)
+            .Select(killmail => new { killmail.KillmailId, killmail.Hash })
+            .ToListAsync(cancellationToken);
+        return [.. missing.DistinctBy(killmail => killmail.KillmailId).Select(killmail => (killmail.KillmailId, killmail.Hash))];
+    }
+
+    public async Task<IReadOnlyList<int>> SetPositionsAsync(IReadOnlyDictionary<int, KillmailPosition> positionsByKillmailId,
+        CancellationToken cancellationToken = default)
+    {
+        await using var db = await contextFactory.CreateDbContextAsync(cancellationToken);
+        List<int> killmailIds = [.. positionsByKillmailId.Keys];
+        List<LocalKillmail> rows = await db.Set<LocalKillmail>()
+            .Where(killmail => killmailIds.Contains(killmail.KillmailId) && killmail.PositionX == null)
+            .ToListAsync(cancellationToken);
+        foreach (LocalKillmail row in rows)
+        {
+            KillmailPosition position = positionsByKillmailId[row.KillmailId];
+            row.PositionX = position.X;
+            row.PositionY = position.Y;
+            row.PositionZ = position.Z;
+        }
+
+        await db.SaveChangesAsync(cancellationToken);
+        return [.. rows.Select(row => row.CharacterId).Distinct()];
     }
 
     private static async Task<IReadOnlySet<int>> _KnownIdsAsync(SharedDbContext db, int characterId, IReadOnlyCollection<int> killmailIds,

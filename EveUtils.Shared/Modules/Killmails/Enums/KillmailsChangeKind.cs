@@ -14,5 +14,8 @@ public enum KillmailsChangeKind
 
     /// <summary>A fleet mate's shared killmails were stored or withdrawn under their character (ET-371). Deliberately
     /// not <see cref="Imported"/>: that one means "your own new mails" to the Local API and to fleet sharing.</summary>
-    FleetShareChanged
+    FleetShareChanged,
+
+    /// <summary>A stored mail got its victim position from ESI (ET-473).</summary>
+    PositionFilled
 }

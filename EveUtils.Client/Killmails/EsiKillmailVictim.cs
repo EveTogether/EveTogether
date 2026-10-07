@@ -11,4 +11,5 @@ public sealed class EsiKillmailVictim
     [JsonPropertyName("ship_type_id")] public int ShipTypeId { get; set; }
     [JsonPropertyName("damage_taken")] public int DamageTaken { get; set; }
     [JsonPropertyName("items")] public EsiKillmailItem[] Items { get; set; } = [];
+    [JsonPropertyName("position")] public EsiKillmailPosition? Position { get; set; }
 }

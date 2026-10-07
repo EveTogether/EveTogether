@@ -13,4 +13,7 @@ public interface ILocalKillmailReader
 
     /// <summary>The character's killmails with items and attackers, newest first.</summary>
     Task<IReadOnlyList<LocalKillmail>> GetForCharacterAsync(int characterId, CancellationToken cancellationToken = default);
+
+    /// <summary>Every stored mail, of any character, that has no victim position yet (ET-473): one entry per killmail id.</summary>
+    Task<IReadOnlyList<(int KillmailId, string Hash)>> GetWithoutPositionAsync(CancellationToken cancellationToken = default);
 }

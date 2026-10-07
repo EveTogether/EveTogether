@@ -251,6 +251,8 @@ public sealed class FakeSdeAccessor : ISdeAccessor
         return _map;
     }
 
+    public IReadOnlyList<SdeCelestial> GetCelestials(int solarSystemId) => [];
+
     public string? GetNpcCorporationName(int corporationId) => _npcCorporations.GetValueOrDefault(corporationId);
 
     public string? GetFactionName(int factionId) => _factionNames.GetValueOrDefault(factionId);

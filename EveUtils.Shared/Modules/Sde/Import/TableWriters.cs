@@ -37,6 +37,8 @@ internal sealed partial class TableWriters
     private readonly SqliteCommand _region;
     private readonly SqliteCommand _constellation;
     private readonly SqliteCommand _jump;
+    private readonly SqliteCommand _celestial;
+    private readonly SqliteCommand _stationOperation;
     private readonly SqliteCommand _npcCorporation;
     private readonly SqliteCommand _faction;
     private readonly SqliteCommand _mutaplasmidRange;
@@ -123,6 +125,14 @@ internal sealed partial class TableWriters
         _jump = Prepare(connection, transaction,
             "INSERT OR IGNORE INTO Jump (fromSystemId, toSystemId) VALUES ($fromSystemId, $toSystemId);",
             "$fromSystemId", "$toSystemId");
+        _celestial = Prepare(connection, transaction,
+            "INSERT INTO Celestial (solarSystemId, itemId, kind, orbitId, celestialIndex, orbitIndex, x, y, z, destinationSystemId, ownerId, operationId) " +
+            "VALUES ($solarSystemId, $itemId, $kind, $orbitId, $celestialIndex, $orbitIndex, $x, $y, $z, $destinationSystemId, $ownerId, $operationId);",
+            "$solarSystemId", "$itemId", "$kind", "$orbitId", "$celestialIndex", "$orbitIndex", "$x", "$y", "$z",
+            "$destinationSystemId", "$ownerId", "$operationId");
+        _stationOperation = Prepare(connection, transaction,
+            "INSERT INTO StationOperation (operationId, nameEn) VALUES ($operationId, $nameEn);",
+            "$operationId", "$nameEn");
         _npcCorporation = Prepare(connection, transaction,
             "INSERT INTO NpcCorporation (corporationId, nameEn) VALUES ($corporationId, $nameEn);",
             "$corporationId", "$nameEn");
@@ -156,8 +166,13 @@ internal sealed partial class TableWriters
             case "mapRegions.jsonl": InsertRegion(element); break;
             case "mapConstellations.jsonl": InsertConstellation(element); break;
             case "mapSolarSystems.jsonl": InsertSolarSystem(element); break;
-            case "mapStargates.jsonl": InsertJump(element); break;
-            case "npcStations.jsonl": CollectStationSystem(element); break;
+            case "mapStars.jsonl": InsertCelestial(element, CelestialKind.Star); break;
+            case "mapPlanets.jsonl": InsertCelestial(element, CelestialKind.Planet); break;
+            case "mapMoons.jsonl": InsertCelestial(element, CelestialKind.Moon); break;
+            case "mapAsteroidBelts.jsonl": InsertCelestial(element, CelestialKind.AsteroidBelt); break;
+            case "mapStargates.jsonl": InsertJump(element); InsertCelestial(element, CelestialKind.Stargate); break;
+            case "npcStations.jsonl": CollectStationSystem(element); InsertCelestial(element, CelestialKind.Station); break;
+            case "stationOperations.jsonl": InsertStationOperation(element); break;
             case "agentTypes.jsonl": CollectAgentType(element); break;
             case "npcCorporations.jsonl": InsertNpcCorporation(element); break;
             case "npcCharacters.jsonl": InsertAgent(element); break;
@@ -466,6 +481,39 @@ internal sealed partial class TableWriters
         _jump.Parameters["$fromSystemId"].Value = Math.Min(from, to);
         _jump.Parameters["$toSystemId"].Value = Math.Max(from, to);
         _jump.ExecuteNonQuery();
+    }
+
+    // ET-473: one row per sun, planet, moon, belt, gate and NPC station. A sun has no position (it is the origin);
+    // the other fields are only filled where the kind has them, the rest stay NULL.
+    private void InsertCelestial(JsonElement e, CelestialKind kind)
+    {
+        var solarSystemId = Int(e, "solarSystemID");
+        if (solarSystemId == 0)
+            return;
+        var hasPosition = e.TryGetProperty("position", out var position) && position.ValueKind == JsonValueKind.Object;
+        _celestial.Parameters["$solarSystemId"].Value = solarSystemId;
+        _celestial.Parameters["$itemId"].Value = Key(e);
+        _celestial.Parameters["$kind"].Value = (int)kind;
+        _celestial.Parameters["$orbitId"].Value = NullableInt(e, "orbitID");
+        _celestial.Parameters["$celestialIndex"].Value = NullableInt(e, "celestialIndex");
+        _celestial.Parameters["$orbitIndex"].Value = NullableInt(e, "orbitIndex");
+        _celestial.Parameters["$x"].Value = hasPosition ? Double(position, "x") : 0d;
+        _celestial.Parameters["$y"].Value = hasPosition ? Double(position, "y") : 0d;
+        _celestial.Parameters["$z"].Value = hasPosition ? Double(position, "z") : 0d;
+        _celestial.Parameters["$destinationSystemId"].Value =
+            e.TryGetProperty("destination", out var destination) && destination.ValueKind == JsonValueKind.Object
+                ? NullableInt(destination, "solarSystemID")
+                : DBNull.Value;
+        _celestial.Parameters["$ownerId"].Value = NullableInt(e, "ownerID");
+        _celestial.Parameters["$operationId"].Value = Bool(e, "useOperationName") ? NullableInt(e, "operationID") : DBNull.Value;
+        _celestial.ExecuteNonQuery();
+    }
+
+    private void InsertStationOperation(JsonElement e)
+    {
+        _stationOperation.Parameters["$operationId"].Value = Key(e);
+        _stationOperation.Parameters["$nameEn"].Value = EnName(e, "operationName");
+        _stationOperation.ExecuteNonQuery();
     }
 
     private void InsertNpcCorporation(JsonElement e)

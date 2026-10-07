@@ -922,6 +922,71 @@ public sealed class SqliteSdeAccessor : ISdeAccessor
         return new SdeMapSnapshot(systems, constellations, regions, jumps);
     }
 
+    public IReadOnlyList<SdeCelestial> GetCelestials(int solarSystemId)
+    {
+        using var connection = Open();
+        if (connection is null)
+            return [];
+        using var command = connection.CreateCommand();
+        // Ordered by kind so planets and moons are named before the moons, belts and stations that orbit them.
+        command.CommandText = """
+            SELECT c.itemId, c.kind, c.orbitId, c.celestialIndex, c.orbitIndex, c.x, c.y, c.z,
+                   c.destinationSystemId, d.nameEn, d.securityStatus, owner.nameEn, operation.nameEn, s.nameEn
+            FROM Celestial c
+            JOIN SolarSystem s ON s.solarSystemId = c.solarSystemId
+            LEFT JOIN SolarSystem d ON d.solarSystemId = c.destinationSystemId
+            LEFT JOIN NpcCorporation owner ON owner.corporationId = c.ownerId
+            LEFT JOIN StationOperation operation ON operation.operationId = c.operationId
+            WHERE c.solarSystemId = $id
+            ORDER BY c.kind, c.itemId;
+            """;
+        command.Parameters.AddWithValue("$id", solarSystemId);
+        using var reader = command.ExecuteReader();
+        var names = new Dictionary<int, string>();
+        var celestials = new List<SdeCelestial>();
+        while (reader.Read())
+        {
+            var itemId = reader.GetInt32(0);
+            var kind = (CelestialKind)reader.GetInt32(1);
+            var orbitName = reader.IsDBNull(2) ? null : names.GetValueOrDefault(reader.GetInt32(2));
+            var systemName = reader.GetString(13);
+            string? destinationName = reader.IsDBNull(9) ? null : reader.GetString(9);
+            var name = kind switch
+            {
+                CelestialKind.Star => $"{systemName} - Star",
+                CelestialKind.Planet => $"{systemName} {RomanNumeral(reader.IsDBNull(3) ? 0 : reader.GetInt32(3))}",
+                CelestialKind.Moon => $"{orbitName ?? systemName} - Moon {(reader.IsDBNull(4) ? 0 : reader.GetInt32(4))}",
+                CelestialKind.AsteroidBelt => $"{orbitName ?? systemName} - Asteroid Belt {(reader.IsDBNull(4) ? 0 : reader.GetInt32(4))}",
+                CelestialKind.Stargate => $"Stargate ({destinationName ?? "unknown"})",
+                _ => StationName(orbitName ?? systemName, reader.IsDBNull(11) ? null : reader.GetString(11),
+                    reader.IsDBNull(12) ? null : reader.GetString(12))
+            };
+            names[itemId] = name;
+            celestials.Add(new SdeCelestial(itemId, kind, name, reader.GetDouble(5), reader.GetDouble(6), reader.GetDouble(7),
+                reader.IsDBNull(8) ? null : reader.GetInt32(8), destinationName, reader.IsDBNull(10) ? null : reader.GetDouble(10)));
+        }
+        return celestials;
+    }
+
+    private static string StationName(string orbitName, string? ownerName, string? operationName) =>
+        $"{orbitName} - {ownerName ?? "Station"}{(operationName is null ? string.Empty : " " + operationName)}";
+
+    private static string RomanNumeral(int number)
+    {
+        ReadOnlySpan<(int Value, string Symbol)> numerals =
+            [(40, "XL"), (10, "X"), (9, "IX"), (5, "V"), (4, "IV"), (1, "I")];
+        var text = new System.Text.StringBuilder();
+        foreach (var (value, symbol) in numerals)
+        {
+            while (number >= value)
+            {
+                text.Append(symbol);
+                number -= value;
+            }
+        }
+        return text.ToString();
+    }
+
     private static List<T> ReadRows<T>(SqliteConnection connection, string sql, Func<SqliteDataReader, T> read)
     {
         using var command = connection.CreateCommand();

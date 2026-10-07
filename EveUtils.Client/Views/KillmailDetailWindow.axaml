@@ -3,6 +3,7 @@
         xmlns:vk="using:EveUtils.Client.ViewModels.Killmails"
         xmlns:vwk="using:EveUtils.Client.Views.Killmails"
         xmlns:ctl="using:EveUtils.Client.Controls"
+        xmlns:ckm="using:EveUtils.Client.Controls.Killmails"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d" d:DesignWidth="758" d:DesignHeight="720"
@@ -37,6 +38,8 @@
                     <StackPanel Grid.Column="2" HorizontalAlignment="Right">
                         <TextBlock FontFamily="{StaticResource MonoFont}" FontSize="10.5" TextAlignment="Right" Text="{Binding TimeText}"/>
                         <TextBlock Classes="hint" Margin="0" TextAlignment="Right" Text="{Binding SystemLineText}"/>
+                        <TextBlock FontSize="11" TextAlignment="Right" Text="{Binding LocationSummaryText}"
+                                   IsVisible="{Binding Location, Converter={x:Static ObjectConverters.IsNotNull}}"/>
                     </StackPanel>
                 </Grid>
                 <Grid ColumnDefinitions="Auto,Auto,Auto,Auto,*" ColumnSpacing="24">
@@ -100,6 +103,67 @@
                                 </DataTemplate>
                             </ContentControl.ContentTemplate>
                         </ContentControl>
+                    </StackPanel>
+                </Border>
+
+                <!-- ══ LOCATION ══ (ET-473): the system from above and the grid around the loss, side by side, since on
+                     the system scale everything within a few hundred km of the loss lands on one point. -->
+                <Border Padding="14,9" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource DividerBrush}">
+                    <Grid ColumnDefinitions="96,*" ColumnSpacing="10">
+                        <TextBlock Classes="sectiontitle" Text="LOCATION"/>
+                        <TextBlock Grid.Column="1" Classes="sectionsummary" Text="{Binding LocationSummaryText}"/>
+                    </Grid>
+                </Border>
+                <Border Classes="sectionbody">
+                    <StackPanel>
+                        <TextBlock Classes="hint" TextWrapping="Wrap" Margin="0,8,0,0" Text="{Binding LocationHintText}"
+                                   IsVisible="{Binding LocationHintText, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+                        <StackPanel IsVisible="{Binding Location, Converter={x:Static ObjectConverters.IsNotNull}}">
+                            <Border Height="400" Margin="0,8,0,0" BorderThickness="1" BorderBrush="{DynamicResource BorderBrush}"
+                                    IsVisible="{Binding IsMapHiddenByOpsec}">
+                                <v:OpsecMapPlaceholder/>
+                            </Border>
+                            <Grid ColumnDefinitions="4*,3*" ColumnSpacing="10" Margin="0,8,0,0" IsVisible="{Binding !IsMapHiddenByOpsec}">
+                                <Border Height="400" BorderThickness="1" BorderBrush="{DynamicResource BorderBrush}">
+                                    <Panel>
+                                        <ckm:CelestialMapControl Location="{Binding Location}" Scale="System"/>
+                                        <TextBlock Classes="label" Margin="8,6" HorizontalAlignment="Left" VerticalAlignment="Top" Text="SYSTEM"/>
+                                        <TextBlock Margin="8,6" HorizontalAlignment="Right" VerticalAlignment="Top"
+                                                   FontFamily="{StaticResource MonoFont}" FontSize="9.5"
+                                                   Foreground="{StaticResource TextDimBrush}" Text="{Binding CelestialCountsText}"/>
+                                    </Panel>
+                                </Border>
+                                <Border Grid.Column="1" Height="400" BorderThickness="1" BorderBrush="{DynamicResource BorderBrush}">
+                                    <Panel>
+                                        <ckm:CelestialMapControl Location="{Binding Location}" Scale="Grid"/>
+                                        <TextBlock Classes="label" Margin="8,6" HorizontalAlignment="Left" VerticalAlignment="Top"
+                                                   Text="GRID · AROUND THE LOSS"/>
+                                    </Panel>
+                                </Border>
+                            </Grid>
+                            <TextBlock Classes="label" Margin="0,10,0,4" Text="NEAREST"/>
+                            <ItemsControl ItemsSource="{Binding NearestCelestials}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="vk:KillmailNearestRowViewModel">
+                                        <Border Padding="0,3" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource DividerBrush}">
+                                            <Grid ColumnDefinitions="16,*,90,100" ColumnSpacing="8">
+                                                <TextBlock FontSize="9" VerticalAlignment="Center" Foreground="{StaticResource TextBrightBrush}"
+                                                           Text="◆" IsVisible="{Binding IsNearest}"/>
+                                                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
+                                                    <TextBlock FontSize="11.5" Text="{Binding Name}"/>
+                                                    <TextBlock Classes="hint" Margin="0" Text="{Binding SecurityText}"
+                                                               IsVisible="{Binding SecurityText, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+                                                </StackPanel>
+                                                <TextBlock Grid.Column="2" Classes="label" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                                           Text="{Binding KindText}"/>
+                                                <TextBlock Grid.Column="3" FontFamily="{StaticResource MonoFont}" FontSize="11"
+                                                           HorizontalAlignment="Right" VerticalAlignment="Center" Text="{Binding DistanceText}"/>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
                     </StackPanel>
                 </Border>
 

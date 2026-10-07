@@ -23,12 +23,14 @@ public sealed class SdeSqliteBuilder
     // Likewise mapSolarSystems/npcStations/agentTypes are lookups for the Agent rows and must precede
     // npcCharacters (ET-173); missions and epicArcs carry no such dependency and can come last. mapRegions,
     // mapConstellations, mapStargates and npcCorporations (ET-335, ET-391) are plain tables with no reader-side
-    // lookup dependency of their own.
+    // lookup dependency of their own, as are the celestial datasets and stationOperations (ET-473): their names are
+    // joined at read time, so no order among them matters.
     private static readonly string[] Datasets =
     [
         "categories.jsonl", "groups.jsonl", "dogmaAttributes.jsonl", "dogmaEffects.jsonl", "types.jsonl", "typeDogma.jsonl",
         "archetypes.jsonl", "factions.jsonl", "typeLists.jsonl", "dungeons.jsonl",
         "mapRegions.jsonl", "mapConstellations.jsonl", "mapSolarSystems.jsonl", "mapStargates.jsonl",
+        "mapStars.jsonl", "mapPlanets.jsonl", "mapMoons.jsonl", "mapAsteroidBelts.jsonl", "stationOperations.jsonl",
         "npcStations.jsonl", "agentTypes.jsonl", "npcCorporations.jsonl",
         "npcCharacters.jsonl", "missions.jsonl", "epicArcs.jsonl", "dynamicItemAttributes.jsonl"
     ];
