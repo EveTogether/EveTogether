@@ -26,9 +26,9 @@ public static class RunCombatTelemetry
         Dictionary<(DamageDirection, string, string?, HitQuality), RunHitTally> tallies = [];
 
         foreach (GameLogEvent logEvent in events.Where(logEvent =>
-                     logEvent.Timestamp >= startedAtUtc.AddSeconds(-5) && logEvent.Timestamp <= stoppedAtUtc.AddSeconds(5)))
+                     logEvent.Timestamp >= startedAtUtc && logEvent.Timestamp <= stoppedAtUtc))
         {
-            int second = Math.Clamp((int)(logEvent.Timestamp - startedAtUtc).TotalSeconds, 0, seconds - 1);
+            int second = (int)(logEvent.Timestamp - startedAtUtc).TotalSeconds;
             switch (logEvent)
             {
                 case CombatEvent hit:
@@ -41,7 +41,7 @@ public static class RunCombatTelemetry
                     _Add(series, rep.Outgoing ? CombatSeriesKind.RepOut : CombatSeriesKind.RepIn, seconds, second, rep.Amount);
                     break;
                 case NeutEvent neut:
-                    _Add(series, CombatSeriesKind.NeutIn, seconds, second, neut.Amount);
+                    _Add(series, neut.Outgoing ? CombatSeriesKind.NeutOut : CombatSeriesKind.NeutIn, seconds, second, neut.Amount);
                     break;
                 case CapTransferEvent cap:
                     _Add(series, cap.Outgoing ? CombatSeriesKind.CapOut : CombatSeriesKind.CapIn, seconds, second, cap.Amount);
@@ -50,7 +50,7 @@ public static class RunCombatTelemetry
         }
 
         // A series of misses only is all zeros: it holds nothing worth a row.
-        foreach ((CombatSeriesKind kind, int[] perSecond) in series)
+        foreach ((CombatSeriesKind kind, int[] perSecond) in series.Where(pair => pair.Value.Any(value => value != 0)))
         {
             timeline.Series.Add(new RunCombatSeries
             {
@@ -136,7 +136,7 @@ public static class RunCombatTelemetry
     private static void _Tally(Dictionary<(DamageDirection, string, string?, HitQuality), RunHitTally> tallies, Guid runId,
         CombatEvent hit)
     {
-        var key = (hit.Direction, hit.Target, (string?)null, hit.Quality);
+        var key = (hit.Direction, hit.Target, hit.Weapon, hit.Quality);
         if (!tallies.TryGetValue(key, out RunHitTally? tally))
         {
             tallies[key] = tally = new RunHitTally

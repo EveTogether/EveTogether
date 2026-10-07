@@ -1145,6 +1145,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
         foreach (GameLogEvent gameEvent in events)
         {
+            enemiesSection?.RecordCatchUpTelemetry(characterId, gameEvent);
             switch (gameEvent)
             {
                 case BountyEvent bounty:
