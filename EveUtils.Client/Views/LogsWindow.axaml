@@ -28,6 +28,8 @@
             <Button Grid.Column="3" Content="Close" Click="OnClose" Classes="accent"/>
         </Grid>
 
+        <TabControl x:Name="LogTabs">
+        <TabItem Header="LOG">
         <Panel>
             <TextBlock Text="No entries logged." IsVisible="{Binding IsEmpty}"
                        Foreground="{DynamicResource TextAccentBrush}"/>
@@ -67,5 +69,53 @@
                 </ItemsControl>
             </ScrollViewer>
         </Panel>
+        </TabItem>
+
+        <!-- ── Item names the EVE static data does not know yet (ET-460) ── -->
+        <TabItem Header="UNRECOGNISED ITEMS" IsVisible="{Binding Unrecognised, Converter={x:Static ObjectConverters.IsNotNull}}">
+            <DockPanel DataContext="{Binding Unrecognised}" x:DataType="vm:UnrecognisedItemsLogViewModel" Margin="0,8,0,0">
+                <StackPanel DockPanel.Dock="Top" Spacing="6" Margin="0,0,0,8">
+                    <TextBlock TextWrapping="Wrap" FontSize="11" Foreground="{DynamicResource TextAccentBrush}"
+                               Text="Item names that were copied or typed in but that the EVE static data does not know yet, such as new event items. They count as 0 until the data knows them, then they are recognised and priced by themselves."/>
+                    <StackPanel Orientation="Horizontal" Spacing="12">
+                        <Button Content="Re-price unrecognised items" Classes="accent"
+                                Command="{Binding RepriceCommand}" IsEnabled="{Binding !IsBusy}"/>
+                        <CheckBox Content="Show resolved" IsChecked="{Binding ShowResolved, Mode=TwoWay}"/>
+                        <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center" FontSize="11"
+                                   Foreground="{DynamicResource TextAccentBrush}"/>
+                    </StackPanel>
+                </StackPanel>
+                <TextBlock Text="{Binding EmptyText}" IsVisible="{Binding IsEmpty}" TextWrapping="Wrap"
+                           Foreground="{DynamicResource TextAccentBrush}"/>
+                <ScrollViewer IsVisible="{Binding !IsEmpty}">
+                    <ItemsControl ItemsSource="{Binding Rows}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:UnrecognisedItemRowViewModel">
+                                <Border Classes="panel" Padding="10,8" Margin="0,0,0,6">
+                                    <StackPanel Spacing="3">
+                                        <Grid ColumnDefinitions="*,Auto">
+                                            <TextBlock Text="{Binding Name}" FontWeight="Bold" TextWrapping="Wrap"
+                                                       Foreground="{StaticResource TextBrightBrush}"/>
+                                            <TextBlock Grid.Column="1" Text="{Binding QuantityText}"
+                                                       Foreground="{StaticResource TextBrightBrush}"/>
+                                        </Grid>
+                                        <TextBlock FontSize="10" Foreground="{DynamicResource TextAccentBrush}">
+                                            <Run Text="{Binding RunsText}"/>
+                                            <Run Text=" · "/>
+                                            <Run Text="{Binding FirstSeenText}"/>
+                                            <Run Text=" · "/>
+                                            <Run Text="{Binding SourcesText}"/>
+                                        </TextBlock>
+                                        <TextBlock FontSize="10" Text="{Binding ResolvedText}" IsVisible="{Binding IsResolved}"
+                                                   Foreground="{DynamicResource TextAccentBrush}"/>
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </DockPanel>
+        </TabItem>
+        </TabControl>
     </DockPanel>
 </v:ChromedWindow>

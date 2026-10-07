@@ -71,6 +71,8 @@ internal sealed class ServerRunSyncRepository(IDbContextFactory<ServerDbContext>
         .AsSplitQuery()
         .Include(run => run.LootCaptures)
             .ThenInclude(capture => capture.Entries)
+        .Include(run => run.LootCaptures)
+            .ThenInclude(capture => capture.UnrecognisedLines)
         .Include(run => run.BountyEntries)
         .Include(run => run.EnemyObservations)
         .Include(run => run.Parameters)

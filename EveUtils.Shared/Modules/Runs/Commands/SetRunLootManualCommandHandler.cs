@@ -2,17 +2,20 @@ using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Data;
 using EveUtils.Shared.DependencyInjection;
 using EveUtils.Shared.Messaging;
+using EveUtils.Shared.Modules.Market.Repositories;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Entities;
 using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Runs.Events;
+using EveUtils.Shared.Modules.Sde;
 using Microsoft.EntityFrameworkCore;
 
 namespace EveUtils.Shared.Modules.Runs.Commands;
 
 [ClientOnly]
 internal sealed class SetRunLootManualCommandHandler(
-    IDbContextFactory<ClientDbContext> contextFactory, IEventBus eventBus, IDispatcher dispatcher)
+    IDbContextFactory<ClientDbContext> contextFactory, IEventBus eventBus, IDispatcher dispatcher, IMarketPriceRepository marketPrices,
+    ISdeAccessor sde)
     : ICommandHandler<SetRunLootManualCommand, Result<Guid>>
 {
     public async Task<Result<Guid>> Handle(SetRunLootManualCommand command, CancellationToken cancellationToken = default)
@@ -65,6 +68,9 @@ internal sealed class SetRunLootManualCommandHandler(
                 LootKind = entry.LootKind
             });
 
+        await UnrecognisedLootWrites.ReplaceOpenAsync(db, manual.Id, command.UnrecognisedNames, run.CharacterId,
+            command.CapturedAtUtc, cancellationToken);
+
         // Excluded and not deleted: the captures the list was written from stay readable underneath it, which is the
         // only way to read back what the correction actually changed.
         foreach (RunLootCapture superseded in captures.Where(candidate => candidate.Id != manual.Id
@@ -72,6 +78,8 @@ internal sealed class SetRunLootManualCommandHandler(
             superseded.IsExcluded = true;
 
         await db.SaveChangesAsync(cancellationToken);
+        // A type the run already fixed keeps that price: writing the list out corrects what was looted, not its worth.
+        await RunPriceSnapshots.FixOnCaptureAsync(db, marketPrices, sde, command.RunId, cancellationToken);
         if (isSaved)
             await dispatcher.Send(new RebuildActivitySummariesCommand(command.RunId), cancellationToken);
         await eventBus.PublishAsync(new RunLootCapturedEvent(command.RunId), EventTarget.Local, cancellationToken);

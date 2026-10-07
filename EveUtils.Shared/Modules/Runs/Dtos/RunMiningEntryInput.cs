@@ -1,3 +1,5 @@
+using EveUtils.Shared.Modules.Runs.Enums;
+
 namespace EveUtils.Shared.Modules.Runs.Dtos;
 
 /// <summary>One ore's aggregated mining on a run, as it travels in <see cref="RunWireData"/> (ET-229) — the same
@@ -10,4 +12,9 @@ public sealed class RunMiningEntryInput
     public required int ResidueUnits { get; init; }
     public required DateTime FirstObservedAtUtc { get; init; }
     public required DateTime LastObservedAtUtc { get; init; }
+
+    // Not required, for the reason RunLootEntryInput gives (ET-463).
+    public decimal? UnitPriceIsk { get; init; }
+    public DateTime? PricedAtUtc { get; init; }
+    public PriceSnapshotSource? PriceSource { get; init; }
 }

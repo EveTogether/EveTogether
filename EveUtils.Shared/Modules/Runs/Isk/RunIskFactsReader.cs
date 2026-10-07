@@ -19,16 +19,17 @@ internal static class RunIskFactsReader
     {
         IReadOnlyList<LootTallyLine> lostInLosses = LossLines(losses);
         RunParameter[] all = [.. parameters];
+        RunPrices runPrices = RunPrices.Of(run, all, prices);
         IReadOnlyList<LootTallyLine> loot = LootTally.Count(Tally(run));
-        decimal? gained = KnownLootValue(loot, LootKind.Gained, prices);
-        decimal? lost = KnownLootValue(loot, LootKind.Lost, prices);
+        decimal? gained = KnownLootValue(loot, LootKind.Gained, runPrices.Loot);
+        decimal? lost = KnownLootValue(loot, LootKind.Lost, runPrices.Loot);
         int? filamentCount = _ParsedInt(all, RunParameterKey.AbyssalFilamentCount);
         decimal? filamentCost = filamentCount is > 0 && FilamentTypeId(all) is { } typeId
-            && prices.TryGetValue(typeId, out double price)
-            ? (decimal)price * filamentCount.Value
+            && runPrices.Filament(typeId) is { } price
+            ? price * filamentCount.Value
             : null;
         IReadOnlyList<LootTallyLine> spent = Spent(run);
-        decimal? spentCost = KnownLootValue(spent, LootKind.Lost, prices);
+        decimal? spentCost = KnownLootValue(spent, LootKind.Lost, runPrices.Loot);
         decimal? consumableCost = filamentCost is null && spentCost is null
             ? null
             : filamentCost.GetValueOrDefault() + spentCost.GetValueOrDefault();
@@ -103,16 +104,16 @@ internal static class RunIskFactsReader
             ? expected.Amount
             : null;
 
-    /// <summary>Priced mining, ore by ore (ET-229): the resolved by-exact-SDE-name type id decides the price
-    /// (<see cref="MiningValuation"/>), residue never counts (depleted, never collected, no ISK value), and a
+    /// <summary>Priced mining, ore by ore (ET-229): the price fixed on the entry (ET-463), else the resolved
+    /// by-exact-SDE-name type id decides it (<see cref="MiningValuation"/>), residue never counts (depleted, never collected, no ISK value), and a
     /// critical cycle's units are not added twice — they are already inside <see cref="RunMiningEntry.Units"/>.
     /// Null only when nothing on the run could be priced, the same "not priced yet, not zero" rule loot follows.</summary>
     public static decimal? MiningValue(IEnumerable<RunMiningEntry> entries, MiningOreTypes ores, IReadOnlyDictionary<int, double> prices)
     {
         decimal[] values = [.. entries
-            .Select(entry => (Entry: entry, Price: ores.Of(entry.OreType) is { } ore
+            .Select(entry => (Entry: entry, Price: entry.UnitPriceIsk ?? (ores.Of(entry.OreType) is { } ore
                 ? MiningValuation.UnitPrice(ore.TypeId, ore.IsMutanite, prices)
-                : null))
+                : null)))
             .Where(resolved => resolved.Price is not null)
             .Select(resolved => resolved.Price!.Value * resolved.Entry.Units)];
         return values.Length == 0 ? null : values.Sum();
@@ -156,11 +157,24 @@ internal static class RunIskFactsReader
     // as nothing rather than as a wrong figure. GetValueOrDefault(), not ?? 1: a missing quantity counts as zero
     // pieces in a summary's item count, so it must value as zero here too.
     public static decimal? KnownLootValue(
-        IEnumerable<LootTallyLine> loot, LootKind lootKind, IReadOnlyDictionary<int, double> prices)
+        IEnumerable<LootTallyLine> loot, LootKind lootKind, IReadOnlyDictionary<int, double> prices) =>
+        KnownLootValue(loot, lootKind, typeId => prices.TryGetValue(typeId, out double price) ? (decimal)price : null);
+
+    public static decimal? KnownLootValue(IEnumerable<LootTallyLine> loot, LootKind lootKind, Func<int, decimal?> unitPrice)
     {
         decimal[] values = [.. loot
-            .Where(line => line.LootKind == lootKind && prices.ContainsKey(line.ItemTypeId))
-            .Select(line => (decimal)prices[line.ItemTypeId] * line.Quantity.GetValueOrDefault())];
+            .Where(line => line.LootKind == lootKind)
+            .Select(line => unitPrice(line.ItemTypeId) * line.Quantity.GetValueOrDefault())
+            .OfType<decimal>()];
         return values.Length == 0 ? null : values.Sum();
     }
+
+    /// <summary>Whether any part of the run is still valued at the live cache price (ET-463): a loot, ore or filament
+    /// line with no fixed price yet, or a linked loss, whose value is never fixed (ET-464). Only such a run can come
+    /// out differently when it is added up again after a price refresh.</summary>
+    public static bool HasLiveValue(Run run, IEnumerable<RunParameter> parameters, IEnumerable<LocalKillmail> losses) =>
+        run.LootCaptures.Where(capture => !capture.IsExcluded).SelectMany(capture => capture.Entries).Any(entry => entry.UnitPriceIsk is null)
+        || run.MiningEntries.Any(entry => entry.UnitPriceIsk is null)
+        || RunPrices.FilamentRow(parameters) is { UnitPriceIsk: null }
+        || losses.Any();
 }

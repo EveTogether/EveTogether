@@ -1065,11 +1065,21 @@ namespace EveUtils.Migrations.Server.MySql.Migrations
                         .HasMaxLength(255)
                         .HasColumnType("varchar(255)");
 
+                    b.Property<int?>("PriceSource")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("PricedAtUtc")
+                        .HasColumnType("datetime(6)");
+
                     b.Property<long?>("Quantity")
                         .HasColumnType("bigint");
 
                     b.Property<Guid>("RunLootCaptureId")
                         .HasColumnType("char(36)");
+
+                    b.Property<decimal?>("UnitPriceIsk")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<decimal?>("Volume")
                         .HasPrecision(18, 3)
@@ -1101,11 +1111,21 @@ namespace EveUtils.Migrations.Server.MySql.Migrations
                         .IsRequired()
                         .HasColumnType("varchar(255)");
 
+                    b.Property<int?>("PriceSource")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("PricedAtUtc")
+                        .HasColumnType("datetime(6)");
+
                     b.Property<int>("ResidueUnits")
                         .HasColumnType("int");
 
                     b.Property<Guid>("RunId")
                         .HasColumnType("char(36)");
+
+                    b.Property<decimal?>("UnitPriceIsk")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<int>("Units")
                         .HasColumnType("int");
@@ -1143,6 +1163,12 @@ namespace EveUtils.Migrations.Server.MySql.Migrations
                     b.Property<int>("ParameterKey")
                         .HasColumnType("int");
 
+                    b.Property<int?>("PriceSource")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("PricedAtUtc")
+                        .HasColumnType("datetime(6)");
+
                     b.Property<Guid>("RunId")
                         .HasColumnType("char(36)");
 
@@ -1151,11 +1177,72 @@ namespace EveUtils.Migrations.Server.MySql.Migrations
                         .HasMaxLength(255)
                         .HasColumnType("varchar(255)");
 
+                    b.Property<decimal?>("UnitPriceIsk")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
                     b.HasKey("Id");
 
                     b.HasIndex("RunId");
 
                     b.ToTable("RunParameter");
+                });
+
+            modelBuilder.Entity("EveUtils.Shared.Modules.Runs.Entities.UnrecognisedLootLine", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("char(36)");
+
+                    b.Property<long?>("CharacterId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("FirstSeenAtUtc")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("varchar(255)");
+
+                    b.Property<long>("Quantity")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime?>("ResolvedAtUtc")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<Guid?>("ResolvedRunLootEntryId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<Guid?>("ResolvedRunParameterId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<int?>("ResolvedTypeId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal?>("ResolvedUnitPrice")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<Guid?>("RunId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<Guid?>("RunLootCaptureId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<int>("Source")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RunLootCaptureId");
+
+                    b.HasIndex("Status");
+
+                    b.ToTable("UnrecognisedLootLine");
                 });
 
             modelBuilder.Entity("EveUtils.Shared.Modules.ServerAuth.Entities.AllowedCharacter", b =>
@@ -1621,6 +1708,16 @@ namespace EveUtils.Migrations.Server.MySql.Migrations
                     b.Navigation("Run");
                 });
 
+            modelBuilder.Entity("EveUtils.Shared.Modules.Runs.Entities.UnrecognisedLootLine", b =>
+                {
+                    b.HasOne("EveUtils.Shared.Modules.Runs.Entities.RunLootCapture", "RunLootCapture")
+                        .WithMany("UnrecognisedLines")
+                        .HasForeignKey("RunLootCaptureId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.Navigation("RunLootCapture");
+                });
+
             modelBuilder.Entity("EveUtils.Shared.Modules.ServerAuth.Entities.ServerSession", b =>
                 {
                     b.HasOne("EveUtils.Shared.Modules.ServerAuth.Entities.SyncedCharacter", "SyncedCharacter")
@@ -1673,6 +1770,8 @@ namespace EveUtils.Migrations.Server.MySql.Migrations
             modelBuilder.Entity("EveUtils.Shared.Modules.Runs.Entities.RunLootCapture", b =>
                 {
                     b.Navigation("Entries");
+
+                    b.Navigation("UnrecognisedLines");
                 });
 
             modelBuilder.Entity("EveUtils.Shared.Modules.Ships.Entities.Ship", b =>

@@ -2,14 +2,17 @@ using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Data;
 using EveUtils.Shared.DependencyInjection;
 using EveUtils.Shared.Messaging;
+using EveUtils.Shared.Modules.Market.Repositories;
 using EveUtils.Shared.Modules.Runs.Entities;
 using EveUtils.Shared.Modules.Runs.Events;
+using EveUtils.Shared.Modules.Sde;
 using Microsoft.EntityFrameworkCore;
 
 namespace EveUtils.Shared.Modules.Runs.Commands;
 
 [ClientOnly]
-internal sealed class AddRunMiningEntryCommandHandler(IDbContextFactory<ClientDbContext> contextFactory, IEventBus eventBus)
+internal sealed class AddRunMiningEntryCommandHandler(
+    IDbContextFactory<ClientDbContext> contextFactory, IEventBus eventBus, IMarketPriceRepository marketPrices, ISdeAccessor sde)
     : ICommandHandler<AddRunMiningEntryCommand, Result>
 {
     public async Task<Result> Handle(AddRunMiningEntryCommand command, CancellationToken cancellationToken = default)
@@ -54,6 +57,9 @@ internal sealed class AddRunMiningEntryCommandHandler(IDbContextFactory<ClientDb
             entry.LastObservedAtUtc = command.OccurredAtUtc;
 
         await db.SaveChangesAsync(cancellationToken);
+        // Priced once, at the first cycle the cache has a price for; every later cycle of the ore adds units only.
+        if (entry.UnitPriceIsk is null)
+            await RunPriceSnapshots.FixOnCaptureAsync(db, marketPrices, sde, run.Id, cancellationToken);
         await eventBus.PublishAsync(new RunsChangedEvent(run.Id, run.GroupCode), EventTarget.Local, cancellationToken);
         return Result.Success();
     }

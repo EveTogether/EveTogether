@@ -21,4 +21,8 @@ public sealed class RunLootCapture
     public bool IsExcluded { get; set; }
     public Run? Run { get; set; }
     public ICollection<RunLootEntry> Entries { get; } = [];
+
+    /// <summary>The rows of this paste no SDE type knew yet (ET-460) — resolved later into <see cref="Entries"/> of
+    /// this same capture, so a late recognition counts exactly as the paste would have.</summary>
+    public ICollection<UnrecognisedLootLine> UnrecognisedLines { get; } = [];
 }

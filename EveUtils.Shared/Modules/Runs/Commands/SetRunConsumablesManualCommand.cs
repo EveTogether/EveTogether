@@ -8,5 +8,6 @@ namespace EveUtils.Shared.Modules.Runs.Commands;
 /// filament becomes its confirmed filament count, zero when the list leaves it out; everything else is stored as one
 /// capture with role <see cref="Enums.LootCaptureRole.Consumed"/>, so it travels to a server the way loot does.
 /// Writing again replaces both.</summary>
-public sealed record SetRunConsumablesManualCommand(Guid RunId, IReadOnlyList<RunLootEntryInput> Entries)
+public sealed record SetRunConsumablesManualCommand(
+    Guid RunId, IReadOnlyList<RunLootEntryInput> Entries, IReadOnlyList<UnrecognisedLootNameInput>? UnrecognisedNames = null)
     : ICommand<Result>;

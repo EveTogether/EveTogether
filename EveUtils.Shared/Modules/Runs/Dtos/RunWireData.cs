@@ -140,7 +140,22 @@ public sealed class RunWireData
                 Quantity = entry.Quantity,
                 Volume = entry.Volume,
                 ClipboardPrice = entry.ClipboardPrice,
-                LootKind = entry.LootKind
+                LootKind = entry.LootKind,
+                UnitPriceIsk = entry.UnitPriceIsk,
+                PricedAtUtc = entry.PricedAtUtc,
+                PriceSource = entry.PriceSource
+            }).ToList(),
+            UnrecognisedLines = capture.UnrecognisedLines.Select(line => new UnrecognisedLootLineInput
+            {
+                Name = line.Name,
+                Quantity = line.Quantity,
+                CharacterId = line.CharacterId,
+                Source = line.Source,
+                FirstSeenAtUtc = line.FirstSeenAtUtc,
+                Status = line.Status,
+                ResolvedAtUtc = line.ResolvedAtUtc,
+                ResolvedTypeId = line.ResolvedTypeId,
+                ResolvedUnitPrice = line.ResolvedUnitPrice
             }).ToList()
         }).ToList(),
         BountyEntries = run.BountyEntries.Select(entry => new RunBountyEntryInput { OccurredAtUtc = entry.OccurredAtUtc, Isk = entry.Isk }).ToList(),
@@ -160,7 +175,10 @@ public sealed class RunWireData
             ItemTypeId = parameter.ItemTypeId,
             BonusWindowSeconds = parameter.BonusWindowSeconds,
             EntryId = parameter.EntryId,
-            ObservedAtUtc = parameter.ObservedAtUtc
+            ObservedAtUtc = parameter.ObservedAtUtc,
+            UnitPriceIsk = parameter.UnitPriceIsk,
+            PricedAtUtc = parameter.PricedAtUtc,
+            PriceSource = parameter.PriceSource
         }).ToList(),
         MiningEntries = run.MiningEntries.Select(entry => new RunMiningEntryInput
         {
@@ -169,7 +187,10 @@ public sealed class RunWireData
             CriticalUnits = entry.CriticalUnits,
             ResidueUnits = entry.ResidueUnits,
             FirstObservedAtUtc = entry.FirstObservedAtUtc,
-            LastObservedAtUtc = entry.LastObservedAtUtc
+            LastObservedAtUtc = entry.LastObservedAtUtc,
+            UnitPriceIsk = entry.UnitPriceIsk,
+            PricedAtUtc = entry.PricedAtUtc,
+            PriceSource = entry.PriceSource
         }).ToList()
     };
 
@@ -240,7 +261,25 @@ public sealed class RunWireData
                     Quantity = entry.Quantity,
                     Volume = entry.Volume,
                     ClipboardPrice = entry.ClipboardPrice,
-                    LootKind = entry.LootKind
+                    LootKind = entry.LootKind,
+                    UnitPriceIsk = entry.UnitPriceIsk,
+                    PricedAtUtc = entry.PricedAtUtc,
+                    PriceSource = entry.PriceSource
+                });
+            foreach (UnrecognisedLootLineInput line in capture.UnrecognisedLines)
+                entity.UnrecognisedLines.Add(new UnrecognisedLootLine
+                {
+                    Id = Guid.CreateVersion7(),
+                    RunLootCaptureId = entity.Id,
+                    Name = line.Name,
+                    Quantity = line.Quantity,
+                    CharacterId = line.CharacterId,
+                    Source = line.Source,
+                    FirstSeenAtUtc = line.FirstSeenAtUtc,
+                    Status = line.Status,
+                    ResolvedAtUtc = line.ResolvedAtUtc,
+                    ResolvedTypeId = line.ResolvedTypeId,
+                    ResolvedUnitPrice = line.ResolvedUnitPrice
                 });
             run.LootCaptures.Add(entity);
         }
@@ -268,7 +307,10 @@ public sealed class RunWireData
                 ItemTypeId = parameter.ItemTypeId,
                 BonusWindowSeconds = parameter.BonusWindowSeconds,
                 EntryId = parameter.EntryId,
-                ObservedAtUtc = parameter.ObservedAtUtc
+                ObservedAtUtc = parameter.ObservedAtUtc,
+                UnitPriceIsk = parameter.UnitPriceIsk,
+                PricedAtUtc = parameter.PricedAtUtc,
+                PriceSource = parameter.PriceSource
             });
         foreach (RunMiningEntryInput entry in MiningEntries)
             run.MiningEntries.Add(new RunMiningEntry
@@ -280,7 +322,10 @@ public sealed class RunWireData
                 CriticalUnits = entry.CriticalUnits,
                 ResidueUnits = entry.ResidueUnits,
                 FirstObservedAtUtc = entry.FirstObservedAtUtc,
-                LastObservedAtUtc = entry.LastObservedAtUtc
+                LastObservedAtUtc = entry.LastObservedAtUtc,
+                UnitPriceIsk = entry.UnitPriceIsk,
+                PricedAtUtc = entry.PricedAtUtc,
+                PriceSource = entry.PriceSource
             });
         foreach (RunAttendanceEntryInput entry in AttendanceEntries)
             run.AttendanceEntries.Add(new RunAttendanceEntry

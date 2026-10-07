@@ -29,9 +29,13 @@ internal static class ActivitySummaryBuilder
         DateTime? stoppedAtUtc = runs.All(run => run.StoppedAtUtc is not null)
             ? runs.Max(run => run.StoppedAtUtc)
             : null;
-        List<LootTallyLine> loot = [.. runs.SelectMany(run => LootTally.Count(RunIskFactsReader.Tally(run)))];
-        decimal? gained = RunIskFactsReader.KnownLootValue(loot, LootKind.Gained, prices);
-        decimal? lost = RunIskFactsReader.KnownLootValue(loot, LootKind.Lost, prices);
+        // Valued run by run: each run's lines carry their own fixed prices (ET-463), and two runs of one activity may
+        // have fixed the same type at different moments.
+        (RunPrices Prices, IReadOnlyList<LootTallyLine> Loot)[] valued = [.. runs.Select(run =>
+            (RunPrices.Of(run, parametersByRun[run.Id], prices), LootTally.Count(RunIskFactsReader.Tally(run))))];
+        List<LootTallyLine> loot = [.. valued.SelectMany(run => run.Loot)];
+        decimal? gained = _KnownSum(valued.Select(run => RunIskFactsReader.KnownLootValue(run.Loot, LootKind.Gained, run.Prices.Loot)));
+        decimal? lost = _KnownSum(valued.Select(run => RunIskFactsReader.KnownLootValue(run.Loot, LootKind.Lost, run.Prices.Loot)));
         // Per run, then added up over the activity by each contributor — the same breakdown the open run window and
         // UNFINISHED make, stored so every screen reads this one and none of them adds figures of its own (ET-256).
         // Earliest run first: the order decides which character a reward line copied onto several runs is handed to
@@ -70,7 +74,7 @@ internal static class ActivitySummaryBuilder
             LootIskGained = gained,
             LootIskLost = lost,
             LootIskNet = gained is null && lost is null ? null : gained.GetValueOrDefault() - lost.GetValueOrDefault(),
-            LootEntriesWithoutPrice = loot.Count(line => !prices.ContainsKey(line.ItemTypeId)),
+            LootEntriesWithoutPrice = valued.Sum(run => run.Loot.Count(line => run.Prices.Loot(line.ItemTypeId) is null)),
             LootItemCount = checked((int)loot.Sum(line => line.Quantity.GetValueOrDefault())),
             // The volume column of an EVE inventory is already the volume of the whole stack (measured: 2 filaments = 0,20 m3).
             LootVolume = loot.Sum(line => line.Volume.GetValueOrDefault()),
@@ -87,5 +91,11 @@ internal static class ActivitySummaryBuilder
             ComputedAtUtc = DateTime.UtcNow,
             SourceRevisionSum = checked(runs.Sum(run => run.Revision))
         };
+    }
+
+    private static decimal? _KnownSum(IEnumerable<decimal?> values)
+    {
+        decimal[] known = [.. values.OfType<decimal>()];
+        return known.Length == 0 ? null : known.Sum();
     }
 }

@@ -28,6 +28,7 @@ using EveUtils.Client.ViewModels.Setup;
 using EveUtils.Client.Esi;
 using EveUtils.Client.EveSettings;
 using EveUtils.Client.Platform;
+using EveUtils.Client.Runs;
 using EveUtils.Client.Skills;
 using EveUtils.Client.Implants;
 using EveUtils.Shared.Modules.Dogma;
@@ -2872,6 +2873,8 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         {
             using var scope = _services.CreateScope();
             await scope.ServiceProvider.GetRequiredService<IDispatcher>().Send(new RepairSiteTypeIdsCommand());
+            // A new build is exactly when a name nobody knew yet (ET-460) becomes known.
+            await _services.GetRequiredService<UnrecognisedLootRepricer>().RepriceAsync();
         }
     }
 

@@ -102,7 +102,8 @@ public static class ClientServices
         services.AddSingleton<ITypeImageProvider>(sp => new TypeImageProvider(
             sp.GetRequiredService<IHttpClientFactory>(),
             sp.GetRequiredService<ISettingRepository>(),
-            DataDirectory())); // opt-in CCP type images, per-instance disk cache
+            DataDirectory(),
+            sp.GetService<IDogmaDataAccessor>())); // opt-in CCP type images, per-instance disk cache
         services.AddSingleton(sp => new CharacterPortraitProvider(
             sp.GetRequiredService<IHttpClientFactory>(),
             sp.GetRequiredService<ISettingRepository>(),

@@ -17,6 +17,7 @@ public static class RunsModule
             .HasAnnotation("Relational:Filter", "\"GroupCode\" IS NOT NULL AND \"DeletedAtUtc\" IS NULL");
         modelBuilder.ApplyConfiguration(new RunLootCaptureConfiguration());
         modelBuilder.ApplyConfiguration(new RunLootEntryConfiguration());
+        modelBuilder.ApplyConfiguration(new UnrecognisedLootLineConfiguration());
         modelBuilder.ApplyConfiguration(new RunBountyEntryConfiguration());
         modelBuilder.ApplyConfiguration(new RunEnemyObservationConfiguration());
         modelBuilder.ApplyConfiguration(new RunParameterConfiguration());
@@ -33,6 +34,7 @@ public static class RunsModule
         modelBuilder.ApplyConfiguration(new RunConfiguration());
         modelBuilder.ApplyConfiguration(new RunLootCaptureConfiguration());
         modelBuilder.ApplyConfiguration(new RunLootEntryConfiguration());
+        modelBuilder.ApplyConfiguration(new UnrecognisedLootLineConfiguration());
         modelBuilder.ApplyConfiguration(new RunBountyEntryConfiguration());
         modelBuilder.ApplyConfiguration(new RunEnemyObservationConfiguration());
         modelBuilder.ApplyConfiguration(new RunParameterConfiguration());

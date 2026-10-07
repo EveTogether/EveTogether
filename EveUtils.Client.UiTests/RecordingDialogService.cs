@@ -87,7 +87,7 @@ public sealed class RecordingDialogService : IDialogService
     public IReadOnlyList<int>? LastPreselectedCharacterIds { get; private set; }
 
     public Task<IReadOnlyList<int>?> PickCharactersAsync(string prompt, IReadOnlyList<CharacterPickOption> options,
-        IReadOnlyList<int>? preselectedCharacterIds = null)
+        IReadOnlyList<int>? preselectedCharacterIds = null, object? owner = null)
     {
         LastPrompt = prompt;
         LastOptions = options;
@@ -127,7 +127,7 @@ public sealed class RecordingDialogService : IDialogService
 
     public Task<string?> SelectServerAsync(string prompt, IReadOnlyList<ServerPickOption> options) => throw NotUsed();
     public string? LastMessage { get; private set; }
-    public Task ShowMessageAsync(string title, string message)
+    public Task ShowMessageAsync(string title, string message, object? owner = null)
     {
         LastMessage = message;
         return Task.CompletedTask;
@@ -187,8 +187,13 @@ public sealed class RecordingDialogService : IDialogService
     /// in-game) is only pinned down by the sequence, not by the last one.</summary>
     public List<(string Title, string Message)> ConfirmPrompts { get; } = [];
 
-    public Task<bool> ConfirmAsync(string title, string message, string okText = "Delete")
+    /// <summary>The view model each confirm was asked on behalf of, in the order of <see cref="ConfirmPrompts"/>
+    /// (ET-459) — null for a question that names no window.</summary>
+    public List<object?> ConfirmOwners { get; } = [];
+
+    public Task<bool> ConfirmAsync(string title, string message, string okText = "Delete", object? owner = null)
     {
+        ConfirmOwners.Add(owner);
         LastConfirmTitle = title;
         LastConfirmMessage = message;
         ConfirmPrompts.Add((title, message));
@@ -203,7 +208,8 @@ public sealed class RecordingDialogService : IDialogService
     /// on a run made of scratch data. A test that cares what the answer does sets this.</summary>
     public Func<string, string, bool?>? OnChoose { get; set; }
 
-    public Task<bool?> ChooseAsync(string title, string message, string primaryText, string secondaryText)
+    public Task<bool?> ChooseAsync(string title, string message, string primaryText, string secondaryText,
+        object? owner = null)
     {
         ChoicePrompts.Add((title, message, primaryText, secondaryText));
         return Task.FromResult(OnChoose is null ? false : OnChoose(title, message));
@@ -310,7 +316,7 @@ public sealed class RecordingDialogService : IDialogService
     public Func<FitPickerViewModel, Task<FitReferenceInfo?>> OnPickFit { get; set; } =
         _ => Task.FromResult<FitReferenceInfo?>(null);
 
-    public Task<FitReferenceInfo?> PickFitAsync(FitPickerViewModel viewModel) => OnPickFit(viewModel);
+    public Task<FitReferenceInfo?> PickFitAsync(FitPickerViewModel viewModel, object? owner = null) => OnPickFit(viewModel);
 
     /// <summary>Returns the doctrine entry the picker "selects" (or null to cancel). Default: cancel.</summary>
     public Func<DoctrinePickerViewModel, Task<DoctrineEntryPick?>> OnPickDoctrineEntry { get; set; } =
@@ -363,7 +369,7 @@ public sealed class RecordingDialogService : IDialogService
     /// <summary>The view model of the last escalation dialog shown, or null.</summary>
     public EscalationDialogViewModel? LastEscalationDialog { get; private set; }
 
-    public Task<bool> ShowEscalationDialogAsync(EscalationDialogViewModel viewModel)
+    public Task<bool> ShowEscalationDialogAsync(EscalationDialogViewModel viewModel, object? owner = null)
     {
         LastEscalationDialog = viewModel;
         return OnShowEscalationDialog(viewModel);

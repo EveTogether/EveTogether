@@ -535,7 +535,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
         IReadOnlyList<int>? picked = await dialogs.PickCharactersAsync("Add which character(s) to this run?",
             [.. candidates.Select(character => new CharacterPickOption(
-                character.EsiCharacterId!.Value, character.Name, "EVE client running", Enabled: true))]);
+                character.EsiCharacterId!.Value, character.Name, "EVE client running", Enabled: true))], owner: this);
         if (picked is not { Count: > 0 } || RunId is not { } runId)
             return;
 
@@ -947,7 +947,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             // and get their own run under this one's group code once _StoreRunAsync has a row to share it from.
             IReadOnlyList<int>? picked = await dialogs.PickCharactersAsync("Whose run is this?",
                 [.. candidates.Select(character => new CharacterPickOption(
-                    character.EsiCharacterId!.Value, character.Name, "local character", Enabled: true))]);
+                    character.EsiCharacterId!.Value, character.Name, "local character", Enabled: true))], owner: this);
             if (picked is { Count: > 0 })
             {
                 chosen = candidates.FirstOrDefault(character => character.EsiCharacterId == picked[0]);
@@ -2789,7 +2789,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             string source = OpsecText.Mark(match.SourceSiteName) ?? "an earlier run";
             if (!await dialogs.ConfirmAsync("Open escalation",
                     $"This run matches the escalation {site} you registered from {source}. Mark that escalation as done?",
-                    "Mark done"))
+                    "Mark done", this))
                 continue;
 
             await Task.Run(() => dispatcher.Send(new SetEscalationOutcomeCommand(
@@ -2839,7 +2839,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
                 ? "This throws away every one of your own runs in this group. None of them will be saved, and none "
                   + "will show up as unfinished."
                 : "This throws the run away. It won't be saved, and it won't show up as unfinished.";
-        if (!await dialogs.ConfirmAsync("Discard this run?", discardMessage, "Discard"))
+        if (!await dialogs.ConfirmAsync("Discard this run?", discardMessage, "Discard", this))
             return;
 
         DateTime nowUtc = DateTime.UtcNow;
@@ -2963,7 +2963,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
         bool? save = await _services.GetRequiredService<IDialogService>().ChooseAsync("Close this run?",
             "This run is not saved yet. Save it, or throw your own registration away — either way the run ends here.",
-            "Save", "Discard");
+            "Save", "Discard", this);
         if (save is null)
             return false;
 

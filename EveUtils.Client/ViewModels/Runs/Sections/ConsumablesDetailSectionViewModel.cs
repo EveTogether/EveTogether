@@ -149,19 +149,22 @@ public sealed partial class ConsumablesDetailSectionViewModel(RunDetailSectionSe
     }
 
     /// <summary>What one run spent: its confirmed filament first, then what its pilot wrote out beside it, most
-    /// valuable first.</summary>
+    /// valuable first. Each at the price the run fixed for it (ET-463), the live one only while it has none.</summary>
     private ActivityLootLineViewModel[] _SpentLines(ActivityDetailDto detail, ActivityRunDetailDto run)
     {
         List<ActivityLootLineViewModel> lines = [];
         if (_FilamentCount(detail, run.RunId) is > 0 and var count)
         {
             (int typeId, string name) = _FilamentOf(detail, run.RunId);
-            lines.Add(new ActivityLootLineViewModel(typeId, name, count, _UnitPrice(typeId), LootKind.Lost));
+            decimal? fixedPrice = detail.Parameters.FirstOrDefault(parameter => parameter.RunId == run.RunId
+                && parameter.ParameterKey == RunParameterKey.AbyssalFilamentTypeId)?.UnitPriceIsk;
+            lines.Add(_Line(typeId, name, count, fixedPrice));
         }
 
+        Dictionary<int, decimal> fixedPrices = FixedLootPrices.Of(run.LootCaptures);
         lines.AddRange(_Spent(run)
-            .Select(entry => new ActivityLootLineViewModel(entry.ItemTypeId, entry.Name, entry.Quantity,
-                _UnitPrice(entry.ItemTypeId), LootKind.Lost))
+            .Select(entry => _Line(entry.ItemTypeId, entry.Name, entry.Quantity,
+                fixedPrices.TryGetValue(entry.ItemTypeId, out decimal kept) ? kept : null))
             .OrderByDescending(line => line.Value.HasValue)
             .ThenByDescending(line => line.Value));
         return [.. lines];
@@ -179,6 +182,9 @@ public sealed partial class ConsumablesDetailSectionViewModel(RunDetailSectionSe
             : 0;
 
     private decimal? _UnitPrice(int typeId) => _unitPrices.TryGetValue(typeId, out decimal price) ? price : null;
+
+    private ActivityLootLineViewModel _Line(int typeId, string name, long? quantity, decimal? fixedPrice) =>
+        new(typeId, name, quantity, fixedPrice ?? _UnitPrice(typeId), LootKind.Lost, isLivePrice: fixedPrice is null);
 
     /// <summary>The filament a run was saved against: the type id SAVE stored, named as the SDE names it, and the
     /// pocket's own tier and weather when the SDE has no such type — a saved run never guesses a type.</summary>

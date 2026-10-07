@@ -9,15 +9,15 @@ using EveUtils.Shared.Modules.Runs.Enums;
 namespace EveUtils.Client.ViewModels.Runs;
 
 /// <summary>
-/// One loot line, valued by type id from ET's own price lookup — never from
-/// <see cref="RunLootEntryDto.ClipboardPrice"/>, which is kept as what that inventory window happened to show and
-/// is never held for a valuation (Raymond, 2026-09-02). The same rule
+/// One loot line, valued at the unit price fixed on the line (ET-463), or by type id from ET's own price lookup while
+/// it has none — never from <see cref="RunLootEntryDto.ClipboardPrice"/>, which is kept as what that inventory window
+/// happened to show and is never held for a valuation (Raymond, 2026-09-02). The same rule
 /// <c>RunLootViewModel._LoadPricesAsync</c> follows for the running run.
 /// </summary>
 public sealed partial class ActivityLootLineViewModel : ObservableObject
 {
     public ActivityLootLineViewModel(int itemTypeId, string name, long? quantity, decimal? unitPrice, LootKind lootKind,
-        bool isExcluded = false, int captureCount = 1)
+        bool isExcluded = false, int captureCount = 1, bool isLivePrice = false)
     {
         ItemTypeId = itemTypeId;
         Name = name;
@@ -29,6 +29,7 @@ public sealed partial class ActivityLootLineViewModel : ObservableObject
         IsLost = lootKind is LootKind.Lost;
         IsExcluded = isExcluded;
         CaptureCount = captureCount;
+        IsLivePrice = isLivePrice && unitPrice is not null;
     }
 
     public int ItemTypeId { get; }
@@ -51,10 +52,16 @@ public sealed partial class ActivityLootLineViewModel : ObservableObject
 
     public decimal? Value { get; }
 
-    public string ValueText => IskFormat.WholeOrNoPrice(Value);
+    /// <summary>Valued at today's cache price because the line has no fixed price yet (ET-463) — said beside the
+    /// figure, since it still moves with the market until the price is fixed.</summary>
+    public bool IsLivePrice { get; }
+
+    public string ValueText => _Marked(IskFormat.WholeOrNoPrice(Value));
 
     /// <summary>The value without its unit, for the columns under a figure that already says ISK.</summary>
-    public string AmountText => IskFormat.NumberOrNoPrice(Value);
+    public string AmountText => _Marked(IskFormat.NumberOrNoPrice(Value));
+
+    private string _Marked(string figure) => IsLivePrice ? $"{figure} · live" : figure;
 
     /// <summary>Spent rather than picked up. Its own category and never loot with a minus in front of it, which is
     /// the reading <see cref="LootKind"/> has carried since it was written.</summary>
@@ -87,6 +94,8 @@ public sealed partial class ActivityLootLineViewModel : ObservableObject
 
     /// <summary>The type's icon from the app's own image cache, best-effort: images off or offline leaves the
     /// lettered tile, the way the fit browser's cargo strip does.</summary>
-    public async Task LoadIconAsync(ITypeImageProvider images) =>
+    public async Task LoadIconAsync(ITypeImageProvider images)
+    {
         Icon = await images.GetImageAsync(ItemTypeId, TypeImageKind.Icon, 32);
+    }
 }

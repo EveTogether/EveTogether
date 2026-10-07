@@ -30,5 +30,12 @@ public sealed class RunParameter
     public Guid? EntryId { get; set; }
 
     public DateTime ObservedAtUtc { get; set; }
+
+    /// <summary>The unit price of the type this row names, fixed the way <see cref="RunLootEntry.UnitPriceIsk"/> is
+    /// (ET-463). Only the filament's type row carries one; on every other row it stays null.</summary>
+    public decimal? UnitPriceIsk { get; set; }
+
+    public DateTime? PricedAtUtc { get; set; }
+    public PriceSnapshotSource? PriceSource { get; set; }
     public Run? Run { get; set; }
 }

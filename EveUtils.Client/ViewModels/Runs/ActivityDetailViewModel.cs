@@ -166,7 +166,15 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
     /// here to delete.</summary>
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(DeleteCommand))]
+    [NotifyCanExecuteChangedFor(nameof(RevalueCommand))]
     private bool _canDelete;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(RevalueText))]
+    [NotifyCanExecuteChangedFor(nameof(RevalueCommand))]
+    private bool _isRevaluing;
+
+    public string RevalueText => IsRevaluing ? "Re-valuing…" : "Re-value at current prices";
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(DeleteText))]
@@ -383,6 +391,46 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
     }
 
     private bool CanStartDelete() => CanDelete && !IsDeleting;
+
+    /// <summary>
+    /// "Re-value at current prices" (ET-463): every loot, ore and filament line of this machine's own runs is valued
+    /// again at today's cache price, replacing the value it was fixed at when it came in — so it asks first. Offered
+    /// wherever delete is, for the same reason: a fleetmate's run is theirs to correct.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanStartRevalue))]
+    private async Task RevalueAsync()
+    {
+        if (_dialogs is null || _lastDetail is not { } detail)
+            return;
+
+        List<Guid> ownRunIds = _OwnRunIds(detail);
+        if (ownRunIds.Count == 0)
+            return;
+
+        if (!await _dialogs.ConfirmAsync("Re-value at current prices?",
+                "Every loot, ore and filament line of your own runs in this activity is valued again at today's price. "
+                + "This replaces the value it had when it came in, and a published activity will read as changed since it was published."))
+            return;
+
+        IsRevaluing = true;
+        try
+        {
+            Result<int> outcome = await _dispatcher.Send(new RevalueRunsCommand(ownRunIds));
+            if (!outcome.IsSuccess)
+            {
+                StatusMessage = outcome.Messages.Count > 0 ? outcome.Messages[0].Text : "The activity could not be re-valued.";
+                return;
+            }
+
+            await LoadAsync();
+        }
+        finally
+        {
+            IsRevaluing = false;
+        }
+    }
+
+    private bool CanStartRevalue() => CanDelete && !IsRevaluing;
 
     /// <summary>Puts a deleted activity straight back — the soft delete's whole point (ET-214). Same either/or as
     /// the delete itself: a group code restores every run deleted with it, a lone run restores by its own id.</summary>

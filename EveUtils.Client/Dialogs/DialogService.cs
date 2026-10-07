@@ -258,6 +258,16 @@ public sealed class DialogService : IDialogService, ISingletonService
         return dialog;
     }
 
+    /// <summary>The window a dialog asked for by <paramref name="requester"/> (ET-459) opens over: the run window when
+    /// the requester is its view model, a floating or popped-out module's window when it is that module's. Null — the
+    /// caller falls back to the main window — for no requester and for anything docked, which already lives there.</summary>
+    internal Window? OwnerFor(object? requester)
+    {
+        if (requester is null) return null;
+        if (_activityWindow is { } run && ReferenceEquals(run.DataContext, requester)) return run;
+        return _moduleHost.WindowShowing(requester);
+    }
+
     /// <summary>The activity window currently up, if any — the same one <see cref="OpenPopoutCount"/> counts.
     /// Readable so the no-focus rule (ET-105 AC-2) can be asserted on the window this service really built, rather
     /// than on a second copy of the decision that could drift away from it.</summary>
@@ -323,11 +333,11 @@ public sealed class DialogService : IDialogService, ISingletonService
     }
 
     public async Task<IReadOnlyList<int>?> PickCharactersAsync(string prompt, IReadOnlyList<CharacterPickOption> options,
-        IReadOnlyList<int>? preselectedCharacterIds = null)
+        IReadOnlyList<int>? preselectedCharacterIds = null, object? owner = null)
     {
         if (_owner is null) return null;
         var dialog = new CharacterPickerWindow(prompt, options, multiSelect: true, preselectedCharacterIds);
-        return await _Over(dialog).ShowDialog<IReadOnlyList<int>?>(_owner);
+        return await _Over(dialog).ShowDialog<IReadOnlyList<int>?>(OwnerFor(owner) ?? _owner);
     }
 
     public async Task ShowSetupWizardAsync(SetupWizardViewModel viewModel)
@@ -349,11 +359,11 @@ public sealed class DialogService : IDialogService, ISingletonService
         return await _Over(dialog).ShowDialog<string?>(_owner);
     }
 
-    public async Task ShowMessageAsync(string title, string message)
+    public async Task ShowMessageAsync(string title, string message, object? owner = null)
     {
         if (_owner is null) return;
         var dialog = new MessageBoxWindow(title, message);
-        await _Over(dialog).ShowDialog(_owner);
+        await _Over(dialog).ShowDialog(OwnerFor(owner) ?? _owner);
     }
 
     public async Task<string?> ImportFitTextAsync(string? initialText = null)
@@ -405,18 +415,19 @@ public sealed class DialogService : IDialogService, ISingletonService
         return await clipboard.TryGetTextAsync();
     }
 
-    public async Task<bool> ConfirmAsync(string title, string message, string okText = "Delete")
+    public async Task<bool> ConfirmAsync(string title, string message, string okText = "Delete", object? owner = null)
     {
         if (_owner is null) return false;
         var dialog = new MessageBoxWindow(title, message, confirm: true, okText: okText);
-        return await _Over(dialog).ShowDialog<bool>(_owner);
+        return await _Over(dialog).ShowDialog<bool>(OwnerFor(owner) ?? _owner);
     }
 
-    public async Task<bool?> ChooseAsync(string title, string message, string primaryText, string secondaryText)
+    public async Task<bool?> ChooseAsync(string title, string message, string primaryText, string secondaryText,
+        object? owner = null)
     {
         if (_owner is null) return null;
         var dialog = new MessageBoxWindow(title, message, confirm: true, okText: primaryText, secondaryText: secondaryText);
-        return await _Over(dialog).ShowDialog<bool?>(_owner);
+        return await _Over(dialog).ShowDialog<bool?>(OwnerFor(owner) ?? _owner);
     }
 
     public async Task ShowCharacterAsync(CharacterDialogViewModel viewModel)
@@ -496,10 +507,10 @@ public sealed class DialogService : IDialogService, ISingletonService
         return await _Over(new FitPickerWindow(viewModel)).ShowDialog<IReadOnlyList<Fleet.FitReferenceInfo>?>(_owner);
     }
 
-    public async Task<Fleet.FitReferenceInfo?> PickFitAsync(FitPickerViewModel viewModel)
+    public async Task<Fleet.FitReferenceInfo?> PickFitAsync(FitPickerViewModel viewModel, object? owner = null)
     {
         if (_owner is null) return null;
-        return await _Over(new FitPickerWindow(viewModel)).ShowDialog<Fleet.FitReferenceInfo?>(_owner);
+        return await _Over(new FitPickerWindow(viewModel)).ShowDialog<Fleet.FitReferenceInfo?>(OwnerFor(owner) ?? _owner);
     }
 
     public async Task<DoctrineEntryPick?> PickDoctrineEntryAsync(DoctrinePickerViewModel viewModel)
@@ -628,7 +639,7 @@ public sealed class DialogService : IDialogService, ISingletonService
         await _Over(new ManualRunStartWindow(viewModel)).ShowDialog(_owner);
     }
 
-    public Task<bool> ShowEscalationDialogAsync(EscalationDialogViewModel viewModel)
+    public Task<bool> ShowEscalationDialogAsync(EscalationDialogViewModel viewModel, object? owner = null)
     {
         if (_owner is null) return Task.FromResult(false);
 
@@ -636,7 +647,7 @@ public sealed class DialogService : IDialogService, ISingletonService
         viewModel.CloseRequested += result => tcs.TrySetResult(result);
         var window = new EscalationDialogWindow(viewModel);
         window.Closed += (_, _) => tcs.TrySetResult(false);
-        _Over(window).ShowDialog(_owner);
+        _Over(window).ShowDialog(OwnerFor(owner) ?? _owner);
         return tcs.Task;
     }
 

@@ -2,10 +2,13 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
+using System.Net;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Media.Imaging;
+using Avalonia.Platform;
+using EveUtils.Shared.Modules.Sde;
 using EveUtils.Shared.Modules.Settings.Repositories;
 
 namespace EveUtils.Client.Imaging;
@@ -16,13 +19,20 @@ namespace EveUtils.Client.Imaging;
 /// is memoised, so concurrent requests for the same image (e.g. eight identical turrets, or the same hull in the browser
 /// and the detail window) share a single download + decode instead of stampeding the server. The bytes are written to a
 /// per-instance disk cache and the decode runs off the UI thread. Any failure (offline, disabled, 404) yields null — and
-/// is not cached, so the next request retries — and the wheel falls back to its offline glyph.
+/// is not cached, so the next request retries — and the wheel falls back to its offline glyph. A 404 is the exception: the
+/// server has no such image, so retrying within the session only repeats the miss. SKINs never reach the server: they
+/// resolve to the bundled placeholder.
 /// </summary>
-public sealed class TypeImageProvider(IHttpClientFactory httpClientFactory, ISettingRepository settings, string dataDirectory)
-    : ITypeImageProvider
+public sealed class TypeImageProvider(IHttpClientFactory httpClientFactory, ISettingRepository settings, string dataDirectory,
+    IDogmaDataAccessor? sde = null) : ITypeImageProvider
 {
     public const string HttpClientName = "evetech-images";
     public const string EnabledSettingKey = "fit.images.enabled";
+
+    private const int SkinCategoryId = 91;
+    // The image server has no icon or render for any SKIN, so they share one bundled placeholder instead of a download.
+    private static readonly Lazy<Bitmap> SkinPlaceholder =
+        new(() => new Bitmap(AssetLoader.Open(new Uri("avares://EveUtils.Client/Assets/skin-placeholder.png"))));
 
     private readonly string _cacheDirectory = Path.Combine(dataDirectory, "type-images");
     // A measured 28-card render burst needs 28 MiB; keep one window intact with 4 MiB of headroom.
@@ -49,6 +59,9 @@ public sealed class TypeImageProvider(IHttpClientFactory httpClientFactory, ISet
     {
         // The load is shared across callers, so a single caller's cancellation must not abort it for the others — the
         // per-call token is intentionally not threaded into the shared download (image loads are fire-and-forget).
+        if (sde?.GetCategoryId(typeId) == SkinCategoryId)
+            return Task.FromResult<Bitmap?>(SkinPlaceholder.Value);
+
         var key = $"{typeId}_{kind}_{size}";
         Lazy<Task<Bitmap?>> load = _cache.GetOrAdd(key, k => new Lazy<Task<Bitmap?>>(() => LoadAsync(k, typeId, kind, size)));
         return _TrackAsync(key, load.Value);
@@ -110,6 +123,10 @@ public sealed class TypeImageProvider(IHttpClientFactory httpClientFactory, ISet
                 using var stream = new MemoryStream(bytes);
                 return new Bitmap(stream);
             });
+        }
+        catch (HttpRequestException exception) when (exception.StatusCode == HttpStatusCode.NotFound)
+        {
+            return null;
         }
         catch
         {

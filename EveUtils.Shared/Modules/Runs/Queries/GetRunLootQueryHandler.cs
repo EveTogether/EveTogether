@@ -25,6 +25,8 @@ internal sealed class GetRunLootQueryHandler(IDbContextFactory<ClientDbContext> 
             .AsNoTracking()
             .Where(capture => capture.RunId == query.RunId)
             .Include(capture => capture.Entries)
+            .Include(capture => capture.UnrecognisedLines)
+            .AsSplitQuery()
             .OrderBy(capture => capture.CapturedAtUtc)
             .ToListAsync(cancellationToken);
 

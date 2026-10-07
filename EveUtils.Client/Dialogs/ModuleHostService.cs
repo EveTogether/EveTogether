@@ -59,6 +59,13 @@ public sealed class ModuleHostService
     /// <summary>The window a popped-out module lives in, for tests to look into.</summary>
     internal Window? PopoutOf(string moduleId) => _modules.FirstOrDefault(m => m.Id == moduleId)?.Popout;
 
+    /// <summary>The window of its own the module with this view model is in right now — floating or popped out — or
+    /// null for a docked module, whose window is the main one.</summary>
+    internal Window? WindowShowing(object viewModel) =>
+        _modules.FirstOrDefault(m => ReferenceEquals(m.Content.DataContext, viewModel)) is { } frame
+            ? frame.Popout ?? (frame.Shown ? frame.Window : null)
+            : null;
+
     public bool IsPoppedOut(string moduleId) => _modules.Any(m => m.Id == moduleId && m.Popout is not null);
 
     /// <summary>Close every floating module window (used when the main window is closing).</summary>
