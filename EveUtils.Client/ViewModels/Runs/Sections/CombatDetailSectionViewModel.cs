@@ -26,7 +26,6 @@ public sealed partial class CombatDetailSectionViewModel : RunDetailSection
         _choice = services.Combat ?? new CombatTelemetryChoice(services.Dispatcher, services.OwnCharacterIds);
         _choice.PropertyChanged += _OnChoiceChanged;
         HeaderSummary = "no combat recorded";
-        CombatEmptyText = NotRecordedText;
     }
 
     public ObservableCollection<CombatPilotChipViewModel> Pilots => _choice.Pilots;
@@ -74,7 +73,7 @@ public sealed partial class CombatDetailSectionViewModel : RunDetailSection
     private static IEnumerable<CombatTileViewModel> TilesOf(RunCombatTimelineDto timeline)
     {
         int seconds = Math.Max(1, timeline.Seconds - 1);
-        long dealt = _Total(timeline, CombatSeriesKind.DmgOut);
+        long dealt = _Total(timeline, CombatSeriesKind.DmgIn);
         long taken = _Total(timeline, CombatSeriesKind.DmgIn);
         yield return new("DAMAGE DEALT", $"{_Number(dealt)} hp",
             $"avg {_Number(dealt / seconds)} dps over {TimeSpan.FromSeconds(seconds):mm\\:ss}");
