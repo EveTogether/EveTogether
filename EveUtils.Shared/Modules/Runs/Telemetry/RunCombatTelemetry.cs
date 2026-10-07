@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.IO.Compression;
 using System.Runtime.InteropServices;
 using EveUtils.Shared.Modules.Gamelog.Models;
@@ -12,6 +13,9 @@ namespace EveUtils.Shared.Modules.Runs.Telemetry;
 /// </summary>
 public static class RunCombatTelemetry
 {
+    // The stored columns' length: a log line is outside input, and a server provider that enforces it must not refuse a sync.
+    private const int NameLength = 255;
+
     /// <summary>
     /// Every combat, repair, neut and capacitor line between the run's start and stop, inclusive; anything else is
     /// left out. A second without a line stays zero, which is also what a STOP/START pause leaves behind.
@@ -31,7 +35,8 @@ public static class RunCombatTelemetry
             int second = (int)(logEvent.Timestamp - startedAtUtc).TotalSeconds;
             switch (logEvent)
             {
-                case CombatEvent hit:
+                case CombatEvent line:
+                    CombatEvent hit = line with { Target = _Clip(line.Target), Weapon = _Clip(line.Weapon) };
                     _Add(series, hit.Direction is DamageDirection.Outgoing ? CombatSeriesKind.DmgOut : CombatSeriesKind.DmgIn,
                         seconds, second, hit.Amount);
                     _CountHit(timeline, hit);
@@ -108,6 +113,9 @@ public static class RunCombatTelemetry
         // Some clients write a neut as a negative amount; the series counts how much, the kind already says which way.
         perSecond[second] += Math.Abs(amount);
     }
+
+    [return: NotNullIfNotNull(nameof(name))]
+    private static string? _Clip(string? name) => name is { Length: > NameLength } ? name[..NameLength] : name;
 
     private static void _CountHit(RunCombatTimeline timeline, CombatEvent hit)
     {
