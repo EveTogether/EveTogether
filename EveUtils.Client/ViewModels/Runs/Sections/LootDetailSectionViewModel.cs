@@ -43,7 +43,7 @@ public sealed partial class LootDetailSectionViewModel : RunDetailSection
     public override void Apply(RunDetailSectionInput input)
     {
         ActivityDetailDto detail = input.Detail;
-        ContainersText = input.RunType.Space is RunSpace.KnownSpace && input.Detail.Runs.Count < 0
+        ContainersText = input.RunType.Space is RunSpace.AbyssalPocket
             ? "Containers opened: not counted. Opening or looting a container writes no line to the game log."
             : null;
         RunLootCaptureDto[] captures = [.. detail.Runs
