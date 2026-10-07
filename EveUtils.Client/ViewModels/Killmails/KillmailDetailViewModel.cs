@@ -24,6 +24,9 @@ using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Sde;
 using EveUtils.Shared.Modules.Sde.Dtos;
 using EveUtils.Shared.Modules.Sde.Enums;
+using EveUtils.Shared.Modules.Settings.Commands;
+using EveUtils.Shared.Modules.Settings.Dtos;
+using EveUtils.Shared.Modules.Settings.Queries;
 using EveUtils.Shared.Modules.Settings.Repositories;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -100,6 +103,12 @@ public sealed partial class KillmailDetailViewModel : ViewModelBase, IDisposable
     [ObservableProperty] private string _linkedRunSummaryText = "kills are not linked to runs";
     [ObservableProperty] private KillmailLinkedRunViewModel? _linkedRun;
 
+    /// <summary>Whether LOCATION is folded shut, remembered across killmails and restarts like the map's side panel.</summary>
+    public const string LocationCollapsedSettingKey = "ui.killmail.location-collapsed";
+
+    [ObservableProperty] private bool _isLocationExpanded = true;
+    private bool _isRestoringLocationState;
+
     [ObservableProperty] private string _locationSummaryText = string.Empty;
     /// <summary>Null when there is nothing to draw — no position yet, abyssal space, or no celestials known.</summary>
     [ObservableProperty] private KillmailLocation? _location;
@@ -141,6 +150,8 @@ public sealed partial class KillmailDetailViewModel : ViewModelBase, IDisposable
             _services.GetRequiredService<IEsiAffiliationResolver>(), _sde,
             _services.GetRequiredService<IKillmailEntityNameRepository>(), _services.GetRequiredService<ISettingRepository>(),
             _services.GetService<TimeProvider>() ?? TimeProvider.System);
+
+        await _RestoreLocationStateAsync(cancellationToken);
 
         Result<KillmailDetailDto> result =
             await _dispatcher.Query(new GetKillmailDetailQuery(_characterId, _killmailId), cancellationToken);
@@ -349,6 +360,22 @@ public sealed partial class KillmailDetailViewModel : ViewModelBase, IDisposable
         CelestialKind.Stargate => "GATE",
         _ => "STATION"
     };
+
+    private async Task _RestoreLocationStateAsync(CancellationToken cancellationToken)
+    {
+        IReadOnlyList<SettingDto> settings = await _dispatcher.Query(new GetSettingsQuery(), cancellationToken);
+        _isRestoringLocationState = true;
+        IsLocationExpanded = !settings.Any(setting => setting.Key == LocationCollapsedSettingKey && setting.Value == "true");
+        _isRestoringLocationState = false;
+    }
+
+    partial void OnIsLocationExpandedChanged(bool value)
+    {
+        if (!_isRestoringLocationState)
+        {
+            _ = _dispatcher.Send(new SetSettingCommand(LocationCollapsedSettingKey, value ? "false" : "true"));
+        }
+    }
 
     private void _OnOpsecChanged() => IsMapHiddenByOpsec = _opsec?.IsEnabled ?? false;
 

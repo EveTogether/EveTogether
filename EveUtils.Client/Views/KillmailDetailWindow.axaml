@@ -108,13 +108,14 @@
 
                 <!-- ══ LOCATION ══ (ET-473): the system from above and the grid around the loss, side by side, since on
                      the system scale everything within a few hundred km of the loss lands on one point. -->
-                <Border Padding="14,9" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource DividerBrush}">
-                    <Grid ColumnDefinitions="96,*" ColumnSpacing="10">
-                        <TextBlock Classes="sectiontitle" Text="LOCATION"/>
-                        <TextBlock Grid.Column="1" Classes="sectionsummary" Text="{Binding LocationSummaryText}"/>
+                <ToggleButton Classes="section" IsChecked="{Binding IsLocationExpanded, Mode=TwoWay}">
+                    <Grid ColumnDefinitions="Auto,96,*" ColumnSpacing="10">
+                        <TextBlock Classes="caret" Text="&#x25B6;"/>
+                        <TextBlock Grid.Column="1" Classes="sectiontitle" Text="LOCATION"/>
+                        <TextBlock Grid.Column="2" Classes="sectionsummary" Text="{Binding LocationSummaryText}"/>
                     </Grid>
-                </Border>
-                <Border Classes="sectionbody">
+                </ToggleButton>
+                <Border Classes="sectionbody" IsVisible="{Binding IsLocationExpanded}">
                     <StackPanel>
                         <TextBlock Classes="hint" TextWrapping="Wrap" Margin="0,8,0,0" Text="{Binding LocationHintText}"
                                    IsVisible="{Binding LocationHintText, Converter={x:Static ObjectConverters.IsNotNull}}"/>
