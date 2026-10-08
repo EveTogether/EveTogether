@@ -76,7 +76,7 @@ public sealed partial class LootDetailSectionViewModel : RunDetailSection
                 input.NameOf(run.CharacterId));
             block.Loot.IsLocked = true;
             block.Loot.IsReadOnly = _services.OwnCharacterIds is { } own && !own.Contains(run.CharacterId);
-            block.Loot.SetRooms([], run.StartedAtUtc, run.StoppedAtUtc,
+            block.Loot.SetRooms(RunRooms.Boundaries(input.Detail.Parameters, run.RunId), run.StartedAtUtc, run.StoppedAtUtc,
                 isNewestFirst: false);
             await block.Loot.LoadWhenIdleAsync(run.LootCaptures, cancellationToken);
         }
