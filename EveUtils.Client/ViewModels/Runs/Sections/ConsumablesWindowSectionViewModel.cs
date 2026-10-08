@@ -74,7 +74,7 @@ public sealed partial class ConsumablesWindowSectionViewModel(IRunWindowContext 
         string firedText = fired switch { 0 => "", 1 => " · 1 charge fired", _ => $" · {fired} charges fired" };
         // The cost the window hands LOOT, filament and fired charges together (ET-471), so this header, LOOT's
         // CONSUMED and TOTAL ISK are one figure; the rows' own price only until the window has handed one in.
-        decimal? cost = Context.LootOverview?.FilamentIsk ?? _TotalCost();
+        decimal? cost = Context.LootOverview?.ConsumablesIsk ?? _TotalCost();
         HeaderSummary = totalCount == 0 && fired == 0
             ? filament
             : cost is { } isk

@@ -277,21 +277,25 @@ public sealed class ConsumablesTests
         await model.StartRunCommand.ExecuteAsync(null);
         if (withHolds)
         {
-            model.RunLoot!.CargoBeforeText = "Agitated Dark Filament\t1\nNova Fury Light Missile\t200";
-            await model.RunLoot.LastCargoWrite;
-            model.RunLoot.CargoAfterText = "Nova Fury Light Missile\t47\nTritanium\t10";
-            await model.RunLoot.LastCargoWrite;
+            Assert.True(model.RunLoot is not null, "an abyssal window has a LOOT section");
+            RunLootViewModel runLoot = model.RunLoot;
+            runLoot.CargoBeforeText = "Agitated Dark Filament\t1\nNova Fury Light Missile\t200";
+            await runLoot.LastCargoWrite;
+            runLoot.CargoAfterText = "Nova Fury Light Missile\t47\nTritanium\t10";
+            await runLoot.LastCargoWrite;
         }
 
         await ActivityWindowHarness.WaitUntil(() =>
         {
             model.Refresh(DateTime.UtcNow);
-            return model.LootOverview?.FilamentIsk is not null && (!withHolds || model.Consumables().SpentChargeLines.Count > 0);
+            return model.LootOverview?.ConsumablesIsk is not null && (!withHolds || model.Consumables().SpentChargeLines.Count > 0);
         });
         model.Refresh(DateTime.UtcNow);
 
-        Assert.Equal(consumed, model.LootOverview!.ConsumedIskDisplay);
-        Assert.Equal(model.GroupTotalIskText, model.LootOverview.NetIskDisplay);
+        Assert.True(model.LootOverview is not null, "an abyssal window has a LOOT section");
+        ActivityLootViewModel overview = model.LootOverview;
+        Assert.Equal(consumed, overview.ConsumedIskDisplay);
+        Assert.Equal(model.GroupTotalIskText, overview.NetIskDisplay);
         Assert.Equal(header, model.Consumables().HeaderSummary);
     }
 
