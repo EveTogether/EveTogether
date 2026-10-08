@@ -84,7 +84,9 @@ public sealed partial class ConsumablesCharacterViewModel : ObservableObject
 
         SpentCharges.Clear();
         foreach (SpentChargeLineViewModel charge in spentCharges)
+        {
             SpentCharges.Add(charge);
+        }
 
         decimal[] priced = [.. lines.Concat(spentCharges.Select(charge => charge.Line)).Select(line => line.Value).OfType<decimal>()];
         SubtotalText = lines.Count == 0 && spentCharges.Count == 0

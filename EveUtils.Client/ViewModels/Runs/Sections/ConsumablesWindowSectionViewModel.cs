@@ -58,7 +58,9 @@ public sealed partial class ConsumablesWindowSectionViewModel(IRunWindowContext 
             : Context.RunLoot?.SpentChargeLines ?? [];
         // Swapped only when it changed: this runs every tick, and a new list would redraw the rows each time.
         if (!charges.SequenceEqual(SpentChargeLines))
+        {
             SpentChargeLines = charges;
+        }
 
         foreach (ConsumableRowViewModel row in Rows)
             row.Reprice(UnitPrice);

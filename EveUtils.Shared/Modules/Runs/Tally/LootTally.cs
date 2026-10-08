@@ -44,7 +44,9 @@ public static class LootTally
     {
         IReadOnlyList<LootTallyLine> counted = Count(captures);
         if (Ends(captures).Before < 0)
+        {
             return new LootTallyCount(counted, []);
+        }
 
         return new LootTallyCount(
             [.. counted.Where(line => !_IsSpentCharge(line, isCharge))],

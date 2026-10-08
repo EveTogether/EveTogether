@@ -703,8 +703,12 @@ public sealed partial class RunLootViewModel : ViewModelBase
         if (counted.Length > 1 && counted[0] is { Value: > 0 } top)
             top.IsTopValue = true;
         if (_images is not null)
+        {
             foreach (ActivityLootLineViewModel line in ItemRows.Concat(SpentChargeLines))
+            {
                 _ = line.LoadIconAsync(_images);
+            }
+        }
 
         foreach (RunLootCaptureRowViewModel capture in Captures)
         {

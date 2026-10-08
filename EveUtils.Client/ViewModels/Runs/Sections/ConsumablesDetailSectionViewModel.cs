@@ -63,7 +63,9 @@ public sealed partial class ConsumablesDetailSectionViewModel(RunDetailSectionSe
         if (others > 0)
             summary.Add(others == 1 ? "1 other item" : $"{others} other items");
         if (charges > 0)
+        {
             summary.Add(charges == 1 ? "1 charge fired" : $"{charges} charges fired");
+        }
         EmptyText = Characters.Count == 0 ? "No filament count or other consumable was confirmed for this activity." : null;
         HeaderSummary = HasConsumables ? string.Join(" · ", summary) : "nothing confirmed";
     }
@@ -81,7 +83,9 @@ public sealed partial class ConsumablesDetailSectionViewModel(RunDetailSectionSe
             return;
 
         foreach (ActivityLootLineViewModel line in Characters.SelectMany(_AllLines).Where(line => line.ItemTypeId > 0))
+        {
             await line.LoadIconAsync(images);
+        }
     }
 
     public override string AbsentReason(string noun) => $"no CONSUMABLES — {noun} used no tracked consumable";
@@ -97,7 +101,9 @@ public sealed partial class ConsumablesDetailSectionViewModel(RunDetailSectionSe
         {
             bool isReadOnly = services.OwnCharacterIds is { } own && !own.Contains(run.CharacterId);
             if (lines.Length == 0 && charges.Length == 0 && isReadOnly)
+            {
                 continue;
+            }
 
             ConsumablesCharacterViewModel block = Characters.FirstOrDefault(character => character.RunId == run.RunId)
                                                   ?? _NewBlock(run, input.NameOf(run.CharacterId), isReadOnly);
