@@ -21,7 +21,7 @@ internal static class RunIskFactsReader
         RunParameter[] all = [.. parameters];
         RunPrices runPrices = RunPrices.Of(run, all, prices);
         LootTallyCount counted = LootTally.Count(Tally(run), isCharge);
-        IReadOnlyList<LootTallyLine> loot = counted.Loot;
+        IReadOnlyList<LootTallyLine> loot = LootTally.Count(Tally(run));
         decimal? gained = KnownLootValue(loot, LootKind.Gained, runPrices.Loot);
         decimal? lost = KnownLootValue(loot, LootKind.Lost, runPrices.Loot);
         int? filamentCount = _ParsedInt(all, RunParameterKey.AbyssalFilamentCount);
