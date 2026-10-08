@@ -3699,6 +3699,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
                         : participant.BountyIsk;
                     RunLootViewModel? loot = LootOverview?.Characters
                         .FirstOrDefault(character => character.RunId == participant.RunId)?.Loot;
+                    _HandFilamentTo(loot, consumables, participant.RunId);
                     (decimal? cost, bool has) = _ConsumableFacts(consumables, participant.RunId, loot);
                     (decimal? miningValue, bool hasMining) = mining?.FactsFor(participant.RunId) ?? (null, false);
                     (bool? isInSite, int? attendanceCount, HomefrontOutcome? outcome, int? waves) =
@@ -3744,6 +3745,11 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     private (long CharacterId, RunIskFacts Facts) _SoloRunIskFacts(ConsumablesWindowSectionViewModel? consumables,
         MiningWindowSectionViewModel? mining, IReadOnlyList<RunIskParameter> parameters, HomefrontWindowSectionViewModel? homefront)
     {
+        if (RunId is { } ownRunId)
+        {
+            _HandFilamentTo(RunLoot, consumables, ownRunId);
+        }
+
         (decimal? cost, bool has) = RunId is { } runId ? _ConsumableFacts(consumables, runId, RunLoot) : (null, false);
         (decimal? miningValue, bool hasMining) = RunId is { } id ? mining?.FactsFor(id) ?? (null, false) : (null, false);
         RunParticipantViewModel? own = RunId is { } ownId ? Participants.FirstOrDefault(p => p.RunId == ownId) : null;
@@ -3800,6 +3806,19 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
     /// <summary>What CONSUMABLES has for one run — its own confirmed count, priced against the section's shared
     /// filament unit price (ET-249). No section built yet (a non-abyssal run) reads the same as no count confirmed.</summary>
+    /// <summary>The filament this run's CONSUMABLES row counts, handed to its LOOT block before its figure is read, so a
+    /// filament gone from the starting hold counts once (ET-483).</summary>
+    private static void _HandFilamentTo(RunLootViewModel? loot, ConsumablesWindowSectionViewModel? consumables, Guid runId)
+    {
+        if (loot is null)
+        {
+            return;
+        }
+
+        int? count = consumables?.Rows.FirstOrDefault(r => r.RunId == runId)?.Count;
+        loot.SpentFilament = count is > 0 && consumables?.FilamentTypeId is { } typeId ? (typeId, count.Value) : null;
+    }
+
     /// <summary>The filament, plus the charges LOOT's two holds show were fired (ET-471): the loot block keeps them
     /// out of its own figure, so they are counted here and TOTAL ISK stays the same.</summary>
     private static (decimal? Cost, bool Has) _ConsumableFacts(ConsumablesWindowSectionViewModel? consumables, Guid runId,

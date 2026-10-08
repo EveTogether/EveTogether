@@ -20,7 +20,7 @@ internal static class RunIskFactsReader
         IReadOnlyList<LootTallyLine> lostInLosses = LossLines(losses);
         RunParameter[] all = [.. parameters];
         RunPrices runPrices = RunPrices.Of(run, all, prices);
-        LootTallyCount counted = LootTally.Count(Tally(run), isCharge);
+        LootTallyCount counted = LootTally.Count(Tally(run), isCharge, SpentFilament(all));
         IReadOnlyList<LootTallyLine> loot = counted.Loot;
         decimal? gained = KnownLootValue(loot, LootKind.Gained, runPrices.Loot);
         decimal? lost = KnownLootValue(loot, LootKind.Lost, runPrices.Loot);
@@ -131,6 +131,12 @@ internal static class RunIskFactsReader
     /// runs at once can collect it into the same type-id set loot pricing already builds.</summary>
     public static int? FilamentTypeId(IEnumerable<RunParameter> parameters) =>
         _ParsedInt(parameters, RunParameterKey.AbyssalFilamentTypeId);
+
+    /// <summary>The filament CONSUMABLES counts for a run, for <see cref="LootTally"/> to take out of LOOT (ET-483).</summary>
+    public static (int TypeId, int Count)? SpentFilament(IEnumerable<RunParameter> parameters) =>
+        _ParsedInt(parameters, RunParameterKey.AbyssalFilamentCount) is > 0 and var count && FilamentTypeId(parameters) is { } typeId
+            ? (typeId, count)
+            : null;
 
     private static int? _ParsedInt(IEnumerable<RunParameter> parameters, RunParameterKey key) =>
         parameters.FirstOrDefault(parameter => parameter.ParameterKey == key)?.TypedValue is { } value

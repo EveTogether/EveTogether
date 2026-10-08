@@ -29,6 +29,9 @@ public sealed partial class ConsumablesWindowSectionViewModel(IRunWindowContext 
     : RunWindowSection(context, RunSectionId.Consumables, "CONSUMABLES")
 {
     private int? _filamentTypeId;
+
+    /// <summary>The filament type this section prices against, once the pocket's tier and weather resolve one.</summary>
+    public int? FilamentTypeId => _filamentTypeId;
     private int? _pricedForTypeId;
 
     public ObservableCollection<ConsumableRowViewModel> Rows { get; } = [];

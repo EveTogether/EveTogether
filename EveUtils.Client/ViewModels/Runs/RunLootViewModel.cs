@@ -111,6 +111,25 @@ public sealed partial class RunLootViewModel : ViewModelBase
 
     public IReadOnlyList<ActivityLootLineViewModel> SpentChargeLines { get; private set; } = [];
 
+    /// <summary>The filament CONSUMABLES counts for this run, handed in by the owner (ET-483): gone from the starting
+    /// hold it is that spend, so LOOT leaves it out rather than counting it a second time as lost.</summary>
+    public (int TypeId, int Count)? SpentFilament
+    {
+        get => _spentFilament;
+        set
+        {
+            if (_spentFilament == value)
+            {
+                return;
+            }
+
+            _spentFilament = value;
+            _Recompute();
+        }
+    }
+
+    private (int TypeId, int Count)? _spentFilament;
+
     /// <summary>Set when the running-run lookup itself failed (none running, or more than one) — a state, not an
     /// empty list left to speak for itself (ET-65 AC-7).</summary>
     [ObservableProperty] private string? _runStatusMessage;
@@ -664,7 +683,7 @@ public sealed partial class RunLootViewModel : ViewModelBase
     /// on screen are the rows those figures are made of.</summary>
     private void _Recompute()
     {
-        LootTallyCount split = LootTally.Count(_TallyCaptures(), ChargeTypes.Of(_sde));
+        LootTallyCount split = LootTally.Count(_TallyCaptures(), ChargeTypes.Of(_sde), SpentFilament);
         _counted = split.Loot;
         SpentChargesIsk = _Sum(split.SpentCharges);
         SpentChargeLines = [.. split.SpentCharges.Select(line =>

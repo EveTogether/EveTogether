@@ -32,7 +32,8 @@ internal static class ActivitySummaryBuilder
         // Valued run by run: each run's lines carry their own fixed prices (ET-463), and two runs of one activity may
         // have fixed the same type at different moments.
         (RunPrices Prices, IReadOnlyList<LootTallyLine> Loot)[] valued = [.. runs.Select(run =>
-            (RunPrices.Of(run, parametersByRun[run.Id], prices), LootTally.Count(RunIskFactsReader.Tally(run), isCharge).Loot))];
+            (RunPrices.Of(run, parametersByRun[run.Id], prices), LootTally.Count(RunIskFactsReader.Tally(run), isCharge,
+                RunIskFactsReader.SpentFilament(parametersByRun[run.Id])).Loot))];
         List<LootTallyLine> loot = [.. valued.SelectMany(run => run.Loot)];
         decimal? gained = _KnownSum(valued.Select(run => RunIskFactsReader.KnownLootValue(run.Loot, LootKind.Gained, run.Prices.Loot)));
         decimal? lost = _KnownSum(valued.Select(run => RunIskFactsReader.KnownLootValue(run.Loot, LootKind.Lost, run.Prices.Loot)));
