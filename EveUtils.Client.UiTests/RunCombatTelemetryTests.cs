@@ -23,8 +23,13 @@ namespace EveUtils.Client.UiTests;
 /// </summary>
 public sealed class RunCombatTelemetryTests
 {
-    private static readonly DateTime RunStart = new(2026, 9, 18, 18, 29, 3);
-    private static readonly DateTime RunStop = new(2026, 9, 18, 18, 39, 39);
+    internal static readonly DateTime RunStart = new(2026, 9, 18, 18, 29, 3);
+    internal static readonly DateTime RunStop = new(2026, 9, 18, 18, 39, 39);
+
+    /// <summary>
+    /// Every combat line of that run, parsed; shared with the detail screen's rendered test (ET-468).
+    /// </summary>
+    internal static GameLogEvent[] RealRunEvents() => [.. File.ReadLines(_Fixture("abyssal-t3-run.txt")).Select(_Parse)];
 
     private const string HitOut = "<color=0xff00ffff><b>998</b> <color=0x77ffffff><font size=10>to</font> <b><color=0xffffffff>Ephialtes Dissipator</b><font size=10><color=0x77ffffff> - Nova Fury Light Missile - Hits";
 
@@ -56,9 +61,7 @@ public sealed class RunCombatTelemetryTests
     [Fact]
     public void Build_OverARealAbyssalRun_MatchesTheGameLog()
     {
-        GameLogEvent[] events = [.. File.ReadLines(_Fixture("abyssal-t3-run.txt")).Select(_Parse)];
-
-        RunCombatTimeline timeline = RunCombatTelemetry.Build(Guid.NewGuid(), events, RunStart, RunStop);
+        RunCombatTimeline timeline = RunCombatTelemetry.Build(Guid.NewGuid(), RealRunEvents(), RunStart, RunStop);
 
         Assert.Equal("DmgOut:65732,DmgIn:1999,NeutIn:115", _Totals(timeline));
         Assert.Equal((998, "Ephialtes Dissipator", 74, "Ephialtes Dissipator", 109),
