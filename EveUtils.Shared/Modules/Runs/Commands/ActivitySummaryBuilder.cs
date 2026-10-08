@@ -22,7 +22,7 @@ internal static class ActivitySummaryBuilder
 
     public static ActivitySummary Build(string activityKey, IReadOnlyList<Run> runs,
         ILookup<Guid, RunParameter> parametersByRun, IReadOnlyDictionary<int, double> prices, MiningOreTypes ores,
-        ILookup<Guid, LocalKillmail> lossesByRun)
+        ILookup<Guid, LocalKillmail> lossesByRun, Func<int, bool> isCharge)
     {
         Run source = runs.OrderBy(run => run.StartedAtUtc).ThenBy(run => run.Id).First();
         DateTime startedAtUtc = runs.Min(run => run.StartedAtUtc);
@@ -32,7 +32,7 @@ internal static class ActivitySummaryBuilder
         // Valued run by run: each run's lines carry their own fixed prices (ET-463), and two runs of one activity may
         // have fixed the same type at different moments.
         (RunPrices Prices, IReadOnlyList<LootTallyLine> Loot)[] valued = [.. runs.Select(run =>
-            (RunPrices.Of(run, parametersByRun[run.Id], prices), LootTally.Count(RunIskFactsReader.Tally(run))))];
+            (RunPrices.Of(run, parametersByRun[run.Id], prices), LootTally.Count(RunIskFactsReader.Tally(run), isCharge).Loot))];
         List<LootTallyLine> loot = [.. valued.SelectMany(run => run.Loot)];
         decimal? gained = _KnownSum(valued.Select(run => RunIskFactsReader.KnownLootValue(run.Loot, LootKind.Gained, run.Prices.Loot)));
         decimal? lost = _KnownSum(valued.Select(run => RunIskFactsReader.KnownLootValue(run.Loot, LootKind.Lost, run.Prices.Loot)));
@@ -43,7 +43,7 @@ internal static class ActivitySummaryBuilder
         DateTime nowUtc = DateTime.UtcNow;
         RunIskFacts[] facts = [.. runs
             .OrderBy(run => run.StartedAtUtc).ThenBy(run => run.Id)
-            .Select(run => RunIskFactsReader.From(run, parametersByRun[run.Id], prices, ores, lossesByRun[run.Id]))];
+            .Select(run => RunIskFactsReader.From(run, parametersByRun[run.Id], prices, ores, lossesByRun[run.Id], isCharge))];
         IskBreakdown isk = IskContributors.Breakdown(facts, nowUtc);
         // The same facts once more, split by character rather than summed — no extra query, and per source it adds
         // up to the activity's own breakdown (ET-296).

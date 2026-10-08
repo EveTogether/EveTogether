@@ -37,6 +37,23 @@ public static class LootTally
         return after < 0 ? [] : _Difference(captures[before], captures[after]);
     }
 
+    /// <summary><see cref="Count(IReadOnlyList{LootTallyCapture})"/>, with the charges that went down between the two
+    /// holds set apart as spent (ET-471). Only a before/after difference shows what was fired; without a starting hold
+    /// nothing is set apart. A move only: the two lists hold exactly the lines the plain count holds.</summary>
+    public static LootTallyCount Count(IReadOnlyList<LootTallyCapture> captures, Func<int, bool> isCharge)
+    {
+        IReadOnlyList<LootTallyLine> counted = Count(captures);
+        if (Ends(captures).Before < 0)
+            return new LootTallyCount(counted, []);
+
+        return new LootTallyCount(
+            [.. counted.Where(line => !_IsSpentCharge(line, isCharge))],
+            [.. counted.Where(line => _IsSpentCharge(line, isCharge))]);
+    }
+
+    private static bool _IsSpentCharge(LootTallyLine line, Func<int, bool> isCharge) =>
+        line.LootKind is LootKind.Lost && isCharge(line.ItemTypeId);
+
     /// <summary>Two captures carrying the same role is a state the picker cannot produce but the model allows — a
     /// synced run, or a second way in built later — and the latest one wins, which is the answer a capture arriving
     /// late gets everywhere else here. Never the reading order's accident.</summary>

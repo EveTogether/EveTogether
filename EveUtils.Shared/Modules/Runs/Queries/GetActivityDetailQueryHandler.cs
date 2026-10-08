@@ -8,6 +8,7 @@ using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Entities;
 using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Runs.Isk;
+using EveUtils.Shared.Modules.Runs.Tally;
 using EveUtils.Shared.Modules.Sde;
 using Microsoft.EntityFrameworkCore;
 
@@ -101,7 +102,7 @@ internal sealed class GetActivityDetailQueryHandler(
             StoredIskBreakdown.ReadByCharacter(summary.IskContributionsByCharacter)
             ?? IskContributors.BreakdownByCharacter([.. runs
                 .OrderBy(run => run.StartedAtUtc).ThenBy(run => run.Id)
-                .Select(run => RunIskFactsReader.From(run, parametersByRun[run.Id], prices, ores, lossesByRun[run.Id]))], nowUtc);
+                .Select(run => RunIskFactsReader.From(run, parametersByRun[run.Id], prices, ores, lossesByRun[run.Id], ChargeTypes.Of(sde)))], nowUtc);
 
         return Result<ActivityDetailDto>.Success(ActivityDetails.ToDto(summary, runs, bountyEntries, enemyObservations,
             parameters, miningEntries, attendance, fleetId, iskByCharacter));

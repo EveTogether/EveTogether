@@ -8,6 +8,7 @@ using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Entities;
 using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Runs.Isk;
+using EveUtils.Shared.Modules.Runs.Tally;
 using EveUtils.Shared.Modules.Sde;
 using Microsoft.EntityFrameworkCore;
 
@@ -67,7 +68,7 @@ internal sealed class GetUnfinishedRunsQueryHandler(
 
         List<UnfinishedRunDto> dtos = [.. runs.Select(run =>
         {
-            (decimal total, bool unknown) = _TotalIsk(run, prices, ores, lossesByRun[run.Id]);
+            (decimal total, bool unknown) = _TotalIsk(run, prices, ores, lossesByRun[run.Id], ChargeTypes.Of(sde));
             return new UnfinishedRunDto(
                 run.Id, run.CharacterId, run.ActivityKind, run.SiteName, run.SignatureGroupSnapshot, run.SiteTypeId,
                 run.StartedAtUtc, run.StoppedAtUtc, total, unknown);
@@ -82,9 +83,9 @@ internal sealed class GetUnfinishedRunsQueryHandler(
     // Unknown only when loot is the sole reason nothing can be said: bounty and rewards are read straight off storage,
     // never priced, so either one being there already makes the total a real (if possibly loot-incomplete) figure.
     private static (decimal Total, bool Unknown) _TotalIsk(Run run, IReadOnlyDictionary<int, double> prices, MiningOreTypes ores,
-        IEnumerable<LocalKillmail> losses)
+        IEnumerable<LocalKillmail> losses, Func<int, bool> isCharge)
     {
-        IskBreakdown isk = IskContributors.Breakdown([RunIskFactsReader.From(run, run.Parameters, prices, ores, losses)], DateTime.UtcNow);
+        IskBreakdown isk = IskContributors.Breakdown([RunIskFactsReader.From(run, run.Parameters, prices, ores, losses, isCharge)], DateTime.UtcNow);
         return (isk.Total, isk.IsUnvalued);
     }
 }
