@@ -51,9 +51,9 @@ public sealed class AbyssalRoomDetectionTests
     /// Counter-proof: keep the detector running after NEW ROOM and the first row gains a RoomDetected@300; skip the
     /// detector's undo and the second row opens a room at 70.</summary>
     [Theory]
-    [InlineData(true, "A@0 B@30 new@100 C@300", "RoomStarted@30 RoomStarted@100", "30 100")]
+    [InlineData(true, "A@0 B@30 new@100 C@300", "RoomStarted()@30 RoomStarted()@100", "30 100")]
     [InlineData(true, "A@0 B@30 undo@35 B@40 A@70", "", "999")]
-    [InlineData(true, "A@0 B@30", "RoomDetected@30", "30 999")]
+    [InlineData(true, "A@0 B@30", "RoomDetected(probable)@30", "30 999")]
     [InlineData(true, "X@0 X@60", "", "999")]
     [InlineData(false, "A@0 B@30 C@60", "", "999")]
     public void Collector_HandWinsUndoHoldsAndOnlyAPocketDetects(bool isAbyssalPocket, string steps,
@@ -69,7 +69,7 @@ public sealed class AbyssalRoomDetectionTests
             .. saved.Select(row => new RunParameterDto(runId, row.ParameterKey, row.TypedValue, null, null, null, row.ObservedAtUtc)),
             new(runId, Shared.Modules.Runs.Enums.RunParameterKey.RoomDetected, string.Empty, null, null, null, T0.AddSeconds(999))
         ];
-        Assert.Equal(expectedSaved, string.Join(" ", saved.Select(row => $"{row.ParameterKey}@{(row.ObservedAtUtc - T0).TotalSeconds}")));
+        Assert.Equal(expectedSaved, string.Join(" ", saved.Select(row => $"{row.ParameterKey}({row.TypedValue})@{(row.ObservedAtUtc - T0).TotalSeconds}")));
         Assert.Equal(expectedRead, string.Join(" ", RunRooms.Boundaries(stored, runId).Select(at => (at - T0).TotalSeconds)));
     }
 
@@ -124,7 +124,7 @@ public sealed class AbyssalRoomDetectionTests
         var draft = new RunSaveDraft(model.RunId ?? Guid.Empty, ActivityWindowHarness.CharacterId, isActingRun: true);
         model.Enemies().AddToSave(draft);
 
-        Assert.Equal(["RoomDetected@12:00:35"], draft.Parameters.Select(row => $"{row.ParameterKey}@{row.ObservedAtUtc:HH:mm:ss}"));
+        Assert.Equal(["RoomDetected(sure)@12:00:35"], draft.Parameters.Select(row => $"{row.ParameterKey}({row.TypedValue})@{row.ObservedAtUtc:HH:mm:ss}"));
         Assert.EndsWith("· auto · sure", model.Enemies().EnemyRooms[0].WindowText);
     }
 

@@ -5,6 +5,7 @@ using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
 using EveUtils.Shared.Modules.Runs;
 using EveUtils.Shared.Modules.Runs.Dtos;
+using EveUtils.Shared.Modules.Runs.Enums;
 
 namespace EveUtils.Client.ViewModels.Runs.Sections;
 
@@ -100,10 +101,26 @@ public sealed partial class EnemiesDetailSectionViewModel() : RunDetailSection(R
             }
 
             EnemyRooms.Add(new ActivityEnemyRoomViewModel(room.Key == int.MaxValue ? "NO ROOMS MARKED" : $"ROOM {room.Key}",
-                room.Key == int.MaxValue ? string.Empty : windowText, room.Sum(observation => observation.Count), rows));
+                room.Key == int.MaxValue ? string.Empty : windowText + _SourceText(detail, room.Key),
+                room.Sum(observation => observation.Count), rows));
         }
 
         HasRooms = true;
+    }
+
+    /// <summary>A room the detector opened on a run with no boundary of the pilot's says so, and how sure (ET-368).</summary>
+    private static string _SourceText(ActivityDetailDto detail, int room)
+    {
+        string? certainty = detail.Runs
+            .Select(run => detail.Parameters
+                .Where(parameter => parameter.RunId == run.RunId
+                                    && parameter.ParameterKey is RunParameterKey.RoomStarted or RunParameterKey.RoomDetected)
+                .OrderBy(parameter => parameter.ObservedAtUtc)
+                .ToList())
+            .Where(rows => room > 1 && rows.Count >= room - 1 && rows.All(row => row.ParameterKey == RunParameterKey.RoomDetected))
+            .Select(rows => rows[room - 2].TypedValue)
+            .FirstOrDefault(value => !string.IsNullOrEmpty(value));
+        return certainty is null ? string.Empty : $" · auto · {certainty}";
     }
 
     private static string _WindowText(DateTime start, DateTime? end)

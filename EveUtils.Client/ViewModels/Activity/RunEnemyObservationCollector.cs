@@ -168,13 +168,13 @@ public sealed class RunEnemyObservationCollector(int characterId, Func<string, i
     }
 
     /// <summary>The boundaries as SAVE stores them: the pilot's as <see cref="RunParameterKey.RoomStarted"/>, the
-    /// detector's as <see cref="RunParameterKey.RoomDetected"/> (ET-368).</summary>
+    /// detector's as <see cref="RunParameterKey.RoomDetected"/> with its certainty as the typed value (ET-368).</summary>
     public IReadOnlyList<RunParameterInput> ToRoomParameters() =>
     [
         .. _roomBoundaries.Select((boundary, index) => new RunParameterInput
         {
             ParameterKey = _detectedCertainties[index] is null ? RunParameterKey.RoomStarted : RunParameterKey.RoomDetected,
-            TypedValue = string.Empty,
+            TypedValue = _detectedCertainties[index]?.ToString().ToLowerInvariant() ?? string.Empty,
             ObservedAtUtc = boundary
         })
     ];
