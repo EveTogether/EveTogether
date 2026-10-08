@@ -4,6 +4,7 @@ using System.Linq;
 using EveUtils.Client.Gamelog;
 using EveUtils.Client.ViewModels.Activity;
 using CommunityToolkit.Mvvm.Input;
+using EveUtils.Shared.Modules.Gamelog.Aggregation;
 using EveUtils.Shared.Modules.Gamelog.Models;
 using EveUtils.Shared.Modules.Runs;
 using EveUtils.Shared.Modules.Runs.Dtos;
@@ -58,7 +59,8 @@ public sealed partial class EnemiesWindowSectionViewModel : RunWindowSection
 
         DateTime since = boundaries[^1];
         TimeSpan inRoom = TimeSpan.FromTicks(Math.Max(0, ((Context.EffectiveStopUtc ?? nowUtc) - since).Ticks));
-        return $"ROOM {boundaries.Count + 1}  since {since.ToLocalTime():HH:mm:ss} · {(int)inRoom.TotalMinutes:00}:{inRoom.Seconds:00}";
+        return $"ROOM {boundaries.Count + 1}  since {since.ToLocalTime():HH:mm:ss} · {(int)inRoom.TotalMinutes:00}:{inRoom.Seconds:00}"
+               + _SourceText(_OnScreenCollector()?.DetectedCertainties[^1]);
     }
 
     /// <summary>NEW ROOM (ET-240): close the current room now and begin the next. The STOP rule decides whose: in a run
@@ -156,10 +158,7 @@ public sealed partial class EnemiesWindowSectionViewModel : RunWindowSection
         }
 
         draft.Enemies.AddRange(collector.ToInputs());
-        draft.Parameters.AddRange(collector.RoomBoundaries.Select(boundary => new RunParameterInput
-        {
-            ParameterKey = RunParameterKey.RoomStarted, TypedValue = string.Empty, ObservedAtUtc = boundary
-        }));
+        draft.Parameters.AddRange(collector.ToRoomParameters());
     }
 
     public override void Dispose()
@@ -174,8 +173,12 @@ public sealed partial class EnemiesWindowSectionViewModel : RunWindowSection
         if (_collectors.ContainsKey(characterId) || Context.Services.GetService<ISdeAccessor>() is not { } sde)
             return;
 
+        // Rooms find themselves only in an abyssal pocket (ET-368): elsewhere waves and reinforcements look like rooms.
         var collector = new RunEnemyObservationCollector(characterId,
-            name => sde.TryGetTypeId(name, out int typeId) ? typeId : null);
+            name => sde.TryGetTypeId(name, out int typeId) ? typeId : null,
+            Context.RunType.Space is RunSpace.AbyssalPocket
+                ? typeId => sde.GetType(typeId) is { } type && AbyssalRoomDetector.IsAbyssalEnemyGroup(type.GroupId)
+                : null);
         // Only the summary: re-announcing the list itself while a count is being typed would rebind the editor
         // under the cursor. The rows are an ObservableCollection — the list keeps itself up to date. Wired for
         // every character, not just the one on screen, so a background sibling's count still moves the summary.
@@ -199,7 +202,8 @@ public sealed partial class EnemiesWindowSectionViewModel : RunWindowSection
         EnemyRooms =
         [
             .. Enumerable.Range(1, roomCount).Reverse().Select(room => new RunEnemyRoomViewModel(room,
-                _RoomWindowText(boundaries, room), isUndoShown: room == roomCount,
+                _RoomWindowText(boundaries, room) + _SourceText(room > 1 ? _OnScreenCollector()?.DetectedCertainties[room - 2] : null),
+                isUndoShown: room == roomCount,
                 [.. EnemyObservations.Where(observation => observation.RoomNumber == room)]))
         ];
         OnPropertyChanged(nameof(EnemyRooms));
@@ -207,6 +211,10 @@ public sealed partial class EnemiesWindowSectionViewModel : RunWindowSection
         RefreshSummary();
         _ShowLootRooms();
     }
+
+    /// <summary>A room the detector opened says so, and how sure it was (ET-368, mockup (a)).</summary>
+    private static string _SourceText(RoomCertainty? certainty) =>
+        certainty is { } detected ? $" · auto · {detected.ToString().ToLowerInvariant()}" : string.Empty;
 
     private string _RoomWindowText(IReadOnlyList<DateTime> boundaries, int room)
     {

@@ -84,5 +84,9 @@ public enum RunParameterKey
 
     /// <summary>A room boundary the pilot set with NEW ROOM (ET-240): one row per boundary, at
     /// <see cref="Entities.RunParameter.ObservedAtUtc"/>. Room 1 has none, it starts with the run.</summary>
-    RoomStarted
+    RoomStarted,
+
+    /// <summary>A room boundary the abyssal room detector set (ET-368), stored the way <see cref="RoomStarted"/> is.
+    /// A run with any <see cref="RoomStarted"/> reads only those: the pilot's own boundaries win.</summary>
+    RoomDetected
 }
