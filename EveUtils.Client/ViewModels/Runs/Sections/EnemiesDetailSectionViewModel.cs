@@ -95,7 +95,10 @@ public sealed partial class EnemiesDetailSectionViewModel() : RunDetailSection(R
                 windows.Any(window => window.End is null) ? null : windows.Max(window => window.End));
             List<ActivityEnemyRowViewModel> rows = [];
             foreach (RunEnemyObservationDto observation in room)
+            {
                 rows.Add(new ActivityEnemyRowViewModel(observation) { IsAlternate = rows.Count % 2 == 1 });
+            }
+
             EnemyRooms.Add(new ActivityEnemyRoomViewModel(room.Key == int.MaxValue ? "NO ROOMS MARKED" : $"ROOM {room.Key}",
                 room.Key == int.MaxValue ? string.Empty : windowText, room.Sum(observation => observation.Count), rows));
         }
@@ -106,7 +109,9 @@ public sealed partial class EnemiesDetailSectionViewModel() : RunDetailSection(R
     private static string _WindowText(DateTime start, DateTime? end)
     {
         if (end is not { } ended)
+        {
             return $"{start.ToLocalTime():HH:mm:ss} – ?";
+        }
 
         TimeSpan length = ended - start;
         return $"{start.ToLocalTime():HH:mm:ss} – {ended.ToLocalTime():HH:mm:ss} · {(int)length.TotalMinutes}m {length.Seconds:00}s";

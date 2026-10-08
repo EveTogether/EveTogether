@@ -98,7 +98,9 @@ public sealed partial class RunLootViewModel : ViewModelBase
     {
         if (_roomBoundaries.SequenceEqual(boundaries) && _roomsStartedAtUtc == startedAtUtc
             && _roomsStoppedAtUtc == stoppedAtUtc && _isRoomNewestFirst == isNewestFirst)
+        {
             return;
+        }
 
         _roomBoundaries = [.. boundaries];
         _roomsStartedAtUtc = startedAtUtc;
@@ -762,7 +764,9 @@ public sealed partial class RunLootViewModel : ViewModelBase
                     .SelectMany(capture => capture.Entries)
                     .Select(entry => new LootTallyLine(entry.ItemTypeId, entry.Quantity, Volume: null, entry.LootKind))];
                 if (lines.Length == 0)
+                {
                     continue;
+                }
 
                 ActivityLootLineViewModel[] rows = [.. lines
                     .GroupBy(line => (line.ItemTypeId, line.LootKind))
@@ -771,10 +775,17 @@ public sealed partial class RunLootViewModel : ViewModelBase
                     .OrderByDescending(row => row.Value.HasValue)
                     .ThenByDescending(row => row.Value)];
                 for (int index = 0; index < rows.Length; index++)
+                {
                     rows[index].IsAlternate = index % 2 == 1;
+                }
+
                 if (_images is not null)
+                {
                     foreach (ActivityLootLineViewModel row in rows)
+                    {
                         _ = row.LoadIconAsync(_images);
+                    }
+                }
 
                 Rooms.Add(new LootRoomViewModel(number, _RoomWindowText(number), _Display(_Sum(lines)), rows)
                 {

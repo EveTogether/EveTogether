@@ -61,11 +61,17 @@ public sealed class RunEnemyObservationCollector(int characterId, Func<string, i
     public bool StartRoom(DateTime atUtc)
     {
         if (_roomBoundaries.Count > 0 && atUtc <= _roomBoundaries[^1])
+        {
             return false;
+        }
 
         if (_roomBoundaries.Count == 0)
+        {
             foreach (RunEnemyObservationViewModel observation in Observations)
+            {
                 observation.RoomNumber = 1;
+            }
+        }
 
         _roomBoundaries.Add(atUtc);
         Regrouped?.Invoke();
@@ -78,14 +84,20 @@ public sealed class RunEnemyObservationCollector(int characterId, Func<string, i
     public bool UndoRoom()
     {
         if (_roomBoundaries.Count == 0)
+        {
             return false;
+        }
 
         int last = _roomBoundaries.Count + 1;
         _roomBoundaries.RemoveAt(_roomBoundaries.Count - 1);
         int? into = _roomBoundaries.Count == 0 ? null : last - 1;
         if (into is null)
+        {
             foreach (RunEnemyObservationViewModel observation in Observations.Where(observation => observation.RoomNumber != last))
+            {
                 observation.RoomNumber = null;
+            }
+        }
 
         foreach (RunEnemyObservationViewModel undone in Observations.Where(observation => observation.RoomNumber == last).ToList())
         {
@@ -95,7 +107,9 @@ public sealed class RunEnemyObservationCollector(int characterId, Func<string, i
                 Observations.Remove(undone);
             }
             else
+            {
                 undone.RoomNumber = into;
+            }
         }
 
         Regrouped?.Invoke();

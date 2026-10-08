@@ -52,7 +52,9 @@ public sealed partial class EnemiesWindowSectionViewModel : RunWindowSection
     public string? CurrentRoomText(DateTime nowUtc)
     {
         if (_OnScreenCollector() is not { RoomBoundaries: { Count: > 0 } boundaries })
+        {
             return null;
+        }
 
         DateTime since = boundaries[^1];
         TimeSpan inRoom = TimeSpan.FromTicks(Math.Max(0, ((Context.EffectiveStopUtc ?? nowUtc) - since).Ticks));
@@ -64,10 +66,15 @@ public sealed partial class EnemiesWindowSectionViewModel : RunWindowSection
     public void StartRoom(DateTime nowUtc)
     {
         if (Context.RunState != ActivityRunState.Running)
+        {
             return;
+        }
 
         foreach (RunEnemyObservationCollector collector in _RoomScope())
+        {
             collector.StartRoom(nowUtc);
+        }
+
         _ShowRooms();
     }
 
@@ -76,7 +83,10 @@ public sealed partial class EnemiesWindowSectionViewModel : RunWindowSection
     private void UndoRoom()
     {
         foreach (RunEnemyObservationCollector collector in _RoomScope())
+        {
             collector.UndoRoom();
+        }
+
         _ShowRooms();
     }
 
@@ -141,7 +151,9 @@ public sealed partial class EnemiesWindowSectionViewModel : RunWindowSection
     public override void AddToSave(RunSaveDraft draft)
     {
         if (draft.CharacterId is not { } characterId || !_collectors.TryGetValue(characterId, out RunEnemyObservationCollector? collector))
+        {
             return;
+        }
 
         draft.Enemies.AddRange(collector.ToInputs());
         draft.Parameters.AddRange(collector.RoomBoundaries.Select(boundary => new RunParameterInput
@@ -207,11 +219,15 @@ public sealed partial class EnemiesWindowSectionViewModel : RunWindowSection
     private void _ShowLootRooms()
     {
         if (Context.LootOverview is not { } overview)
+        {
             return;
+        }
 
         foreach (ActivityLootCharacterViewModel block in overview.Characters)
+        {
             block.Loot.SetRooms(_collectors.GetValueOrDefault((int)block.CharacterId)?.RoomBoundaries ?? [],
                 Context.EffectiveStartUtc, Context.EffectiveStopUtc, isNewestFirst: true);
+        }
     }
 
     // The event fires for damage either way — "250 to Centii Scavenger" and "1 from Centii Servant" alike — and both
