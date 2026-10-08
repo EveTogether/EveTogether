@@ -176,7 +176,7 @@ public sealed partial class EnemiesWindowSectionViewModel : RunWindowSection
         // Rooms find themselves only in an abyssal pocket (ET-368): elsewhere waves and reinforcements look like rooms.
         var collector = new RunEnemyObservationCollector(characterId,
             name => sde.TryGetTypeId(name, out int typeId) ? typeId : null,
-            Context.RunType.Space is RunSpace.AbyssalPocket
+            false
                 ? typeId => sde.GetType(typeId) is { } type && AbyssalRoomDetector.IsAbyssalEnemyGroup(type.GroupId)
                 : null);
         // Only the summary: re-announcing the list itself while a count is being typed would rebind the editor
