@@ -483,7 +483,7 @@
                                             <DataTemplate x:DataType="vh:HomeEarningsDayViewModel">
                                                 <Button Classes="bar" Height="70" Command="{Binding OpenCommand}"
                                                         ToolTip.Tip="{Binding Tooltip}">
-                                                    <Panel>
+                                                    <Panel Height="70">
                                                         <Border Background="{StaticResource HatchBrush}" Height="70"
                                                                 IsVisible="{Binding !IsTracked}"/>
                                                         <Border Classes="barfill" Classes.loss="{Binding IsLoss}" VerticalAlignment="Bottom"

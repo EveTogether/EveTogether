@@ -114,7 +114,7 @@ public sealed partial class HomeEarningsViewModel : ObservableObject
             DateOnly day = first.AddDays(offset);
             bool isTracked = input.FirstTracked is { } start && day >= start;
             double barHeight = Math.Abs((double)values[offset]) * pixelsPerUnit;
-            Days[offset].Show(day, barHeight, values[offset] < 0 ? zeroLine - barHeight : zeroLine, values[offset] < 0, isTracked,
+            Days[offset].Show(day, barHeight, values[offset] < 0 ? Math.Max(0, zeroLine - barHeight) : zeroLine, values[offset] < 0, isTracked,
                 day == today ? EarningsBarAge.Today : day >= weekStart ? EarningsBarAge.ThisWeek : EarningsBarAge.Older,
                 day == first || day.DayOfWeek == input.FirstDay ? _DayLabel(day) : string.Empty,
                 isTracked ? RunsActivityStripViewModel.DayTooltip(day, [.. byDay[day]]) : $"{_DayLabel(day)} · not tracked yet");
