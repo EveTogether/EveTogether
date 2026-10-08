@@ -3719,6 +3719,13 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         // decided, the next tick showing the mirror not yet caught up with it.
         var homefront = _sections.GetValueOrDefault(RunSectionId.Homefront) as HomefrontWindowSectionViewModel;
         RunAttendanceDecision? homefrontDecision = homefront?.LiveDecision;
+        // Every LOOT block, a solo run's too (ET-483): its figure is read from RunLoot below, but the LOOT section
+        // draws its own block of that run, and that block must leave the filament out just the same.
+        if (LootOverview is { } overview)
+        {
+            foreach (ActivityLootCharacterViewModel block in overview.Characters)
+                _HandFilamentTo(block.Loot, consumables, block.RunId);
+        }
 
         List<(long CharacterId, RunIskFacts Facts)> runs = isGroup
             ? [.. Participants.OrderBy(participant => participant.RunId).Select(participant =>
@@ -3732,7 +3739,6 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
                     decimal bountyIsk = _ParticipantBountyIsk(participant);
                     RunLootViewModel? loot = LootOverview?.Characters
                         .FirstOrDefault(character => character.RunId == participant.RunId)?.Loot;
-                    _HandFilamentTo(loot, consumables, participant.RunId);
                     (decimal? cost, bool has) = _ConsumableFacts(consumables, participant.RunId, loot);
                     (decimal? miningValue, bool hasMining) = mining?.FactsFor(participant.RunId) ?? (null, false);
                     (bool? isInSite, int? attendanceCount, HomefrontOutcome? outcome, int? waves) =

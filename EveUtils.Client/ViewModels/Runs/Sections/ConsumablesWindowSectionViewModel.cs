@@ -69,12 +69,17 @@ public sealed partial class ConsumablesWindowSectionViewModel(IRunWindowContext 
             row.Reprice(UnitPrice);
 
         int totalCount = Rows.Sum(row => row.Count ?? 0);
-        string filament = FilamentName ?? "filament";
-        HeaderSummary = totalCount == 0
-            ? "no filament count set"
-            : _TotalCost() is { } cost
-                ? $"-{IskFormat.Whole(cost)} — {totalCount}x {filament}"
-                : $"{totalCount}x {filament} — no price yet";
+        long fired = charges.Sum(line => line.Quantity ?? 1);
+        string filament = totalCount == 0 ? "no filament count set" : $"{totalCount}x {FilamentName ?? "filament"}";
+        string firedText = fired switch { 0 => "", 1 => " · 1 charge fired", _ => $" · {fired} charges fired" };
+        // The cost the window hands LOOT, filament and fired charges together (ET-471), so this header, LOOT's
+        // CONSUMED and TOTAL ISK are one figure; the rows' own price only until the window has handed one in.
+        decimal? cost = Context.LootOverview?.FilamentIsk ?? _TotalCost();
+        HeaderSummary = totalCount == 0 && fired == 0
+            ? filament
+            : cost is { } isk
+                ? $"-{IskFormat.Whole(isk)} — {filament}{firedText}"
+                : $"{filament}{firedText} — no price yet";
     }
 
     /// <summary>What SAVE stores for one run of the group: this character's own confirmed count, and the shared
