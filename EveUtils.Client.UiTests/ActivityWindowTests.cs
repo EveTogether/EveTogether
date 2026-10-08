@@ -1162,9 +1162,10 @@ public class ActivityWindowTests
         Assert.NotEqual(Grid.GetColumn(cells[2]), Grid.GetColumn(cells[3]));         // save and discard, two
 
         var row = Assert.IsType<Grid>(cells[0].Parent);
-        var widths = new[] { 0, 2, 3 }.Select(column => row.ColumnDefinitions[column].Width).Distinct().ToList();
+        // STOP and NEW ROOM steer (ET-240), the gap after them is the group boundary, SAVE and DISCARD end the run.
+        var widths = new[] { 0, 1, 3, 4 }.Select(column => row.ColumnDefinitions[column].Width).Distinct().ToList();
         Assert.Single(widths);
-        Assert.True(row.ColumnDefinitions[1].Width.Value > 0, "the group boundary between steering and ending is gone");
+        Assert.True(row.ColumnDefinitions[2].Width.Value > 0, "the group boundary between steering and ending is gone");
     }
 
     // ── Helpers ─────────────────────────────────────────────────────────────────────────────────────

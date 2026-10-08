@@ -55,7 +55,7 @@ public sealed partial class EnemiesWindowSectionViewModel : RunWindowSection
             return null;
 
         DateTime since = boundaries[^1];
-        TimeSpan inRoom = (Context.EffectiveStopUtc ?? nowUtc) - since;
+        TimeSpan inRoom = TimeSpan.FromTicks(Math.Max(0, ((Context.EffectiveStopUtc ?? nowUtc) - since).Ticks));
         return $"ROOM {boundaries.Count + 1}  since {since.ToLocalTime():HH:mm:ss} · {(int)inRoom.TotalMinutes:00}:{inRoom.Seconds:00}";
     }
 
