@@ -1,5 +1,10 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.VisualTree;
 using Avalonia.Headless.XUnit;
 using EveUtils.Client.ViewModels.Home;
 using EveUtils.Client.ViewModels.Runs;
@@ -116,6 +121,70 @@ public sealed class HomeEarningsTests
         Assert.Equal(loss.BarHeight, gain.BarMargin.Bottom, 6);
         Assert.Equal("1B", earnings.ChartMaxText);
         Assert.Equal("-3B", earnings.ChartMinText);
+    }
+
+    [AvaloniaTheory]
+    [InlineData(true, true)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(false, false)]
+    public void ChartView_RefreshedFromAnotherDataset_HasTheBoundsOfAFreshRender(bool firstHasLoss, bool viaRuns)
+    {
+        RunsActivityFacts[] withLoss =
+        [
+            _Activity(new DateTime(2026, 9, 20, 20, 0, 0), 1_110_000_000m),
+            _Activity(new DateTime(2026, 9, 21, 20, 0, 0), -2_070_000_000m),
+            _Activity(new DateTime(2026, 9, 22, 20, 0, 0), 400_000_000m)
+        ];
+        RunsActivityFacts[] gainsOnly =
+        [
+            _Activity(new DateTime(2026, 9, 10, 20, 0, 0), 800_000_000m),
+            _Activity(new DateTime(2026, 9, 21, 20, 0, 0), 300_000_000m)
+        ];
+        RunsActivityFacts[] first = firstHasLoss ? withLoss : gainsOnly;
+        RunsActivityFacts[] second = firstHasLoss ? gainsOnly : withLoss;
+        var tracked = new DateOnly(2026, 9, 1);
+        using var instance = TestClientInstance.Create();
+        using var refreshedHome = new HomeDashboardViewModel(instance.Services, HomeNavigation.None, []);
+        using var freshHome = new HomeDashboardViewModel(instance.Services, HomeNavigation.None, []);
+        Window refreshedWindow = _Show(refreshedHome);
+        Window freshWindow = _Show(freshHome);
+
+        refreshedHome.Earnings.Show(new HomeEarningsInput(first, Now, DayOfWeek.Monday, tracked));
+        refreshedWindow.UpdateLayout();
+        if (viaRuns)
+        {
+            refreshedHome.Earnings.ShadeByRunsCommand.Execute(null);
+            refreshedWindow.UpdateLayout();
+            refreshedHome.Earnings.ShadeByIskCommand.Execute(null);
+        }
+
+        refreshedHome.Earnings.Show(new HomeEarningsInput(second, Now, DayOfWeek.Monday, tracked));
+        refreshedWindow.UpdateLayout();
+        freshHome.Earnings.Show(new HomeEarningsInput(second, Now, DayOfWeek.Monday, tracked));
+        freshWindow.UpdateLayout();
+
+        Assert.Equal(_ChartGeometry(freshWindow), _ChartGeometry(refreshedWindow));
+    }
+
+    private static Window _Show(HomeDashboardViewModel home)
+    {
+        var window = new Window { Width = 1500, Height = 1400, Content = new Views.Home.HomeDashboardView { DataContext = home } };
+        window.Show();
+        window.UpdateLayout();
+        return window;
+    }
+
+    private static string _ChartGeometry(Window window)
+    {
+        Border chart = window.GetVisualDescendants().OfType<Border>().Single(border => border.Name == "Chart");
+        IEnumerable<string> bars = chart.GetVisualDescendants().OfType<Border>()
+            .Where(border => border.Classes.Contains("barfill") && border.Bounds.Height > 0)
+            .Select(border => $"{border.Bounds}");
+        IEnumerable<string> lines = chart.GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Line>().Select(line => $"{line.Bounds}");
+        IEnumerable<string> labels = chart.GetVisualDescendants().OfType<TextBlock>().Where(text => text.Classes.Contains("mono"))
+            .Select(text => $"{text.Text}@{text.Bounds}");
+        return string.Join(" | ", bars.Concat(lines).Concat(labels));
     }
 
     /// <summary>"Today" starts at local midnight (decision, ET-324), read through the real query with its local→UTC
