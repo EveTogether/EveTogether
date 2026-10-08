@@ -466,7 +466,7 @@ public sealed class ConsumablesTests
     /// Red without the change: the count was read from the ship the live detection last saw, so a run with a chosen fit
     /// and no live ship proposed nothing at all.
     /// </summary>
-    [Theory]
+    [AvaloniaTheory]
     [InlineData(587, "Frigate", 25, 3)]
     [InlineData(16240, "Destroyer", 420, 2)]
     [InlineData(620, "Cruiser", 26, 1)]
@@ -483,7 +483,7 @@ public sealed class ConsumablesTests
     /// The live ship stays the source when no fit is chosen. Covered nowhere before, so it stands as the second test
     /// of the ticket's budget.
     /// </summary>
-    [Fact]
+    [AvaloniaFact]
     public async Task ProposedCount_FallsBackToTheLiveShip_WhenNoFitIsChosen()
     {
         var liveOnly = new ShipFitDetectionReading(ShipFitDetectionState.Observed, DateTimeOffset.UtcNow, 620, 9, "Vexor",
