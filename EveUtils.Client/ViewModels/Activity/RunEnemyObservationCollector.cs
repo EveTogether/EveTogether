@@ -135,6 +135,7 @@ public sealed class RunEnemyObservationCollector(int characterId, Func<string, i
         int last = _roomBoundaries.Count + 1;
         if (_detectedCertainties[^1] is not null)
         {
+            _detector?.Undo();
         }
 
         _roomBoundaries.RemoveAt(_roomBoundaries.Count - 1);
