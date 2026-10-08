@@ -23,7 +23,7 @@ public sealed record RoomDetection(DateTime AtUtc, RoomCertainty Certainty, bool
 public sealed class AbyssalRoomDetector
 {
     public const int MaxRooms = 3;
-    public static readonly TimeSpan Silence = TimeSpan.FromSeconds(15);
+    public static readonly TimeSpan Silence = TimeSpan.FromSeconds(20);
     public static readonly TimeSpan SureSilence = TimeSpan.FromSeconds(30);
     public static readonly TimeSpan ConfirmWindow = TimeSpan.FromSeconds(15);
 
