@@ -14,5 +14,9 @@ public sealed class RunEnemyObservation
     public DateTime FirstObservedAtUtc { get; set; }
 
     public DateTime LastObservedAtUtc { get; set; }
+
+    /// <summary>The room this row was seen in (ET-240), or null when the pilot never pressed NEW ROOM on the run.</summary>
+    public int? RoomNumber { get; set; }
+
     public Run? Run { get; set; }
 }

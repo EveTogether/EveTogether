@@ -165,7 +165,8 @@ public sealed class RunWireData
             EnemyTypeId = observation.EnemyTypeId,
             EnemyName = observation.EnemyName,
             FirstObservedAtUtc = observation.FirstObservedAtUtc,
-            LastObservedAtUtc = observation.LastObservedAtUtc
+            LastObservedAtUtc = observation.LastObservedAtUtc,
+            RoomNumber = observation.RoomNumber
         }).ToList(),
         Parameters = run.Parameters.Select(parameter => new RunParameterInput
         {
@@ -294,7 +295,8 @@ public sealed class RunWireData
                 EnemyTypeId = observation.EnemyTypeId,
                 EnemyName = observation.EnemyName,
                 FirstObservedAtUtc = observation.FirstObservedAtUtc,
-                LastObservedAtUtc = observation.LastObservedAtUtc
+                LastObservedAtUtc = observation.LastObservedAtUtc,
+                RoomNumber = observation.RoomNumber
             });
         foreach (RunParameterInput parameter in Parameters)
             run.Parameters.Add(new RunParameter

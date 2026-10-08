@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using EveUtils.Client.Formatting;
 using EveUtils.Shared.Modules.Market.Services;
+using EveUtils.Shared.Modules.Runs;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Enums;
 using Microsoft.Extensions.DependencyInjection;
@@ -75,6 +76,8 @@ public sealed partial class LootDetailSectionViewModel : RunDetailSection
                 input.NameOf(run.CharacterId));
             block.Loot.IsLocked = true;
             block.Loot.IsReadOnly = _services.OwnCharacterIds is { } own && !own.Contains(run.CharacterId);
+            block.Loot.SetRooms(RunRooms.Boundaries(input.Detail.Parameters, run.RunId), run.StartedAtUtc, run.StoppedAtUtc,
+                isNewestFirst: false);
             await block.Loot.LoadWhenIdleAsync(run.LootCaptures, cancellationToken);
         }
 

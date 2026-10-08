@@ -1002,6 +1002,9 @@ namespace EveUtils.Migrations.Server.SqlServer.Migrations
                     b.Property<DateTime>("LastObservedAtUtc")
                         .HasColumnType("datetime2");
 
+                    b.Property<int?>("RoomNumber")
+                        .HasColumnType("int");
+
                     b.Property<Guid>("RunId")
                         .HasColumnType("uniqueidentifier");
 

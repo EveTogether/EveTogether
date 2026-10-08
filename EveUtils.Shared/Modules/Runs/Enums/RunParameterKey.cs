@@ -80,5 +80,9 @@ public enum RunParameterKey
     /// <summary>On the source run: the run that flew one of its escalations (ET-451), beside a completed
     /// <see cref="EscalationOutcome"/> and sharing its <see cref="Entities.RunParameter.EntryId"/>. Absent on an
     /// escalation ticked off by hand.</summary>
-    EscalationCompletedByRunId
+    EscalationCompletedByRunId,
+
+    /// <summary>A room boundary the pilot set with NEW ROOM (ET-240): one row per boundary, at
+    /// <see cref="Entities.RunParameter.ObservedAtUtc"/>. Room 1 has none, it starts with the run.</summary>
+    RoomStarted
 }

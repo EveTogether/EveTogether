@@ -3,7 +3,11 @@ using System.Collections.Generic;
 using System.Linq;
 using EveUtils.Client.Gamelog;
 using EveUtils.Client.ViewModels.Activity;
+using CommunityToolkit.Mvvm.Input;
 using EveUtils.Shared.Modules.Gamelog.Models;
+using EveUtils.Shared.Modules.Runs;
+using EveUtils.Shared.Modules.Runs.Dtos;
+using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Sde;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -19,7 +23,7 @@ namespace EveUtils.Client.ViewModels.Runs.Sections;
 /// character's own count: nothing here is ever reassigned or cleared for one character because another one was
 /// clicked.
 /// </summary>
-public sealed class EnemiesWindowSectionViewModel : RunWindowSection
+public sealed partial class EnemiesWindowSectionViewModel : RunWindowSection
 {
     private readonly GamelogClientService? _gamelog;
     private readonly Dictionary<int, RunEnemyObservationCollector> _collectors = [];
@@ -38,6 +42,44 @@ public sealed class EnemiesWindowSectionViewModel : RunWindowSection
             ? collector.Observations
             : [];
 
+    /// <summary>The on-screen character's rows per room, newest room first (ET-240) — empty while the run has no
+    /// rooms, and then the flat list above is the whole of it, exactly as before NEW ROOM existed.</summary>
+    public IReadOnlyList<RunEnemyRoomViewModel> EnemyRooms { get; private set; } = [];
+
+    public bool HasRooms => EnemyRooms.Count > 0;
+
+    /// <summary>The window's line under the clock while the run has rooms: which room, since when, for how long.</summary>
+    public string? CurrentRoomText(DateTime nowUtc)
+    {
+        if (_OnScreenCollector() is not { RoomBoundaries: { Count: > 0 } boundaries })
+            return null;
+
+        DateTime since = boundaries[^1];
+        TimeSpan inRoom = (Context.EffectiveStopUtc ?? nowUtc) - since;
+        return $"ROOM {boundaries.Count + 1}  since {since.ToLocalTime():HH:mm:ss} · {(int)inRoom.TotalMinutes:00}:{inRoom.Seconds:00}";
+    }
+
+    /// <summary>NEW ROOM (ET-240): close the current room now and begin the next. The STOP rule decides whose: in a run
+    /// whose clock is per pilot only the pilot on screen, otherwise every own toon in the group.</summary>
+    public void StartRoom(DateTime nowUtc)
+    {
+        if (Context.RunState != ActivityRunState.Running)
+            return;
+
+        foreach (RunEnemyObservationCollector collector in _RoomScope())
+            collector.StartRoom(nowUtc);
+        _ShowRooms();
+    }
+
+    /// <summary>Undo on the last room: the same pilots NEW ROOM reached take its boundary back.</summary>
+    [RelayCommand]
+    private void UndoRoom()
+    {
+        foreach (RunEnemyObservationCollector collector in _RoomScope())
+            collector.UndoRoom();
+        _ShowRooms();
+    }
+
     /// <summary>Shut, the section still has to answer both halves of the question it exists for: which kinds were
     /// seen, and how many of them carry a count. Zero means "seen, not counted", so "seen" and "counted"
     /// are different numbers and the header is the only place they are both visible.</summary>
@@ -51,7 +93,8 @@ public sealed class EnemiesWindowSectionViewModel : RunWindowSection
         }
 
         int counted = EnemyObservations.Count(observation => observation.IsCounted);
-        HeaderSummary = $"{types} {(types == 1 ? "type" : "types")} · {(counted == 0 ? "none counted" : $"{counted} counted")}";
+        string rooms = _OnScreenCollector() is { RoomBoundaries.Count: > 0 and var boundaries } ? $"{boundaries + 1} rooms · " : string.Empty;
+        HeaderSummary = $"{rooms}{types} {(types == 1 ? "type" : "types")} · {(counted == 0 ? "none counted" : $"{counted} counted")}";
     }
 
     /// <summary>Give the on-screen character its own tally, if it does not have one yet.</summary>
@@ -61,7 +104,11 @@ public sealed class EnemiesWindowSectionViewModel : RunWindowSection
             _Ensure(id);
 
         OnPropertyChanged(nameof(EnemyObservations));
+        _ShowRooms();
     }
+
+    /// <summary>Keeps LOOT's blocks on the same boundaries — a block appears or the clock stops after a room was set.</summary>
+    public override void Refresh(DateTime nowUtc) => _ShowLootRooms();
 
     /// <summary>Called for a sibling the moment its own <c>StartRunCommand</c> is sent, so its gamelog is watched for
     /// enemies from the same instant its bounty and loot start counting (ET-210 review finding, round 4).</summary>
@@ -79,18 +126,28 @@ public sealed class EnemiesWindowSectionViewModel : RunWindowSection
     public override void OnRunClosed()
     {
         foreach (RunEnemyObservationCollector collector in _collectors.Values)
+        {
             collector.Changed -= RefreshSummary;
+            collector.Regrouped -= _ShowRooms;
+        }
 
         _collectors.Clear();
         OnPropertyChanged(nameof(EnemyObservations));
+        _ShowRooms();
     }
 
     /// <summary>What SAVE stores for one character — empty when nobody ever typed a count for them, the same "seen,
     /// not counted, never stored" rule <see cref="RunEnemyObservationViewModel.IsCounted"/> already applies live.</summary>
     public override void AddToSave(RunSaveDraft draft)
     {
-        if (draft.CharacterId is { } characterId && _collectors.TryGetValue(characterId, out RunEnemyObservationCollector? collector))
-            draft.Enemies.AddRange(collector.ToInputs());
+        if (draft.CharacterId is not { } characterId || !_collectors.TryGetValue(characterId, out RunEnemyObservationCollector? collector))
+            return;
+
+        draft.Enemies.AddRange(collector.ToInputs());
+        draft.Parameters.AddRange(collector.RoomBoundaries.Select(boundary => new RunParameterInput
+        {
+            ParameterKey = RunParameterKey.RoomStarted, TypedValue = string.Empty, ObservedAtUtc = boundary
+        }));
     }
 
     public override void Dispose()
@@ -111,7 +168,50 @@ public sealed class EnemiesWindowSectionViewModel : RunWindowSection
         // under the cursor. The rows are an ObservableCollection — the list keeps itself up to date. Wired for
         // every character, not just the one on screen, so a background sibling's count still moves the summary.
         collector.Changed += RefreshSummary;
+        collector.Regrouped += _ShowRooms;
         _collectors[characterId] = collector;
+    }
+
+    private RunEnemyObservationCollector? _OnScreenCollector() =>
+        Context.RunCharacterId is { } id ? _collectors.GetValueOrDefault(id) : null;
+
+    private IEnumerable<RunEnemyObservationCollector> _RoomScope() =>
+        Context.RunType.ClockPerPilot
+            ? _OnScreenCollector() is { } own ? [own] : []
+            : _collectors.Values;
+
+    private void _ShowRooms()
+    {
+        IReadOnlyList<DateTime> boundaries = _OnScreenCollector()?.RoomBoundaries ?? [];
+        int roomCount = boundaries.Count == 0 ? 0 : boundaries.Count + 1;
+        EnemyRooms =
+        [
+            .. Enumerable.Range(1, roomCount).Reverse().Select(room => new RunEnemyRoomViewModel(room,
+                _RoomWindowText(boundaries, room), isUndoShown: room == roomCount,
+                [.. EnemyObservations.Where(observation => observation.RoomNumber == room)]))
+        ];
+        OnPropertyChanged(nameof(EnemyRooms));
+        OnPropertyChanged(nameof(HasRooms));
+        RefreshSummary();
+        _ShowLootRooms();
+    }
+
+    private string _RoomWindowText(IReadOnlyList<DateTime> boundaries, int room)
+    {
+        DateTime? start = room == 1 ? Context.EffectiveStartUtc : RunRooms.StartOf(boundaries, room, default);
+        DateTime? end = RunRooms.EndOf(boundaries, room, Context.EffectiveStopUtc);
+        return $"{start?.ToLocalTime():HH:mm:ss} – {(end is { } ended ? ended.ToLocalTime().ToString("HH:mm:ss") : "now")}";
+    }
+
+    // Loot falls in the room that was going when it was copied (ET-240): every block reads its own pilot's boundaries.
+    private void _ShowLootRooms()
+    {
+        if (Context.LootOverview is not { } overview)
+            return;
+
+        foreach (ActivityLootCharacterViewModel block in overview.Characters)
+            block.Loot.SetRooms(_collectors.GetValueOrDefault((int)block.CharacterId)?.RoomBoundaries ?? [],
+                Context.EffectiveStartUtc, Context.EffectiveStopUtc, isNewestFirst: true);
     }
 
     // The event fires for damage either way — "250 to Centii Scavenger" and "1 from Centii Servant" alike — and both

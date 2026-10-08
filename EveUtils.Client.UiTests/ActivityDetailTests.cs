@@ -429,6 +429,45 @@ public sealed class ActivityDetailTests
         Assert.Equal(2, texts.Count(text => text == "Tritanium ×3"));        // and both captures under them
     }
 
+    /// <summary>ET-240 AC-5/AC-6/AC-10: the rooms of a combat site, marked with NEW ROOM, come back after SAVE and
+    /// reopening — in ENEMIES and in LOOT, each copy in the room that was going when it was made, a copy after STOP in
+    /// the last room. Counter-proof: save without the RoomStarted boundary and LOOT falls back to one flat list.</summary>
+    [AvaloniaFact]
+    public async Task SavedRunWithRooms_ShowsEnemiesAndLootPerRoom_AfterReopening()
+    {
+        using var instance = TestClientInstance.Create();
+        ICqrsDispatcher dispatcher = instance.Services.GetRequiredService<ICqrsDispatcher>();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        await instance.Services.GetRequiredService<IMarketPriceRepository>().ReplaceAllAsync(
+            [new LocalMarketPrice { TypeId = 34, AveragePrice = 100, AdjustedPrice = 100, UpdatedAt = DateTimeOffset.UtcNow }],
+            cancellationToken);
+        Result<Guid> started = await dispatcher.Send(new StartRunCommand(90000001, ActivityKind.Site, StartedAtUtc,
+            1234, "Homefront", 30000142), cancellationToken);
+        RunLootCaptureInput CaptureAt(int minute, long quantity) => new()
+        {
+            CapturedAtUtc = StartedAtUtc.AddMinutes(minute), Source = LootCaptureSource.Clipboard, ContentHash = $"C{minute}",
+            Entries = [new RunLootEntryInput { ItemTypeId = 34, Name = "Tritanium", Quantity = quantity, LootKind = LootKind.Gained }]
+        };
+        RunEnemyObservationInput SeenIn(int room, int count, int fromMinute) => new()
+        {
+            RoomNumber = room, Count = count, EnemyTypeId = 111, EnemyName = "Centii Scavenger",
+            FirstObservedAtUtc = StartedAtUtc.AddMinutes(fromMinute), LastObservedAtUtc = StartedAtUtc.AddMinutes(fromMinute + 3)
+        };
+        await dispatcher.Send(new SaveRunCommand(started.Value, StartedAtUtc.AddMinutes(15), StartedAtUtc.AddMinutes(17),
+            [CaptureAt(3, 1), CaptureAt(7, 2), CaptureAt(16, 4)], [], [SeenIn(1, 2, 1), SeenIn(2, 3, 6)],
+            [new RunParameterInput { ParameterKey = RunParameterKey.RoomStarted, TypedValue = string.Empty, ObservedAtUtc = StartedAtUtc.AddMinutes(5) }]),
+            cancellationToken);
+
+        (ActivityDetailWindow window, Window root) = await _PresentAsync(instance, 758, cancellationToken);
+        ActivityDetailViewModel viewModel = Assert.IsType<ActivityDetailViewModel>(window.DataContext);
+        RunLootViewModel loot = Assert.Single(viewModel.Loot().LootOverview.Characters).Loot;
+        List<string> texts = RenderedText.VisibleTexts(root);
+
+        Assert.Equal(["ROOM 1", "ROOM 2"], viewModel.Enemies().EnemyRooms.Select(room => room.Title));
+        Assert.Equal([(1, $"{100m:N0} ISK"), (2, $"{600m:N0} ISK")], loot.Rooms.Select(room => (room.Number, room.SubtotalText)));
+        Assert.Equal(2, texts.Count(text => text == "ROOM 2"));
+    }
+
     /// <summary>AC-5: two runs in one activity that each sighted the same enemy type stay two rows, each with its
     /// own first/last window. Counter-proof: group by enemy type alone and there is one row, with the later
     /// sighting silently overwriting the earlier one's window.</summary>

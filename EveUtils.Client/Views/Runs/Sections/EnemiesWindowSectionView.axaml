@@ -4,20 +4,41 @@
              xmlns:vs="using:EveUtils.Client.ViewModels.Runs.Sections"
              x:Class="EveUtils.Client.Views.Runs.Sections.EnemiesWindowSectionView"
              x:DataType="vs:EnemiesWindowSectionViewModel">
+    <UserControl.DataTemplates>
+        <DataTemplate DataType="va:RunEnemyObservationViewModel">
+            <Grid Classes="kv" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                <TextBlock Text="{Binding EnemyName}" VerticalAlignment="Center"/>
+                <!-- Seen is not counted, so the row says which of the two it is. -->
+                <TextBlock Grid.Column="1" Classes="hint" Margin="0" VerticalAlignment="Center"
+                           Text="{Binding CountStateText}"/>
+                <NumericUpDown Grid.Column="2" Classes="count" Width="72" Minimum="0" Maximum="999" Increment="1"
+                               FormatString="0" Value="{Binding Count, Mode=TwoWay}"/>
+            </Grid>
+        </DataTemplate>
+    </UserControl.DataTemplates>
     <!-- Its own section, folded by default: a site's worth of rats inside ACTIVITY pushed FIT, FLEET,
          BOUNTY and LOOT under the fold. The count is typed after the fight, so the rows outlive STOP. -->
-    <ItemsControl x:Name="EnemyList" ItemsSource="{Binding EnemyObservations}">
-        <ItemsControl.ItemTemplate>
-            <DataTemplate DataType="va:RunEnemyObservationViewModel">
-                <Grid Classes="kv" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
-                    <TextBlock Text="{Binding EnemyName}" VerticalAlignment="Center"/>
-                    <!-- Seen is not counted, so the row says which of the two it is. -->
-                    <TextBlock Grid.Column="1" Classes="hint" Margin="0" VerticalAlignment="Center"
-                               Text="{Binding CountStateText}"/>
-                    <NumericUpDown Grid.Column="2" Classes="count" Width="72" Minimum="0" Maximum="999" Increment="1"
-                                   FormatString="0" Value="{Binding Count, Mode=TwoWay}"/>
-                </Grid>
-            </DataTemplate>
-        </ItemsControl.ItemTemplate>
-    </ItemsControl>
+    <StackPanel>
+        <ItemsControl x:Name="EnemyList" ItemsSource="{Binding EnemyObservations}" IsVisible="{Binding !HasRooms}"/>
+        <!-- Per room once NEW ROOM was pressed (ET-240), the room going on now first. -->
+        <ItemsControl x:Name="EnemyRoomList" ItemsSource="{Binding EnemyRooms}" IsVisible="{Binding HasRooms}">
+            <ItemsControl.ItemTemplate>
+                <DataTemplate DataType="va:RunEnemyRoomViewModel">
+                    <StackPanel Spacing="2" Margin="0,6,0,0">
+                        <Border BorderThickness="0,0,0,1" BorderBrush="{DynamicResource BorderBrush}" Padding="0,0,0,3">
+                            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+                                <TextBlock Classes="label" VerticalAlignment="Center" Text="{Binding Title}"/>
+                                <TextBlock Grid.Column="1" Classes="hint" Margin="0" VerticalAlignment="Center"
+                                           Text="{Binding WindowText}"/>
+                                <Button Grid.Column="2" Classes="link" Content="undo" IsVisible="{Binding IsUndoShown}"
+                                        ToolTip.Tip="Take this room back: its enemies and loot fold into the room before it."
+                                        Command="{Binding #EnemyRoomList.((vs:EnemiesWindowSectionViewModel)DataContext).UndoRoomCommand}"/>
+                            </Grid>
+                        </Border>
+                        <ItemsControl ItemsSource="{Binding Observations}"/>
+                    </StackPanel>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+    </StackPanel>
 </UserControl>

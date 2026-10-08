@@ -265,6 +265,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     [NotifyPropertyChangedFor(nameof(ClockHint))]
     [NotifyPropertyChangedFor(nameof(IsStartButtonVisible))]
     [NotifyPropertyChangedFor(nameof(IsStopButtonVisible))]
+    [NotifyPropertyChangedFor(nameof(IsNewRoomButtonVisible))]
     [NotifyPropertyChangedFor(nameof(IsKeepRunButtonVisible))]
     [NotifyPropertyChangedFor(nameof(IsDiscardButtonVisible))]
     [NotifyPropertyChangedFor(nameof(IsSaveButtonVisible))]
@@ -280,6 +281,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsStartButtonVisible))]
     [NotifyPropertyChangedFor(nameof(IsStopButtonVisible))]
+    [NotifyPropertyChangedFor(nameof(IsNewRoomButtonVisible))]
     [NotifyPropertyChangedFor(nameof(IsDiscardButtonVisible))]
     [NotifyPropertyChangedFor(nameof(IsSaveButtonVisible))]
     [NotifyPropertyChangedFor(nameof(IsCommandStatusShown))]
@@ -693,6 +695,16 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         _MayTimeOwnLeg && RunState != ActivityRunState.Running && _pendingCopy is null;
 
     public bool IsStopButtonVisible => _MayTimeOwnLeg && RunState == ActivityRunState.Running;
+
+    /// <summary>NEW ROOM (ET-240) beside STOP, for every run type with an ENEMIES section: only while there is
+    /// something left to bring down, so only while the run is going.</summary>
+    public bool IsNewRoomButtonVisible => IsStopButtonVisible && _Enemies() is { } enemies && Sections.Contains(enemies);
+
+    /// <summary>"ROOM 2  since 20:44:31 · 03:00" under the clock — null until NEW ROOM was pressed once.</summary>
+    public string? CurrentRoomText { get; private set; }
+
+    private EnemiesWindowSectionViewModel? _Enemies() =>
+        _sections.GetValueOrDefault(RunSectionId.Enemies) as EnemiesWindowSectionViewModel;
 
     /// <summary>In a run whose clock is per pilot, START and STOP time this pilot's own leg and nobody else's (ET-246),
     /// so there they are every pilot's own buttons; DISCARD still ends the run for everybody and stays the commander's.
@@ -1794,6 +1806,9 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         // falling out of expiry, ET-237) — summarising first would describe last tick's answer instead of this one's.
         foreach (RunWindowSection section in _AllSections())
             section.Refresh(nowUtc);
+        CurrentRoomText = _Enemies()?.CurrentRoomText(nowUtc);
+        OnPropertyChanged(nameof(CurrentRoomText));
+        OnPropertyChanged(nameof(IsNewRoomButtonVisible));
         _RefreshGroupTotalIsk(nowUtc);
         _RefreshSummaries();
         _RefreshCompact(nowUtc);
@@ -1952,6 +1967,15 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
     [RelayCommand]
     private void StopRun() => StopRun(DateTime.UtcNow);
+
+    [RelayCommand]
+    private void StartNewRoom() => StartNewRoom(DateTime.UtcNow);
+
+    public void StartNewRoom(DateTime nowUtc)
+    {
+        _Enemies()?.StartRoom(nowUtc);
+        Refresh(nowUtc);
+    }
 
     /// <summary>Move the window to a running run on the clock. <see cref="StartRunAsync"/> is what also gives it a
     /// row in the store; the way into a pocket calls this too, for a run nobody pressed a button for.</summary>
