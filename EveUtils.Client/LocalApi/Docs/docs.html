@@ -36,16 +36,17 @@
   <h2>What this is</h2>
   <p>An <strong>opt-in, read-only</strong> HTTP API that runs inside the EVE Together client and exposes your own
      game data — live combat metrics, characters, fits, fleets and doctrines — so you can build stream overlays,
-     widgets and tooling against it. It is one component; widgets are just one use case.</p>
+     widgets and tooling against it. It is one component; widgets are just one use case. The only thing you can write
+     through it is your own saved widgets (see <a href="#widgets">Widgets and OBS</a>); your game data is read-only.</p>
 
   <h2>Security model</h2>
   <table>
     <tr><th>Property</th><th>Behaviour</th></tr>
     <tr><td>Binding</td><td>Listens on <code>127.0.0.1</code> only — never on a network interface. Not reachable from other machines.</td></tr>
-    <tr><td>Access</td><td>Read-only. There are no mutating endpoints; the API can never change your fits, fleets or settings.</td></tr>
+    <tr><td>Access</td><td>Read-only for your game data. The only endpoints that write are the widget ones (<code>POST</code>, <code>PUT</code>, <code>DELETE /api/v1/widgets</code>), and they only touch your saved widget configs; the API can never change your fits or fleets.</td></tr>
     <tr><td>Secrets</td><td>Never exposes ESI tokens, granted scopes or credentials — only public game/fit/fleet data.</td></tr>
     <tr><td>Default</td><td>Off by default. Enable it and pick the port in <em>Settings &rarr; Local API server</em>.</td></tr>
-    <tr><td>Location</td><td>Where you are is left out by default: <code>location</code> in <code>metrics</code> is <code>null</code> and <code>fleet.metrics</code> sends no <code>Location</code> samples. Turn on <em>Include my location</em> in <em>Settings &rarr; Integrations</em> to send it. OPSEC mode leaves it out again while it is on.</td></tr>
+    <tr><td>Location</td><td>Where you are is left out by default: <code>location</code> in <code>metrics</code> is <code>null</code> and <code>fleet.metrics</code> sends no <code>Location</code> samples. Turn on <em>Include my location</em> in <em>Settings &rarr; Integrations</em> to send it. OPSEC mode leaves it out again while it is on. See <a href="#location">Breaking change: Include my location</a>.</td></tr>
     <tr><td>Hardening</td><td>Host-header validation rejects DNS-rebinding. Only same-origin requests are allowed by default — pages served by this API itself, such as <code>/widget</code>; any other origin gets <code>403</code>, on the WebSocket too, unless it is on the allowlist (<code>localapi.allowedorigins</code>, comma-separated). An optional API key (<code>localapi.apikey</code>) gates <code>/api</code>, <code>/ws</code> and <code>/hub</code> when set.</td></tr>
   </table>
 
@@ -172,6 +173,64 @@ await conn.start();</code></pre>
   <p>A ready-to-run live DPS overlay (raw WebSocket, zero dependencies) lives at <a href="/widget">/widget</a> — drop that
      URL straight into an OBS browser source, or open it and <em>view source</em> as a starting point for your own.</p>
 
+  <h2 id="widgets">Widgets and OBS <span class="pill">available</span></h2>
+  <p>The <strong>widget manager</strong> in the app (<em>Settings &rarr; Integrations &rarr; Open widget manager&hellip;</em>, or the
+     Local API line on Home) lists the eight built-in widgets with a live preview. Each has <em>Copy URL</em> and <em>Open</em>.
+     <em>Customize</em> opens an editor for the name, characters, fields, theme (together, minimal, ticker), accent colour,
+     background (transparent, or a panel with an opacity), size and the preset's options. Saving it makes your own copy under
+     <em>My widgets</em>; the built-in ones never change. A widget you saved keeps its address, and when you change it an open
+     OBS source applies the change by itself (<code>widget.config</code> over the stream), without a reload.</p>
+  <table>
+    <tr><th>Address</th><th>What</th></tr>
+    <tr><td><code>{{BASE_URL}}/w/&lt;id&gt;</code></td><td>The widget page for OBS: transparent, top-left, no status line and no error on stream. The id of a built-in widget is its preset key (<code>live-dps</code>, <code>dps-graph</code>, <code>current-run</code>, <code>run-totals</code>, <code>abyssal-totals</code>, <code>last-killmail</code>, <code>kill-alert</code>, <code>fleet-dps</code>); a saved widget has a 32-character id. An unknown id answers an empty <code>404</code>, so a stale OBS source shows nothing.</td></tr>
+    <tr><td><code>GET /api/v1/widgets</code></td><td>The widgets with the <code>url</code> to paste into OBS and the <code>width</code> &times; <code>height</code> to set there.</td></tr>
+  </table>
+  <p>A refused write answers <code>{ "code", "message" }</code>: <code>400 VALIDATION_FAILED</code> (a name of up to 64 characters
+     is required; at most 32 characters, fields and options each), <code>404 NOT_FOUND</code>, or
+     <code>409 PRESET_READ_ONLY</code> when you try to change or delete a built-in widget.</p>
+  <h3>Add a widget to OBS</h3>
+  <ol>
+    <li>In OBS, under <em>Sources</em>, click + and pick <em>Browser</em>. Name it after the widget.</li>
+    <li>Paste the widget's URL into <em>URL</em> (<em>Copy URL</em> in the manager puts it on your clipboard).</li>
+    <li>Set <em>Width</em> and <em>Height</em> to the size the manager shows (<em>Add to OBS</em> fills them in for you). Leave <em>Custom CSS</em> as it is: the background is set in the manager.</li>
+    <li>Click <em>OK</em> and drag the widget where you want it.</li>
+  </ol>
+  <h3>The API key in the URL</h3>
+  <p>When you set an API key (the manager can create, show, copy and renew it), every <code>/api</code>, <code>/ws</code>,
+     <code>/hub</code> and <code>/w</code> request needs it. OBS cannot send headers, so the widget URL carries it as
+     <code>?key=&hellip;</code>. Anyone who sees that URL has the key: keep it off stream and out of the OBS properties
+     window. The manager warns you when the URL contains it. Saving a new key restarts the Local API, so renew it and paste the new URL into OBS.</p>
+  <h3>OPSEC</h3>
+  <p>While OPSEC mode is on, your location is left out of the API and the widgets, even with <em>Include my location</em> on
+     (see below). Nothing else is masked.</p>
+
+  <h2 id="versioning">Versioning</h2>
+  <p>The version is in the path: everything is under <code>/api/v1</code>, and <code>GET /api/v1/health</code> returns
+     <code>{ "status", "appVersion", "apiVersion" }</code> (<code>apiVersion</code> is <code>v1</code>; <code>appVersion</code> is the app's own version).
+     The WebSocket and the SignalR hub follow the same contract.</p>
+  <ul>
+    <li><strong>Additions stay in v1.</strong> New endpoints, new fields on existing rows, new event types and new widget presets or field keys can appear in any release. Existing fields keep their name, type and meaning.</li>
+    <li><strong>Read defensively.</strong> Ignore fields and event types you do not know, and treat fields added after your first version (<code>history</code> in the <code>snapshot</code>, <code>repIn</code>&hellip; in <code>metrics</code>) as optional, so your widget keeps working against an older client.</li>
+    <li><strong>There is no <code>/api/v2</code>.</strong> The one change that makes an existing field empty is the location change below; it was made inside v1, on purpose, and is listed in the changelog.</li>
+    <li>Enums in the widget config (<code>preset</code>, <code>theme</code>, <code>background</code>) travel as strings.</li>
+  </ul>
+
+  <h2 id="location">Breaking change: Include my location</h2>
+  <p>Until this release the Local API always sent where you are, even with location sharing off (that setting only ever applied to
+     the server). It is now <strong>off by default</strong>, for the whole Local API. If your own widget or tool reads your system, it
+     gets nothing until you turn on <em>Include my location</em> under <em>Settings &rarr; Integrations</em>.</p>
+  <table>
+    <tr><th>Where</th><th>Before</th><th>Now (setting off, or OPSEC on)</th></tr>
+    <tr><td><code>metrics</code>, <code>GET /api/v1/metrics</code></td><td><code>location</code> held your system</td><td><code>location</code> is <code>null</code>. <code>locationStatus</code> is unchanged: it is a reason, not a location.</td></tr>
+    <tr><td><code>fleet.metrics</code></td><td>samples with <code>kind: "Location"</code> for you and your fleet mates</td><td>no <code>Location</code> samples are sent at all, for any member: where your mates are gives away where you are.</td></tr>
+    <tr><td><code>runs/current</code>, <code>run.changed</code></td><td>(new)</td><td><code>signature</code> and <code>system</code> are <code>null</code>.</td></tr>
+    <tr><td><code>killmails/latest</code>, <code>killmail.added</code></td><td>(new)</td><td>the solar-system fields are <code>null</code>.</td></tr>
+    <tr><td>Widgets</td><td>(new)</td><td>the location fields (<code>system</code>, <code>signature</code>, <code>systems</code>) stay hidden, and the manager only lets you pick them while the setting is on.</td></tr>
+  </table>
+  <p><strong>Migrating:</strong> treat <code>location</code> as nullable, and when you need it, turn on <em>Include my location</em>. The setting is read when the
+     Local API starts; saving Settings restarts it, so it applies straight away. OPSEC mode is checked live and overrides the setting.
+     No other field changed.</p>
+
   <h2>Roadmap</h2>
   <table>
     <tr><th>Milestone</th><th>Scope</th></tr>
@@ -180,6 +239,7 @@ await conn.start();</code></pre>
     <tr><td>M3 <span class="pill">done</span></td><td>WebSocket realtime stream at <code>/ws</code> — snapshot + own metrics + live fleet metrics/changes.</td></tr>
     <tr><td>M4 <span class="pill">done</span></td><td>SignalR hub at <code>/hub/fleet</code> — the same events for richer .NET/JS clients.</td></tr>
     <tr><td>M5 <span class="pill">done</span></td><td>CORS, host-header validation, optional API key, the <code>/types/{id}</code> resolver, and a sample widget.</td></tr>
+    <tr><td>M6 <span class="pill">done</span></td><td>Widget manager and eight built-in widgets at <code>/w/&lt;id&gt;</code> · <code>runs/current</code>, <code>runs/summary</code>, <code>killmails/latest</code> · combat metrics split in/out with history on connect · location off by default.</td></tr>
   </table>
 </div>
 </body>
