@@ -27,6 +27,10 @@ public static class RunsModule
         // Client-only, never synced (ET-182): where a group code came from is this client's own observation, not a
         // fact the fleet's other members need to agree on.
         modelBuilder.ApplyConfiguration(new RunGroupOriginConfiguration());
+        // Client-only until it is synced with the run (ET-472).
+        modelBuilder.ApplyConfiguration(new RunCombatTimelineConfiguration());
+        modelBuilder.ApplyConfiguration(new RunCombatSeriesConfiguration());
+        modelBuilder.ApplyConfiguration(new RunHitTallyConfiguration());
     }
 
     public static void ConfigureServerModel(ModelBuilder modelBuilder)

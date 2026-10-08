@@ -18,17 +18,24 @@ namespace EveUtils.Client.ViewModels.Runs.Sections;
 /// characterId rather than on which run the window is currently showing, so switching the column never touches a
 /// character's own count: nothing here is ever reassigned or cleared for one character because another one was
 /// clicked.
+///
+/// The same per-character watch keeps each character's combat lines for the run's timeline (ET-467), so both ride
+/// one lifecycle: started with the run, fed live and by catch-up, handed to SAVE, let go at close.
 /// </summary>
 public sealed class EnemiesWindowSectionViewModel : RunWindowSection
 {
     private readonly GamelogClientService? _gamelog;
     private readonly Dictionary<int, RunEnemyObservationCollector> _collectors = [];
+    private readonly Dictionary<int, List<GameLogEvent>> _combatEvents = [];
 
     public EnemiesWindowSectionViewModel(IRunWindowContext context) : base(context, RunSectionId.Enemies, "ENEMIES")
     {
         _gamelog = context.Services.GetService<GamelogClientService>();
         if (_gamelog is not null)
+        {
             _gamelog.CombatObserved += _OnCombatObserved;
+            _gamelog.TelemetryObserved += _OnTelemetryObserved;
+        }
     }
 
     /// <summary>The on-screen character's own sightings — whichever run the column is currently showing. Every other
@@ -74,6 +81,16 @@ public sealed class EnemiesWindowSectionViewModel : RunWindowSection
     internal void RecordCatchUpSighting(int characterId, string target, DateTime observedAtUtc) =>
         _collectors.GetValueOrDefault(characterId)?.Record(characterId, target, observedAtUtc);
 
+    /// <summary>One line from the same catch-up read, for the run's timeline: what <see cref="_OnTelemetryObserved"/>
+    /// does live. Lines that are not combat, repair, neut or capacitor are ignored here.</summary>
+    internal void RecordCatchUpTelemetry(int characterId, GameLogEvent logEvent)
+    {
+        if (logEvent is CombatEvent or RemoteRepEvent or NeutEvent or CapTransferEvent)
+        {
+            _combatEvents.GetValueOrDefault(characterId)?.Add(logEvent);
+        }
+    }
+
     /// <summary>Let go of every character's list — the whole group's, since STOP, SAVE and DISCARD act on the whole
     /// group (ET-210).</summary>
     public override void OnRunClosed()
@@ -82,6 +99,7 @@ public sealed class EnemiesWindowSectionViewModel : RunWindowSection
             collector.Changed -= RefreshSummary;
 
         _collectors.Clear();
+        _combatEvents.Clear();
         OnPropertyChanged(nameof(EnemyObservations));
     }
 
@@ -91,17 +109,27 @@ public sealed class EnemiesWindowSectionViewModel : RunWindowSection
     {
         if (draft.CharacterId is { } characterId && _collectors.TryGetValue(characterId, out RunEnemyObservationCollector? collector))
             draft.Enemies.AddRange(collector.ToInputs());
+
+        // A copy: the save runs off the UI thread, where the live path keeps adding.
+        if (draft.CharacterId is { } recordedId && _combatEvents.TryGetValue(recordedId, out List<GameLogEvent>? combatEvents))
+        {
+            draft.CombatEvents = [.. combatEvents];
+        }
     }
 
     public override void Dispose()
     {
         if (_gamelog is not null)
+        {
             _gamelog.CombatObserved -= _OnCombatObserved;
+            _gamelog.TelemetryObserved -= _OnTelemetryObserved;
+        }
         base.Dispose();
     }
 
     private void _Ensure(int characterId)
     {
+        _combatEvents.TryAdd(characterId, []);
         if (_collectors.ContainsKey(characterId) || Context.Services.GetService<ISdeAccessor>() is not { } sde)
             return;
 
@@ -125,5 +153,15 @@ public sealed class EnemiesWindowSectionViewModel : RunWindowSection
 
         Avalonia.Threading.Dispatcher.UIThread.Post(() =>
             _collectors.GetValueOrDefault(characterId)?.Record(characterId, target, observedAtUtc));
+    }
+
+    private void _OnTelemetryObserved(int characterId, GameLogEvent logEvent)
+    {
+        if (Context.RunState != ActivityRunState.Running)
+        {
+            return;
+        }
+
+        Avalonia.Threading.Dispatcher.UIThread.Post(() => _combatEvents.GetValueOrDefault(characterId)?.Add(logEvent));
     }
 }
