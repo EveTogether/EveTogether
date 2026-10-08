@@ -106,6 +106,11 @@ public sealed partial class RunLootViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(NetIskDisplay))]
     private decimal? _netIsk;
 
+    /// <summary>The charges the two holds show were fired (ET-471): out of LOOT, in CONSUMABLES at the same price.</summary>
+    [ObservableProperty] private decimal? _spentChargesIsk;
+
+    public IReadOnlyList<ActivityLootLineViewModel> SpentChargeLines { get; private set; } = [];
+
     /// <summary>Set when the running-run lookup itself failed (none running, or more than one) — a state, not an
     /// empty list left to speak for itself (ET-65 AC-7).</summary>
     [ObservableProperty] private string? _runStatusMessage;
@@ -659,7 +664,11 @@ public sealed partial class RunLootViewModel : ViewModelBase
     /// on screen are the rows those figures are made of.</summary>
     private void _Recompute()
     {
-        _counted = LootTally.Count(_TallyCaptures());
+        LootTallyCount split = LootTally.Count(_TallyCaptures(), ChargeTypes.Of(_sde));
+        _counted = split.Loot;
+        SpentChargesIsk = _Sum(split.SpentCharges);
+        SpentChargeLines = [.. split.SpentCharges.Select(line =>
+            _Row(line.ItemTypeId, line.LootKind, line.Quantity ?? 1, isExcluded: false, captureCount: 1))];
         TotalIsk = _Sum(_counted);
         EntriesWithoutPrice = _counted.Count(line => !_unitPrices.ContainsKey(line.ItemTypeId));
         LootIsk = _Sum(_counted.Where(line => line.LootKind == LootKind.Gained));
@@ -694,7 +703,7 @@ public sealed partial class RunLootViewModel : ViewModelBase
         if (counted.Length > 1 && counted[0] is { Value: > 0 } top)
             top.IsTopValue = true;
         if (_images is not null)
-            foreach (ActivityLootLineViewModel line in ItemRows)
+            foreach (ActivityLootLineViewModel line in ItemRows.Concat(SpentChargeLines))
                 _ = line.LoadIconAsync(_images);
 
         foreach (RunLootCaptureRowViewModel capture in Captures)
@@ -708,6 +717,7 @@ public sealed partial class RunLootViewModel : ViewModelBase
                 isLivePrice: _liveTypeIds.Contains(entry.ItemTypeId)))];
         }
 
+        OnPropertyChanged(nameof(SpentChargeLines));
         OnPropertyChanged(nameof(TotalIskLabel));
         OnPropertyChanged(nameof(DifferenceText));
         OnPropertyChanged(nameof(CanOfferLootEdit));

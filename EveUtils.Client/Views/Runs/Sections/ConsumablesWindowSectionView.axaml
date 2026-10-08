@@ -28,5 +28,16 @@
                 </DataTemplate>
             </ItemsControl.ItemTemplate>
         </ItemsControl>
+        <!-- The charges the two cargo holds show were fired (ET-471); LOOT no longer lists them as lost. -->
+        <ItemsControl ItemsSource="{Binding SpentChargeLines}">
+            <ItemsControl.ItemTemplate>
+                <DataTemplate DataType="vr:ActivityLootLineViewModel">
+                    <StackPanel>
+                        <vw:ActivityLootLineView/>
+                        <TextBlock Classes="hint" Margin="32,0,0,2" Text="from cargo before/after"/>
+                    </StackPanel>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
     </StackPanel>
 </UserControl>

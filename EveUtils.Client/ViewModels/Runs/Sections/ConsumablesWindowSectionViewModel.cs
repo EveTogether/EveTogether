@@ -41,6 +41,10 @@ public sealed partial class ConsumablesWindowSectionViewModel(IRunWindowContext 
     /// as they do everywhere else (ET-329). Null until the pocket's tier and weather resolve a type.</summary>
     [ObservableProperty] private ActivityLootLineViewModel? _filamentLine;
 
+    /// <summary>The charges LOOT's two holds show were fired (ET-471), drawn here where they are counted. Empty
+    /// without a starting hold: only a before/after difference shows what was fired.</summary>
+    [ObservableProperty] private IReadOnlyList<ActivityLootLineViewModel> _spentChargeLines = [];
+
     public override void Refresh(DateTime nowUtc)
     {
         _SyncRows();
@@ -49,6 +53,13 @@ public sealed partial class ConsumablesWindowSectionViewModel(IRunWindowContext 
 
     public override void RefreshSummary()
     {
+        IReadOnlyList<ActivityLootLineViewModel> charges = Context.LootOverview is { } overview
+            ? [.. overview.Characters.SelectMany(character => character.Loot.SpentChargeLines)]
+            : Context.RunLoot?.SpentChargeLines ?? [];
+        // Swapped only when it changed: this runs every tick, and a new list would redraw the rows each time.
+        if (!charges.SequenceEqual(SpentChargeLines))
+            SpentChargeLines = charges;
+
         foreach (ConsumableRowViewModel row in Rows)
             row.Reprice(UnitPrice);
 
