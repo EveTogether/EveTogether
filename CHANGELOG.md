@@ -17,6 +17,7 @@ entries under `[Unreleased]` below that were not there yet at the previous night
 
 ## [Unreleased]
 
+- **Fixed: a filament you pasted in your starting cargo hold no longer counts twice.** It was taken off your total once as the filament you spent and once more as loot you lost. It now counts once, under CONSUMABLES; only filaments beyond the number you entered on the run still count as lost.
 - **Changed: missiles and ammo you fired now show under CONSUMABLES instead of as lost loot.** When you paste your cargo before and after a run, the charges that went down are listed under CONSUMABLES as "from cargo before/after", next to how many hits the game log counted for them. Your total ISK stays exactly the same, because the charges only move from LOOT to CONSUMABLES. Without a starting cargo hold nothing is listed, since only the two holds show what was actually fired.
 - **Added: attackers on a killmail now show their corporation and alliance logo, and older killmails get their attackers' security status.** The logos sit in front of the corporation and alliance names; NPC corporations without a logo show an empty tile. Killmails you fetched before security status was kept are filled in quietly in the background, a batch at a time, so nothing waits on it.
 - **Changed: the killmail's item table is easier to read.** Each group (hull, high slots, mid slots, …) now has its own band with a brighter title, and the one row per group that was lit up for no clear reason is gone — every row has the same background.
