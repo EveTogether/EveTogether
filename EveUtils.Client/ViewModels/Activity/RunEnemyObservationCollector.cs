@@ -24,6 +24,9 @@ public sealed class RunEnemyObservationCollector(int characterId, Func<string, i
     /// <summary>Per boundary in <see cref="RoomBoundaries"/>: the detector's certainty, or null when the pilot set it.</summary>
     public IReadOnlyList<RoomCertainty?> DetectedCertainties => _detectedCertainties;
 
+    /// <summary>Whether the detector still runs: an abyssal pocket where the pilot has not pressed NEW ROOM.</summary>
+    public bool IsDetecting => _detector is not null;
+
     /// <summary>A row appeared or moved between rooms — the moments a list grouped per room has to be laid out
     /// again. Not raised for a typed count, so an open editor is never rebound under the cursor.</summary>
     public event Action? Regrouped;

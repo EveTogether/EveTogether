@@ -59,9 +59,15 @@ public sealed partial class EnemiesWindowSectionViewModel : RunWindowSection
 
         DateTime since = boundaries[^1];
         TimeSpan inRoom = TimeSpan.FromTicks(Math.Max(0, ((Context.EffectiveStopUtc ?? nowUtc) - since).Ticks));
-        return $"ROOM {boundaries.Count + 1}  since {since.ToLocalTime():HH:mm:ss} · {(int)inRoom.TotalMinutes:00}:{inRoom.Seconds:00}"
-               + _SourceText(_OnScreenCollector()?.DetectedCertainties[^1]);
+        return $"ROOM {boundaries.Count + 1}  since {since.ToLocalTime():HH:mm:ss} · {(int)inRoom.TotalMinutes:00}:{inRoom.Seconds:00}";
     }
+
+    /// <summary>The AUTO badge for the room going on now, when the detector opened it (ET-368).</summary>
+    public RoomSourceViewModel? CurrentRoomSource =>
+        _OnScreenCollector() is { DetectedCertainties: { Count: > 0 } certainties } ? RoomSourceViewModel.Of(certainties[^1]) : null;
+
+    /// <summary>Whether the on-screen pilot's rooms are still found by the detector (ET-368).</summary>
+    public bool IsDetecting => _OnScreenCollector()?.IsDetecting == true;
 
     /// <summary>NEW ROOM (ET-240): close the current room now and begin the next. The STOP rule decides whose: in a run
     /// whose clock is per pilot only the pilot on screen, otherwise every own toon in the group.</summary>
@@ -202,19 +208,15 @@ public sealed partial class EnemiesWindowSectionViewModel : RunWindowSection
         EnemyRooms =
         [
             .. Enumerable.Range(1, roomCount).Reverse().Select(room => new RunEnemyRoomViewModel(room,
-                _RoomWindowText(boundaries, room) + _SourceText(room > 1 ? _OnScreenCollector()?.DetectedCertainties[room - 2] : null),
-                isUndoShown: room == roomCount,
-                [.. EnemyObservations.Where(observation => observation.RoomNumber == room)]))
+                _RoomWindowText(boundaries, room), isUndoShown: room == roomCount,
+                [.. EnemyObservations.Where(observation => observation.RoomNumber == room)],
+                RoomSourceViewModel.Of(room > 1 ? _OnScreenCollector()?.DetectedCertainties[room - 2] : null)))
         ];
         OnPropertyChanged(nameof(EnemyRooms));
         OnPropertyChanged(nameof(HasRooms));
         RefreshSummary();
         _ShowLootRooms();
     }
-
-    /// <summary>A room the detector opened says so, and how sure it was (ET-368, mockup (a)).</summary>
-    private static string _SourceText(RoomCertainty? certainty) =>
-        certainty is { } detected ? $" · auto · {detected.ToString().ToLowerInvariant()}" : string.Empty;
 
     private string _RoomWindowText(IReadOnlyList<DateTime> boundaries, int room)
     {

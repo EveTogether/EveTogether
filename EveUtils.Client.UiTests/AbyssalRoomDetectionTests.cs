@@ -125,7 +125,7 @@ public sealed class AbyssalRoomDetectionTests
         model.Enemies().AddToSave(draft);
 
         Assert.Equal(["RoomDetected(sure)@12:00:35"], draft.Parameters.Select(row => $"{row.ParameterKey}({row.TypedValue})@{row.ObservedAtUtc:HH:mm:ss}"));
-        Assert.EndsWith("· auto · sure", model.Enemies().EnemyRooms[0].WindowText);
+        Assert.Equal("sure", model.Enemies().EnemyRooms[0].Source?.Word);
     }
 
     /// <summary>One run's combat lines through ET's own catch-up reader, into a collector that detects the way an
