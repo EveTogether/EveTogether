@@ -42,7 +42,7 @@ public sealed class RunEnemyObservationCollector(int characterId, Func<string, i
             return;
 
         int? room = RunRooms.RoomOf(_roomBoundaries, observedAtUtc);
-        if (Observations.FirstOrDefault(observation => observation.EnemyTypeId == enemyTypeId)
+        if (Observations.FirstOrDefault(observation => observation.EnemyTypeId == enemyTypeId && observation.RoomNumber == room)
             is { } seen)
         {
             seen.Observe(observedAtUtc);
