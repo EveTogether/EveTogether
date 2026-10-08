@@ -43,8 +43,6 @@ public static class LootTally
     public static LootTallyCount Count(IReadOnlyList<LootTallyCapture> captures, Func<int, bool> isCharge)
     {
         IReadOnlyList<LootTallyLine> counted = Count(captures);
-        if (Ends(captures).Before < 0)
-            return new LootTallyCount(counted, []);
 
         return new LootTallyCount(
             [.. counted.Where(line => !_IsSpentCharge(line, isCharge))],
@@ -52,7 +50,7 @@ public static class LootTally
     }
 
     private static bool _IsSpentCharge(LootTallyLine line, Func<int, bool> isCharge) =>
-        line.LootKind is LootKind.Lost && isCharge(line.ItemTypeId);
+        isCharge(line.ItemTypeId);
 
     /// <summary>Two captures carrying the same role is a state the picker cannot produce but the model allows — a
     /// synced run, or a second way in built later — and the latest one wins, which is the answer a capture arriving
