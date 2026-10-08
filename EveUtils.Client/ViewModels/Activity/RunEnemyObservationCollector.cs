@@ -85,6 +85,7 @@ public sealed class RunEnemyObservationCollector(int characterId, Func<string, i
             return false;
         }
 
+        _detector = null;
         for (int index = 0; index < _detectedCertainties.Count; index++)
         {
             _detectedCertainties[index] = null;
