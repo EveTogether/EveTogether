@@ -165,9 +165,9 @@ public sealed class RunLootTallyTests
         RunIskFacts facts = RunIskFactsReader.From(run, [], new Dictionary<int, double> { [novaFury] = 100_000, [60] = 10_000_000 },
             MiningOreTypes.Resolve([], sde), [], ChargeTypes.Of(sde));
 
+        Assert.Equal((decimal)expectedTotal, IskContributors.Breakdown([facts], StartedAtUtc).Total);
         Assert.Equal((decimal)expectedLoot, facts.LootIskNet);
         Assert.Equal((decimal?)expectedConsumables, facts.ConsumableIskCost);
-        Assert.Equal((decimal)expectedTotal, IskContributors.Breakdown([facts], StartedAtUtc).Total);
     }
 
     private static LootTallyCapture _Hold(LootCaptureRole role, long quantity) =>
