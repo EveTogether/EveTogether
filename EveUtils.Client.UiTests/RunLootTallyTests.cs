@@ -170,6 +170,30 @@ public sealed class RunLootTallyTests
         Assert.Equal((decimal?)expectedConsumables, facts.ConsumableIskCost);
     }
 
+    [Fact]
+    public void Probe_FilamentInTheStartingHold_CountsOnce()
+    {
+        const int filament = 47762;
+        Run run = new() { CharacterId = 90000001 };
+        run.LootCaptures.Add(new RunLootCapture
+        {
+            Role = LootCaptureRole.CargoBefore, CapturedAtUtc = StartedAtUtc,
+            Entries = { new RunLootEntry { ItemTypeId = filament, Quantity = 1 } }
+        });
+        run.LootCaptures.Add(new RunLootCapture { Role = LootCaptureRole.CargoAfter, CapturedAtUtc = StartedAtUtc.AddMinutes(20) });
+        RunParameter[] parameters =
+        [
+            new() { ParameterKey = RunParameterKey.AbyssalFilamentCount, TypedValue = "1" },
+            new() { ParameterKey = RunParameterKey.AbyssalFilamentTypeId, TypedValue = "47762" }
+        ];
+        FakeSdeAccessor sde = new FakeSdeAccessor().Add(filament, "Calm Dark Filament", 4041, 17);
+
+        RunIskFacts facts = RunIskFactsReader.From(run, parameters, new Dictionary<int, double> { [filament] = 1_000_000 },
+            MiningOreTypes.Resolve([], sde), [], ChargeTypes.Of(sde));
+
+        Assert.Equal(-1_000_000m, IskContributors.Breakdown([facts], StartedAtUtc).Total);
+    }
+
     private static LootTallyCapture _Hold(LootCaptureRole role, long quantity) =>
         new(role, IsExcluded: false, quantity == 0 ? [] : [new LootTallyLine(34, quantity, Volume: null, LootKind.Gained)]);
 
