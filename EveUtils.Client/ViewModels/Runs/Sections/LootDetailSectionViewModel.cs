@@ -1,3 +1,5 @@
+using System;
+using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -81,6 +83,7 @@ public sealed partial class LootDetailSectionViewModel : RunDetailSection
                 input.NameOf(run.CharacterId));
             block.Loot.IsLocked = true;
             block.Loot.IsReadOnly = _services.OwnCharacterIds is { } own && !own.Contains(run.CharacterId);
+            block.Loot.SpentFilament = _SpentFilament(input.Detail, run.RunId);
             await block.Loot.LoadWhenIdleAsync(run.LootCaptures, cancellationToken);
         }
 
@@ -88,6 +91,19 @@ public sealed partial class LootDetailSectionViewModel : RunDetailSection
         if (isFirstRead)
             LootOverview.OrderByValue();
     }
+
+    /// <summary>The filament the run was saved against and its count, which CONSUMABLES counts (ET-483).</summary>
+    private static (int TypeId, int Count)? _SpentFilament(ActivityDetailDto detail, Guid runId) =>
+        _ParsedInt(detail, runId, RunParameterKey.AbyssalFilamentCount) is > 0 and var count
+        && _ParsedInt(detail, runId, RunParameterKey.AbyssalFilamentTypeId) is { } typeId
+            ? (typeId, count)
+            : null;
+
+    private static int? _ParsedInt(ActivityDetailDto detail, Guid runId, RunParameterKey key) =>
+        detail.Parameters.FirstOrDefault(parameter => parameter.RunId == runId && parameter.ParameterKey == key) is { } stored
+        && int.TryParse(stored.TypedValue, NumberStyles.Integer, CultureInfo.InvariantCulture, out int parsed)
+            ? parsed
+            : null;
 
     public override string AbsentReason(string noun) => $"no LOOT — {noun} leaves no wrecks to empty";
 }

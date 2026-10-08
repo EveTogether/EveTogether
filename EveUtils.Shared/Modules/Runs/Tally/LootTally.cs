@@ -37,6 +37,41 @@ public static class LootTally
         return after < 0 ? [] : _Difference(captures[before], captures[after]);
     }
 
+    /// <summary><see cref="Count(IReadOnlyList{LootTallyCapture})"/>, with the charges that went down between the two
+    /// holds set apart as spent (ET-471). Only a before/after difference shows what was fired; without a starting hold
+    /// nothing is set apart. A move only: the two lists hold exactly the lines the plain count holds, less the filament
+    /// <paramref name="spentFilament"/> names, which CONSUMABLES already counts from the pilot's own count (ET-483).</summary>
+    public static LootTallyCount Count(IReadOnlyList<LootTallyCapture> captures, Func<int, bool> isCharge,
+        (int TypeId, int Count)? spentFilament = null)
+    {
+        IReadOnlyList<LootTallyLine> counted = Count(captures);
+        if (Ends(captures).Before < 0)
+        {
+            return new LootTallyCount(counted, []);
+        }
+
+        return new LootTallyCount(
+            [.. counted.Where(line => !_IsSpentCharge(line, isCharge)).Select(line => _LessFilament(line, spentFilament)).OfType<LootTallyLine>()],
+            [.. counted.Where(line => _IsSpentCharge(line, isCharge))]);
+    }
+
+    // A filament gone from the hold is the one the run was entered on, counted once, as spent. Only what went beyond
+    // the pilot's own count stays lost loot.
+    private static LootTallyLine? _LessFilament(LootTallyLine line, (int TypeId, int Count)? spentFilament)
+    {
+        if (spentFilament is not { } filament || line.LootKind is not LootKind.Lost || line.ItemTypeId != filament.TypeId)
+        {
+            return line;
+        }
+
+        long quantity = line.Quantity ?? 1;
+        long left = quantity - filament.Count;
+        return left > 0 ? line with { Quantity = left, Volume = line.Volume / quantity * left } : null;
+    }
+
+    private static bool _IsSpentCharge(LootTallyLine line, Func<int, bool> isCharge) =>
+        line.LootKind is LootKind.Lost && isCharge(line.ItemTypeId);
+
     /// <summary>Two captures carrying the same role is a state the picker cannot produce but the model allows — a
     /// synced run, or a second way in built later — and the latest one wins, which is the answer a capture arriving
     /// late gets everywhere else here. Never the reading order's accident.</summary>

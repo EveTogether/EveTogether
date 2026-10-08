@@ -8,6 +8,7 @@ using EveUtils.Shared.Modules.Runs.Entities;
 using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Runs.Events;
 using EveUtils.Shared.Modules.Runs.Isk;
+using EveUtils.Shared.Modules.Runs.Tally;
 using EveUtils.Shared.Modules.Sde;
 using Microsoft.EntityFrameworkCore;
 
@@ -118,7 +119,7 @@ internal sealed class RebuildActivitySummariesCommandHandler(
         foreach (IGrouping<string, Run> activity in runs.GroupBy(run => run.GroupCode ?? run.Id.ToString()))
         {
             ActivitySummary built = ActivitySummaryBuilder.Build(activity.Key, activity.ToArray(), parametersByRun, prices, ores,
-                lossesByRun);
+                lossesByRun, ChargeTypes.Of(sde));
             if (existing.Remove(activity.Key, out ActivitySummary? kept))
             {
                 built.Id = kept.Id;

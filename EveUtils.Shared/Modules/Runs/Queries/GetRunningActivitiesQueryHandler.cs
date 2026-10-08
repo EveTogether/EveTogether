@@ -8,6 +8,7 @@ using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Entities;
 using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Runs.Isk;
+using EveUtils.Shared.Modules.Runs.Tally;
 using EveUtils.Shared.Modules.Sde;
 using Microsoft.EntityFrameworkCore;
 
@@ -50,7 +51,7 @@ internal sealed class GetRunningActivitiesQueryHandler(
             {
                 // Ordered by run id the way a saved activity is, so a mission reward every own toon carries counts once.
                 RunIskFacts[] facts = [.. activity.OrderBy(run => run.Id)
-                    .Select(run => RunIskFactsReader.From(run, run.Parameters, prices, ores, lossesByRun[run.Id]))];
+                    .Select(run => RunIskFactsReader.From(run, run.Parameters, prices, ores, lossesByRun[run.Id], ChargeTypes.Of(sde)))];
                 decimal[] loot = [.. facts.Select(run => run.LootIskNet).OfType<decimal>()];
                 return new RunningActivityDto(
                     activity.Key,

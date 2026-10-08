@@ -55,6 +55,10 @@ public sealed partial class ConsumablesCharacterViewModel : ObservableObject
 
     public ObservableCollection<ActivityLootLineViewModel> Lines { get; } = [];
 
+    /// <summary>The charges the run's two cargo holds show were fired (ET-471). Kept apart from <see cref="Lines"/>:
+    /// they come from LOOT's holds, so a list rewritten by hand must never write them in a second time.</summary>
+    public ObservableCollection<SpentChargeLineViewModel> SpentCharges { get; } = [];
+
     public InventoryListEditorViewModel Editor { get; }
 
     [ObservableProperty] private string _subtotalText = string.Empty;
@@ -69,7 +73,7 @@ public sealed partial class ConsumablesCharacterViewModel : ObservableObject
 
     public bool CanEdit => CanOfferEdit && !IsBusy;
 
-    public void Show(IReadOnlyList<ActivityLootLineViewModel> lines)
+    public void Show(IReadOnlyList<ActivityLootLineViewModel> lines, IReadOnlyList<SpentChargeLineViewModel> spentCharges)
     {
         Lines.Clear();
         foreach (ActivityLootLineViewModel line in lines)
@@ -78,8 +82,14 @@ public sealed partial class ConsumablesCharacterViewModel : ObservableObject
             Lines.Add(line);
         }
 
-        decimal[] priced = [.. lines.Select(line => line.Value).OfType<decimal>()];
-        SubtotalText = lines.Count == 0
+        SpentCharges.Clear();
+        foreach (SpentChargeLineViewModel charge in spentCharges)
+        {
+            SpentCharges.Add(charge);
+        }
+
+        decimal[] priced = [.. lines.Concat(spentCharges.Select(charge => charge.Line)).Select(line => line.Value).OfType<decimal>()];
+        SubtotalText = lines.Count == 0 && spentCharges.Count == 0
             ? "nothing spent"
             : IskFormat.WholeOrNoPrice(priced.Length == 0 ? null : -priced.Sum());
         OnPropertyChanged(nameof(HasLines));

@@ -10,6 +10,7 @@ using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Entities;
 using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Runs.Isk;
+using EveUtils.Shared.Modules.Runs.Tally;
 using EveUtils.Shared.Modules.Sde;
 using Microsoft.EntityFrameworkCore;
 
@@ -63,7 +64,7 @@ internal sealed class GetServerActivityOverviewQueryHandler(
                      .OrderByDescending(activity => activity.Min(run => run.StartedAtUtc)))
         {
             Run[] members = [.. activity];
-            ActivitySummary summary = ActivitySummaryBuilder.Build(activity.Key, members, parametersByRun, prices, ores, noLosses);
+            ActivitySummary summary = ActivitySummaryBuilder.Build(activity.Key, members, parametersByRun, prices, ores, noLosses, ChargeTypes.Of(sde));
             ActivityOverviewRowDto row = ActivityOverviewRows.ToDto(summary, members.SelectMany(run => run.Parameters),
                 members.Select(run => (run.CharacterId, run.CharacterNameSnapshot)),
                 members.Any(run => run.AutoSavedAtUtc.HasValue), onThisServer, ownCharacterIds);

@@ -10,6 +10,7 @@ using EveUtils.Shared.Modules.Runs.Commands;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Entities;
 using EveUtils.Shared.Modules.Runs.Enums;
+using EveUtils.Shared.Modules.Runs.Isk;
 using EveUtils.Shared.Modules.Runs.Tally;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -134,6 +135,49 @@ public sealed class RunLootTallyTests
         LootTallyLine line = Assert.Single(LootTally.Count([before, after]));
         Assert.Equal(60, line.ItemTypeId);
         Assert.Equal(5L, line.Quantity);
+    }
+
+    /// <summary>ET-471: 153 of 200 Nova Fury fired between the two holds leave LOOT for CONSUMABLES and TOTAL ISK does
+    /// not move. The second row is the reading before the split (no charge category); the third has no starting hold,
+    /// so nothing is fired. The fourth (ET-483) also enters on a filament from the starting hold: CONSUMABLES counts it
+    /// once and LOOT leaves it out. Counter-proofs: leave the charges in LootIskNet as well and the first row's TOTAL
+    /// drops by 15,300,000; leave the filament in LOOT and the fourth row's drops by 1,000,000.</summary>
+    [Theory]
+    [InlineData(LootCaptureRole.CargoBefore, 8, 0, 60_000_000d, 15_300_000d, 44_700_000d)]
+    [InlineData(LootCaptureRole.CargoBefore, 7, 0, 44_700_000d, null, 44_700_000d)]
+    [InlineData(LootCaptureRole.Snapshot, 8, 0, 84_700_000d, null, 84_700_000d)]
+    [InlineData(LootCaptureRole.CargoBefore, 8, 1, 60_000_000d, 16_300_000d, 43_700_000d)]
+    public void From_ChargesFiredBetweenTwoHolds_MoveToConsumablesAndLeaveTotalIskAlone(LootCaptureRole firstRole,
+        int novaFuryCategory, int filaments, double expectedLoot, double? expectedConsumables, double expectedTotal)
+    {
+        const int novaFury = 2629;
+        const int filament = 47762;
+        FakeSdeAccessor sde = new FakeSdeAccessor().Add(novaFury, "Nova Fury Light Missile", 384, novaFuryCategory);
+        Run run = new() { CharacterId = 90000001 };
+        run.LootCaptures.Add(new RunLootCapture
+        {
+            Role = firstRole, CapturedAtUtc = StartedAtUtc,
+            Entries = { new RunLootEntry { ItemTypeId = novaFury, Quantity = 200 }, new RunLootEntry { ItemTypeId = filament, Quantity = filaments } }
+        });
+        run.LootCaptures.Add(new RunLootCapture
+        {
+            Role = LootCaptureRole.CargoAfter, CapturedAtUtc = StartedAtUtc.AddMinutes(20),
+            Entries = { new RunLootEntry { ItemTypeId = novaFury, Quantity = 47 }, new RunLootEntry { ItemTypeId = 60, Quantity = 6 } }
+        });
+
+        RunParameter[] entered =
+        [
+            new() { ParameterKey = RunParameterKey.AbyssalFilamentCount, TypedValue = $"{filaments}" },
+            new() { ParameterKey = RunParameterKey.AbyssalFilamentTypeId, TypedValue = $"{filament}" }
+        ];
+
+        RunIskFacts facts = RunIskFactsReader.From(run, entered,
+            new Dictionary<int, double> { [novaFury] = 100_000, [60] = 10_000_000, [filament] = 1_000_000 },
+            MiningOreTypes.Resolve([], sde), [], ChargeTypes.Of(sde));
+
+        Assert.Equal((decimal)expectedTotal, IskContributors.Breakdown([facts], StartedAtUtc).Total);
+        Assert.Equal((decimal)expectedLoot, facts.LootIskNet);
+        Assert.Equal((decimal?)expectedConsumables, facts.ConsumableIskCost);
     }
 
     private static LootTallyCapture _Hold(LootCaptureRole role, long quantity) =>

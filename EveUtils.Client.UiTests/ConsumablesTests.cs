@@ -21,6 +21,7 @@ using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Entities;
 using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Runs.Isk;
+using EveUtils.Shared.Modules.Runs.Tally;
 using EveUtils.Shared.Modules.Runs.Queries;
 using EveUtils.Shared.Modules.Sde;
 using Microsoft.EntityFrameworkCore;
@@ -370,7 +371,7 @@ public sealed class ConsumablesTests
 
         RunIskFacts facts = RunIskFactsReader.From(received, received.Parameters,
             new Dictionary<int, double> { [34] = 10_000_000, [60000] = 5_000_000, [2488] = 100_000 },
-            RunIskFactsReader.OresOf([received], _Sde()), []);
+            RunIskFactsReader.OresOf([received], _Sde()), [], ChargeTypes.Of(_Sde()));
         Assert.Equal(5_500_000m, facts.ConsumableIskCost);
         Assert.Equal(30_000_000m, facts.LootIskNet);
     }
