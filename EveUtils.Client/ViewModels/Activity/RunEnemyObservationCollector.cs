@@ -91,7 +91,8 @@ public sealed class RunEnemyObservationCollector(int characterId, Func<string, i
         {
             if (Observations.FirstOrDefault(kept => kept.EnemyTypeId == undone.EnemyTypeId && kept.RoomNumber == into) is { } kept)
             {
-                undone.RoomNumber = into;
+                kept.Absorb(undone);
+                Observations.Remove(undone);
             }
             else
                 undone.RoomNumber = into;
