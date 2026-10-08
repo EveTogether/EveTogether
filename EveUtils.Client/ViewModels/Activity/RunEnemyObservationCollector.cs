@@ -103,6 +103,8 @@ public sealed class RunEnemyObservationCollector(int characterId, Func<string, i
         if (detection.IsUpgrade)
         {
             _detectedCertainties[^1] = detection.Certainty;
+            // The room headers carry the certainty, so they are laid out again even when no row moved.
+            Regrouped?.Invoke();
             Changed?.Invoke();
             return;
         }

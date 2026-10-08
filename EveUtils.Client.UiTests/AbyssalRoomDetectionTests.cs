@@ -120,7 +120,7 @@ public sealed class AbyssalRoomDetectionTests
         await model.StartRunCommand.ExecuteAsync(null);
 
         await Feeds[path](harness, model);
-        await ActivityWindowHarness.WaitUntil(() => model.Enemies().EnemyRooms.Count == 2);
+        await ActivityWindowHarness.WaitUntil(() => model.Enemies().EnemyObservations.Count == Sightings.Length);
         var draft = new RunSaveDraft(model.RunId ?? Guid.Empty, ActivityWindowHarness.CharacterId, isActingRun: true);
         model.Enemies().AddToSave(draft);
 
