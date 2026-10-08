@@ -47,7 +47,7 @@ public sealed class AbyssalRoomDetector
         _lastSeenUtc = atUtc;
         TimeSpan gap = atUtc - last;
         bool isNew = !_rooms[^1].Contains(enemyTypeId);
-        if (isNew && _rooms.Count < MaxRooms)
+        if (isNew && gap >= Silence && _rooms.Count < MaxRooms)
         {
             _rooms.Add([enemyTypeId]);
             _confirmableSinceUtc = gap >= SureSilence ? atUtc : null;
