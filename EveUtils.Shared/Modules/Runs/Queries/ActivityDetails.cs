@@ -26,7 +26,8 @@ internal static class ActivityDetails
             // same type, and folding those into one row would silently overwrite whichever sighting lost the merge.
             [.. enemyObservations.OrderBy(observation => observation.FirstObservedAtUtc)
                 .Select(observation => new RunEnemyObservationDto(observation.RunId, observation.EnemyTypeId,
-                    observation.EnemyName, observation.Count, observation.FirstObservedAtUtc, observation.LastObservedAtUtc))],
+                    observation.EnemyName, observation.Count, observation.FirstObservedAtUtc, observation.LastObservedAtUtc,
+                    observation.RoomNumber))],
             [.. parameters.OrderBy(parameter => parameter.ParameterKey).ThenBy(parameter => parameter.ObservedAtUtc)
                 .Select(parameter => new RunParameterDto(parameter.RunId, parameter.ParameterKey, parameter.TypedValue,
                     parameter.Amount, parameter.ItemTypeId, parameter.BonusWindowSeconds, parameter.ObservedAtUtc, parameter.EntryId,
