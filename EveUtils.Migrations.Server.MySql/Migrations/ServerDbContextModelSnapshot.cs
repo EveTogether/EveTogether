@@ -1002,6 +1002,9 @@ namespace EveUtils.Migrations.Server.MySql.Migrations
                     b.Property<DateTime>("LastObservedAtUtc")
                         .HasColumnType("datetime(6)");
 
+                    b.Property<int?>("RoomNumber")
+                        .HasColumnType("int");
+
                     b.Property<Guid>("RunId")
                         .HasColumnType("char(36)");
 

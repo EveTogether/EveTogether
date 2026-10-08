@@ -19,7 +19,8 @@ public sealed record RunMiningEntryDto(
 /// with their own first/last window, and folding those into one would silently overwrite whichever sighting lost
 /// the merge.</summary>
 public sealed record RunEnemyObservationDto(
-    Guid RunId, int EnemyTypeId, string EnemyName, int Count, DateTime FirstObservedAtUtc, DateTime LastObservedAtUtc);
+    Guid RunId, int EnemyTypeId, string EnemyName, int Count, DateTime FirstObservedAtUtc, DateTime LastObservedAtUtc,
+    int? RoomNumber = null);
 
 public sealed record RunParameterDto(
     Guid RunId, RunParameterKey ParameterKey, string TypedValue, decimal? Amount, int? ItemTypeId,

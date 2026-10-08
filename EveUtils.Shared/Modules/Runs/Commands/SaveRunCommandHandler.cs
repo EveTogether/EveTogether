@@ -78,7 +78,8 @@ internal sealed class SaveRunCommandHandler(IDbContextFactory<ClientDbContext> c
                 EnemyTypeId = observation.EnemyTypeId,
                 EnemyName = observation.EnemyName,
                 FirstObservedAtUtc = observation.FirstObservedAtUtc,
-                LastObservedAtUtc = observation.LastObservedAtUtc
+                LastObservedAtUtc = observation.LastObservedAtUtc,
+                RoomNumber = observation.RoomNumber
             });
         foreach (RunParameterInput parameter in command.Parameters)
             db.Set<RunParameter>().Add(new RunParameter

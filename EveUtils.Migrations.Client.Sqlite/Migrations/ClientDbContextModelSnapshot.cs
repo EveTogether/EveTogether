@@ -1244,6 +1244,9 @@ namespace EveUtils.Migrations.Client.Sqlite.Migrations
                     b.Property<DateTime>("LastObservedAtUtc")
                         .HasColumnType("TEXT");
 
+                    b.Property<int?>("RoomNumber")
+                        .HasColumnType("INTEGER");
+
                     b.Property<Guid>("RunId")
                         .HasColumnType("TEXT");
 
