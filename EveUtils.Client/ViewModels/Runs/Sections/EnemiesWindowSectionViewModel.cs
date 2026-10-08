@@ -4,6 +4,7 @@ using System.Linq;
 using EveUtils.Client.Gamelog;
 using EveUtils.Client.ViewModels.Activity;
 using CommunityToolkit.Mvvm.Input;
+using EveUtils.Shared.Modules.Gamelog.Aggregation;
 using EveUtils.Shared.Modules.Gamelog.Models;
 using EveUtils.Shared.Modules.Runs;
 using EveUtils.Shared.Modules.Runs.Dtos;
@@ -67,6 +68,13 @@ public sealed partial class EnemiesWindowSectionViewModel : RunWindowSection
         TimeSpan inRoom = TimeSpan.FromTicks(Math.Max(0, ((Context.EffectiveStopUtc ?? nowUtc) - since).Ticks));
         return $"ROOM {boundaries.Count + 1}  since {since.ToLocalTime():HH:mm:ss} · {(int)inRoom.TotalMinutes:00}:{inRoom.Seconds:00}";
     }
+
+    /// <summary>The AUTO badge for the room going on now, when the detector opened it (ET-368).</summary>
+    public RoomSourceViewModel? CurrentRoomSource =>
+        _OnScreenCollector() is { DetectedCertainties: { Count: > 0 } certainties } ? RoomSourceViewModel.Of(certainties[^1]) : null;
+
+    /// <summary>Whether the on-screen pilot's rooms are still found by the detector (ET-368).</summary>
+    public bool IsDetecting => _OnScreenCollector()?.IsDetecting == true;
 
     /// <summary>NEW ROOM (ET-240): close the current room now and begin the next. The STOP rule decides whose: in a run
     /// whose clock is per pilot only the pilot on screen, otherwise every own toon in the group.</summary>
@@ -171,10 +179,7 @@ public sealed partial class EnemiesWindowSectionViewModel : RunWindowSection
         if (draft.CharacterId is { } characterId && _collectors.TryGetValue(characterId, out RunEnemyObservationCollector? collector))
         {
             draft.Enemies.AddRange(collector.ToInputs());
-            draft.Parameters.AddRange(collector.RoomBoundaries.Select(boundary => new RunParameterInput
-            {
-                ParameterKey = RunParameterKey.RoomStarted, TypedValue = string.Empty, ObservedAtUtc = boundary
-            }));
+            draft.Parameters.AddRange(collector.ToRoomParameters());
         }
 
         // A copy: the save runs off the UI thread, where the live path keeps adding.
@@ -200,8 +205,12 @@ public sealed partial class EnemiesWindowSectionViewModel : RunWindowSection
         if (_collectors.ContainsKey(characterId) || Context.Services.GetService<ISdeAccessor>() is not { } sde)
             return;
 
+        // Rooms find themselves only in an abyssal pocket (ET-368): elsewhere waves and reinforcements look like rooms.
         var collector = new RunEnemyObservationCollector(characterId,
-            name => sde.TryGetTypeId(name, out int typeId) ? typeId : null);
+            name => sde.TryGetTypeId(name, out int typeId) ? typeId : null,
+            Context.RunType.Space is RunSpace.AbyssalPocket
+                ? typeId => sde.GetType(typeId) is { } type && AbyssalRoomDetector.IsAbyssalEnemyGroup(type.GroupId)
+                : null);
         // Only the summary: re-announcing the list itself while a count is being typed would rebind the editor
         // under the cursor. The rows are an ObservableCollection — the list keeps itself up to date. Wired for
         // every character, not just the one on screen, so a background sibling's count still moves the summary.
@@ -226,7 +235,8 @@ public sealed partial class EnemiesWindowSectionViewModel : RunWindowSection
         [
             .. Enumerable.Range(1, roomCount).Reverse().Select(room => new RunEnemyRoomViewModel(room,
                 _RoomWindowText(boundaries, room), isUndoShown: room == roomCount,
-                [.. EnemyObservations.Where(observation => observation.RoomNumber == room)]))
+                [.. EnemyObservations.Where(observation => observation.RoomNumber == room)],
+                RoomSourceViewModel.Of(room > 1 ? _OnScreenCollector()?.DetectedCertainties[room - 2] : null)))
         ];
         OnPropertyChanged(nameof(EnemyRooms));
         OnPropertyChanged(nameof(HasRooms));

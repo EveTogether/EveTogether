@@ -1,0 +1,1821 @@
+------------------------------------------------------------
+  Gamelog
+  Listener: RaymondKrah
+  Session Started: 2026.09.18 17:27:33
+------------------------------------------------------------
+[ 2026.09.18 17:29:32 ] (None) Undocking from Aphend VII - Moon 7 - Carthum Conglomerate Foundry to Aphend solar system.
+[ 2026.09.18 17:50:51 ] (combat) 565 to Starving Damavik - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:50:56 ] (combat) 487 to Starving Damavik - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:51:10 ] (combat) 290 to Striking Damavik - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:51:14 ] (combat) 649 to Striking Damavik - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:51:20 ] (combat) 247 to Striking Damavik - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:51:26 ] (combat) 338 to Shining Drekavac - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:51:32 ] (combat) 390 to Shining Drekavac - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:51:34 ] (combat) 77 from Shining Drekavac - Grazes
+[ 2026.09.18 17:51:38 ] (combat) 433 to Shining Drekavac - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:51:39 ] (combat) 149 from Shining Drekavac - Penetrates
+[ 2026.09.18 17:51:43 ] (combat) 433 to Shining Drekavac - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:51:44 ] (combat) 147 from Shining Drekavac - Penetrates
+[ 2026.09.18 17:51:49 ] (combat) 433 to Shining Drekavac - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:51:55 ] (combat) 433 to Shining Drekavac - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:52:00 ] (combat) 433 to Shining Drekavac - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:52:05 ] (combat) 433 to Shining Drekavac - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:52:11 ] (combat) 433 to Shining Drekavac - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:52:16 ] (combat) 433 to Shining Drekavac - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:52:21 ] (combat) 444 to Shining Drekavac - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:52:26 ] (combat) Shining Drekavac misses you completely
+[ 2026.09.18 17:52:28 ] (combat) 300 to Triglavian Biocombinative Cache - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:52:30 ] (combat) 338 to Shining Drekavac - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:52:31 ] (combat) Shining Drekavac misses you completely
+[ 2026.09.18 17:52:33 ] (combat) 649 to Shining Drekavac - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:52:35 ] (combat) 433 to Shining Drekavac - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:52:36 ] (combat) 75 from Shining Drekavac - Grazes
+[ 2026.09.18 17:52:38 ] (combat) 649 to Shining Drekavac - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:52:40 ] (combat) 433 to Shining Drekavac - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:52:41 ] (combat) Shining Drekavac misses you completely
+[ 2026.09.18 17:52:43 ] (combat) 649 to Shining Drekavac - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:52:46 ] (combat) 433 to Shining Drekavac - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:52:49 ] (combat) 649 to Shining Drekavac - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:52:51 ] (combat) 433 to Shining Drekavac - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:52:54 ] (combat) 666 to Shining Drekavac - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:53:44 ] (combat) 300 to Triglavian Biocombinative Cache - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:53:45 ] (combat) 343 to Anchoring Damavik - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:53:49 ] (combat) 385 to Anchoring Damavik - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:53:50 ] (combat) 649 to Anchoring Damavik - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:53:55 ] (combat) 440 to Anchoring Damavik - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:53:57 ] (combat) 485 to Anchoring Damavik - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:54:03 ] (combat) 507 to Harrowing Vedmak - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:54:09 ] (combat) 507 to Harrowing Vedmak - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:54:14 ] (combat) 547 to Harrowing Vedmak - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:54:19 ] (combat) 649 to Harrowing Vedmak - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:54:24 ] (combat) 649 to Harrowing Vedmak - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:54:25 ] (combat) 433 to Harrowing Vedmak - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:54:30 ] (combat) 649 to Harrowing Vedmak - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:54:35 ] (combat) 649 to Harrowing Vedmak - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:54:40 ] (combat) 649 to Harrowing Vedmak - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:54:46 ] (combat) 649 to Harrowing Vedmak - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:54:51 ] (combat) 649 to Harrowing Vedmak - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:54:56 ] (combat) 668 to Harrowing Vedmak - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:54:57 ] (combat) 281 from Harrowing Vedmak - Smashes
+[ 2026.09.18 17:55:02 ] (combat) 668 to Harrowing Vedmak - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:55:07 ] (combat) 668 to Harrowing Vedmak - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:55:09 ] (combat) 27 from Striking Damavik - Penetrates
+[ 2026.09.18 17:55:09 ] (combat) Harrowing Vedmak misses you completely
+[ 2026.09.18 17:55:12 ] (combat) 313 to Harrowing Vedmak - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:55:17 ] (combat) 350 from Harrowing Vedmak - Smashes
+[ 2026.09.18 17:55:18 ] (combat) 338 to Harrowing Vedmak - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:55:23 ] (combat) 338 to Harrowing Vedmak - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:55:29 ] (combat) 649 to Harrowing Vedmak - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:55:34 ] (combat) 649 to Harrowing Vedmak - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:55:39 ] (combat) 649 to Harrowing Vedmak - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:55:44 ] (combat) 679 to Harrowing Vedmak - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:55:50 ] (combat) 679 to Harrowing Vedmak - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:56:40 ] (combat) 300 to Triglavian Biocombinative Cache - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:56:42 ] (combat) 913 to Ephialtes Obfuscator - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:56:45 ] (combat) 401 to Ephialtes Obfuscator - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:56:46 ] (combat) 639 to Ephialtes Obfuscator - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:56:49 ] (combat) 477 to Ephialtes Obfuscator - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:56:51 ] (combat) 720 to Ephialtes Obfuscator - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:56:56 ] (combat) 467 to Ephialtes Obfuscator - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:56:58 ] (combat) 726 to Ephialtes Obfuscator - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:57:01 ] (combat) 513 to Ephialtes Obfuscator - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:57:03 ] (combat) 193 to Ephialtes Obfuscator - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:57:07 ] (combat) 461 to Ephialtes Confuser - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:57:10 ] (combat) 690 to Ephialtes Confuser - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:57:14 ] (combat) 459 to Ephialtes Confuser - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:57:16 ] (combat) 707 to Ephialtes Confuser - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:57:27 ] (combat) 688 to Ephialtes Obfuscator - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:57:32 ] (combat) 688 to Ephialtes Obfuscator - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:57:37 ] (combat) 688 to Ephialtes Obfuscator - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:57:38 ] (combat) 459 to Ephialtes Obfuscator - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:57:43 ] (combat) 696 to Ephialtes Obfuscator - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:57:48 ] (combat) 409 to Ephialtes Obfuscator - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:57:54 ] (combat) 507 to Karybdis Tyrannos - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:57:59 ] (combat) 507 to Karybdis Tyrannos - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:58:04 ] (combat) 507 to Karybdis Tyrannos - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:58:10 ] (combat) 507 to Karybdis Tyrannos - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:58:15 ] (combat) 507 to Karybdis Tyrannos - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:58:19 ] (combat) 507 to Karybdis Tyrannos - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:58:21 ] (combat) Karybdis Tyrannos misses you completely
+[ 2026.09.18 17:58:25 ] (combat) 507 to Karybdis Tyrannos - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:58:26 ] (combat) Karybdis Tyrannos misses you completely
+[ 2026.09.18 17:58:30 ] (combat) 507 to Karybdis Tyrannos - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:58:31 ] (combat) Karybdis Tyrannos misses you completely
+[ 2026.09.18 17:58:35 ] (combat) 507 to Karybdis Tyrannos - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:58:36 ] (combat) Karybdis Tyrannos misses you completely
+[ 2026.09.18 17:58:40 ] (combat) 507 to Karybdis Tyrannos - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:58:41 ] (combat) Karybdis Tyrannos misses you completely
+[ 2026.09.18 17:58:46 ] (combat) Karybdis Tyrannos misses you completely
+[ 2026.09.18 17:58:47 ] (combat) 507 to Karybdis Tyrannos - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:58:51 ] (combat) Karybdis Tyrannos misses you completely
+[ 2026.09.18 17:58:52 ] (combat) 507 to Karybdis Tyrannos - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:58:56 ] (combat) Karybdis Tyrannos misses you completely
+[ 2026.09.18 17:58:57 ] (combat) 507 to Karybdis Tyrannos - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:59:01 ] (combat) Karybdis Tyrannos misses you completely
+[ 2026.09.18 17:59:03 ] (combat) 507 to Karybdis Tyrannos - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:59:06 ] (combat) Karybdis Tyrannos misses you completely
+[ 2026.09.18 17:59:08 ] (combat) 507 to Karybdis Tyrannos - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:59:11 ] (combat) Karybdis Tyrannos misses you completely
+[ 2026.09.18 17:59:13 ] (combat) 1015 to Karybdis Tyrannos - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:59:16 ] (combat) Karybdis Tyrannos misses you completely
+[ 2026.09.18 17:59:18 ] (combat) 1015 to Karybdis Tyrannos - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:59:19 ] (combat) 676 to Karybdis Tyrannos - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:59:21 ] (combat) Karybdis Tyrannos misses you completely
+[ 2026.09.18 17:59:24 ] (combat) 1015 to Karybdis Tyrannos - Nova Fury Light Missile - Hits
+[ 2026.09.18 17:59:26 ] (combat) Karybdis Tyrannos misses you completely
+[ 2026.09.18 18:04:11 ] (combat) 302 to Anchoring Damavik - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:04:15 ] (combat) 440 to Anchoring Damavik - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:04:19 ] (combat) 441 to Anchoring Damavik - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:04:21 ] (combat) Warp scramble attempt from Anchoring Damavik to Jackdaw [EWB-C] [RIPRC] [Jithran] -
+[ 2026.09.18 18:04:24 ] (combat) 439 to Anchoring Damavik - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:04:25 ] (combat) 293 to Anchoring Damavik - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:04:30 ] (combat) 677 to Anchoring Damavik - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:04:37 ] (combat) 649 to Starving Vedmak - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:04:42 ] (combat) 649 to Starving Vedmak - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:04:47 ] (combat) 4 GJ energy neutralized Starving Vedmak - Starving Vedmak
+[ 2026.09.18 18:04:48 ] (combat) 649 to Starving Vedmak - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:04:50 ] (combat) Striking Damavik misses you completely
+[ 2026.09.18 18:04:50 ] (combat) 114 from Starving Vedmak - Grazes
+[ 2026.09.18 18:04:52 ] (combat) 677 to Starving Vedmak - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:04:55 ] (combat) Starving Vedmak misses you completely
+[ 2026.09.18 18:05:02 ] (combat) 17 from Striking Damavik - Hits
+[ 2026.09.18 18:05:06 ] (combat) 507 to Starving Vedmak - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:05:06 ] (combat) 15 from Striking Damavik - Glances Off
+[ 2026.09.18 18:05:09 ] (combat) 12 from Striking Damavik - Grazes
+[ 2026.09.18 18:05:10 ] (combat) 550 to Starving Vedmak - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:05:13 ] (combat) 19 from Striking Damavik - Hits
+[ 2026.09.18 18:05:15 ] (combat) 649 to Starving Vedmak - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:05:16 ] (combat) 433 to Starving Vedmak - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:05:16 ] (combat) 24 from Striking Damavik - Hits
+[ 2026.09.18 18:05:21 ] (combat) 649 to Starving Vedmak - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:05:26 ] (combat) 649 to Starving Vedmak - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:05:31 ] (combat) 620 to Starving Vedmak - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:05:41 ] (combat) 365 to Striking Damavik - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:05:42 ] (combat) 269 to Striking Damavik - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:05:47 ] (combat) 449 to Striking Damavik - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:05:52 ] (combat) 518 to Striking Damavik - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:06:29 ] (combat) Scylla Tyrannos misses you completely
+[ 2026.09.18 18:06:31 ] (combat) Ephialtes Lancer misses you completely
+[ 2026.09.18 18:06:31 ] (combat) Ephialtes Confuser misses you completely
+[ 2026.09.18 18:06:31 ] (combat) Ephialtes Entangler misses you completely
+[ 2026.09.18 18:06:31 ] (combat) Ephialtes Spearfisher misses you completely
+[ 2026.09.18 18:06:34 ] (combat) Scylla Tyrannos misses you completely
+[ 2026.09.18 18:06:35 ] (combat) Ephialtes Lancer misses you completely
+[ 2026.09.18 18:06:35 ] (combat) Ephialtes Confuser misses you completely
+[ 2026.09.18 18:06:35 ] (combat) Ephialtes Entangler misses you completely
+[ 2026.09.18 18:06:35 ] (combat) Ephialtes Spearfisher misses you completely
+[ 2026.09.18 18:06:39 ] (combat) Scylla Tyrannos misses you completely
+[ 2026.09.18 18:06:39 ] (combat) Ephialtes Lancer misses you completely
+[ 2026.09.18 18:06:39 ] (combat) Ephialtes Confuser misses you completely
+[ 2026.09.18 18:06:39 ] (combat) Ephialtes Entangler misses you completely
+[ 2026.09.18 18:06:39 ] (combat) Ephialtes Spearfisher misses you completely
+[ 2026.09.18 18:06:40 ] (combat) 913 to Ephialtes Entangler - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:06:42 ] (combat) 5 from Ephialtes Lancer - Praedormitan Missile - Hits
+[ 2026.09.18 18:06:42 ] (combat) 3 from Ephialtes Confuser - Praedormitan Missile - Hits
+[ 2026.09.18 18:06:43 ] (combat) 3 from Ephialtes Confuser - Praedormitan Missile - Hits
+[ 2026.09.18 18:06:43 ] (combat) 3 from Ephialtes Spearfisher - Praedormitan Missile - Hits
+[ 2026.09.18 18:06:43 ] (combat) Ephialtes Lancer misses you completely
+[ 2026.09.18 18:06:43 ] (combat) Ephialtes Entangler misses you completely
+[ 2026.09.18 18:06:44 ] (combat) 3 from Ephialtes Entangler - Praedormitan Missile - Hits
+[ 2026.09.18 18:06:44 ] (combat) Scylla Tyrannos misses you completely
+[ 2026.09.18 18:06:47 ] (combat) Ephialtes Lancer misses you completely
+[ 2026.09.18 18:06:47 ] (combat) Ephialtes Confuser misses you completely
+[ 2026.09.18 18:06:47 ] (combat) Ephialtes Entangler misses you completely
+[ 2026.09.18 18:06:47 ] (combat) Ephialtes Spearfisher misses you completely
+[ 2026.09.18 18:06:48 ] (combat) 3 from Ephialtes Lancer - Praedormitan Missile - Hits
+[ 2026.09.18 18:06:48 ] (combat) 2 from Ephialtes Confuser - Praedormitan Missile - Hits
+[ 2026.09.18 18:06:49 ] (combat) 2 from Ephialtes Confuser - Praedormitan Missile - Hits
+[ 2026.09.18 18:06:49 ] (combat) 2 from Ephialtes Spearfisher - Praedormitan Missile - Hits
+[ 2026.09.18 18:06:49 ] (combat) 913 to Ephialtes Entangler - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:06:49 ] (combat) Scylla Tyrannos misses you completely
+[ 2026.09.18 18:06:50 ] (combat) 2 from Ephialtes Entangler - Praedormitan Missile - Hits
+[ 2026.09.18 18:06:51 ] (combat) 47 from Ephialtes Lancer - Smashes
+[ 2026.09.18 18:06:51 ] (combat) 22 from Ephialtes Confuser - Hits
+[ 2026.09.18 18:06:51 ] (combat) 24 from Ephialtes Entangler - Hits
+[ 2026.09.18 18:06:51 ] (combat) 13 from Ephialtes Spearfisher - Grazes
+[ 2026.09.18 18:06:53 ] (combat) 411 to Ephialtes Entangler - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:06:54 ] (combat) 3 from Ephialtes Lancer - Praedormitan Missile - Hits
+[ 2026.09.18 18:06:54 ] (combat) 2 from Ephialtes Confuser - Praedormitan Missile - Hits
+[ 2026.09.18 18:06:54 ] (combat) 2 from Ephialtes Spearfisher - Praedormitan Missile - Hits
+[ 2026.09.18 18:06:54 ] (combat) Scylla Tyrannos misses you completely
+[ 2026.09.18 18:06:55 ] (combat) 2 from Ephialtes Confuser - Praedormitan Missile - Hits
+[ 2026.09.18 18:06:55 ] (combat) 2 from Ephialtes Spearfisher - Praedormitan Missile - Hits
+[ 2026.09.18 18:06:55 ] (combat) 52 from Ephialtes Lancer - Smashes
+[ 2026.09.18 18:06:56 ] (combat) 2 from Ephialtes Confuser - Praedormitan Missile - Hits
+[ 2026.09.18 18:06:57 ] (combat) Warp scramble attempt from Ephialtes Spearfisher to you!
+[ 2026.09.18 18:06:59 ] (combat) 507 to Scylla Tyrannos - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:06:59 ] (combat) 40 from Ephialtes Lancer - Penetrates
+[ 2026.09.18 18:06:59 ] (combat) 30 from Ephialtes Confuser - Penetrates
+[ 2026.09.18 18:06:59 ] (combat) 14 from Ephialtes Spearfisher - Grazes
+[ 2026.09.18 18:07:03 ] (combat) Ephialtes Lancer misses you completely
+[ 2026.09.18 18:07:03 ] (combat) 20 from Ephialtes Confuser - Hits
+[ 2026.09.18 18:07:03 ] (combat) Ephialtes Spearfisher misses you completely
+[ 2026.09.18 18:07:04 ] (combat) 2 from Ephialtes Confuser - Praedormitan Missile - Hits
+[ 2026.09.18 18:07:04 ] (combat) 507 to Scylla Tyrannos - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:07:05 ] (combat) 3 from Ephialtes Lancer - Praedormitan Missile - Hits
+[ 2026.09.18 18:07:05 ] (combat) 2 from Ephialtes Spearfisher - Praedormitan Missile - Hits
+[ 2026.09.18 18:07:06 ] (combat) 2 from Ephialtes Confuser - Praedormitan Missile - Hits
+[ 2026.09.18 18:07:06 ] (combat) 2 from Ephialtes Spearfisher - Praedormitan Missile - Hits
+[ 2026.09.18 18:07:07 ] (combat) 2 from Ephialtes Confuser - Praedormitan Missile - Hits
+[ 2026.09.18 18:07:07 ] (combat) 29 from Ephialtes Lancer - Hits
+[ 2026.09.18 18:07:07 ] (combat) Ephialtes Spearfisher misses you completely
+[ 2026.09.18 18:07:09 ] (combat) 507 to Scylla Tyrannos - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:07:11 ] (combat) Ephialtes Lancer misses you completely
+[ 2026.09.18 18:07:11 ] (combat) 14 from Ephialtes Confuser - Grazes
+[ 2026.09.18 18:07:11 ] (combat) Ephialtes Spearfisher misses you completely
+[ 2026.09.18 18:07:14 ] (combat) 2 from Ephialtes Confuser - Praedormitan Missile - Hits
+[ 2026.09.18 18:07:14 ] (combat) Scylla Tyrannos misses you completely
+[ 2026.09.18 18:07:15 ] (combat) 507 to Scylla Tyrannos - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:07:15 ] (combat) Ephialtes Lancer misses you completely
+[ 2026.09.18 18:07:15 ] (combat) 30 from Ephialtes Confuser - Penetrates
+[ 2026.09.18 18:07:15 ] (combat) 30 from Ephialtes Spearfisher - Penetrates
+[ 2026.09.18 18:07:16 ] (combat) 2 from Ephialtes Spearfisher - Praedormitan Missile - Hits
+[ 2026.09.18 18:07:17 ] (combat) 3 from Ephialtes Lancer - Praedormitan Missile - Hits
+[ 2026.09.18 18:07:18 ] (combat) 2 from Ephialtes Confuser - Praedormitan Missile - Hits
+[ 2026.09.18 18:07:19 ] (combat) Scylla Tyrannos misses you completely
+[ 2026.09.18 18:07:19 ] (combat) 20 from Ephialtes Lancer - Grazes
+[ 2026.09.18 18:07:19 ] (combat) 30 from Ephialtes Confuser - Penetrates
+[ 2026.09.18 18:07:19 ] (combat) 12 from Ephialtes Spearfisher - Grazes
+[ 2026.09.18 18:07:20 ] (combat) 1015 to Scylla Tyrannos - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:07:23 ] (combat) Ephialtes Lancer misses you completely
+[ 2026.09.18 18:07:23 ] (combat) 23 from Ephialtes Confuser - Hits
+[ 2026.09.18 18:07:23 ] (combat) 15 from Ephialtes Spearfisher - Grazes
+[ 2026.09.18 18:07:24 ] (combat) 2 from Ephialtes Confuser - Praedormitan Missile - Hits
+[ 2026.09.18 18:07:24 ] (combat) 38 from Scylla Tyrannos - Glances Off
+[ 2026.09.18 18:07:25 ] (combat) 2 from Ephialtes Spearfisher - Praedormitan Missile - Hits
+[ 2026.09.18 18:07:25 ] (combat) 196 to Scylla Tyrannos - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:07:26 ] (combat) 2 from Ephialtes Spearfisher - Praedormitan Missile - Hits
+[ 2026.09.18 18:07:27 ] (combat) 3 from Ephialtes Lancer - Praedormitan Missile - Hits
+[ 2026.09.18 18:07:27 ] (combat) 35 from Ephialtes Confuser - Smashes
+[ 2026.09.18 18:07:27 ] (combat) 18 from Ephialtes Spearfisher - Glances Off
+[ 2026.09.18 18:07:28 ] (combat) 2 from Ephialtes Confuser - Praedormitan Missile - Hits
+[ 2026.09.18 18:07:29 ] (combat) Scylla Tyrannos misses you completely
+[ 2026.09.18 18:07:31 ] (combat) 24 from Ephialtes Lancer - Glances Off
+[ 2026.09.18 18:07:31 ] (combat) 23 from Ephialtes Confuser - Hits
+[ 2026.09.18 18:07:31 ] (combat) 31 from Ephialtes Spearfisher - Smashes
+[ 2026.09.18 18:07:33 ] (combat) 507 to Scylla Tyrannos - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:07:34 ] (combat) 2 from Ephialtes Confuser - Praedormitan Missile - Hits
+[ 2026.09.18 18:07:34 ] (combat) Scylla Tyrannos misses you completely
+[ 2026.09.18 18:07:35 ] (combat) 2 from Ephialtes Spearfisher - Praedormitan Missile - Hits
+[ 2026.09.18 18:07:35 ] (combat) Ephialtes Lancer misses you completely
+[ 2026.09.18 18:07:35 ] (combat) Ephialtes Confuser misses you completely
+[ 2026.09.18 18:07:37 ] (combat) 4 from Ephialtes Lancer - Praedormitan Missile - Hits
+[ 2026.09.18 18:07:38 ] (combat) 3 from Ephialtes Confuser - Praedormitan Missile - Hits
+[ 2026.09.18 18:07:38 ] (combat) 507 to Scylla Tyrannos - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:07:39 ] (combat) 33 from Scylla Tyrannos - Grazes
+[ 2026.09.18 18:07:39 ] (combat) Ephialtes Lancer misses you completely
+[ 2026.09.18 18:07:39 ] (combat) 14 from Ephialtes Confuser - Grazes
+[ 2026.09.18 18:07:43 ] (combat) 507 to Scylla Tyrannos - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:07:43 ] (combat) Ephialtes Lancer misses you completely
+[ 2026.09.18 18:07:43 ] (combat) 20 from Ephialtes Confuser - Hits
+[ 2026.09.18 18:07:44 ] (combat) Scylla Tyrannos misses you completely
+[ 2026.09.18 18:07:45 ] (combat) 3 from Ephialtes Lancer - Praedormitan Missile - Hits
+[ 2026.09.18 18:07:45 ] (combat) 3 from Ephialtes Confuser - Praedormitan Missile - Hits
+[ 2026.09.18 18:07:47 ] (combat) 23 from Ephialtes Lancer - Glances Off
+[ 2026.09.18 18:07:48 ] (combat) 507 to Scylla Tyrannos - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:07:49 ] (combat) 541 to Scylla Tyrannos - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:07:51 ] (combat) 26 from Ephialtes Lancer - Glances Off
+[ 2026.09.18 18:07:53 ] (combat) 3 from Ephialtes Lancer - Praedormitan Missile - Hits
+[ 2026.09.18 18:07:54 ] (combat) 1015 to Scylla Tyrannos - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:07:55 ] (combat) 32 from Ephialtes Lancer - Hits
+[ 2026.09.18 18:07:57 ] (combat) Warp scramble attempt from Ephialtes Spearfisher to Jackdaw [EWB-C] [RIPRC] [Jithran] -
+[ 2026.09.18 18:07:59 ] (combat) 196 to Scylla Tyrannos - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:07:59 ] (combat) 47 from Ephialtes Lancer - Smashes
+[ 2026.09.18 18:08:03 ] (combat) 41 from Ephialtes Lancer - Penetrates
+[ 2026.09.18 18:08:04 ] (combat) 3 from Ephialtes Lancer - Praedormitan Missile - Hits
+[ 2026.09.18 18:08:05 ] (combat) 834 to Ephialtes Lancer - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:08:07 ] (combat) 20 from Ephialtes Lancer - Grazes
+[ 2026.09.18 18:08:10 ] (combat) 732 to Ephialtes Lancer - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:08:11 ] (combat) Ephialtes Lancer misses you completely
+[ 2026.09.18 18:08:15 ] (combat) 3 from Ephialtes Lancer - Praedormitan Missile - Hits
+[ 2026.09.18 18:08:16 ] (combat) 720 to Ephialtes Lancer - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:08:19 ] (combat) Ephialtes Lancer misses you completely
+[ 2026.09.18 18:08:21 ] (combat) 755 to Ephialtes Lancer - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:08:26 ] (combat) Warp scramble attempt from Ephialtes Spearfisher to Jackdaw [EWB-C] [RIPRC] [Jithran] -
+[ 2026.09.18 18:08:27 ] (combat) Warp scramble attempt from Ephialtes Spearfisher to Jackdaw [EWB-C] [RIPRC] [Jithran] -
+[ 2026.09.18 18:08:30 ] (combat) 733 to Ephialtes Spearfisher - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:08:34 ] (combat) 21 from Ephialtes Spearfisher - Hits
+[ 2026.09.18 18:08:36 ] (combat) 705 to Ephialtes Spearfisher - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:08:37 ] (combat) 2 from Ephialtes Spearfisher - Praedormitan Missile - Hits
+[ 2026.09.18 18:08:38 ] (combat) 25 from Ephialtes Spearfisher - Penetrates
+[ 2026.09.18 18:08:41 ] (combat) 436 to Ephialtes Spearfisher - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:08:42 ] (combat) 34 from Ephialtes Spearfisher - Smashes
+[ 2026.09.18 18:08:46 ] (combat) Ephialtes Spearfisher misses you completely
+[ 2026.09.18 18:08:47 ] (combat) 8 from Ephialtes Spearfisher - Praedormitan Missile - Hits
+[ 2026.09.18 18:08:48 ] (combat) 691 to Ephialtes Spearfisher - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:08:50 ] (combat) 26 from Ephialtes Spearfisher - Penetrates
+[ 2026.09.18 18:08:53 ] (combat) 735 to Ephialtes Spearfisher - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:08:54 ] (combat) 24 from Ephialtes Spearfisher - Hits
+[ 2026.09.18 18:08:57 ] (combat) Warp scramble attempt from Ephialtes Spearfisher to you!
+[ 2026.09.18 18:08:57 ] (combat) 14 from Ephialtes Spearfisher - Praedormitan Missile - Hits
+[ 2026.09.18 18:08:58 ] (combat) 725 to Ephialtes Spearfisher - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:08:59 ] (combat) 521 to Ephialtes Spearfisher - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:09:35 ] (combat) 137 to Fogcaster Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:09:39 ] (combat) 213 to Fogcaster Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:09:44 ] (combat) 266 to Fogcaster Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:09:49 ] (combat) 19 to Fogcaster Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:09:58 ] (combat) 126 to Blastlance Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:10:04 ] (combat) 235 to Blastlance Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:10:04 ] (combat) Spotlighter Tessella misses you completely
+[ 2026.09.18 18:10:08 ] (combat) Spotlighter Tessella misses you completely
+[ 2026.09.18 18:10:10 ] (combat) 173 to Blastlance Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:10:12 ] (combat) Spotlighter Tessella misses you completely
+[ 2026.09.18 18:10:16 ] (combat) 166 to Blastlance Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:10:16 ] (combat) Spotlighter Tessella misses you completely
+[ 2026.09.18 18:10:20 ] (combat) 8 from Spotlighter Tessella - Glances Off
+[ 2026.09.18 18:10:24 ] (combat) Spotlighter Tessella misses you completely
+[ 2026.09.18 18:10:25 ] (combat) 182 to Blastlance Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:10:28 ] (combat) Spotlighter Tessella misses you completely
+[ 2026.09.18 18:10:29 ] (combat) 372 to Blastlance Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:10:32 ] (combat) Spotlighter Tessella misses you completely
+[ 2026.09.18 18:10:34 ] (combat) 525 to Blastlance Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:10:36 ] (combat) 11 from Spotlighter Tessella - Hits
+[ 2026.09.18 18:10:40 ] (combat) 13 from Spotlighter Tessella - Penetrates
+[ 2026.09.18 18:10:42 ] (combat) 361 to Blastlance Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:10:44 ] (combat) 12 from Spotlighter Tessella - Penetrates
+[ 2026.09.18 18:10:47 ] (combat) 353 to Blastlance Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:10:48 ] (combat) 14 from Spotlighter Tessella - Penetrates
+[ 2026.09.18 18:10:52 ] (combat) 10 from Spotlighter Tessella - Hits
+[ 2026.09.18 18:10:53 ] (combat) 232 to Blastlance Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:10:56 ] (combat) 11 from Spotlighter Tessella - Hits
+[ 2026.09.18 18:11:00 ] (combat) 8 from Spotlighter Tessella - Glances Off
+[ 2026.09.18 18:11:04 ] (combat) 10 from Spotlighter Tessella - Hits
+[ 2026.09.18 18:11:05 ] (combat) 181 to Blastlance Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:11:08 ] (combat) 10 from Spotlighter Tessella - Hits
+[ 2026.09.18 18:11:12 ] (combat) 14 from Spotlighter Tessella - Penetrates
+[ 2026.09.18 18:11:16 ] (combat) 356 to Blastlance Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:11:16 ] (combat) 12 from Spotlighter Tessella - Penetrates
+[ 2026.09.18 18:11:20 ] (combat) 286 to Blastlance Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:11:20 ] (combat) 10 from Spotlighter Tessella - Hits
+[ 2026.09.18 18:11:24 ] (combat) 10 from Spotlighter Tessella - Hits
+[ 2026.09.18 18:11:24 ] (combat) Blastlance Tessella misses you completely
+[ 2026.09.18 18:11:26 ] (combat) 171 to Blastlance Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:11:28 ] (combat) Spotlighter Tessella misses you completely
+[ 2026.09.18 18:11:28 ] (combat) Blastlance Tessella misses you completely
+[ 2026.09.18 18:11:32 ] (combat) 183 to Blastlance Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:11:32 ] (combat) 13 from Spotlighter Tessella - Penetrates
+[ 2026.09.18 18:11:33 ] (combat) 121 to Blastlance Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:11:36 ] (combat) 7 from Spotlighter Tessella - Grazes
+[ 2026.09.18 18:11:38 ] (combat) 181 to Blastlance Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:11:40 ] (combat) 14 from Spotlighter Tessella - Penetrates
+[ 2026.09.18 18:11:42 ] (combat) 266 to Blastlance Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:11:44 ] (combat) 13 from Spotlighter Tessella - Penetrates
+[ 2026.09.18 18:11:48 ] (combat) 183 to Spotlighter Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:18:25 ] (combat) Devoted Torchbearer misses you completely
+[ 2026.09.18 18:18:25 ] (combat) Devoted Hunter misses you completely
+[ 2026.09.18 18:18:25 ] (combat) Devoted Fisher misses you completely
+[ 2026.09.18 18:18:28 ] (combat) Devoted Knight misses you completely
+[ 2026.09.18 18:18:30 ] (combat) Devoted Hunter misses you completely
+[ 2026.09.18 18:18:30 ] (combat) Devoted Torchbearer misses you completely
+[ 2026.09.18 18:18:30 ] (combat) Devoted Fisher misses you completely
+[ 2026.09.18 18:18:32 ] (combat) Devoted Knight misses you completely
+[ 2026.09.18 18:18:34 ] (combat) Devoted Hunter misses you completely
+[ 2026.09.18 18:18:35 ] (combat) Devoted Torchbearer misses you completely
+[ 2026.09.18 18:18:35 ] (combat) Devoted Fisher misses you completely
+[ 2026.09.18 18:18:35 ] (combat) Devoted Knight misses you completely
+[ 2026.09.18 18:18:39 ] (combat) Devoted Hunter misses you completely
+[ 2026.09.18 18:18:39 ] (combat) Devoted Knight misses you completely
+[ 2026.09.18 18:18:40 ] (combat) Devoted Torchbearer misses you completely
+[ 2026.09.18 18:18:40 ] (combat) Devoted Fisher misses you completely
+[ 2026.09.18 18:18:42 ] (combat) 609 to Devoted Hunter - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:18:42 ] (combat) Devoted Knight misses you completely
+[ 2026.09.18 18:18:43 ] (combat) Devoted Hunter misses you completely
+[ 2026.09.18 18:18:45 ] (combat) Devoted Torchbearer misses you completely
+[ 2026.09.18 18:18:45 ] (combat) Devoted Fisher misses you completely
+[ 2026.09.18 18:18:46 ] (combat) Devoted Knight misses you completely
+[ 2026.09.18 18:18:47 ] (combat) 609 to Devoted Hunter - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:18:48 ] (combat) Devoted Hunter misses you completely
+[ 2026.09.18 18:18:49 ] (combat) Devoted Knight misses you completely
+[ 2026.09.18 18:18:50 ] (combat) Devoted Torchbearer misses you completely
+[ 2026.09.18 18:18:50 ] (combat) Devoted Fisher misses you completely
+[ 2026.09.18 18:18:52 ] (combat) 609 to Devoted Hunter - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:18:53 ] (combat) 406 to Devoted Hunter - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:18:53 ] (combat) Devoted Knight misses you completely
+[ 2026.09.18 18:18:55 ] (combat) Devoted Torchbearer misses you completely
+[ 2026.09.18 18:18:55 ] (combat) Devoted Fisher misses you completely
+[ 2026.09.18 18:18:56 ] (combat) Devoted Knight misses you completely
+[ 2026.09.18 18:18:57 ] (combat) 419 to Devoted Hunter - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:19:00 ] (combat) Devoted Knight misses you completely
+[ 2026.09.18 18:19:00 ] (combat) Devoted Torchbearer misses you completely
+[ 2026.09.18 18:19:00 ] (combat) Devoted Fisher misses you completely
+[ 2026.09.18 18:19:01 ] (combat) Devoted Hunter misses you completely
+[ 2026.09.18 18:19:02 ] (combat) 164 to Devoted Hunter - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:19:04 ] (combat) Devoted Knight misses you completely
+[ 2026.09.18 18:19:05 ] (combat) Devoted Torchbearer misses you completely
+[ 2026.09.18 18:19:05 ] (combat) Devoted Fisher misses you completely
+[ 2026.09.18 18:19:06 ] (combat) 45 from Devoted Hunter - Glances Off
+[ 2026.09.18 18:19:07 ] (combat) Devoted Knight misses you completely
+[ 2026.09.18 18:19:09 ] (combat) 659 to Devoted Fisher - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:19:10 ] (combat) Devoted Torchbearer misses you completely
+[ 2026.09.18 18:19:10 ] (combat) Devoted Fisher misses you completely
+[ 2026.09.18 18:19:10 ] (combat) Devoted Hunter misses you completely
+[ 2026.09.18 18:19:11 ] (combat) Devoted Knight misses you completely
+[ 2026.09.18 18:19:14 ] (combat) 640 to Devoted Fisher - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:19:14 ] (combat) Devoted Knight misses you completely
+[ 2026.09.18 18:19:15 ] (combat) 60 from Devoted Hunter - Hits
+[ 2026.09.18 18:19:15 ] (combat) Devoted Torchbearer misses you completely
+[ 2026.09.18 18:19:15 ] (combat) Devoted Fisher misses you completely
+[ 2026.09.18 18:19:18 ] (combat) Devoted Knight misses you completely
+[ 2026.09.18 18:19:19 ] (combat) 299 to Devoted Fisher - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:19:19 ] (combat) 80 from Devoted Hunter - Penetrates
+[ 2026.09.18 18:19:20 ] (combat) Devoted Torchbearer misses you completely
+[ 2026.09.18 18:19:21 ] (combat) Devoted Knight misses you completely
+[ 2026.09.18 18:19:24 ] (combat) 61 from Devoted Hunter - Hits
+[ 2026.09.18 18:19:25 ] (combat) 158 from Devoted Knight - Hits
+[ 2026.09.18 18:19:26 ] (combat) 311 to Devoted Torchbearer - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:19:28 ] (combat) Devoted Knight misses you completely
+[ 2026.09.18 18:19:29 ] (combat) 42 from Devoted Hunter - Grazes
+[ 2026.09.18 18:19:31 ] (combat) 659 to Devoted Torchbearer - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:19:32 ] (combat) 177 from Devoted Knight - Penetrates
+[ 2026.09.18 18:19:33 ] (combat) 53 from Devoted Hunter - Hits
+[ 2026.09.18 18:19:35 ] (combat) 120 from Devoted Knight - Glances Off
+[ 2026.09.18 18:19:36 ] (combat) 63 from Devoted Torchbearer - Smashes
+[ 2026.09.18 18:19:37 ] (combat) 354 to Devoted Torchbearer - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:19:38 ] (combat) 63 from Devoted Hunter - Hits
+[ 2026.09.18 18:19:39 ] (combat) Devoted Knight misses you completely
+[ 2026.09.18 18:19:41 ] (combat) 40 from Devoted Torchbearer - Hits
+[ 2026.09.18 18:19:42 ] (combat) 207 to Devoted Torchbearer - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:19:42 ] (combat) 44 from Devoted Hunter - Glances Off
+[ 2026.09.18 18:19:42 ] (combat) Devoted Knight misses you completely
+[ 2026.09.18 18:19:46 ] (combat) Devoted Knight misses you completely
+[ 2026.09.18 18:19:47 ] (combat) 65 from Devoted Hunter - Hits
+[ 2026.09.18 18:19:48 ] (combat) 609 to Devoted Hunter - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:19:49 ] (combat) 500 from Devoted Knight - Wrecks
+[ 2026.09.18 18:19:51 ] (combat) 46 from Devoted Hunter - Glances Off
+[ 2026.09.18 18:19:53 ] (combat) Devoted Knight misses you completely
+[ 2026.09.18 18:19:54 ] (combat) 609 to Devoted Hunter - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:19:54 ] (combat) 0 GJ energy neutralized Devoted Knight - Devoted Knight
+[ 2026.09.18 18:19:56 ] (combat) 48 from Devoted Hunter - Glances Off
+[ 2026.09.18 18:19:56 ] (combat) 135 from Devoted Knight - Hits
+[ 2026.09.18 18:19:57 ] (combat) Devoted Fisher misses you completely
+[ 2026.09.18 18:19:59 ] (combat) 609 to Devoted Hunter - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:20:00 ] (combat) 500 from Devoted Knight - Wrecks
+[ 2026.09.18 18:20:00 ] (combat) Devoted Hunter misses you completely
+[ 2026.09.18 18:20:02 ] (combat) 60 from Devoted Fisher - Smashes
+[ 2026.09.18 18:20:03 ] (combat) Devoted Knight misses you completely
+[ 2026.09.18 18:20:05 ] (combat) 787 to Devoted Hunter - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:20:07 ] (combat) 63 from Devoted Fisher - Smashes
+[ 2026.09.18 18:20:07 ] (combat) Devoted Knight misses you completely
+[ 2026.09.18 18:20:10 ] (combat) Devoted Knight misses you completely
+[ 2026.09.18 18:20:12 ] (combat) 300 to Triglavian Biocombinative Cache - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:20:12 ] (combat) 32 from Devoted Fisher - Glances Off
+[ 2026.09.18 18:20:14 ] (combat) Devoted Knight misses you completely
+[ 2026.09.18 18:20:17 ] (combat) 609 to Devoted Knight - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:20:19 ] (combat) 406 to Devoted Knight - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:20:21 ] (combat) Devoted Knight misses you completely
+[ 2026.09.18 18:20:22 ] (combat) 609 to Devoted Knight - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:20:24 ] (combat) 406 to Devoted Knight - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:20:27 ] (combat) 609 to Devoted Knight - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:20:28 ] (combat) 89 from Devoted Knight - Grazes
+[ 2026.09.18 18:20:30 ] (combat) 406 to Devoted Knight - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:20:31 ] (combat) Devoted Knight misses you completely
+[ 2026.09.18 18:20:33 ] (combat) 609 to Devoted Knight - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:20:35 ] (combat) 406 to Devoted Knight - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:20:38 ] (combat) 609 to Devoted Knight - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:20:39 ] (combat) 125 from Devoted Knight - Hits
+[ 2026.09.18 18:20:40 ] (combat) 440 to Devoted Knight - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:20:42 ] (combat) 122 from Devoted Knight - Glances Off
+[ 2026.09.18 18:20:43 ] (combat) 726 to Devoted Knight - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:20:46 ] (combat) 212 to Devoted Knight - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:21:29 ] (combat) 507 to Lucid Firewatcher - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:21:33 ] (combat) 860 to Lucid Firewatcher - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:21:40 ] (combat) 507 to Lucid Firewatcher - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:21:44 ] (combat) 343 to Lucid Firewatcher - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:21:49 ] (combat) 535 to Lucid Firewatcher - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:21:57 ] (combat) 300 to Triglavian Biocombinative Cache - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:21:59 ] (combat) 406 to Lucid Upholder - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:22:04 ] (combat) 232 to Lucid Upholder - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:22:05 ] (combat) 368 to Lucid Upholder - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:22:09 ] (combat) 271 to Lucid Upholder - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:22:10 ] (combat) 320 to Lucid Upholder - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:22:15 ] (combat) 271 to Lucid Upholder - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:22:17 ] (combat) 333 to Lucid Upholder - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:22:21 ] (combat) 267 to Lucid Upholder - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:22:22 ] (combat) 406 to Lucid Upholder - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:22:24 ] (combat) Lucid Aegis misses you completely
+[ 2026.09.18 18:22:26 ] (combat) 271 to Lucid Upholder - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:22:26 ] (combat) Lucid Aegis misses you completely
+[ 2026.09.18 18:22:27 ] (combat) 406 to Lucid Upholder - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:22:28 ] (combat) Lucid Aegis misses you completely
+[ 2026.09.18 18:22:30 ] (combat) Lucid Aegis misses you completely
+[ 2026.09.18 18:22:31 ] (combat) 6 from Lucid Aegis - Oneiric Missile - Hits
+[ 2026.09.18 18:22:31 ] (combat) 441 to Lucid Upholder - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:22:32 ] (combat) 1015 to Lucid Upholder - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:22:32 ] (combat) Lucid Aegis misses you completely
+[ 2026.09.18 18:22:34 ] (combat) Lucid Aegis misses you completely
+[ 2026.09.18 18:22:35 ] (combat) 7 from Lucid Upholder - Praedormitan Missile - Hits
+[ 2026.09.18 18:22:36 ] (combat) 6 from Lucid Aegis - Oneiric Missile - Hits
+[ 2026.09.18 18:22:36 ] (combat) 466 to Lucid Upholder - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:22:37 ] (combat) 1015 to Lucid Upholder - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:22:38 ] (combat) Lucid Aegis misses you completely
+[ 2026.09.18 18:22:40 ] (combat) 625 to Lucid Upholder - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:22:46 ] (combat) 271 to Lucid Watchman - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:22:47 ] (combat) 406 to Lucid Watchman - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:22:52 ] (combat) 271 to Lucid Watchman - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:22:56 ] (combat) 271 to Lucid Watchman - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:22:57 ] (combat) 406 to Lucid Watchman - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:23:01 ] (combat) 676 to Lucid Watchman - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:23:02 ] (combat) 827 to Lucid Watchman - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:23:33 ] (combat) Gazedimmer Tessella misses you completely
+[ 2026.09.18 18:23:33 ] (combat) Sparkneedle Tessella misses you completely
+[ 2026.09.18 18:23:35 ] (combat) Sparkneedle Tessella misses you completely
+[ 2026.09.18 18:23:37 ] (combat) Gazedimmer Tessella misses you completely
+[ 2026.09.18 18:23:37 ] (combat) Sparkneedle Tessella misses you completely
+[ 2026.09.18 18:23:39 ] (combat) Sparkneedle Tessella misses you completely
+[ 2026.09.18 18:23:41 ] (combat) Gazedimmer Tessella misses you completely
+[ 2026.09.18 18:23:41 ] (combat) Sparkneedle Tessella misses you completely
+[ 2026.09.18 18:23:43 ] (combat) Sparkneedle Tessella misses you completely
+[ 2026.09.18 18:23:44 ] (combat) 300 to Triglavian Biocombinative Cache - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:23:45 ] (combat) 137 to Gazedimmer Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:23:45 ] (combat) Sparkneedle Tessella misses you completely
+[ 2026.09.18 18:23:46 ] (combat) Bathyic Abyssal Overmind misses you completely
+[ 2026.09.18 18:23:47 ] (combat) Sparkneedle Tessella misses you completely
+[ 2026.09.18 18:23:49 ] (combat) 137 to Gazedimmer Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:23:49 ] (combat) Sparkneedle Tessella misses you completely
+[ 2026.09.18 18:23:50 ] (combat) 104 to Gazedimmer Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:23:50 ] (combat) Bathyic Abyssal Overmind misses you completely
+[ 2026.09.18 18:23:51 ] (combat) Sparkneedle Tessella misses you completely
+[ 2026.09.18 18:23:53 ] (combat) 7 from Gazedimmer Tessella - Grazes
+[ 2026.09.18 18:23:53 ] (combat) Sparkneedle Tessella misses you completely
+[ 2026.09.18 18:23:54 ] (combat) Bathyic Abyssal Overmind misses you completely
+[ 2026.09.18 18:23:55 ] (combat) 271 to Gazedimmer Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:23:55 ] (combat) Sparkneedle Tessella misses you completely
+[ 2026.09.18 18:23:57 ] (combat) Gazedimmer Tessella misses you completely
+[ 2026.09.18 18:23:57 ] (combat) Sparkneedle Tessella misses you completely
+[ 2026.09.18 18:23:59 ] (combat) Bathyic Abyssal Overmind misses you completely
+[ 2026.09.18 18:24:00 ] (combat) 157 to Gazedimmer Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:24:01 ] (combat) Gazedimmer Tessella misses you completely
+[ 2026.09.18 18:24:03 ] (combat) Bathyic Abyssal Overmind misses you completely
+[ 2026.09.18 18:24:05 ] (combat) 7 from Gazedimmer Tessella - Grazes
+[ 2026.09.18 18:24:07 ] (combat) Bathyic Abyssal Overmind misses you completely
+[ 2026.09.18 18:24:09 ] (combat) Gazedimmer Tessella misses you completely
+[ 2026.09.18 18:24:12 ] (combat) 91 to Gazedimmer Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:24:12 ] (combat) Bathyic Abyssal Overmind misses you completely
+[ 2026.09.18 18:24:13 ] (combat) 137 to Gazedimmer Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:24:16 ] (combat) Bathyic Abyssal Overmind misses you completely
+[ 2026.09.18 18:24:17 ] (combat) 131 to Gazedimmer Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:24:18 ] (combat) 232 to Gazedimmer Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:24:20 ] (combat) Bathyic Abyssal Overmind misses you completely
+[ 2026.09.18 18:24:21 ] (combat) 14 from Gazedimmer Tessella - Penetrates
+[ 2026.09.18 18:24:22 ] (combat) 172 to Gazedimmer Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:24:23 ] (combat) 221 to Gazedimmer Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:24:24 ] (combat) Bathyic Abyssal Overmind misses you completely
+[ 2026.09.18 18:24:25 ] (combat) 11 from Gazedimmer Tessella - Hits
+[ 2026.09.18 18:24:27 ] (combat) 15 to Gazedimmer Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:24:29 ] (combat) 329 from Bathyic Abyssal Overmind - Hits
+[ 2026.09.18 18:24:33 ] (combat) Bathyic Abyssal Overmind misses you completely
+[ 2026.09.18 18:24:40 ] (combat) 888 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 18:24:45 ] (combat) 888 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 18:24:49 ] (combat) 426 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 18:24:56 ] (combat) 370 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 18:25:01 ] (combat) 351 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 18:25:06 ] (combat) 343 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 18:25:11 ] (combat) 342 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 18:25:12 ] (combat) 230 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 18:25:18 ] (combat) 337 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 18:25:23 ] (combat) 335 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 18:25:28 ] (combat) 335 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 18:25:34 ] (combat) 335 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 18:25:39 ] (combat) 335 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 18:25:43 ] (combat) 333 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 18:25:48 ] (combat) Bathyic Abyssal Overmind misses you completely
+[ 2026.09.18 18:25:49 ] (combat) 544 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 18:25:52 ] (combat) Bathyic Abyssal Overmind misses you completely
+[ 2026.09.18 18:25:54 ] (combat) 325 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 18:25:56 ] (combat) Bathyic Abyssal Overmind misses you completely
+[ 2026.09.18 18:25:59 ] (combat) 325 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 18:26:01 ] (combat) 411 from Bathyic Abyssal Overmind - Hits
+[ 2026.09.18 18:26:05 ] (combat) 325 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 18:26:09 ] (combat) Bathyic Abyssal Overmind misses you completely
+[ 2026.09.18 18:26:11 ] (combat) 325 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 18:26:13 ] (combat) Bathyic Abyssal Overmind misses you completely
+[ 2026.09.18 18:26:16 ] (combat) 325 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 18:26:18 ] (combat) Bathyic Abyssal Overmind misses you completely
+[ 2026.09.18 18:26:22 ] (combat) 325 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 18:26:26 ] (combat) Bathyic Abyssal Overmind misses you completely
+[ 2026.09.18 18:26:28 ] (combat) 325 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 18:26:31 ] (combat) Bathyic Abyssal Overmind misses you completely
+[ 2026.09.18 18:26:33 ] (combat) 353 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 18:26:35 ] (combat) Bathyic Abyssal Overmind misses you completely
+[ 2026.09.18 18:26:37 ] (combat) 381 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 18:26:39 ] (combat) Bathyic Abyssal Overmind misses you completely
+[ 2026.09.18 18:26:42 ] (combat) 392 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 18:26:43 ] (combat) Bathyic Abyssal Overmind misses you completely
+[ 2026.09.18 18:26:47 ] (combat) 397 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 18:26:48 ] (combat) Bathyic Abyssal Overmind misses you completely
+[ 2026.09.18 18:26:52 ] (combat) 399 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 18:26:56 ] (combat) Bathyic Abyssal Overmind misses you completely
+[ 2026.09.18 18:26:57 ] (combat) 401 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 18:27:01 ] (combat) Bathyic Abyssal Overmind misses you completely
+[ 2026.09.18 18:27:03 ] (combat) 402 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 18:27:05 ] (combat) Bathyic Abyssal Overmind misses you completely
+[ 2026.09.18 18:27:08 ] (combat) 403 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 18:27:09 ] (combat) Bathyic Abyssal Overmind misses you completely
+[ 2026.09.18 18:27:14 ] (combat) 403 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 18:27:18 ] (combat) Bathyic Abyssal Overmind misses you completely
+[ 2026.09.18 18:27:19 ] (combat) 404 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 18:27:20 ] (combat) 268 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 18:29:53 ] (combat) 888 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 18:29:57 ] (combat) 888 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 18:29:58 ] (combat) Spotlighter Tessella misses you completely
+[ 2026.09.18 18:30:02 ] (combat) 888 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 18:30:02 ] (combat) Spotlighter Tessella misses you completely
+[ 2026.09.18 18:30:06 ] (combat) 15 from Spotlighter Tessella - Smashes
+[ 2026.09.18 18:30:06 ] (combat) Gazedimmer Tessella misses you completely
+[ 2026.09.18 18:30:07 ] (combat) 7 from Gazedimmer Tessella - Grazes
+[ 2026.09.18 18:30:08 ] (combat) 478 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 18:30:09 ] (combat) 7 from Spotlighter Tessella - Grazes
+[ 2026.09.18 18:30:10 ] (combat) 16 from Spotlighter Tessella - Smashes
+[ 2026.09.18 18:30:10 ] (combat) 12 from Gazedimmer Tessella - Penetrates
+[ 2026.09.18 18:30:11 ] (combat) 12 from Gazedimmer Tessella - Penetrates
+[ 2026.09.18 18:30:12 ] (combat) 325 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 18:30:13 ] (combat) 14 from Spotlighter Tessella - Penetrates
+[ 2026.09.18 18:30:14 ] (combat) 16 from Gazedimmer Tessella - Smashes
+[ 2026.09.18 18:30:14 ] (combat) 7 from Spotlighter Tessella - Grazes
+[ 2026.09.18 18:30:15 ] (combat) 8 from Gazedimmer Tessella - Glances Off
+[ 2026.09.18 18:30:17 ] (combat) 325 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 18:30:17 ] (combat) 8 from Spotlighter Tessella - Glances Off
+[ 2026.09.18 18:30:18 ] (combat) 7 from Gazedimmer Tessella - Grazes
+[ 2026.09.18 18:30:18 ] (combat) 36 from Spotlighter Tessella - Wrecks
+[ 2026.09.18 18:30:19 ] (combat) 7 from Gazedimmer Tessella - Grazes
+[ 2026.09.18 18:30:21 ] (combat) Spotlighter Tessella misses you completely
+[ 2026.09.18 18:30:22 ] (combat) 14 from Gazedimmer Tessella - Penetrates
+[ 2026.09.18 18:30:22 ] (combat) 6 from Spotlighter Tessella - Grazes
+[ 2026.09.18 18:30:23 ] (combat) 325 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 18:30:23 ] (combat) 10 from Gazedimmer Tessella - Hits
+[ 2026.09.18 18:30:25 ] (combat) 10 from Spotlighter Tessella - Hits
+[ 2026.09.18 18:30:25 ] (combat) Bathyic Abyssal Overmind misses you completely
+[ 2026.09.18 18:30:26 ] (combat) 10 from Gazedimmer Tessella - Hits
+[ 2026.09.18 18:30:26 ] (combat) 7 from Spotlighter Tessella - Grazes
+[ 2026.09.18 18:30:27 ] (combat) 325 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 18:30:27 ] (combat) 6 from Gazedimmer Tessella - Grazes
+[ 2026.09.18 18:30:29 ] (combat) 6 from Spotlighter Tessella - Grazes
+[ 2026.09.18 18:30:30 ] (combat) Bathyic Abyssal Overmind misses you completely
+[ 2026.09.18 18:30:30 ] (combat) 14 from Gazedimmer Tessella - Penetrates
+[ 2026.09.18 18:30:30 ] (combat) 14 from Spotlighter Tessella - Penetrates
+[ 2026.09.18 18:30:31 ] (combat) 7 from Gazedimmer Tessella - Grazes
+[ 2026.09.18 18:30:32 ] (combat) 325 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 18:30:33 ] (combat) 8 from Spotlighter Tessella - Glances Off
+[ 2026.09.18 18:30:34 ] (combat) Bathyic Abyssal Overmind misses you completely
+[ 2026.09.18 18:30:34 ] (combat) 13 from Gazedimmer Tessella - Penetrates
+[ 2026.09.18 18:30:34 ] (combat) Spotlighter Tessella misses you completely
+[ 2026.09.18 18:30:35 ] (combat) Gazedimmer Tessella misses you completely
+[ 2026.09.18 18:30:37 ] (combat) 325 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 18:30:37 ] (combat) Spotlighter Tessella misses you completely
+[ 2026.09.18 18:30:38 ] (combat) 216 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 18:30:39 ] (combat) 8 from Gazedimmer Tessella - Glances Off
+[ 2026.09.18 18:30:39 ] (combat) Spotlighter Tessella misses you completely
+[ 2026.09.18 18:30:41 ] (combat) Spotlighter Tessella misses you completely
+[ 2026.09.18 18:30:43 ] (combat) 325 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 18:30:43 ] (combat) 8 from Gazedimmer Tessella - Glances Off
+[ 2026.09.18 18:30:43 ] (combat) 15 from Spotlighter Tessella - Penetrates
+[ 2026.09.18 18:30:46 ] (combat) 7 from Spotlighter Tessella - Grazes
+[ 2026.09.18 18:30:47 ] (combat) 8 from Gazedimmer Tessella - Glances Off
+[ 2026.09.18 18:30:47 ] (combat) Spotlighter Tessella misses you completely
+[ 2026.09.18 18:30:47 ] (combat) Bathyic Abyssal Overmind misses you completely
+[ 2026.09.18 18:30:49 ] (combat) 325 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 18:30:50 ] (combat) Spotlighter Tessella misses you completely
+[ 2026.09.18 18:30:51 ] (combat) 14 from Gazedimmer Tessella - Penetrates
+[ 2026.09.18 18:30:51 ] (combat) Spotlighter Tessella misses you completely
+[ 2026.09.18 18:30:51 ] (combat) Bathyic Abyssal Overmind misses you completely
+[ 2026.09.18 18:30:54 ] (combat) 325 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 18:30:54 ] (combat) 12 from Spotlighter Tessella - Hits
+[ 2026.09.18 18:30:55 ] (combat) 9 from Gazedimmer Tessella - Glances Off
+[ 2026.09.18 18:30:55 ] (combat) 6 from Spotlighter Tessella - Grazes
+[ 2026.09.18 18:30:55 ] (combat) Bathyic Abyssal Overmind misses you completely
+[ 2026.09.18 18:30:56 ] (combat) 8 from Gazedimmer Tessella - Glances Off
+[ 2026.09.18 18:30:58 ] (combat) 9 from Spotlighter Tessella - Hits
+[ 2026.09.18 18:30:59 ] (combat) Gazedimmer Tessella misses you completely
+[ 2026.09.18 18:31:00 ] (combat) 325 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 18:31:00 ] (combat) 17 from Gazedimmer Tessella - Smashes
+[ 2026.09.18 18:31:03 ] (combat) 9 from Gazedimmer Tessella - Glances Off
+[ 2026.09.18 18:31:04 ] (combat) 14 from Gazedimmer Tessella - Penetrates
+[ 2026.09.18 18:31:04 ] (combat) Bathyic Abyssal Overmind misses you completely
+[ 2026.09.18 18:31:05 ] (combat) 326 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 18:31:07 ] (combat) 10 from Gazedimmer Tessella - Hits
+[ 2026.09.18 18:31:08 ] (combat) 9 from Gazedimmer Tessella - Hits
+[ 2026.09.18 18:31:08 ] (combat) Bathyic Abyssal Overmind misses you completely
+[ 2026.09.18 18:31:10 ] (combat) 11 from Gazedimmer Tessella - Hits
+[ 2026.09.18 18:31:11 ] (combat) 326 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 18:31:12 ] (combat) 8 from Gazedimmer Tessella - Glances Off
+[ 2026.09.18 18:31:13 ] (combat) Bathyic Abyssal Overmind misses you completely
+[ 2026.09.18 18:31:15 ] (combat) 6 from Gazedimmer Tessella - Grazes
+[ 2026.09.18 18:31:16 ] (combat) 327 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 18:31:16 ] (combat) Gazedimmer Tessella misses you completely
+[ 2026.09.18 18:31:17 ] (combat) 218 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 18:31:19 ] (combat) 11 from Gazedimmer Tessella - Hits
+[ 2026.09.18 18:31:20 ] (combat) 9 from Gazedimmer Tessella - Glances Off
+[ 2026.09.18 18:31:21 ] (combat) Bathyic Abyssal Overmind misses you completely
+[ 2026.09.18 18:31:22 ] (combat) 327 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 18:31:23 ] (combat) Gazedimmer Tessella misses you completely
+[ 2026.09.18 18:31:24 ] (combat) 16 from Gazedimmer Tessella - Smashes
+[ 2026.09.18 18:31:25 ] (combat) Bathyic Abyssal Overmind misses you completely
+[ 2026.09.18 18:31:27 ] (combat) 12 from Gazedimmer Tessella - Penetrates
+[ 2026.09.18 18:31:28 ] (combat) 328 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 18:31:28 ] (combat) 11 from Gazedimmer Tessella - Hits
+[ 2026.09.18 18:31:30 ] (combat) Bathyic Abyssal Overmind misses you completely
+[ 2026.09.18 18:31:31 ] (combat) 16 from Gazedimmer Tessella - Smashes
+[ 2026.09.18 18:31:32 ] (combat) 14 from Gazedimmer Tessella - Penetrates
+[ 2026.09.18 18:31:33 ] (combat) 328 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 18:31:34 ] (combat) Bathyic Abyssal Overmind misses you completely
+[ 2026.09.18 18:31:35 ] (combat) 9 from Gazedimmer Tessella - Glances Off
+[ 2026.09.18 18:31:36 ] (combat) 8 from Gazedimmer Tessella - Glances Off
+[ 2026.09.18 18:31:38 ] (combat) Bathyic Abyssal Overmind misses you completely
+[ 2026.09.18 18:31:39 ] (combat) 329 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 18:31:39 ] (combat) 18 from Gazedimmer Tessella - Smashes
+[ 2026.09.18 18:31:40 ] (combat) Gazedimmer Tessella misses you completely
+[ 2026.09.18 18:31:43 ] (combat) Bathyic Abyssal Overmind misses you completely
+[ 2026.09.18 18:31:43 ] (combat) 12 from Gazedimmer Tessella - Penetrates
+[ 2026.09.18 18:31:44 ] (combat) 384 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 18:31:44 ] (combat) Gazedimmer Tessella misses you completely
+[ 2026.09.18 18:31:47 ] (combat) 8 from Gazedimmer Tessella - Glances Off
+[ 2026.09.18 18:31:47 ] (combat) Bathyic Abyssal Overmind misses you completely
+[ 2026.09.18 18:31:48 ] (combat) 395 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 18:31:48 ] (combat) 10 from Gazedimmer Tessella - Hits
+[ 2026.09.18 18:31:51 ] (combat) Gazedimmer Tessella misses you completely
+[ 2026.09.18 18:31:51 ] (combat) Bathyic Abyssal Overmind misses you completely
+[ 2026.09.18 18:31:52 ] (combat) 6 from Gazedimmer Tessella - Grazes
+[ 2026.09.18 18:31:54 ] (combat) 400 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 18:31:55 ] (combat) 36 from Gazedimmer Tessella - Wrecks
+[ 2026.09.18 18:31:56 ] (combat) Bathyic Abyssal Overmind misses you completely
+[ 2026.09.18 18:31:56 ] (combat) 9 from Gazedimmer Tessella - Hits
+[ 2026.09.18 18:31:57 ] (combat) Spotlighter Tessella misses you completely
+[ 2026.09.18 18:31:58 ] (combat) Spotlighter Tessella misses you completely
+[ 2026.09.18 18:31:59 ] (combat) 403 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 18:31:59 ] (combat) 11 from Gazedimmer Tessella - Hits
+[ 2026.09.18 18:32:00 ] (combat) 11 from Gazedimmer Tessella - Hits
+[ 2026.09.18 18:32:00 ] (combat) Bathyic Abyssal Overmind misses you completely
+[ 2026.09.18 18:32:01 ] (combat) Spotlighter Tessella misses you completely
+[ 2026.09.18 18:32:02 ] (combat) Spotlighter Tessella misses you completely
+[ 2026.09.18 18:32:03 ] (combat) 404 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 18:32:03 ] (combat) 17 from Gazedimmer Tessella - Smashes
+[ 2026.09.18 18:32:04 ] (combat) Gazedimmer Tessella misses you completely
+[ 2026.09.18 18:32:04 ] (combat) Bathyic Abyssal Overmind misses you completely
+[ 2026.09.18 18:32:05 ] (combat) Spotlighter Tessella misses you completely
+[ 2026.09.18 18:32:06 ] (combat) Spotlighter Tessella misses you completely
+[ 2026.09.18 18:32:07 ] (combat) 11 from Gazedimmer Tessella - Hits
+[ 2026.09.18 18:32:08 ] (combat) Bathyic Abyssal Overmind misses you completely
+[ 2026.09.18 18:32:09 ] (combat) 330 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 18:32:09 ] (combat) Spotlighter Tessella misses you completely
+[ 2026.09.18 18:32:10 ] (combat) Spotlighter Tessella misses you completely
+[ 2026.09.18 18:32:11 ] (combat) 14 from Gazedimmer Tessella - Penetrates
+[ 2026.09.18 18:32:13 ] (combat) 410 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 18:32:13 ] (combat) Spotlighter Tessella misses you completely
+[ 2026.09.18 18:32:14 ] (combat) Spotlighter Tessella misses you completely
+[ 2026.09.18 18:32:15 ] (combat) 8 from Gazedimmer Tessella - Glances Off
+[ 2026.09.18 18:32:17 ] (combat) 8 from Spotlighter Tessella - Glances Off
+[ 2026.09.18 18:32:17 ] (combat) Bathyic Abyssal Overmind misses you completely
+[ 2026.09.18 18:32:18 ] (combat) 410 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 18:32:18 ] (combat) Spotlighter Tessella misses you completely
+[ 2026.09.18 18:32:19 ] (combat) Gazedimmer Tessella misses you completely
+[ 2026.09.18 18:32:21 ] (combat) 7 from Spotlighter Tessella - Grazes
+[ 2026.09.18 18:32:21 ] (combat) Bathyic Abyssal Overmind misses you completely
+[ 2026.09.18 18:32:22 ] (combat) Spotlighter Tessella misses you completely
+[ 2026.09.18 18:32:23 ] (combat) 410 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 18:32:23 ] (combat) 16 from Gazedimmer Tessella - Smashes
+[ 2026.09.18 18:32:25 ] (combat) 12 from Spotlighter Tessella - Penetrates
+[ 2026.09.18 18:32:26 ] (combat) Bathyic Abyssal Overmind misses you completely
+[ 2026.09.18 18:32:26 ] (combat) 7 from Spotlighter Tessella - Grazes
+[ 2026.09.18 18:32:27 ] (combat) 6 from Gazedimmer Tessella - Grazes
+[ 2026.09.18 18:32:29 ] (combat) 410 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 18:32:29 ] (combat) 7 from Spotlighter Tessella - Grazes
+[ 2026.09.18 18:32:33 ] (combat) 8 from Spotlighter Tessella - Glances Off
+[ 2026.09.18 18:33:47 ] (combat) 913 to Ephialtes Obfuscator - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:33:52 ] (combat) 913 to Ephialtes Obfuscator - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:33:56 ] (combat) 913 to Ephialtes Obfuscator - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:34:00 ] (combat) 336 to Ephialtes Obfuscator - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:34:08 ] (combat) 694 to Ephialtes Dissipator - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:34:14 ] (combat) 690 to Ephialtes Dissipator - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:34:20 ] (combat) 689 to Ephialtes Dissipator - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:34:27 ] (combat) 459 to Ephialtes Dissipator - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:34:30 ] (combat) Ephialtes Lancer misses you completely
+[ 2026.09.18 18:34:32 ] (combat) 998 to Ephialtes Dissipator - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:34:34 ] (combat) Ephialtes Lancer misses you completely
+[ 2026.09.18 18:34:38 ] (combat) Ephialtes Lancer misses you completely
+[ 2026.09.18 18:34:39 ] (combat) Ephialtes Illuminator misses you completely
+[ 2026.09.18 18:34:40 ] (combat) 3 from Ephialtes Lancer - Praedormitan Missile - Hits
+[ 2026.09.18 18:34:42 ] (combat) 22 from Ephialtes Lancer - Grazes
+[ 2026.09.18 18:34:43 ] (combat) Ephialtes Illuminator misses you completely
+[ 2026.09.18 18:34:45 ] (combat) 3 from Ephialtes Lancer - Praedormitan Missile - Hits
+[ 2026.09.18 18:34:46 ] (combat) 26 from Ephialtes Lancer - Glances Off
+[ 2026.09.18 18:34:47 ] (combat) Ephialtes Illuminator misses you completely
+[ 2026.09.18 18:34:49 ] (combat) 750 to Ephialtes Obfuscator - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:34:50 ] (combat) Ephialtes Lancer misses you completely
+[ 2026.09.18 18:34:51 ] (combat) 2 from Ephialtes Illuminator - Praedormitan Missile - Hits
+[ 2026.09.18 18:34:53 ] (combat) 3 from Ephialtes Lancer - Praedormitan Missile - Hits
+[ 2026.09.18 18:34:54 ] (combat) 726 to Ephialtes Obfuscator - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:34:54 ] (combat) 34 from Ephialtes Lancer - Hits
+[ 2026.09.18 18:34:55 ] (combat) 2 from Ephialtes Illuminator - Praedormitan Missile - Hits
+[ 2026.09.18 18:34:58 ] (combat) 33 from Ephialtes Lancer - Hits
+[ 2026.09.18 18:34:59 ] (combat) 707 to Ephialtes Obfuscator - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:34:59 ] (combat) 25 from Ephialtes Illuminator - Penetrates
+[ 2026.09.18 18:35:02 ] (combat) 2 from Ephialtes Illuminator - Praedormitan Missile - Hits
+[ 2026.09.18 18:35:02 ] (combat) Ephialtes Lancer misses you completely
+[ 2026.09.18 18:35:03 ] (combat) 730 to Ephialtes Obfuscator - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:35:03 ] (combat) 16 from Ephialtes Illuminator - Glances Off
+[ 2026.09.18 18:35:05 ] (combat) 4 from Ephialtes Lancer - Praedormitan Missile - Hits
+[ 2026.09.18 18:35:06 ] (combat) Ephialtes Lancer misses you completely
+[ 2026.09.18 18:35:07 ] (combat) Ephialtes Illuminator misses you completely
+[ 2026.09.18 18:35:08 ] (combat) 165 to Ephialtes Obfuscator - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:35:08 ] (combat) 22 from Ephialtes Illuminator - Hits
+[ 2026.09.18 18:35:10 ] (combat) 30 from Ephialtes Lancer - Hits
+[ 2026.09.18 18:35:11 ] (combat) 23 from Ephialtes Illuminator - Hits
+[ 2026.09.18 18:35:12 ] (combat) 3 from Ephialtes Illuminator - Praedormitan Missile - Hits
+[ 2026.09.18 18:35:13 ] (combat) 3 from Ephialtes Illuminator - Praedormitan Missile - Hits
+[ 2026.09.18 18:35:14 ] (combat) Ephialtes Lancer misses you completely
+[ 2026.09.18 18:35:15 ] (combat) 697 to Ephialtes Dissipator - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:35:15 ] (combat) Ephialtes Illuminator misses you completely
+[ 2026.09.18 18:35:15 ] (combat) 16 GJ energy neutralized Ephialtes Dissipator - Ephialtes Dissipator
+[ 2026.09.18 18:35:16 ] (combat) 4 from Ephialtes Lancer - Praedormitan Missile - Hits
+[ 2026.09.18 18:35:16 ] (combat) 17 from Ephialtes Illuminator - Glances Off
+[ 2026.09.18 18:35:17 ] (combat) 24 GJ energy neutralized Ephialtes Dissipator - Ephialtes Dissipator
+[ 2026.09.18 18:35:17 ] (combat) 24 from Ephialtes Dissipator - Hits
+[ 2026.09.18 18:35:18 ] (combat) 21 from Ephialtes Lancer - Grazes
+[ 2026.09.18 18:35:19 ] (combat) Ephialtes Dissipator misses you completely
+[ 2026.09.18 18:35:20 ] (combat) 2 from Ephialtes Dissipator - Praedormitan Missile - Hits
+[ 2026.09.18 18:35:20 ] (combat) 33 from Ephialtes Illuminator - Smashes
+[ 2026.09.18 18:35:21 ] (combat) 2 from Ephialtes Illuminator - Praedormitan Missile - Hits
+[ 2026.09.18 18:35:21 ] (combat) 74 from Ephialtes Dissipator - Wrecks
+[ 2026.09.18 18:35:22 ] (combat) 2 from Ephialtes Dissipator - Praedormitan Missile - Hits
+[ 2026.09.18 18:35:22 ] (combat) Ephialtes Lancer misses you completely
+[ 2026.09.18 18:35:23 ] (combat) 15 from Ephialtes Dissipator - Grazes
+[ 2026.09.18 18:35:24 ] (combat) 26 from Ephialtes Illuminator - Penetrates
+[ 2026.09.18 18:35:25 ] (combat) 5 GJ energy neutralized Ephialtes Dissipator - Ephialtes Dissipator
+[ 2026.09.18 18:35:25 ] (combat) Ephialtes Dissipator misses you completely
+[ 2026.09.18 18:35:26 ] (combat) 3 from Ephialtes Lancer - Praedormitan Missile - Hits
+[ 2026.09.18 18:35:26 ] (combat) 691 to Ephialtes Dissipator - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:35:27 ] (combat) 7 GJ energy neutralized Ephialtes Dissipator - Ephialtes Dissipator
+[ 2026.09.18 18:35:27 ] (combat) 20 from Ephialtes Dissipator - Hits
+[ 2026.09.18 18:35:28 ] (combat) 23 from Ephialtes Illuminator - Hits
+[ 2026.09.18 18:35:29 ] (combat) Ephialtes Dissipator misses you completely
+[ 2026.09.18 18:35:30 ] (combat) Ephialtes Lancer misses you completely
+[ 2026.09.18 18:35:31 ] (combat) 2 from Ephialtes Dissipator - Praedormitan Missile - Hits
+[ 2026.09.18 18:35:32 ] (combat) 2 from Ephialtes Illuminator - Praedormitan Missile - Hits
+[ 2026.09.18 18:35:33 ] (combat) 2 from Ephialtes Dissipator - Praedormitan Missile - Hits
+[ 2026.09.18 18:35:34 ] (combat) Ephialtes Lancer misses you completely
+[ 2026.09.18 18:35:35 ] (combat) 2 GJ energy neutralized Ephialtes Dissipator - Ephialtes Dissipator
+[ 2026.09.18 18:35:35 ] (combat) Ephialtes Dissipator misses you completely
+[ 2026.09.18 18:35:36 ] (combat) 3 from Ephialtes Lancer - Praedormitan Missile - Hits
+[ 2026.09.18 18:35:36 ] (combat) 377 to Ephialtes Dissipator - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:35:36 ] (combat) Ephialtes Illuminator misses you completely
+[ 2026.09.18 18:35:37 ] (combat) 2 GJ energy neutralized Ephialtes Dissipator - Ephialtes Dissipator
+[ 2026.09.18 18:35:37 ] (combat) Ephialtes Dissipator misses you completely
+[ 2026.09.18 18:35:38 ] (combat) Ephialtes Lancer misses you completely
+[ 2026.09.18 18:35:40 ] (combat) 22 from Ephialtes Illuminator - Hits
+[ 2026.09.18 18:35:41 ] (combat) Ephialtes Dissipator misses you completely
+[ 2026.09.18 18:35:42 ] (combat) 22 from Ephialtes Lancer - Grazes
+[ 2026.09.18 18:35:43 ] (combat) 689 to Ephialtes Dissipator - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:35:44 ] (combat) 2 from Ephialtes Dissipator - Praedormitan Missile - Hits
+[ 2026.09.18 18:35:44 ] (combat) 2 from Ephialtes Illuminator - Praedormitan Missile - Hits
+[ 2026.09.18 18:35:45 ] (combat) Ephialtes Dissipator misses you completely
+[ 2026.09.18 18:35:46 ] (combat) 3 from Ephialtes Lancer - Praedormitan Missile - Hits
+[ 2026.09.18 18:35:47 ] (combat) 1 GJ energy neutralized Ephialtes Dissipator - Ephialtes Dissipator
+[ 2026.09.18 18:35:48 ] (combat) 688 to Ephialtes Dissipator - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:35:48 ] (combat) Ephialtes Illuminator misses you completely
+[ 2026.09.18 18:35:49 ] (combat) Ephialtes Dissipator misses you completely
+[ 2026.09.18 18:35:50 ] (combat) 24 from Ephialtes Lancer - Glances Off
+[ 2026.09.18 18:35:53 ] (combat) 5 from Ephialtes Dissipator - Praedormitan Missile - Hits
+[ 2026.09.18 18:35:54 ] (combat) 39 from Ephialtes Lancer - Penetrates
+[ 2026.09.18 18:35:55 ] (combat) 5 from Ephialtes Lancer - Praedormitan Missile - Hits
+[ 2026.09.18 18:35:57 ] (combat) 58 GJ energy neutralized Ephialtes Dissipator - Ephialtes Dissipator
+[ 2026.09.18 18:35:57 ] (combat) 20 from Ephialtes Dissipator - Hits
+[ 2026.09.18 18:35:58 ] (combat) 19 from Ephialtes Lancer - Grazes
+[ 2026.09.18 18:35:59 ] (combat) 706 to Ephialtes Dissipator - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:36:00 ] (combat) 2 from Ephialtes Dissipator - Praedormitan Missile - Hits
+[ 2026.09.18 18:36:01 ] (combat) 21 from Ephialtes Dissipator - Hits
+[ 2026.09.18 18:36:02 ] (combat) 19 from Ephialtes Lancer - Grazes
+[ 2026.09.18 18:36:03 ] (combat) 5 from Ephialtes Lancer - Praedormitan Missile - Hits
+[ 2026.09.18 18:36:04 ] (combat) 391 to Ephialtes Dissipator - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:36:06 ] (combat) Ephialtes Lancer misses you completely
+[ 2026.09.18 18:36:10 ] (combat) 707 to Ephialtes Lancer - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:36:14 ] (combat) 3 from Ephialtes Lancer - Praedormitan Missile - Hits
+[ 2026.09.18 18:36:16 ] (combat) 698 to Ephialtes Lancer - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:36:18 ] (combat) 37 from Ephialtes Lancer - Penetrates
+[ 2026.09.18 18:36:21 ] (combat) 727 to Ephialtes Lancer - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:36:27 ] (combat) 369 to Ephialtes Lancer - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:37:04 ] (combat) 104 to Snarecaster Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:37:08 ] (combat) 144 to Snarecaster Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:37:12 ] (combat) 193 to Snarecaster Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:37:18 ] (combat) 171 to Snarecaster Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:37:26 ] (combat) 406 to Strikegrip Tessera - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:37:30 ] (combat) 406 to Strikegrip Tessera - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:37:36 ] (combat) 406 to Strikegrip Tessera - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:37:39 ] (combat) Strikegrip Tessera misses you completely
+[ 2026.09.18 18:37:40 ] (combat) 406 to Strikegrip Tessera - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:37:44 ] (combat) Strikegrip Tessera misses you completely
+[ 2026.09.18 18:37:45 ] (combat) 406 to Strikegrip Tessera - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:37:49 ] (combat) Strikegrip Tessera misses you completely
+[ 2026.09.18 18:37:51 ] (combat) 406 to Strikegrip Tessera - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:37:54 ] (combat) Strikegrip Tessera misses you completely
+[ 2026.09.18 18:37:56 ] (combat) 406 to Strikegrip Tessera - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:37:59 ] (combat) Strikegrip Tessera misses you completely
+[ 2026.09.18 18:38:02 ] (combat) 714 to Strikegrip Tessera - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:38:04 ] (combat) Strikegrip Tessera misses you completely
+[ 2026.09.18 18:38:08 ] (combat) 916 to Strikegrip Tessera - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:38:09 ] (combat) Strikegrip Tessera misses you completely
+[ 2026.09.18 18:38:13 ] (combat) 430 to Strikegrip Tessera - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:38:24 ] (combat) 406 to Embergrip Tessera - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:38:28 ] (combat) 406 to Embergrip Tessera - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:38:34 ] (combat) 848 to Embergrip Tessera - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:38:41 ] (combat) 271 to Strikegrip Tessera - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:38:46 ] (combat) 271 to Strikegrip Tessera - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:38:51 ] (combat) 406 to Strikegrip Tessera - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:38:52 ] (combat) Strikegrip Tessera misses you completely
+[ 2026.09.18 18:38:56 ] (combat) 406 to Strikegrip Tessera - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:38:57 ] (combat) Strikegrip Tessera misses you completely
+[ 2026.09.18 18:39:02 ] (combat) 778 to Strikegrip Tessera - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:57:01 ] (combat) Emberlance Tessella misses you completely
+[ 2026.09.18 18:57:01 ] (combat) Fogcaster Tessella misses you completely
+[ 2026.09.18 18:57:02 ] (combat) Emberlance Tessella misses you completely
+[ 2026.09.18 18:57:05 ] (combat) Fogcaster Tessella misses you completely
+[ 2026.09.18 18:57:05 ] (combat) Emberlance Tessella misses you completely
+[ 2026.09.18 18:57:07 ] (combat) Emberlance Tessella misses you completely
+[ 2026.09.18 18:57:09 ] (combat) Fogcaster Tessella misses you completely
+[ 2026.09.18 18:57:09 ] (combat) Emberlance Tessella misses you completely
+[ 2026.09.18 18:57:11 ] (combat) 300 to Triglavian Biocombinative Cache - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:57:11 ] (combat) Emberlance Tessella misses you completely
+[ 2026.09.18 18:57:12 ] (combat) Fogcaster Tessella misses you completely
+[ 2026.09.18 18:57:12 ] (combat) Emberlance Tessella misses you completely
+[ 2026.09.18 18:57:13 ] (combat) 473 to Emberlance Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:57:15 ] (combat) Emberlance Tessella misses you completely
+[ 2026.09.18 18:57:17 ] (combat) Fogcaster Tessella misses you completely
+[ 2026.09.18 18:57:17 ] (combat) Emberlance Tessella misses you completely
+[ 2026.09.18 18:57:18 ] (combat) 636 to Emberlance Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:57:19 ] (combat) Emberlance Tessella misses you completely
+[ 2026.09.18 18:57:20 ] (combat) 248 to Emberlance Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:57:21 ] (combat) Fogcaster Tessella misses you completely
+[ 2026.09.18 18:57:21 ] (combat) Emberlance Tessella misses you completely
+[ 2026.09.18 18:57:23 ] (combat) Emberlance Tessella misses you completely
+[ 2026.09.18 18:57:25 ] (combat) 609 to Emberlance Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:57:25 ] (combat) Fogcaster Tessella misses you completely
+[ 2026.09.18 18:57:27 ] (combat) Emberlance Tessella misses you completely
+[ 2026.09.18 18:57:28 ] (combat) 753 to Emberlance Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:57:29 ] (combat) Fogcaster Tessella misses you completely
+[ 2026.09.18 18:57:29 ] (combat) Emberlance Tessella misses you completely
+[ 2026.09.18 18:57:31 ] (combat) 241 to Emberlance Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:57:33 ] (combat) 324 to Emberlance Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:57:33 ] (combat) 13 from Fogcaster Tessella - Penetrates
+[ 2026.09.18 18:57:35 ] (combat) 225 to Emberlance Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:57:37 ] (combat) Fogcaster Tessella misses you completely
+[ 2026.09.18 18:57:37 ] (combat) Emberlance Tessella misses you completely
+[ 2026.09.18 18:57:39 ] (combat) 339 to Emberlance Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:57:40 ] (combat) 184 to Emberlance Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:57:41 ] (combat) 6 from Fogcaster Tessella - Grazes
+[ 2026.09.18 18:57:41 ] (combat) Emberlance Tessella misses you completely
+[ 2026.09.18 18:57:43 ] (combat) 19 from Emberlance Tessella - Hits
+[ 2026.09.18 18:57:44 ] (combat) 83 to Emberlance Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:57:45 ] (combat) 15 from Fogcaster Tessella - Smashes
+[ 2026.09.18 18:57:45 ] (combat) Emberlance Tessella misses you completely
+[ 2026.09.18 18:57:46 ] (combat) 116 to Emberlance Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:57:47 ] (combat) 19 from Emberlance Tessella - Hits
+[ 2026.09.18 18:57:49 ] (combat) 283 to Emberlance Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:57:49 ] (combat) 10 from Fogcaster Tessella - Hits
+[ 2026.09.18 18:57:51 ] (combat) 198 to Emberlance Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:57:53 ] (combat) 9 from Fogcaster Tessella - Hits
+[ 2026.09.18 18:57:53 ] (combat) 22 from Emberlance Tessella - Hits
+[ 2026.09.18 18:57:54 ] (combat) 305 to Emberlance Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:57:55 ] (combat) 30 from Emberlance Tessella - Penetrates
+[ 2026.09.18 18:57:56 ] (combat) 218 to Emberlance Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:57:57 ] (combat) 7 from Fogcaster Tessella - Grazes
+[ 2026.09.18 18:57:57 ] (combat) 15 from Emberlance Tessella - Glances Off
+[ 2026.09.18 18:57:59 ] (combat) 338 to Emberlance Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:58:01 ] (combat) Fogcaster Tessella misses you completely
+[ 2026.09.18 18:58:02 ] (combat) 174 to Emberlance Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:58:04 ] (combat) 73 from Emberlance Tessella - Wrecks
+[ 2026.09.18 18:58:05 ] (combat) Fogcaster Tessella misses you completely
+[ 2026.09.18 18:58:06 ] (combat) 32 from Emberlance Tessella - Smashes
+[ 2026.09.18 18:58:08 ] (combat) Emberlance Tessella misses you completely
+[ 2026.09.18 18:58:09 ] (combat) 447 to Emberlance Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:58:09 ] (combat) 15 from Fogcaster Tessella - Smashes
+[ 2026.09.18 18:58:10 ] (combat) 31 from Emberlance Tessella - Smashes
+[ 2026.09.18 18:58:12 ] (combat) 16 from Emberlance Tessella - Glances Off
+[ 2026.09.18 18:58:14 ] (combat) 32 from Emberlance Tessella - Smashes
+[ 2026.09.18 18:58:16 ] (combat) 18 from Emberlance Tessella - Hits
+[ 2026.09.18 18:58:18 ] (combat) 572 to Emberlance Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:58:20 ] (combat) Emberlance Tessella misses you completely
+[ 2026.09.18 18:58:22 ] (combat) 24 from Emberlance Tessella - Penetrates
+[ 2026.09.18 18:58:24 ] (combat) 18 from Emberlance Tessella - Glances Off
+[ 2026.09.18 18:58:25 ] (combat) 218 to Emberlance Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:58:26 ] (combat) 317 to Emberlance Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:58:28 ] (combat) 23 from Emberlance Tessella - Hits
+[ 2026.09.18 18:58:30 ] (combat) 13 from Emberlance Tessella - Grazes
+[ 2026.09.18 18:58:31 ] (combat) 326 to Emberlance Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:58:32 ] (combat) 14 from Emberlance Tessella - Grazes
+[ 2026.09.18 18:58:33 ] (combat) 238 to Emberlance Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:58:34 ] (combat) 32 from Emberlance Tessella - Smashes
+[ 2026.09.18 18:58:36 ] (combat) 356 to Emberlance Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:59:32 ] (combat) 558 to Emberlance Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:59:36 ] (combat) 675 to Emberlance Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:59:41 ] (combat) 110 to Emberlance Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:59:42 ] (combat) 217 to Emberlance Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:59:46 ] (combat) 236 to Emberlance Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:59:52 ] (combat) 170 to Emberlance Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:59:54 ] (combat) 315 to Emberlance Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 18:59:59 ] (combat) 91 to Fogcaster Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:00:00 ] (combat) 293 to Emberlance Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:00:04 ] (combat) 152 to Fogcaster Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:00:06 ] (combat) 583 to Emberlance Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:00:08 ] (combat) 152 to Fogcaster Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:00:12 ] (combat) 910 to Emberlance Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:00:17 ] (combat) 435 to Emberlance Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:00:19 ] (combat) 300 to Triglavian Biocombinative Cache - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:00:31 ] (combat) 330 to Emberlance Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:00:36 ] (combat) 345 to Emberlance Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:00:43 ] (combat) 274 to Fogcaster Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:01:28 ] (combat) Scylla Tyrannos misses you completely
+[ 2026.09.18 19:01:31 ] (combat) Lucid Upholder misses you completely
+[ 2026.09.18 19:01:31 ] (combat) Lucid Watchman misses you completely
+[ 2026.09.18 19:01:33 ] (combat) Scylla Tyrannos misses you completely
+[ 2026.09.18 19:01:36 ] (combat) Lucid Upholder misses you completely
+[ 2026.09.18 19:01:36 ] (combat) Lucid Watchman misses you completely
+[ 2026.09.18 19:01:38 ] (combat) 300 to Triglavian Biocombinative Cache - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:01:38 ] (combat) Scylla Tyrannos misses you completely
+[ 2026.09.18 19:01:41 ] (combat) Lucid Upholder misses you completely
+[ 2026.09.18 19:01:41 ] (combat) Lucid Watchman misses you completely
+[ 2026.09.18 19:01:43 ] (combat) Scylla Tyrannos misses you completely
+[ 2026.09.18 19:01:46 ] (combat) 7 from Lucid Upholder - Praedormitan Missile - Hits
+[ 2026.09.18 19:01:46 ] (combat) 7 from Lucid Watchman - Praedormitan Missile - Hits
+[ 2026.09.18 19:01:47 ] (combat) 406 to Lucid Upholder - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:01:48 ] (combat) Scylla Tyrannos misses you completely
+[ 2026.09.18 19:01:51 ] (combat) Lucid Upholder misses you completely
+[ 2026.09.18 19:01:51 ] (combat) Lucid Watchman misses you completely
+[ 2026.09.18 19:01:52 ] (combat) 406 to Lucid Upholder - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:01:53 ] (combat) Scylla Tyrannos misses you completely
+[ 2026.09.18 19:01:55 ] (combat) 7 from Lucid Watchman - Praedormitan Missile - Hits
+[ 2026.09.18 19:01:55 ] (combat) 7 from Lucid Upholder - Praedormitan Missile - Hits
+[ 2026.09.18 19:01:56 ] (combat) 31 from Lucid Upholder - Grazes
+[ 2026.09.18 19:01:56 ] (combat) Lucid Watchman misses you completely
+[ 2026.09.18 19:01:57 ] (combat) 323 to Lucid Upholder - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:01:58 ] (combat) 31 from Scylla Tyrannos - Grazes
+[ 2026.09.18 19:02:01 ] (combat) 393 to Lucid Upholder - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:02:01 ] (combat) 45 from Lucid Watchman - Grazes
+[ 2026.09.18 19:02:03 ] (combat) 33 from Scylla Tyrannos - Grazes
+[ 2026.09.18 19:02:04 ] (combat) 11 from Lucid Watchman - Praedormitan Missile - Hits
+[ 2026.09.18 19:02:06 ] (combat) 60 from Lucid Upholder - Hits
+[ 2026.09.18 19:02:06 ] (combat) 86 from Lucid Watchman - Penetrates
+[ 2026.09.18 19:02:07 ] (combat) 406 to Lucid Upholder - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:02:08 ] (combat) 13 from Lucid Upholder - Praedormitan Missile - Hits
+[ 2026.09.18 19:02:08 ] (combat) 40 from Scylla Tyrannos - Glances Off
+[ 2026.09.18 19:02:11 ] (combat) Lucid Upholder misses you completely
+[ 2026.09.18 19:02:11 ] (combat) 86 from Lucid Watchman - Penetrates
+[ 2026.09.18 19:02:12 ] (combat) 411 to Lucid Upholder - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:02:13 ] (combat) Scylla Tyrannos misses you completely
+[ 2026.09.18 19:02:16 ] (combat) 11 from Lucid Watchman - Praedormitan Missile - Hits
+[ 2026.09.18 19:02:16 ] (combat) 33 from Lucid Upholder - Grazes
+[ 2026.09.18 19:02:17 ] (combat) 1015 to Lucid Upholder - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:02:18 ] (combat) 58 from Scylla Tyrannos - Hits
+[ 2026.09.18 19:02:21 ] (combat) Lucid Upholder misses you completely
+[ 2026.09.18 19:02:21 ] (combat) 57 from Lucid Watchman - Hits
+[ 2026.09.18 19:02:22 ] (combat) 874 to Lucid Upholder - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:02:23 ] (combat) Scylla Tyrannos misses you completely
+[ 2026.09.18 19:02:26 ] (combat) 42 from Lucid Watchman - Grazes
+[ 2026.09.18 19:02:28 ] (combat) 507 to Scylla Tyrannos - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:02:31 ] (combat) 11 from Lucid Watchman - Praedormitan Missile - Hits
+[ 2026.09.18 19:02:33 ] (combat) 507 to Scylla Tyrannos - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:02:38 ] (combat) 77 from Scylla Tyrannos - Smashes
+[ 2026.09.18 19:02:39 ] (combat) 507 to Scylla Tyrannos - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:02:43 ] (combat) Scylla Tyrannos misses you completely
+[ 2026.09.18 19:02:44 ] (combat) 507 to Scylla Tyrannos - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:02:48 ] (combat) Scylla Tyrannos misses you completely
+[ 2026.09.18 19:02:49 ] (combat) 1015 to Scylla Tyrannos - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:02:53 ] (combat) Scylla Tyrannos misses you completely
+[ 2026.09.18 19:02:54 ] (combat) 296 to Scylla Tyrannos - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:03:02 ] (combat) 397 to Lucid Watchman - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:03:07 ] (combat) 406 to Lucid Watchman - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:03:13 ] (combat) 761 to Lucid Watchman - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:03:18 ] (combat) 635 to Lucid Watchman - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:08:42 ] (combat) 104 to Snarecaster Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:08:46 ] (combat) 145 to Snarecaster Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:08:51 ] (combat) 192 to Snarecaster Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:08:52 ] (combat) 132 to Snarecaster Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:08:57 ] (combat) 208 to Snarecaster Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:09:04 ] (combat) 105 to Snarecaster Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:09:09 ] (combat) 147 to Snarecaster Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:09:10 ] (combat) 22 from Blastlance Tessella - Glances Off
+[ 2026.09.18 19:09:12 ] (combat) 17 from Blastlance Tessella - Grazes
+[ 2026.09.18 19:09:14 ] (combat) 194 to Snarecaster Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:09:14 ] (combat) 41 from Blastlance Tessella - Smashes
+[ 2026.09.18 19:09:15 ] (combat) 131 to Snarecaster Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:09:16 ] (combat) 31 from Blastlance Tessella - Penetrates
+[ 2026.09.18 19:09:18 ] (combat) 30 from Blastlance Tessella - Hits
+[ 2026.09.18 19:09:20 ] (combat) 170 to Snarecaster Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:09:20 ] (combat) 17 from Blastlance Tessella - Grazes
+[ 2026.09.18 19:09:22 ] (combat) 33 from Blastlance Tessella - Penetrates
+[ 2026.09.18 19:09:24 ] (combat) 29 from Blastlance Tessella - Hits
+[ 2026.09.18 19:09:26 ] (combat) 42 from Blastlance Tessella - Smashes
+[ 2026.09.18 19:09:27 ] (combat) 356 to Blastlance Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:09:28 ] (combat) 37 from Blastlance Tessella - Penetrates
+[ 2026.09.18 19:09:30 ] (combat) 40 from Blastlance Tessella - Smashes
+[ 2026.09.18 19:09:32 ] (combat) 181 to Blastlance Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:09:34 ] (combat) Blastlance Tessella misses you completely
+[ 2026.09.18 19:09:36 ] (combat) 41 from Blastlance Tessella - Smashes
+[ 2026.09.18 19:09:38 ] (combat) 38 from Blastlance Tessella - Smashes
+[ 2026.09.18 19:09:40 ] (combat) 29 from Blastlance Tessella - Hits
+[ 2026.09.18 19:09:42 ] (combat) 36 from Blastlance Tessella - Penetrates
+[ 2026.09.18 19:09:44 ] (combat) 31 from Blastlance Tessella - Penetrates
+[ 2026.09.18 19:09:46 ] (combat) Blastlance Tessella misses you completely
+[ 2026.09.18 19:09:47 ] (combat) 354 to Blastlance Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:09:48 ] (combat) 31 from Blastlance Tessella - Penetrates
+[ 2026.09.18 19:09:50 ] (combat) 41 from Blastlance Tessella - Smashes
+[ 2026.09.18 19:09:51 ] (combat) 440 to Blastlance Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:09:52 ] (combat) Blastlance Tessella misses you completely
+[ 2026.09.18 19:09:54 ] (combat) 16 from Blastlance Tessella - Grazes
+[ 2026.09.18 19:09:56 ] (combat) 26 from Blastlance Tessella - Hits
+[ 2026.09.18 19:09:58 ] (combat) 30 from Blastlance Tessella - Hits
+[ 2026.09.18 19:09:59 ] (combat) 181 to Blastlance Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:10:00 ] (combat) 18 from Blastlance Tessella - Grazes
+[ 2026.09.18 19:10:02 ] (combat) Blastlance Tessella misses you completely
+[ 2026.09.18 19:10:04 ] (combat) 187 to Blastlance Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:10:06 ] (combat) 41 from Blastlance Tessella - Smashes
+[ 2026.09.18 19:10:08 ] (combat) 34 from Blastlance Tessella - Penetrates
+[ 2026.09.18 19:10:10 ] (combat) 183 to Blastlance Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:10:12 ] (combat) 18 from Blastlance Tessella - Grazes
+[ 2026.09.18 19:10:14 ] (combat) 91 from Blastlance Tessella - Wrecks
+[ 2026.09.18 19:10:15 ] (combat) 296 to Blastlance Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:10:16 ] (combat) 25 from Blastlance Tessella - Hits
+[ 2026.09.18 19:10:18 ] (combat) 16 from Blastlance Tessella - Grazes
+[ 2026.09.18 19:10:21 ] (combat) 96 to Blastlance Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:10:27 ] (combat) 507 to Blastlance Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:10:28 ] (combat) 133 to Blastlance Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:10:33 ] (combat) 502 to Blastlance Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:10:39 ] (combat) 507 to Blastlance Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:10:40 ] (combat) 349 to Blastlance Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:10:45 ] (combat) 638 to Blastlance Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:10:52 ] (combat) 181 to Blastlance Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:10:57 ] (combat) 370 to Blastlance Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:11:36 ] (combat) 507 to Scylla Tyrannos - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:11:40 ] (combat) 507 to Scylla Tyrannos - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:11:44 ] (combat) 507 to Scylla Tyrannos - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:11:49 ] (combat) 507 to Scylla Tyrannos - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:11:54 ] (combat) Warp scramble attempt from Scylla Tyrannos to Jackdaw [EWB-C] [RIPRC] [Jithran] -
+[ 2026.09.18 19:11:54 ] (combat) 720 to Scylla Tyrannos - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:11:59 ] (combat) 1015 to Scylla Tyrannos - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:12:05 ] (combat) 507 to Scylla Tyrannos - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:12:06 ] (combat) 338 to Scylla Tyrannos - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:12:11 ] (combat) 507 to Scylla Tyrannos - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:12:16 ] (combat) 507 to Scylla Tyrannos - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:12:17 ] (combat) 564 to Scylla Tyrannos - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:12:22 ] (combat) 77 to Scylla Tyrannos - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:12:31 ] (combat) 913 to Ephialtes Lancer - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:12:35 ] (combat) 913 to Ephialtes Lancer - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:12:40 ] (combat) 91 to Ephialtes Lancer - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:12:47 ] (combat) 913 to Ephialtes Lancer - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:12:52 ] (combat) 913 to Ephialtes Lancer - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:12:58 ] (combat) 437 to Ephialtes Lancer - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:13:08 ] (combat) 507 to Karybdis Tyrannos - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:13:14 ] (combat) 507 to Karybdis Tyrannos - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:13:20 ] (combat) 507 to Karybdis Tyrannos - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:13:25 ] (combat) 507 to Karybdis Tyrannos - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:13:30 ] (combat) 507 to Karybdis Tyrannos - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:13:47 ] (combat) 507 to Karybdis Tyrannos - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:13:52 ] (combat) 507 to Karybdis Tyrannos - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:13:57 ] (combat) 507 to Karybdis Tyrannos - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:14:02 ] (combat) 507 to Karybdis Tyrannos - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:14:06 ] (combat) 507 to Karybdis Tyrannos - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:14:11 ] (combat) 745 to Karybdis Tyrannos - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:14:16 ] (combat) 1015 to Karybdis Tyrannos - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:14:21 ] (combat) 1015 to Karybdis Tyrannos - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:14:25 ] (combat) 1015 to Karybdis Tyrannos - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:15:26 ] (combat) 913 to Ephialtes Confuser - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:15:30 ] (combat) 913 to Ephialtes Confuser - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:15:34 ] (combat) 913 to Ephialtes Confuser - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:15:39 ] (combat) 404 to Ephialtes Confuser - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:15:46 ] (combat) 487 to Ephialtes Confuser - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:15:51 ] (combat) 511 to Ephialtes Confuser - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:15:57 ] (combat) 487 to Ephialtes Confuser - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:16:02 ] (combat) 531 to Ephialtes Confuser - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:16:02 ] (combat) 16 from Ephialtes Entangler - Glances Off
+[ 2026.09.18 19:16:04 ] (combat) Ephialtes Entangler misses you completely
+[ 2026.09.18 19:16:06 ] (combat) Ephialtes Illuminator misses you completely
+[ 2026.09.18 19:16:06 ] (combat) 19 from Ephialtes Entangler - Hits
+[ 2026.09.18 19:16:08 ] (combat) 2 from Ephialtes Entangler - Praedormitan Missile - Hits
+[ 2026.09.18 19:16:08 ] (combat) Ephialtes Illuminator misses you completely
+[ 2026.09.18 19:16:09 ] (combat) 3 from Ephialtes Entangler - Praedormitan Missile - Hits
+[ 2026.09.18 19:16:09 ] (combat) Ephialtes Lancer misses you completely
+[ 2026.09.18 19:16:10 ] (combat) Ephialtes Illuminator misses you completely
+[ 2026.09.18 19:16:10 ] (combat) 16 from Ephialtes Entangler - Glances Off
+[ 2026.09.18 19:16:11 ] (combat) 23 from Ephialtes Illuminator - Hits
+[ 2026.09.18 19:16:12 ] (combat) Ephialtes Illuminator misses you completely
+[ 2026.09.18 19:16:12 ] (combat) 25 from Ephialtes Entangler - Hits
+[ 2026.09.18 19:16:13 ] (combat) Ephialtes Lancer misses you completely
+[ 2026.09.18 19:16:14 ] (combat) 4 from Ephialtes Illuminator - Praedormitan Missile - Hits
+[ 2026.09.18 19:16:14 ] (combat) 692 to Ephialtes Entangler - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:16:15 ] (combat) 4 from Ephialtes Illuminator - Praedormitan Missile - Hits
+[ 2026.09.18 19:16:15 ] (combat) 5 from Ephialtes Lancer - Praedormitan Missile - Hits
+[ 2026.09.18 19:16:16 ] (combat) 4 from Ephialtes Illuminator - Praedormitan Missile - Hits
+[ 2026.09.18 19:16:16 ] (combat) 4 from Ephialtes Entangler - Praedormitan Missile - Hits
+[ 2026.09.18 19:16:17 ] (combat) Ephialtes Lancer misses you completely
+[ 2026.09.18 19:16:18 ] (combat) 3 from Ephialtes Entangler - Praedormitan Missile - Hits
+[ 2026.09.18 19:16:18 ] (combat) Ephialtes Illuminator misses you completely
+[ 2026.09.18 19:16:19 ] (combat) 17 from Ephialtes Illuminator - Glances Off
+[ 2026.09.18 19:16:20 ] (combat) 694 to Ephialtes Entangler - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:16:20 ] (combat) Ephialtes Illuminator misses you completely
+[ 2026.09.18 19:16:21 ] (combat) 40 from Ephialtes Lancer - Penetrates
+[ 2026.09.18 19:16:22 ] (combat) 3 from Ephialtes Illuminator - Praedormitan Missile - Hits
+[ 2026.09.18 19:16:22 ] (combat) 26 from Ephialtes Entangler - Penetrates
+[ 2026.09.18 19:16:23 ] (combat) Ephialtes Illuminator misses you completely
+[ 2026.09.18 19:16:24 ] (combat) 3 from Ephialtes Illuminator - Praedormitan Missile - Hits
+[ 2026.09.18 19:16:24 ] (combat) 4 from Ephialtes Lancer - Praedormitan Missile - Hits
+[ 2026.09.18 19:16:24 ] (combat) 30 from Ephialtes Entangler - Penetrates
+[ 2026.09.18 19:16:25 ] (combat) 3 from Ephialtes Illuminator - Praedormitan Missile - Hits
+[ 2026.09.18 19:16:25 ] (combat) 703 to Ephialtes Entangler - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:16:25 ] (combat) Ephialtes Lancer misses you completely
+[ 2026.09.18 19:16:26 ] (combat) 3 from Ephialtes Entangler - Praedormitan Missile - Hits
+[ 2026.09.18 19:16:26 ] (combat) Ephialtes Illuminator misses you completely
+[ 2026.09.18 19:16:27 ] (combat) 14 from Ephialtes Illuminator - Grazes
+[ 2026.09.18 19:16:28 ] (combat) Ephialtes Illuminator misses you completely
+[ 2026.09.18 19:16:28 ] (combat) Ephialtes Entangler misses you completely
+[ 2026.09.18 19:16:29 ] (combat) 3 from Ephialtes Entangler - Praedormitan Missile - Hits
+[ 2026.09.18 19:16:29 ] (combat) Ephialtes Lancer misses you completely
+[ 2026.09.18 19:16:30 ] (combat) 383 to Ephialtes Entangler - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:16:30 ] (combat) 13 from Ephialtes Illuminator - Grazes
+[ 2026.09.18 19:16:31 ] (combat) Ephialtes Illuminator misses you completely
+[ 2026.09.18 19:16:32 ] (combat) 3 from Ephialtes Illuminator - Praedormitan Missile - Hits
+[ 2026.09.18 19:16:32 ] (combat) Ephialtes Entangler misses you completely
+[ 2026.09.18 19:16:33 ] (combat) Ephialtes Lancer misses you completely
+[ 2026.09.18 19:16:34 ] (combat) Ephialtes Illuminator misses you completely
+[ 2026.09.18 19:16:34 ] (combat) Ephialtes Entangler misses you completely
+[ 2026.09.18 19:16:35 ] (combat) 3 from Ephialtes Illuminator - Praedormitan Missile - Hits
+[ 2026.09.18 19:16:35 ] (combat) 4 from Ephialtes Lancer - Praedormitan Missile - Hits
+[ 2026.09.18 19:16:36 ] (combat) 3 from Ephialtes Illuminator - Praedormitan Missile - Hits
+[ 2026.09.18 19:16:36 ] (combat) 690 to Ephialtes Entangler - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:16:37 ] (combat) 3 from Ephialtes Entangler - Praedormitan Missile - Hits
+[ 2026.09.18 19:16:37 ] (combat) 27 from Ephialtes Lancer - Glances Off
+[ 2026.09.18 19:16:38 ] (combat) Ephialtes Illuminator misses you completely
+[ 2026.09.18 19:16:38 ] (combat) 14 from Ephialtes Entangler - Grazes
+[ 2026.09.18 19:16:39 ] (combat) 3 from Ephialtes Entangler - Praedormitan Missile - Hits
+[ 2026.09.18 19:16:39 ] (combat) Ephialtes Illuminator misses you completely
+[ 2026.09.18 19:16:40 ] (combat) Ephialtes Illuminator misses you completely
+[ 2026.09.18 19:16:40 ] (combat) Ephialtes Entangler misses you completely
+[ 2026.09.18 19:16:41 ] (combat) 689 to Ephialtes Entangler - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:16:41 ] (combat) 25 from Ephialtes Lancer - Glances Off
+[ 2026.09.18 19:16:42 ] (combat) Ephialtes Illuminator misses you completely
+[ 2026.09.18 19:16:42 ] (combat) Ephialtes Entangler misses you completely
+[ 2026.09.18 19:16:43 ] (combat) 3 from Ephialtes Illuminator - Praedormitan Missile - Hits
+[ 2026.09.18 19:16:44 ] (combat) Ephialtes Illuminator misses you completely
+[ 2026.09.18 19:16:45 ] (combat) 7 from Ephialtes Illuminator - Praedormitan Missile - Hits
+[ 2026.09.18 19:16:45 ] (combat) 9 from Ephialtes Lancer - Praedormitan Missile - Hits
+[ 2026.09.18 19:16:46 ] (combat) Ephialtes Illuminator misses you completely
+[ 2026.09.18 19:16:47 ] (combat) 14 from Ephialtes Illuminator - Praedormitan Missile - Hits
+[ 2026.09.18 19:16:47 ] (combat) 14 from Ephialtes Entangler - Praedormitan Missile - Hits
+[ 2026.09.18 19:16:48 ] (combat) Ephialtes Illuminator misses you completely
+[ 2026.09.18 19:16:49 ] (combat) 23 from Ephialtes Lancer - Grazes
+[ 2026.09.18 19:16:50 ] (combat) 25 from Ephialtes Illuminator - Penetrates
+[ 2026.09.18 19:16:51 ] (combat) 5 from Ephialtes Illuminator - Praedormitan Missile - Hits
+[ 2026.09.18 19:16:51 ] (combat) 699 to Ephialtes Entangler - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:16:52 ] (combat) 4 from Ephialtes Illuminator - Praedormitan Missile - Hits
+[ 2026.09.18 19:16:53 ] (combat) 5 from Ephialtes Lancer - Praedormitan Missile - Hits
+[ 2026.09.18 19:16:54 ] (combat) 4 from Ephialtes Illuminator - Praedormitan Missile - Hits
+[ 2026.09.18 19:16:55 ] (combat) Ephialtes Illuminator misses you completely
+[ 2026.09.18 19:16:56 ] (combat) 399 to Ephialtes Entangler - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:16:56 ] (combat) 30 from Ephialtes Illuminator - Penetrates
+[ 2026.09.18 19:16:57 ] (combat) Ephialtes Lancer misses you completely
+[ 2026.09.18 19:16:58 ] (combat) 30 from Ephialtes Illuminator - Penetrates
+[ 2026.09.18 19:16:59 ] (combat) 4 from Ephialtes Illuminator - Praedormitan Missile - Hits
+[ 2026.09.18 19:17:00 ] (combat) Ephialtes Illuminator misses you completely
+[ 2026.09.18 19:17:01 ] (combat) 5 from Ephialtes Illuminator - Praedormitan Missile - Hits
+[ 2026.09.18 19:17:01 ] (combat) 26 from Ephialtes Lancer - Glances Off
+[ 2026.09.18 19:17:02 ] (combat) 18 from Ephialtes Illuminator - Glances Off
+[ 2026.09.18 19:17:03 ] (combat) 6 from Ephialtes Lancer - Praedormitan Missile - Hits
+[ 2026.09.18 19:17:03 ] (combat) 28 from Ephialtes Illuminator - Penetrates
+[ 2026.09.18 19:17:04 ] (combat) 5 from Ephialtes Illuminator - Praedormitan Missile - Hits
+[ 2026.09.18 19:17:05 ] (combat) 47 from Ephialtes Lancer - Smashes
+[ 2026.09.18 19:17:06 ] (combat) Ephialtes Illuminator misses you completely
+[ 2026.09.18 19:17:07 ] (combat) 14 from Ephialtes Illuminator - Grazes
+[ 2026.09.18 19:17:08 ] (combat) 25 from Ephialtes Illuminator - Penetrates
+[ 2026.09.18 19:17:09 ] (combat) 3 from Ephialtes Illuminator - Praedormitan Missile - Hits
+[ 2026.09.18 19:17:09 ] (combat) 39 from Ephialtes Lancer - Penetrates
+[ 2026.09.18 19:17:11 ] (combat) 3 from Ephialtes Illuminator - Praedormitan Missile - Hits
+[ 2026.09.18 19:17:12 ] (combat) 4 from Ephialtes Lancer - Praedormitan Missile - Hits
+[ 2026.09.18 19:17:12 ] (combat) 15 from Ephialtes Illuminator - Grazes
+[ 2026.09.18 19:17:13 ] (combat) 25 from Ephialtes Lancer - Glances Off
+[ 2026.09.18 19:17:15 ] (combat) 3 from Ephialtes Illuminator - Praedormitan Missile - Hits
+[ 2026.09.18 19:17:16 ] (combat) 14 from Ephialtes Illuminator - Grazes
+[ 2026.09.18 19:17:17 ] (combat) 35 from Ephialtes Lancer - Hits
+[ 2026.09.18 19:17:20 ] (combat) 865 to Ephialtes Illuminator - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:17:21 ] (combat) 21 from Ephialtes Lancer - Grazes
+[ 2026.09.18 19:17:22 ] (combat) 3 from Ephialtes Lancer - Praedormitan Missile - Hits
+[ 2026.09.18 19:17:25 ] (combat) 24 from Ephialtes Lancer - Glances Off
+[ 2026.09.18 19:17:26 ] (combat) 872 to Ephialtes Illuminator - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:17:29 ] (combat) 19 from Ephialtes Lancer - Grazes
+[ 2026.09.18 19:17:31 ] (combat) 860 to Ephialtes Illuminator - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:17:32 ] (combat) 3 from Ephialtes Lancer - Praedormitan Missile - Hits
+[ 2026.09.18 19:17:33 ] (combat) Ephialtes Lancer misses you completely
+[ 2026.09.18 19:17:37 ] (combat) 38 from Ephialtes Lancer - Penetrates
+[ 2026.09.18 19:17:38 ] (combat) 712 to Ephialtes Lancer - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:17:39 ] (combat) 471 to Ephialtes Lancer - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:17:43 ] (combat) 694 to Ephialtes Lancer - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:17:44 ] (combat) 3 from Ephialtes Lancer - Praedormitan Missile - Hits
+[ 2026.09.18 19:17:49 ] (combat) 558 to Ephialtes Lancer - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:26:11 ] (combat) 300 to Triglavian Biocombinative Cache - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:26:14 ] (combat) 222 to Lucid Firewatcher - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:26:18 ] (combat) 507 to Lucid Firewatcher - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:26:22 ] (combat) 257 to Lucid Firewatcher - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:26:24 ] (combat) 632 to Lucid Firewatcher - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:26:28 ] (combat) 662 to Lucid Firewatcher - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:26:43 ] (combat) 304 to Lucid Deepwatcher - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:26:47 ] (combat) 304 to Lucid Deepwatcher - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:26:53 ] (combat) 304 to Lucid Deepwatcher - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:26:58 ] (combat) 304 to Lucid Deepwatcher - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:27:02 ] (combat) 304 to Lucid Deepwatcher - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:27:07 ] (combat) 304 to Lucid Deepwatcher - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:27:08 ] (combat) 203 to Lucid Deepwatcher - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:27:13 ] (combat) 304 to Lucid Deepwatcher - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:27:18 ] (combat) 304 to Lucid Deepwatcher - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:27:23 ] (combat) 304 to Lucid Deepwatcher - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:27:28 ] (combat) 304 to Lucid Deepwatcher - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:27:32 ] (combat) Lucid Deepwatcher misses you completely
+[ 2026.09.18 19:27:33 ] (combat) 932 to Lucid Deepwatcher - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:27:37 ] (combat) Lucid Deepwatcher misses you completely
+[ 2026.09.18 19:27:39 ] (combat) 679 to Lucid Deepwatcher - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:27:42 ] (combat) Lucid Deepwatcher misses you completely
+[ 2026.09.18 19:27:44 ] (combat) 1015 to Lucid Deepwatcher - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:27:45 ] (combat) 676 to Lucid Deepwatcher - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:27:47 ] (combat) Lucid Deepwatcher misses you completely
+[ 2026.09.18 19:27:50 ] (combat) 548 to Lucid Deepwatcher - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:27:52 ] (combat) Lucid Deepwatcher misses you completely
+[ 2026.09.18 19:27:55 ] (combat) 1015 to Lucid Deepwatcher - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:27:57 ] (combat) Lucid Deepwatcher misses you completely
+[ 2026.09.18 19:28:00 ] (combat) 1015 to Lucid Deepwatcher - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:28:02 ] (combat) Lucid Deepwatcher misses you completely
+[ 2026.09.18 19:28:07 ] (combat) 203 to Lucid Deepwatcher - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:28:12 ] (combat) 203 to Lucid Deepwatcher - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:28:17 ] (combat) Lucid Deepwatcher misses you completely
+[ 2026.09.18 19:28:18 ] (combat) 203 to Lucid Deepwatcher - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:28:22 ] (combat) 170 from Lucid Deepwatcher - Glances Off
+[ 2026.09.18 19:28:24 ] (combat) 203 to Lucid Deepwatcher - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:28:27 ] (combat) Lucid Deepwatcher misses you completely
+[ 2026.09.18 19:28:29 ] (combat) 203 to Lucid Deepwatcher - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:28:32 ] (combat) Lucid Deepwatcher misses you completely
+[ 2026.09.18 19:28:35 ] (combat) 203 to Lucid Deepwatcher - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:28:37 ] (combat) Lucid Deepwatcher misses you completely
+[ 2026.09.18 19:28:41 ] (combat) 203 to Lucid Deepwatcher - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:28:42 ] (combat) Lucid Deepwatcher misses you completely
+[ 2026.09.18 19:28:46 ] (combat) 203 to Lucid Deepwatcher - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:28:47 ] (combat) Lucid Deepwatcher misses you completely
+[ 2026.09.18 19:28:51 ] (combat) 203 to Lucid Deepwatcher - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:28:52 ] (combat) Lucid Deepwatcher misses you completely
+[ 2026.09.18 19:28:57 ] (combat) 203 to Lucid Deepwatcher - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:29:10 ] (combat) 203 to Lucid Deepwatcher - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:29:12 ] (combat) 203 to Lucid Deepwatcher - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:29:17 ] (combat) 676 to Lucid Deepwatcher - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:29:22 ] (combat) 676 to Lucid Deepwatcher - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:29:27 ] (combat) 676 to Lucid Deepwatcher - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:29:32 ] (combat) Lucid Deepwatcher misses you completely
+[ 2026.09.18 19:29:34 ] (combat) 676 to Lucid Deepwatcher - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:29:37 ] (combat) Lucid Deepwatcher misses you completely
+[ 2026.09.18 19:29:45 ] (combat) 1015 to Lucid Deepwatcher - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:30:35 ] (combat) 509 to Starving Damavik - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:30:40 ] (combat) 649 to Starving Damavik - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:30:45 ] (combat) 649 to Starving Damavik - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:30:50 ] (combat) 231 to Starving Damavik - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:30:59 ] (combat) 382 to Starving Damavik - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:31:05 ] (combat) 489 to Starving Damavik - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:31:11 ] (combat) 475 to Starving Damavik - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:31:16 ] (combat) 475 to Starving Damavik - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:31:20 ] (combat) 480 to Starving Damavik - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:31:26 ] (combat) 300 to Triglavian Biocombinative Cache - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:31:36 ] (combat) 507 to Ghosting Kikimora - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:31:40 ] (combat) 570 to Ghosting Kikimora - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:31:46 ] (combat) 648 to Ghosting Kikimora - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:31:51 ] (combat) 648 to Ghosting Kikimora - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:31:55 ] (combat) 662 to Ghosting Kikimora - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:32:01 ] (combat) 667 to Ghosting Kikimora - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:32:08 ] (combat) 507 to Striking Kikimora - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:32:13 ] (combat) 648 to Striking Kikimora - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:32:18 ] (combat) 671 to Striking Kikimora - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:32:24 ] (combat) 509 to Striking Damavik - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:32:31 ] (combat) 649 to Striking Damavik - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:32:37 ] (combat) 507 to Striking Kikimora - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:32:42 ] (combat) 649 to Striking Kikimora - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:32:48 ] (combat) 674 to Striking Kikimora - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:33:31 ] (combat) 509 to Starving Damavik - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:33:36 ] (combat) 381 to Starving Damavik - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:33:41 ] (combat) 479 to Starving Damavik - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:33:46 ] (combat) 482 to Starving Damavik - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:33:51 ] (combat) 480 to Starving Damavik - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:33:59 ] (combat) 300 to Triglavian Biocombinative Cache - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:34:06 ] (combat) 507 to Harrowing Vedmak - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:34:12 ] (combat) 507 to Harrowing Vedmak - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:34:17 ] (combat) 547 to Harrowing Vedmak - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:34:22 ] (combat) 649 to Harrowing Vedmak - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:34:27 ] (combat) 649 to Harrowing Vedmak - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:34:33 ] (combat) 649 to Harrowing Vedmak - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:34:38 ] (combat) 649 to Harrowing Vedmak - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:34:43 ] (combat) 649 to Harrowing Vedmak - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:34:50 ] (combat) 648 to Harrowing Vedmak - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:34:55 ] (combat) 649 to Harrowing Vedmak - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:35:00 ] (combat) 680 to Harrowing Vedmak - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:35:05 ] (combat) 671 to Harrowing Vedmak - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:35:12 ] (combat) 671 to Harrowing Vedmak - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:35:17 ] (combat) 679 to Harrowing Vedmak - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:40:05 ] (combat) 913 to Ephialtes Obfuscator - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:40:09 ] (combat) 913 to Ephialtes Obfuscator - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:40:13 ] (combat) 490 to Ephialtes Obfuscator - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:40:19 ] (combat) 848 to Ephialtes Obfuscator - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:40:25 ] (combat) 716 to Ephialtes Dissipator - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:40:30 ] (combat) 690 to Ephialtes Dissipator - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:40:37 ] (combat) 820 to Ephialtes Dissipator - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:40:38 ] (combat) Ephialtes Dissipator misses you completely
+[ 2026.09.18 19:40:42 ] (combat) 976 to Ephialtes Dissipator - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:40:48 ] (combat) 338 to Karybdis Tyrannos - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:40:53 ] (combat) 338 to Karybdis Tyrannos - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:40:56 ] (combat) Ephialtes Obfuscator misses you completely
+[ 2026.09.18 19:40:58 ] (combat) 507 to Karybdis Tyrannos - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:41:00 ] (combat) Ephialtes Obfuscator misses you completely
+[ 2026.09.18 19:41:01 ] (combat) Karybdis Tyrannos misses you completely
+[ 2026.09.18 19:41:03 ] (combat) 507 to Karybdis Tyrannos - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:41:06 ] (combat) Karybdis Tyrannos misses you completely
+[ 2026.09.18 19:41:08 ] (combat) 507 to Karybdis Tyrannos - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:41:11 ] (combat) 404 from Karybdis Tyrannos - Hits
+[ 2026.09.18 19:41:13 ] (combat) 507 to Karybdis Tyrannos - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:41:16 ] (combat) Karybdis Tyrannos misses you completely
+[ 2026.09.18 19:41:18 ] (combat) 507 to Karybdis Tyrannos - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:41:21 ] (combat) Karybdis Tyrannos misses you completely
+[ 2026.09.18 19:41:23 ] (combat) 507 to Karybdis Tyrannos - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:41:26 ] (combat) Karybdis Tyrannos misses you completely
+[ 2026.09.18 19:41:28 ] (combat) 507 to Karybdis Tyrannos - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:41:31 ] (combat) Karybdis Tyrannos misses you completely
+[ 2026.09.18 19:41:34 ] (combat) 507 to Karybdis Tyrannos - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:41:36 ] (combat) Karybdis Tyrannos misses you completely
+[ 2026.09.18 19:41:39 ] (combat) 507 to Karybdis Tyrannos - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:41:41 ] (combat) Karybdis Tyrannos misses you completely
+[ 2026.09.18 19:41:44 ] (combat) 507 to Karybdis Tyrannos - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:41:46 ] (combat) Karybdis Tyrannos misses you completely
+[ 2026.09.18 19:41:50 ] (combat) 507 to Karybdis Tyrannos - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:41:51 ] (combat) Karybdis Tyrannos misses you completely
+[ 2026.09.18 19:41:55 ] (combat) 507 to Karybdis Tyrannos - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:41:56 ] (combat) Karybdis Tyrannos misses you completely
+[ 2026.09.18 19:42:00 ] (combat) 1015 to Karybdis Tyrannos - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:42:01 ] (combat) Karybdis Tyrannos misses you completely
+[ 2026.09.18 19:42:05 ] (combat) 1015 to Karybdis Tyrannos - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:42:06 ] (combat) Karybdis Tyrannos misses you completely
+[ 2026.09.18 19:42:11 ] (combat) 1015 to Karybdis Tyrannos - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:42:46 ] (combat) Devoted Smith misses you completely
+[ 2026.09.18 19:42:46 ] (combat) Devoted Torchbearer misses you completely
+[ 2026.09.18 19:42:46 ] (combat) Devoted Hunter misses you completely
+[ 2026.09.18 19:42:49 ] (combat) Devoted Knight misses you completely
+[ 2026.09.18 19:42:51 ] (combat) Devoted Hunter misses you completely
+[ 2026.09.18 19:42:51 ] (combat) Devoted Smith misses you completely
+[ 2026.09.18 19:42:51 ] (combat) Devoted Torchbearer misses you completely
+[ 2026.09.18 19:42:53 ] (combat) Devoted Knight misses you completely
+[ 2026.09.18 19:42:55 ] (combat) 659 to Devoted Smith - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:42:55 ] (combat) Devoted Hunter misses you completely
+[ 2026.09.18 19:42:56 ] (combat) Devoted Smith misses you completely
+[ 2026.09.18 19:42:56 ] (combat) Devoted Torchbearer misses you completely
+[ 2026.09.18 19:42:56 ] (combat) Devoted Knight misses you completely
+[ 2026.09.18 19:43:00 ] (combat) 646 to Devoted Smith - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:43:00 ] (combat) Devoted Hunter misses you completely
+[ 2026.09.18 19:43:00 ] (combat) Devoted Knight misses you completely
+[ 2026.09.18 19:43:01 ] (combat) Devoted Smith misses you completely
+[ 2026.09.18 19:43:01 ] (combat) Devoted Torchbearer misses you completely
+[ 2026.09.18 19:43:03 ] (combat) Devoted Knight misses you completely
+[ 2026.09.18 19:43:04 ] (combat) 441 to Devoted Smith - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:43:04 ] (combat) Devoted Hunter misses you completely
+[ 2026.09.18 19:43:06 ] (combat) Devoted Smith misses you completely
+[ 2026.09.18 19:43:06 ] (combat) Devoted Torchbearer misses you completely
+[ 2026.09.18 19:43:07 ] (combat) Devoted Knight misses you completely
+[ 2026.09.18 19:43:09 ] (combat) Devoted Hunter misses you completely
+[ 2026.09.18 19:43:10 ] (combat) Devoted Knight misses you completely
+[ 2026.09.18 19:43:11 ] (combat) 659 to Devoted Smith - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:43:11 ] (combat) Devoted Torchbearer misses you completely
+[ 2026.09.18 19:43:13 ] (combat) Devoted Hunter misses you completely
+[ 2026.09.18 19:43:14 ] (combat) Devoted Knight misses you completely
+[ 2026.09.18 19:43:16 ] (combat) 263 to Devoted Smith - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:43:16 ] (combat) Devoted Torchbearer misses you completely
+[ 2026.09.18 19:43:17 ] (combat) Devoted Knight misses you completely
+[ 2026.09.18 19:43:18 ] (combat) Devoted Hunter misses you completely
+[ 2026.09.18 19:43:21 ] (combat) Devoted Knight misses you completely
+[ 2026.09.18 19:43:21 ] (combat) Devoted Smith misses you completely
+[ 2026.09.18 19:43:21 ] (combat) Devoted Torchbearer misses you completely
+[ 2026.09.18 19:43:22 ] (combat) 776 to Devoted Smith - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:43:23 ] (combat) Devoted Hunter misses you completely
+[ 2026.09.18 19:43:25 ] (combat) Devoted Knight misses you completely
+[ 2026.09.18 19:43:26 ] (combat) Devoted Smith misses you completely
+[ 2026.09.18 19:43:26 ] (combat) Devoted Torchbearer misses you completely
+[ 2026.09.18 19:43:27 ] (combat) Devoted Hunter misses you completely
+[ 2026.09.18 19:43:28 ] (combat) Devoted Knight misses you completely
+[ 2026.09.18 19:43:31 ] (combat) 609 to Devoted Hunter - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:43:31 ] (combat) Devoted Smith misses you completely
+[ 2026.09.18 19:43:31 ] (combat) Devoted Torchbearer misses you completely
+[ 2026.09.18 19:43:32 ] (combat) Devoted Knight misses you completely
+[ 2026.09.18 19:43:32 ] (combat) Devoted Hunter misses you completely
+[ 2026.09.18 19:43:35 ] (combat) Devoted Knight misses you completely
+[ 2026.09.18 19:43:36 ] (combat) 609 to Devoted Hunter - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:43:36 ] (combat) 130 from Devoted Torchbearer - Wrecks
+[ 2026.09.18 19:43:39 ] (combat) Devoted Knight misses you completely
+[ 2026.09.18 19:43:41 ] (combat) Devoted Hunter misses you completely
+[ 2026.09.18 19:43:41 ] (combat) Devoted Torchbearer misses you completely
+[ 2026.09.18 19:43:42 ] (combat) 609 to Devoted Hunter - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:43:42 ] (combat) Devoted Knight misses you completely
+[ 2026.09.18 19:43:45 ] (combat) Devoted Hunter misses you completely
+[ 2026.09.18 19:43:46 ] (combat) 270 to Devoted Hunter - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:43:46 ] (combat) Devoted Knight misses you completely
+[ 2026.09.18 19:43:46 ] (combat) 31 from Devoted Torchbearer - Glances Off
+[ 2026.09.18 19:43:49 ] (combat) 163 from Devoted Knight - Hits
+[ 2026.09.18 19:43:50 ] (combat) 396 to Devoted Hunter - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:43:52 ] (combat) 48 from Devoted Torchbearer - Penetrates
+[ 2026.09.18 19:43:53 ] (combat) Devoted Knight misses you completely
+[ 2026.09.18 19:43:56 ] (combat) 405 to Devoted Torchbearer - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:43:56 ] (combat) Devoted Knight misses you completely
+[ 2026.09.18 19:43:57 ] (combat) 31 from Devoted Torchbearer - Glances Off
+[ 2026.09.18 19:44:00 ] (combat) Devoted Knight misses you completely
+[ 2026.09.18 19:44:02 ] (combat) 57 from Devoted Torchbearer - Smashes
+[ 2026.09.18 19:44:03 ] (combat) 406 to Devoted Knight - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:44:07 ] (combat) 38 from Devoted Torchbearer - Hits
+[ 2026.09.18 19:44:07 ] (combat) 131 from Devoted Knight - Hits
+[ 2026.09.18 19:44:09 ] (combat) 406 to Devoted Knight - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:44:10 ] (combat) Devoted Knight misses you completely
+[ 2026.09.18 19:44:12 ] (combat) 46 from Devoted Torchbearer - Penetrates
+[ 2026.09.18 19:44:14 ] (combat) 609 to Devoted Knight - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:44:17 ] (combat) Devoted Torchbearer misses you completely
+[ 2026.09.18 19:44:17 ] (combat) 150 from Devoted Knight - Hits
+[ 2026.09.18 19:44:20 ] (combat) 609 to Devoted Knight - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:44:21 ] (combat) Devoted Knight misses you completely
+[ 2026.09.18 19:44:22 ] (combat) 34 from Devoted Torchbearer - Hits
+[ 2026.09.18 19:44:24 ] (combat) Devoted Knight misses you completely
+[ 2026.09.18 19:44:25 ] (combat) 609 to Devoted Knight - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:44:27 ] (combat) 30 from Devoted Torchbearer - Glances Off
+[ 2026.09.18 19:44:28 ] (combat) Devoted Knight misses you completely
+[ 2026.09.18 19:44:31 ] (combat) 609 to Devoted Knight - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:44:32 ] (combat) 25 from Devoted Torchbearer - Grazes
+[ 2026.09.18 19:44:35 ] (combat) Devoted Knight misses you completely
+[ 2026.09.18 19:44:36 ] (combat) 609 to Devoted Knight - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:44:37 ] (combat) Devoted Torchbearer misses you completely
+[ 2026.09.18 19:44:38 ] (combat) Devoted Knight misses you completely
+[ 2026.09.18 19:44:41 ] (combat) 628 to Devoted Knight - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:44:42 ] (combat) 23 from Devoted Torchbearer - Grazes
+[ 2026.09.18 19:44:42 ] (combat) Devoted Knight misses you completely
+[ 2026.09.18 19:44:45 ] (combat) Devoted Knight misses you completely
+[ 2026.09.18 19:44:48 ] (combat) 644 to Devoted Knight - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:44:49 ] (combat) Devoted Knight misses you completely
+[ 2026.09.18 19:44:52 ] (combat) Devoted Knight misses you completely
+[ 2026.09.18 19:44:53 ] (combat) 954 to Devoted Knight - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:44:56 ] (combat) 86 from Devoted Knight - Grazes
+[ 2026.09.18 19:45:46 ] (combat) 402 to Lucid Warden - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:45:50 ] (combat) 670 to Lucid Warden - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:45:58 ] (combat) 313 to Lucid Escort - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:45:59 ] (combat) 454 to Lucid Escort - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:46:02 ] (combat) 644 to Lucid Escort - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:46:04 ] (combat) 289 to Lucid Escort - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:46:11 ] (combat) 266 to Lucid Aegis - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:46:16 ] (combat) 253 to Lucid Aegis - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:46:21 ] (combat) 302 to Lucid Aegis - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:46:28 ] (combat) 478 to Lucid Aegis - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:46:37 ] (combat) 276 to Lucid Aegis - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:46:43 ] (combat) 507 to Lucid Aegis - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:46:49 ] (combat) 745 to Lucid Aegis - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:46:56 ] (combat) 238 to Lucid Preserver - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:47:01 ] (combat) 367 to Lucid Preserver - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:47:07 ] (combat) 670 to Lucid Preserver - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:47:13 ] (combat) 271 to Lucid Watchman - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:47:18 ] (combat) 271 to Lucid Watchman - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:47:23 ] (combat) 271 to Lucid Watchman - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:47:29 ] (combat) 271 to Lucid Watchman - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:47:30 ] (combat) 44 from Lucid Watchman - Grazes
+[ 2026.09.18 19:47:33 ] (combat) 581 to Lucid Watchman - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:47:35 ] (combat) 82 from Lucid Watchman - Penetrates
+[ 2026.09.18 19:47:36 ] (combat) 30 from Lucid Watchman - Praedormitan Missile - Hits
+[ 2026.09.18 19:50:50 ] (combat) 247 to Tangling Damavik - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:50:54 ] (combat) 621 to Tangling Damavik - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:50:58 ] (combat) 649 to Tangling Damavik - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:51:05 ] (combat) 650 to Tangling Damavik - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:51:06 ] (combat) 453 to Tangling Damavik - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:51:09 ] (combat) 237 to Tangling Damavik - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:51:18 ] (combat) 300 to Triglavian Biocombinative Cache - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:51:19 ] (combat) 40 to Tangling Damavik - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:51:27 ] (combat) 245 to Ghosting Damavik - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:51:29 ] (combat) 649 to Ghosting Damavik - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:51:34 ] (combat) 432 to Ghosting Damavik - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:51:41 ] (combat) 509 to Striking Damavik - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:51:47 ] (combat) 649 to Striking Damavik - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:51:52 ] (combat) 649 to Striking Damavik - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:51:57 ] (combat) 668 to Striking Damavik - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:52:06 ] (combat) 338 to Striking Damavik - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:52:12 ] (combat) 432 to Striking Damavik - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:52:38 ] (combat) 422 to Striking Damavik - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:52:44 ] (combat) 432 to Striking Damavik - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:52:54 ] (combat) 180 to Strikeneedle Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:52:59 ] (combat) 182 to Strikeneedle Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:53:05 ] (combat) 403 to Strikeneedle Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:53:10 ] (combat) 186 to Sparkneedle Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:53:15 ] (combat) 607 to Sparkneedle Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:53:22 ] (combat) 233 to Sparkneedle Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:53:27 ] (combat) 68 to Sparkneedle Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:54:03 ] (combat) Lucid Watchman misses you completely
+[ 2026.09.18 19:54:08 ] (combat) Lucid Watchman misses you completely
+[ 2026.09.18 19:54:09 ] (combat) 300 to Triglavian Biocombinative Cache - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:54:13 ] (combat) Lucid Watchman misses you completely
+[ 2026.09.18 19:54:14 ] (combat) 406 to Lucid Watchman - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:54:15 ] (combat) 7 from Lucid Watchman - Praedormitan Missile - Hits
+[ 2026.09.18 19:54:17 ] (combat) 7 from Lucid Watchman - Praedormitan Missile - Hits
+[ 2026.09.18 19:54:18 ] (combat) Lucid Watchman misses you completely
+[ 2026.09.18 19:54:19 ] (combat) 406 to Lucid Watchman - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:54:23 ] (combat) 406 to Lucid Watchman - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:54:24 ] (combat) 7 from Lucid Watchman - Praedormitan Missile - Hits
+[ 2026.09.18 19:54:25 ] (combat) 7 from Lucid Watchman - Praedormitan Missile - Hits
+[ 2026.09.18 19:54:26 ] (combat) 7 from Lucid Watchman - Praedormitan Missile - Hits
+[ 2026.09.18 19:54:27 ] (combat) 963 to Lucid Watchman - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:54:28 ] (combat) 64 from Lucid Watchman - Hits
+[ 2026.09.18 19:54:33 ] (combat) 67 from Lucid Watchman - Hits
+[ 2026.09.18 19:54:34 ] (combat) 406 to Lucid Watchman - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:54:35 ] (combat) 7 from Lucid Watchman - Praedormitan Missile - Hits
+[ 2026.09.18 19:54:36 ] (combat) 7 from Lucid Watchman - Praedormitan Missile - Hits
+[ 2026.09.18 19:54:38 ] (combat) Lucid Watchman misses you completely
+[ 2026.09.18 19:54:39 ] (combat) 406 to Lucid Watchman - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:54:43 ] (combat) 82 from Lucid Watchman - Penetrates
+[ 2026.09.18 19:54:45 ] (combat) 406 to Lucid Watchman - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:54:48 ] (combat) 7 from Lucid Watchman - Praedormitan Missile - Hits
+[ 2026.09.18 19:54:49 ] (combat) 7 from Lucid Watchman - Praedormitan Missile - Hits
+[ 2026.09.18 19:54:50 ] (combat) 406 to Lucid Watchman - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:54:53 ] (combat) 221 from Lucid Watchman - Wrecks
+[ 2026.09.18 19:54:55 ] (combat) 406 to Lucid Watchman - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:54:58 ] (combat) Lucid Watchman misses you completely
+[ 2026.09.18 19:55:00 ] (combat) 948 to Lucid Watchman - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:55:01 ] (combat) 271 to Lucid Watchman - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:55:03 ] (combat) 51 from Lucid Watchman - Glances Off
+[ 2026.09.18 19:55:04 ] (combat) 17 from Lucid Watchman - Praedormitan Missile - Hits
+[ 2026.09.18 19:55:05 ] (combat) 18 from Lucid Watchman - Praedormitan Missile - Hits
+[ 2026.09.18 19:55:06 ] (combat) 747 to Lucid Watchman - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:55:08 ] (combat) 79 from Lucid Watchman - Penetrates
+[ 2026.09.18 19:55:11 ] (combat) 827 to Lucid Watchman - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:55:13 ] (combat) 103 from Lucid Watchman - Smashes
+[ 2026.09.18 19:55:18 ] (combat) 7 from Lucid Watchman - Praedormitan Missile - Hits
+[ 2026.09.18 19:55:19 ] (combat) 7 from Lucid Watchman - Praedormitan Missile - Hits
+[ 2026.09.18 19:55:22 ] (combat) 406 to Lucid Watchman - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:55:23 ] (combat) Lucid Watchman misses you completely
+[ 2026.09.18 19:55:28 ] (combat) 406 to Lucid Watchman - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:55:33 ] (combat) 406 to Lucid Watchman - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:55:34 ] (combat) 8 from Lucid Watchman - Praedormitan Missile - Hits
+[ 2026.09.18 19:55:35 ] (combat) Lucid Watchman misses you completely
+[ 2026.09.18 19:55:38 ] (combat) Lucid Watchman misses you completely
+[ 2026.09.18 19:55:39 ] (combat) 406 to Lucid Watchman - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:55:40 ] (combat) 77 from Lucid Watchman - Penetrates
+[ 2026.09.18 19:55:43 ] (combat) 556 to Lucid Watchman - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:55:45 ] (combat) Lucid Watchman misses you completely
+[ 2026.09.18 19:55:46 ] (combat) 7 from Lucid Watchman - Praedormitan Missile - Hits
+[ 2026.09.18 19:55:47 ] (combat) 7 from Lucid Watchman - Praedormitan Missile - Hits
+[ 2026.09.18 19:55:48 ] (combat) 1015 to Lucid Watchman - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:55:50 ] (combat) 78 from Lucid Watchman - Penetrates
+[ 2026.09.18 19:55:53 ] (combat) 38 from Lucid Watchman - Grazes
+[ 2026.09.18 19:55:54 ] (combat) 682 to Lucid Watchman - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:55:58 ] (combat) 10 from Lucid Watchman - Praedormitan Missile - Hits
+[ 2026.09.18 19:56:00 ] (combat) 482 to Lucid Watchman - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:56:03 ] (combat) 46 from Lucid Watchman - Grazes
+[ 2026.09.18 19:56:06 ] (combat) 786 to Lucid Watchman - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:56:48 ] (combat) 1015 to Plateforger Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:56:57 ] (combat) 397 to Plateforger Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:57:03 ] (combat) 394 to Plateforger Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 19:57:14 ] (combat) 888 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 19:57:19 ] (combat) 888 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 19:57:23 ] (combat) 888 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 19:57:24 ] (combat) 592 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 19:57:29 ] (combat) 888 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 19:57:33 ] (combat) 457 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 19:57:38 ] (combat) 405 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 19:57:44 ] (combat) 364 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 19:57:51 ] (combat) 350 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 19:57:55 ] (combat) 325 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 19:57:59 ] (combat) Bathyic Abyssal Overmind misses you completely
+[ 2026.09.18 19:58:01 ] (combat) 325 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 19:58:03 ] (combat) Bathyic Abyssal Overmind misses you completely
+[ 2026.09.18 19:58:06 ] (combat) 325 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 19:58:08 ] (combat) Bathyic Abyssal Overmind misses you completely
+[ 2026.09.18 19:58:10 ] (combat) 325 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 19:58:12 ] (combat) Bathyic Abyssal Overmind misses you completely
+[ 2026.09.18 19:58:15 ] (combat) 325 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 19:58:16 ] (combat) Bathyic Abyssal Overmind misses you completely
+[ 2026.09.18 19:58:21 ] (combat) 325 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 19:58:25 ] (combat) Bathyic Abyssal Overmind misses you completely
+[ 2026.09.18 19:58:27 ] (combat) 325 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 19:58:29 ] (combat) Bathyic Abyssal Overmind misses you completely
+[ 2026.09.18 19:58:32 ] (combat) 325 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 19:58:33 ] (combat) Bathyic Abyssal Overmind misses you completely
+[ 2026.09.18 19:58:38 ] (combat) Bathyic Abyssal Overmind misses you completely
+[ 2026.09.18 19:58:39 ] (combat) 326 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 19:58:42 ] (combat) Bathyic Abyssal Overmind misses you completely
+[ 2026.09.18 19:58:44 ] (combat) 326 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 19:58:47 ] (combat) Bathyic Abyssal Overmind misses you completely
+[ 2026.09.18 19:58:49 ] (combat) 327 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 19:58:51 ] (combat) Bathyic Abyssal Overmind misses you completely
+[ 2026.09.18 19:58:54 ] (combat) 327 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 19:58:55 ] (combat) Bathyic Abyssal Overmind misses you completely
+[ 2026.09.18 19:58:59 ] (combat) Bathyic Abyssal Overmind misses you completely
+[ 2026.09.18 19:59:00 ] (combat) 328 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 19:59:03 ] (combat) Bathyic Abyssal Overmind misses you completely
+[ 2026.09.18 19:59:04 ] (combat) 328 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 19:59:08 ] (combat) Bathyic Abyssal Overmind misses you completely
+[ 2026.09.18 19:59:09 ] (combat) 328 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 19:59:12 ] (combat) Bathyic Abyssal Overmind misses you completely
+[ 2026.09.18 19:59:16 ] (combat) 372 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 19:59:21 ] (combat) 390 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 19:59:21 ] (combat) 300 to Triglavian Biocombinative Cache - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 19:59:25 ] (combat) Bathyic Abyssal Overmind misses you completely
+[ 2026.09.18 19:59:27 ] (combat) 400 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 19:59:29 ] (combat) 266 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 19:59:31 ] (combat) 402 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 19:59:34 ] (combat) 269 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 19:59:37 ] (combat) 405 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 19:59:38 ] (combat) Bathyic Abyssal Overmind misses you completely
+[ 2026.09.18 19:59:40 ] (combat) 222 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 19:59:42 ] (combat) 408 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 19:59:45 ] (combat) 273 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 19:59:46 ] (combat) 409 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 19:59:49 ] (combat) 273 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 19:59:51 ] (combat) Bathyic Abyssal Overmind misses you completely
+[ 2026.09.18 19:59:52 ] (combat) 409 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 19:59:54 ] (combat) 274 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 19:59:55 ] (combat) Bathyic Abyssal Overmind misses you completely
+[ 2026.09.18 19:59:57 ] (combat) 409 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 19:59:59 ] (combat) Bathyic Abyssal Overmind misses you completely
+[ 2026.09.18 20:00:00 ] (combat) 274 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 20:00:02 ] (combat) 410 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 20:00:04 ] (combat) Bathyic Abyssal Overmind misses you completely
+[ 2026.09.18 20:00:05 ] (combat) 214 to Bathyic Abyssal Overmind - Mjolnir Fury Light Missile - Hits
+[ 2026.09.18 20:05:10 ] (combat) 197 to Snarecaster Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 20:05:17 ] (combat) 69 to Snarecaster Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 20:05:21 ] (combat) 106 to Snarecaster Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 20:05:22 ] (combat) 86 to Snarecaster Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 20:05:28 ] (combat) 175 to Snarecaster Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 20:05:32 ] (combat) 202 to Snarecaster Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 20:05:37 ] (combat) 78 to Snarecaster Tessella - Nova Fury Light Missile - Hits
+[ 2026.09.18 20:05:46 ] (combat) 406 to Strikegrip Tessera - Nova Fury Light Missile - Hits
+[ 2026.09.18 20:05:51 ] (combat) 406 to Strikegrip Tessera - Nova Fury Light Missile - Hits
+[ 2026.09.18 20:05:55 ] (combat) 745 to Strikegrip Tessera - Nova Fury Light Missile - Hits
+[ 2026.09.18 20:06:00 ] (combat) 988 to Strikegrip Tessera - Nova Fury Light Missile - Hits
+[ 2026.09.18 20:06:07 ] (combat) 406 to Strikegrip Tessera - Nova Fury Light Missile - Hits
+[ 2026.09.18 20:06:12 ] (combat) 406 to Strikegrip Tessera - Nova Fury Light Missile - Hits
+[ 2026.09.18 20:06:17 ] (combat) 406 to Strikegrip Tessera - Nova Fury Light Missile - Hits
+[ 2026.09.18 20:06:22 ] (combat) 406 to Strikegrip Tessera - Nova Fury Light Missile - Hits
+[ 2026.09.18 20:06:27 ] (combat) 406 to Strikegrip Tessera - Nova Fury Light Missile - Hits
+[ 2026.09.18 20:06:33 ] (combat) 406 to Strikegrip Tessera - Nova Fury Light Missile - Hits
+[ 2026.09.18 20:06:36 ] (combat) Strikegrip Tessera misses you completely
+[ 2026.09.18 20:06:39 ] (combat) 406 to Strikegrip Tessera - Nova Fury Light Missile - Hits
+[ 2026.09.18 20:06:41 ] (combat) Strikegrip Tessera misses you completely
+[ 2026.09.18 20:06:43 ] (combat) 806 to Strikegrip Tessera - Nova Fury Light Missile - Hits
+[ 2026.09.18 20:06:46 ] (combat) Strikegrip Tessera misses you completely
+[ 2026.09.18 20:06:48 ] (combat) 936 to Strikegrip Tessera - Nova Fury Light Missile - Hits
+[ 2026.09.18 20:06:56 ] (combat) 489 to Sparkgrip Tessera - Nova Fury Light Missile - Hits
+[ 2026.09.18 20:07:01 ] (combat) 91 to Sparkgrip Tessera - Nova Fury Light Missile - Hits
+[ 2026.09.18 20:08:09 ] (combat) 438 to Devoted Smith - Nova Fury Light Missile - Hits
+[ 2026.09.18 20:08:13 ] (combat) 335 to Devoted Smith - Nova Fury Light Missile - Hits
+[ 2026.09.18 20:08:20 ] (combat) 434 to Devoted Smith - Nova Fury Light Missile - Hits
+[ 2026.09.18 20:08:25 ] (combat) 747 to Devoted Smith - Nova Fury Light Missile - Hits
+[ 2026.09.18 20:08:33 ] (combat) 433 to Devoted Lookout - Nova Fury Light Missile - Hits
+[ 2026.09.18 20:08:38 ] (combat) 435 to Devoted Lookout - Nova Fury Light Missile - Hits
+[ 2026.09.18 20:08:43 ] (combat) Devoted Torchbearer misses you completely
+[ 2026.09.18 20:08:44 ] (combat) 527 to Devoted Lookout - Nova Fury Light Missile - Hits
+[ 2026.09.18 20:08:48 ] (combat) Devoted Torchbearer misses you completely
+[ 2026.09.18 20:08:49 ] (combat) 332 to Devoted Lookout - Nova Fury Light Missile - Hits
+[ 2026.09.18 20:08:53 ] (combat) Devoted Torchbearer misses you completely
+[ 2026.09.18 20:08:56 ] (combat) 659 to Devoted Lookout - Nova Fury Light Missile - Hits
+[ 2026.09.18 20:08:58 ] (combat) Devoted Torchbearer misses you completely
+[ 2026.09.18 20:09:01 ] (combat) 640 to Devoted Lookout - Nova Fury Light Missile - Hits
+[ 2026.09.18 20:09:03 ] (combat) 24 from Devoted Torchbearer - Grazes
+[ 2026.09.18 20:09:06 ] (combat) 299 to Devoted Lookout - Nova Fury Light Missile - Hits
+[ 2026.09.18 20:09:08 ] (combat) 54 from Devoted Torchbearer - Penetrates
+[ 2026.09.18 20:09:11 ] (combat) 593 to Devoted Torchbearer - Nova Fury Light Missile - Hits
+[ 2026.09.18 20:09:12 ] (combat) 393 to Devoted Torchbearer - Nova Fury Light Missile - Hits
+[ 2026.09.18 20:09:13 ] (combat) 33 from Devoted Torchbearer - Hits
+[ 2026.09.18 20:09:17 ] (combat) 478 to Devoted Torchbearer - Nova Fury Light Missile - Hits
+[ 2026.09.18 20:09:18 ] (combat) 36 from Devoted Torchbearer - Hits
+[ 2026.09.18 20:09:23 ] (combat) 512 to Devoted Torchbearer - Nova Fury Light Missile - Hits
+[ 2026.09.18 20:09:24 ] (combat) 34 from Devoted Lookout - Hits
+[ 2026.09.18 20:09:28 ] (combat) Devoted Torchbearer misses you completely
+[ 2026.09.18 20:09:30 ] (combat) 659 to Devoted Torchbearer - Nova Fury Light Missile - Hits
+[ 2026.09.18 20:09:33 ] (combat) Devoted Torchbearer misses you completely
+[ 2026.09.18 20:09:36 ] (combat) 324 to Devoted Torchbearer - Nova Fury Light Missile - Hits
+[ 2026.09.18 20:09:38 ] (combat) 40 from Devoted Torchbearer - Hits
+[ 2026.09.18 20:09:42 ] (combat) 413 to Devoted Torchbearer - Nova Fury Light Missile - Hits
+[ 2026.09.18 20:09:43 ] (combat) 26 from Devoted Torchbearer - Grazes
+[ 2026.09.18 20:09:46 ] (combat) 434 to Devoted Torchbearer - Nova Fury Light Missile - Hits
+[ 2026.09.18 20:09:48 ] (combat) 30 from Devoted Torchbearer - Glances Off
+[ 2026.09.18 20:09:51 ] (combat) 472 to Devoted Torchbearer - Nova Fury Light Missile - Hits
+[ 2026.09.18 20:09:52 ] (combat) 399 to Devoted Torchbearer - Nova Fury Light Missile - Hits
+[ 2026.09.18 20:09:53 ] (combat) 60 from Devoted Torchbearer - Smashes
+[ 2026.09.18 20:09:57 ] (combat) 255 to Devoted Torchbearer - Nova Fury Light Missile - Hits
+[ 2026.09.18 20:10:27 ] (combat) 509 to Ghosting Damavik - Nova Fury Light Missile - Hits
+[ 2026.09.18 20:10:31 ] (combat) 649 to Ghosting Damavik - Nova Fury Light Missile - Hits
+[ 2026.09.18 20:10:37 ] (combat) 477 to Ghosting Damavik - Nova Fury Light Missile - Hits
+[ 2026.09.18 20:10:48 ] (combat) 537 to Ghosting Damavik - Nova Fury Light Missile - Hits
+[ 2026.09.18 20:10:54 ] (combat) 509 to Striking Damavik - Nova Fury Light Missile - Hits
+[ 2026.09.18 20:11:00 ] (combat) 649 to Striking Damavik - Nova Fury Light Missile - Hits
+[ 2026.09.18 20:11:06 ] (combat) 649 to Striking Damavik - Nova Fury Light Missile - Hits
+[ 2026.09.18 20:11:13 ] (combat) 360 to Striking Damavik - Nova Fury Light Missile - Hits
+[ 2026.09.18 20:11:20 ] (combat) 422 to Striking Damavik - Nova Fury Light Missile - Hits
+[ 2026.09.18 20:11:24 ] (combat) 649 to Harrowing Vedmak - Nova Fury Light Missile - Hits
+[ 2026.09.18 20:11:30 ] (combat) 649 to Harrowing Vedmak - Nova Fury Light Missile - Hits
+[ 2026.09.18 20:11:35 ] (combat) 649 to Harrowing Vedmak - Nova Fury Light Missile - Hits
+[ 2026.09.18 20:11:40 ] (combat) 663 to Harrowing Vedmak - Nova Fury Light Missile - Hits
+[ 2026.09.18 20:11:45 ] (combat) 679 to Harrowing Vedmak - Nova Fury Light Missile - Hits
+[ 2026.09.18 20:11:52 ] (combat) 507 to Harrowing Vedmak - Nova Fury Light Missile - Hits
+[ 2026.09.18 20:11:58 ] (combat) 550 to Harrowing Vedmak - Nova Fury Light Missile - Hits
+[ 2026.09.18 20:12:03 ] (combat) 649 to Harrowing Vedmak - Nova Fury Light Missile - Hits
+[ 2026.09.18 20:12:06 ] (combat) 203 from Harrowing Vedmak - Hits
+[ 2026.09.18 20:12:08 ] (combat) 649 to Harrowing Vedmak - Nova Fury Light Missile - Hits
+[ 2026.09.18 20:12:11 ] (combat) 191 from Harrowing Vedmak - Hits
+[ 2026.09.18 20:12:13 ] (combat) 649 to Harrowing Vedmak - Nova Fury Light Missile - Hits
+[ 2026.09.18 20:12:16 ] (combat) Harrowing Vedmak misses you completely
+[ 2026.09.18 20:12:19 ] (combat) 679 to Harrowing Vedmak - Nova Fury Light Missile - Hits
+[ 2026.09.18 20:12:21 ] (combat) 237 from Harrowing Vedmak - Hits
+[ 2026.09.18 20:12:24 ] (combat) 679 to Harrowing Vedmak - Nova Fury Light Missile - Hits

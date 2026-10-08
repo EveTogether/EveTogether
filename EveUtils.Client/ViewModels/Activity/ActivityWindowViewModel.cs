@@ -703,6 +703,12 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     /// <summary>"ROOM 2  since 20:44:31 · 03:00" under the clock — null until NEW ROOM was pressed once.</summary>
     public string? CurrentRoomText { get; private set; }
 
+    /// <summary>The AUTO badge beside the room line when the detector opened the room (ET-368).</summary>
+    public RoomSourceViewModel? CurrentRoomSource { get; private set; }
+
+    /// <summary>Said under the buttons only while the detector runs for this pilot, so NEW ROOM is never a guess.</summary>
+    public bool IsRoomDetectionHintShown => IsNewRoomButtonVisible && _Enemies()?.IsDetecting == true;
+
     private EnemiesWindowSectionViewModel? _Enemies() =>
         _sections.GetValueOrDefault(RunSectionId.Enemies) as EnemiesWindowSectionViewModel;
 
@@ -1808,8 +1814,11 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         foreach (RunWindowSection section in _AllSections())
             section.Refresh(nowUtc);
         CurrentRoomText = _Enemies()?.CurrentRoomText(nowUtc);
+        CurrentRoomSource = _Enemies()?.CurrentRoomSource;
         OnPropertyChanged(nameof(CurrentRoomText));
+        OnPropertyChanged(nameof(CurrentRoomSource));
         OnPropertyChanged(nameof(IsNewRoomButtonVisible));
+        OnPropertyChanged(nameof(IsRoomDetectionHintShown));
         _RefreshGroupTotalIsk(nowUtc);
         _RefreshSummaries();
         _RefreshCompact(nowUtc);

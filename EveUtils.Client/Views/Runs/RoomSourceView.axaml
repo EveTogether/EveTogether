@@ -1,0 +1,43 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vr="using:EveUtils.Client.ViewModels.Runs"
+             x:Class="EveUtils.Client.Views.Runs.RoomSourceView"
+             x:DataType="vr:RoomSourceViewModel">
+    <!-- A detected room (ET-368, mockup (a)): AUTO in a dashed info outline, then the certainty as dots and a word, so
+         it never rests on colour alone. Dashed the way the loot disclosure draws it: a Border has no dash. -->
+    <UserControl.Styles>
+        <Style Selector="Rectangle.autobadge">
+            <Setter Property="Stroke" Value="{StaticResource BlueBrush}"/>
+            <Setter Property="StrokeThickness" Value="1"/>
+            <Setter Property="StrokeDashArray" Value="3,2"/>
+            <Setter Property="RadiusX" Value="2"/>
+            <Setter Property="RadiusY" Value="2"/>
+        </Style>
+        <Style Selector="TextBlock.autobadge">
+            <Setter Property="Margin" Value="4,2"/>
+            <Setter Property="FontSize" Value="8.5"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="LetterSpacing" Value="0.7"/>
+            <Setter Property="Foreground" Value="{StaticResource BlueBrush}"/>
+        </Style>
+        <Style Selector="TextBlock.dots">
+            <Setter Property="FontSize" Value="9.5"/>
+            <Setter Property="Foreground" Value="{StaticResource WarnBrush}"/>
+        </Style>
+        <Style Selector="TextBlock.dots.sure">
+            <Setter Property="Foreground" Value="{StaticResource GreenBrush}"/>
+        </Style>
+        <Style Selector="TextBlock.word">
+            <Setter Property="FontSize" Value="9.5"/>
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+        </Style>
+    </UserControl.Styles>
+    <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+        <Panel VerticalAlignment="Center">
+            <Rectangle Classes="autobadge"/>
+            <TextBlock Classes="autobadge" Text="AUTO"/>
+        </Panel>
+        <TextBlock Classes="dots" Classes.sure="{Binding IsSure}" VerticalAlignment="Center" Text="{Binding Dots}"/>
+        <TextBlock Classes="word" VerticalAlignment="Center" Text="{Binding Word}"/>
+    </StackPanel>
+</UserControl>

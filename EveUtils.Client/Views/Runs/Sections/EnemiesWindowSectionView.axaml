@@ -2,6 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:va="using:EveUtils.Client.ViewModels.Activity"
              xmlns:vs="using:EveUtils.Client.ViewModels.Runs.Sections"
+             xmlns:vw="using:EveUtils.Client.Views.Runs"
              x:Class="EveUtils.Client.Views.Runs.Sections.EnemiesWindowSectionView"
              x:DataType="vs:EnemiesWindowSectionViewModel">
     <UserControl.DataTemplates>
@@ -26,11 +27,15 @@
                 <DataTemplate DataType="va:RunEnemyRoomViewModel">
                     <StackPanel Spacing="2" Margin="0,6,0,0">
                         <Border BorderThickness="0,0,0,1" BorderBrush="{DynamicResource BorderBrush}" Padding="0,0,0,3">
-                            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+                            <Grid ColumnDefinitions="Auto,Auto,*,Auto" ColumnSpacing="10">
                                 <TextBlock Classes="label" VerticalAlignment="Center" Text="{Binding Title}"/>
-                                <TextBlock Grid.Column="1" Classes="hint" Margin="0" VerticalAlignment="Center"
+                                <Panel Grid.Column="1" VerticalAlignment="Center"
+                                       IsVisible="{Binding Source, Converter={x:Static ObjectConverters.IsNotNull}}">
+                                    <vw:RoomSourceView DataContext="{Binding Source}"/>
+                                </Panel>
+                                <TextBlock Grid.Column="2" Classes="hint" Margin="0" VerticalAlignment="Center"
                                            Text="{Binding WindowText}"/>
-                                <Button Grid.Column="2" Classes="link" Content="undo" IsVisible="{Binding IsUndoShown}"
+                                <Button Grid.Column="3" Classes="link" Content="undo" IsVisible="{Binding IsUndoShown}"
                                         ToolTip.Tip="Take this room back: its enemies and loot fold into the room before it."
                                         Command="{Binding #EnemyRoomList.((vs:EnemiesWindowSectionViewModel)DataContext).UndoRoomCommand}"/>
                             </Grid>

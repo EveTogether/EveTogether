@@ -8,12 +8,17 @@ namespace EveUtils.Shared.Modules.Runs;
 /// rooms later (ET-469) cannot split a run differently. Room 1 starts with the run and has no boundary of its own.</summary>
 public static class RunRooms
 {
-    /// <summary>One run's boundaries, oldest first — empty for a run nobody pressed NEW ROOM on.</summary>
-    public static IReadOnlyList<DateTime> Boundaries(IEnumerable<RunParameterDto> parameters, Guid runId) =>
-        [.. parameters
-            .Where(parameter => parameter.RunId == runId && parameter.ParameterKey == RunParameterKey.RoomStarted)
-            .Select(parameter => parameter.ObservedAtUtc)
-            .Order()];
+    /// <summary>One run's boundaries, oldest first — empty for a run without rooms. The pilot's own wins (ET-368): a
+    /// run with any <see cref="RunParameterKey.RoomStarted"/> reads only those, never the detector's beside them.</summary>
+    public static IReadOnlyList<DateTime> Boundaries(IEnumerable<RunParameterDto> parameters, Guid runId)
+    {
+        RunParameterDto[] rows = [.. parameters.Where(parameter => parameter.RunId == runId
+            && parameter.ParameterKey is RunParameterKey.RoomStarted or RunParameterKey.RoomDetected)];
+        RunParameterKey source = rows.Any(row => row.ParameterKey == RunParameterKey.RoomStarted)
+            ? RunParameterKey.RoomStarted
+            : RunParameterKey.RoomDetected;
+        return [.. rows.Where(row => row.ParameterKey == source).Select(row => row.ObservedAtUtc).Order()];
+    }
 
     /// <summary>The room <paramref name="atUtc"/> falls in, or null when the run has no rooms. A moment on a boundary
     /// is the new room's; before the run started is room 1, after it stopped the last room.</summary>

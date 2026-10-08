@@ -2,6 +2,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:va="using:EveUtils.Client.ViewModels.Activity"
         xmlns:vr="using:EveUtils.Client.ViewModels.Runs"
+        xmlns:vw="using:EveUtils.Client.Views.Runs"
         xmlns:mi="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -546,10 +547,14 @@
                 </Grid>
 
                 <!-- The room this pilot is in (ET-240), once NEW ROOM was pressed: room 1 began with the run. -->
-                <Grid x:Name="CurrentRoom" ColumnDefinitions="Auto,*" ColumnSpacing="10"
+                <Grid x:Name="CurrentRoom" ColumnDefinitions="Auto,Auto,*" ColumnSpacing="10"
                       IsVisible="{Binding CurrentRoomText, Converter={x:Static ObjectConverters.IsNotNull}}">
                     <TextBlock Classes="label" VerticalAlignment="Center" Text="ROOM"/>
                     <TextBlock x:Name="CurrentRoomLine" Grid.Column="1" Classes="fleetclock" Text="{Binding CurrentRoomText}"/>
+                    <Panel Grid.Column="2" VerticalAlignment="Center"
+                           IsVisible="{Binding CurrentRoomSource, Converter={x:Static ObjectConverters.IsNotNull}}">
+                        <vw:RoomSourceView DataContext="{Binding CurrentRoomSource}"/>
+                    </Panel>
                 </Grid>
 
                 <!-- The fleet's clock (ET-243): the figure above is this pilot's own pocket; this is the activity's. -->
@@ -634,6 +639,10 @@
                             IsVisible="{Binding IsDiscardButtonVisible}" IsEnabled="{Binding !IsSaving}"
                             Command="{Binding DiscardRunCommand}"/>
                 </Grid>
+                <!-- Only while the detector runs for this pilot (ET-368): the rooms are found, and the button still rules. -->
+                <TextBlock x:Name="RoomDetectionHint" Classes="hint" Margin="0" TextWrapping="Wrap"
+                           IsVisible="{Binding IsRoomDetectionHintShown}"
+                           Text="ET splits abyssal rooms from the game log. NEW ROOM still works and always wins"/>
                 <!-- A save is not always instant (ET-210 review finding: a five-member group took five to six
                      seconds) — shown in the window itself and not only on the button, so it is still noticed once
                      the window has scrolled past the controls (ET-225). Every button above is disabled for the same

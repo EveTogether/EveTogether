@@ -1,17 +1,31 @@
 using System.Collections.ObjectModel;
+using EveUtils.Shared.Modules.Gamelog.Aggregation;
 using EveUtils.Shared.Modules.Runs;
 using EveUtils.Shared.Modules.Runs.Dtos;
+using EveUtils.Shared.Modules.Runs.Enums;
 
 namespace EveUtils.Client.ViewModels.Activity;
 
-public sealed class RunEnemyObservationCollector(int characterId, Func<string, int?> typeIdResolver)
+/// <param name="isAbyssalEnemy">Set only in an abyssal pocket (ET-368): which types the room detector reads. Null
+/// keeps rooms to NEW ROOM alone, the way every other run type has them.</param>
+public sealed class RunEnemyObservationCollector(int characterId, Func<string, int?> typeIdResolver,
+    Func<int, bool>? isAbyssalEnemy = null)
 {
     private readonly List<DateTime> _roomBoundaries = [];
+    // Per boundary: how sure the detector was, or null for one the pilot set (ET-368).
+    private readonly List<RoomCertainty?> _detectedCertainties = [];
+    private AbyssalRoomDetector? _detector = isAbyssalEnemy is null ? null : new AbyssalRoomDetector();
 
     public ObservableCollection<RunEnemyObservationViewModel> Observations { get; } = [];
 
     /// <summary>Where the pilot pressed NEW ROOM (ET-240), oldest first — empty while the run has no rooms.</summary>
     public IReadOnlyList<DateTime> RoomBoundaries => _roomBoundaries;
+
+    /// <summary>Per boundary in <see cref="RoomBoundaries"/>: the detector's certainty, or null when the pilot set it.</summary>
+    public IReadOnlyList<RoomCertainty?> DetectedCertainties => _detectedCertainties;
+
+    /// <summary>Whether the detector still runs: an abyssal pocket where the pilot has not pressed NEW ROOM.</summary>
+    public bool IsDetecting => _detector is not null;
 
     /// <summary>A row appeared or moved between rooms — the moments a list grouped per room has to be laid out
     /// again. Not raised for a typed count, so an open editor is never rebound under the cursor.</summary>
@@ -41,6 +55,12 @@ public sealed class RunEnemyObservationCollector(int characterId, Func<string, i
         if (observedCharacterId != characterId || typeIdResolver(target) is not int enemyTypeId)
             return;
 
+        if (_detector is not null && isAbyssalEnemy?.Invoke(enemyTypeId) == true
+            && _detector.Observe(enemyTypeId, observedAtUtc) is { } detection)
+        {
+            _ApplyDetection(detection);
+        }
+
         int? room = RunRooms.RoomOf(_roomBoundaries, observedAtUtc);
         if (Observations.FirstOrDefault(observation => observation.EnemyTypeId == enemyTypeId && observation.RoomNumber == room)
             is { } seen)
@@ -57,7 +77,10 @@ public sealed class RunEnemyObservationCollector(int characterId, Func<string, i
     }
 
     /// <summary>Close the current room at <paramref name="atUtc"/> and begin the next. The first press makes two
-    /// rooms: everything seen so far becomes room 1. A moment not after the last boundary is refused.</summary>
+    /// rooms: everything seen so far becomes room 1. A moment not after the last boundary is refused.
+    ///
+    /// The pilot's own press wins over the detector for the rest of the run (ET-368, the ET-262 rule): every boundary
+    /// it set becomes the pilot's, since they were seen and flown on, and the detector stops.</summary>
     public bool StartRoom(DateTime atUtc)
     {
         if (_roomBoundaries.Count > 0 && atUtc <= _roomBoundaries[^1])
@@ -65,6 +88,32 @@ public sealed class RunEnemyObservationCollector(int characterId, Func<string, i
             return false;
         }
 
+        _detector = null;
+        for (int index = 0; index < _detectedCertainties.Count; index++)
+        {
+            _detectedCertainties[index] = null;
+        }
+
+        _AddBoundary(atUtc, certainty: null);
+        return true;
+    }
+
+    private void _ApplyDetection(RoomDetection detection)
+    {
+        if (detection.IsUpgrade)
+        {
+            _detectedCertainties[^1] = detection.Certainty;
+            // The room headers carry the certainty, so they are laid out again even when no row moved.
+            Regrouped?.Invoke();
+            Changed?.Invoke();
+            return;
+        }
+
+        _AddBoundary(detection.AtUtc, detection.Certainty);
+    }
+
+    private void _AddBoundary(DateTime atUtc, RoomCertainty? certainty)
+    {
         if (_roomBoundaries.Count == 0)
         {
             foreach (RunEnemyObservationViewModel observation in Observations)
@@ -74,9 +123,9 @@ public sealed class RunEnemyObservationCollector(int characterId, Func<string, i
         }
 
         _roomBoundaries.Add(atUtc);
+        _detectedCertainties.Add(certainty);
         Regrouped?.Invoke();
         Changed?.Invoke();
-        return true;
     }
 
     /// <summary>Take the last boundary back: the last room's rows fold into the room before it per type — counts
@@ -89,7 +138,13 @@ public sealed class RunEnemyObservationCollector(int characterId, Func<string, i
         }
 
         int last = _roomBoundaries.Count + 1;
+        if (_detectedCertainties[^1] is not null)
+        {
+            _detector?.Undo();
+        }
+
         _roomBoundaries.RemoveAt(_roomBoundaries.Count - 1);
+        _detectedCertainties.RemoveAt(_detectedCertainties.Count - 1);
         int? into = _roomBoundaries.Count == 0 ? null : last - 1;
         if (into is null)
         {
@@ -116,6 +171,18 @@ public sealed class RunEnemyObservationCollector(int characterId, Func<string, i
         Changed?.Invoke();
         return true;
     }
+
+    /// <summary>The boundaries as SAVE stores them: the pilot's as <see cref="RunParameterKey.RoomStarted"/>, the
+    /// detector's as <see cref="RunParameterKey.RoomDetected"/> with its certainty as the typed value (ET-368).</summary>
+    public IReadOnlyList<RunParameterInput> ToRoomParameters() =>
+    [
+        .. _roomBoundaries.Select((boundary, index) => new RunParameterInput
+        {
+            ParameterKey = _detectedCertainties[index] is null ? RunParameterKey.RoomStarted : RunParameterKey.RoomDetected,
+            TypedValue = _detectedCertainties[index]?.ToString().ToLowerInvariant() ?? string.Empty,
+            ObservedAtUtc = boundary
+        })
+    ];
 
     /// <summary>The seam ET-106 left to ET-105: what the window watched, in the shape <c>SaveRunCommand</c> stores.</summary>
     public IReadOnlyList<RunEnemyObservationInput> ToInputs() =>

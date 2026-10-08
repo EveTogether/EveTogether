@@ -2,7 +2,7 @@ namespace EveUtils.Client.ViewModels.Activity;
 
 /// <summary>One room of the run window's ENEMIES list (ET-240): its header and the rows seen in it.</summary>
 public sealed class RunEnemyRoomViewModel(int number, string windowText, bool isUndoShown,
-    IReadOnlyList<RunEnemyObservationViewModel> observations)
+    IReadOnlyList<RunEnemyObservationViewModel> observations, Runs.RoomSourceViewModel? source = null)
 {
     public int Number { get; } = number;
 
@@ -14,4 +14,7 @@ public sealed class RunEnemyRoomViewModel(int number, string windowText, bool is
     public bool IsUndoShown { get; } = isUndoShown;
 
     public IReadOnlyList<RunEnemyObservationViewModel> Observations { get; } = observations;
+
+    /// <summary>Set when the detector opened this room (ET-368).</summary>
+    public Runs.RoomSourceViewModel? Source { get; } = source;
 }
