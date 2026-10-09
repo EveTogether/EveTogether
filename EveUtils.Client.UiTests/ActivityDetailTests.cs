@@ -1,4 +1,6 @@
 using System.Collections.ObjectModel;
+using System.Globalization;
+using System.Text.RegularExpressions;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
@@ -10,6 +12,7 @@ using EveUtils.Client.Runs;
 using EveUtils.Client.ViewModels.Runs;
 using EveUtils.Client.ViewModels.Runs.Sections;
 using EveUtils.Client.Views;
+using EveUtils.Client.Views.Runs.Sections;
 using EveUtils.Shared.Data;
 using EveUtils.Shared.Identity;
 using EveUtils.Shared.Messaging;
@@ -711,12 +714,21 @@ public sealed class ActivityDetailTests
         "Ephialtes Dissipator · Wrecks", "115 GJ", "109", "no rep line in this run", "reps in · none in this run"
     ];
 
+    // ET-474 AC1/AC3: run 5's hit quality — the Dissipator's missiles as a row of their own, the enemy's weapon-less lines
+    // apart from its named ones, and no figure for a missile that is not a verdict.
+    private static readonly string[] RealRunHitQuality =
+    [
+        "OUT · WHAT YOU DID", "IN · WHAT THEY DID TO YOU", HitQualityDetailSectionViewModel.MissileLabel, "Nova Fury Light Missile",
+        "15,178"
+    ];
+
     public static TheoryData<GameLogEvent[]?, CombatArrival, string[], string[]> AbyssalCombat => new()
     {
         // Run 5 of 18 Sep 2026 as it was saved, with its real combat: the figures are the game log's own (AC1, AC6).
-        { RunCombatTelemetryTests.RealRunEvents(), CombatArrival.Saved, RealRunTiles, [CombatDetailSectionViewModel.NotRecordedText] },
+        { RunCombatTelemetryTests.RealRunEvents(), CombatArrival.Saved, [.. RealRunTiles, .. RealRunHitQuality], [CombatDetailSectionViewModel.NotRecordedText, HitQualityDetailSectionViewModel.NotRecordedText] },
         // The same run saved before combat was kept: one line in each, never a zero or an empty chart (AC2).
-        { null, CombatArrival.Saved, [CombatDetailSectionViewModel.NotRecordedText], ["0 hp", "DAMAGE DEALT", "DPS out"] },
+        // AC4 of ET-474: HIT QUALITY says why in one line, with no table and no zeros.
+        { null, CombatArrival.Saved, [CombatDetailSectionViewModel.NotRecordedText, HitQualityDetailSectionViewModel.NotRecordedText], ["0 hp", "DAMAGE DEALT", "DPS out", "OUT · WHAT YOU DID", "IN · WHAT THEY DID TO YOU"] },
         // ET-472: a fleet mate's run pulled with its combat shows the same tiles here.
         { RunCombatTelemetryTests.RealRunEvents(), CombatArrival.FleetMateShared, RealRunTiles, [CombatDetailSectionViewModel.NotRecordedText] },
         // ET-472: a fleet mate who withholds combat shows none of it.
@@ -754,8 +766,33 @@ public sealed class ActivityDetailTests
         Assert.All(absent, text => Assert.DoesNotContain(text, texts));
         Assert.DoesNotContain(texts, text => text.Contains("BOUNDARY", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(texts, text => text.StartsWith("Containers opened: not counted", StringComparison.Ordinal));
-        Assert.Equal(["ACTIVITY", "COMBAT / TIMELINE", "ENEMIES"],
-            texts.Where(text => text is "ACTIVITY" or "COMBAT / TIMELINE" or "ENEMIES"));
+        Assert.Equal(["ACTIVITY", "COMBAT / TIMELINE", "ENEMIES", "HIT QUALITY"],
+            texts.Where(text => text is "ACTIVITY" or "COMBAT / TIMELINE" or "ENEMIES" or "HIT QUALITY"));
+        // AC3: a missile never carries a percentage, here or in the header.
+        Assert.DoesNotContain(texts, text => Regex.IsMatch(text, @"d%"));
+        if (combat is not null && arrival == CombatArrival.Saved)
+        {
+            _AssertRealRunHitQuality(texts, _HitQualityOf(await _PresentAsync(instance, 758, cancellationToken)));
+        }
+    }
+
+    private static HitQualityDetailSectionViewModel _HitQualityOf((ActivityDetailWindow Window, Window Root) presented) =>
+        presented.Root.GetVisualDescendants().OfType<HitQualityDetailSectionView>()
+            .Select(view => view.DataContext).OfType<HitQualityDetailSectionViewModel>().Single();
+
+    // AC1: Σ OUT is COMBAT's dealt; a source's named weapon and its weapon-less lines never share a row.
+    private static void _AssertRealRunHitQuality(List<string> texts, HitQualityDetailSectionViewModel hit)
+    {
+        Assert.Equal(65_732, hit.OutRows.Sum(row => long.Parse(row.Total, NumberStyles.AllowThousands, CultureInfo.InvariantCulture)));
+        Assert.Contains("65,732 hp", texts);
+        HitQualityRowViewModel missiles = Assert.Single(hit.OutRows, row => row.Target == "Ephialtes Dissipator");
+        Assert.Equal(("Nova Fury Light Missile", "27", "154", "998", "15,178"), (missiles.Weapon, missiles.Shots, missiles.Min, missiles.Max, missiles.Total));
+        Assert.Equal(HitQualityDetailSectionViewModel.MissileLabel, missiles.Application);
+        Assert.All(hit.OutRows, row => Assert.Equal(HitQualityDetailSectionViewModel.MissileLabel, row.Application));
+        Assert.Equal(hit.InRows.Count, hit.InRows.Select(row => (row.Target, row.Weapon)).Distinct().Count());
+        HitQualityRowViewModel noWeapon = Assert.Single(hit.InRows, row => row.Target == "Ephialtes Dissipator" && !row.HasWeapon);
+        Assert.Equal(["2", "·", "1", "5", "·", "1", "9"], noWeapon.Counts);
+        Assert.All(hit.InRows, row => Assert.False(row.HasApplication));
     }
 
     // Hands the saved run back through the pull as the server would (ET-472), as a fleet mate's or as this pilot's own.

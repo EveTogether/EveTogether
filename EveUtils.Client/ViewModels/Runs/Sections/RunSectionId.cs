@@ -34,5 +34,8 @@ public enum RunSectionId
     Rooms,
 
     /// <summary>The enemies of each abyssal room in the order to shoot them, live only (ET-369).</summary>
-    Targets
+    Targets,
+
+    /// <summary>How the pilot's shots landed and what the enemy's did, per target and weapon, from the stored hit tallies (ET-474).</summary>
+    HitQuality
 }

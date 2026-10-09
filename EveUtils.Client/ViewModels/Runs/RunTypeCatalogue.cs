@@ -269,7 +269,7 @@ public static class RunTypeCatalogue
             WindowSections = AbyssalWindow,
             DetailSections =
             [
-                RunSectionId.Activity, RunSectionId.Combat, RunSectionId.Rooms, RunSectionId.Enemies,
+                RunSectionId.Activity, RunSectionId.Combat, RunSectionId.Rooms, RunSectionId.Enemies, RunSectionId.HitQuality,
                 RunSectionId.Fleet, RunSectionId.Loot, RunSectionId.Consumables, RunSectionId.Loss
             ],
             Space = RunSpace.AbyssalPocket,

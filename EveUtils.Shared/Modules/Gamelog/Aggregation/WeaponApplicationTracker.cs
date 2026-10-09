@@ -38,7 +38,7 @@ public sealed class WeaponApplicationTracker(Func<string, WeaponClass> classify,
 
     // The middle of each word's damage band, as a fraction of the damage at a certain hit (the roll's expected value
     // at 100 % chance to hit is 1.0).
-    private static double Score(HitQuality quality) => quality switch
+    internal static double Score(HitQuality quality) => quality switch
     {
         HitQuality.Grazes => 0.5625,
         HitQuality.Glances => 0.6875,
@@ -48,6 +48,26 @@ public sealed class WeaponApplicationTracker(Func<string, WeaponClass> classify,
         HitQuality.Wrecks => 1.49,
         _ => 0,
     };
+
+    /// <summary>One weapon's application over a stored tally of its shots (ET-474): the same <see cref="Score"/> and
+    /// verdict bands the live meter uses, weighted by count. A missile, or an unresolved name that only wrote "Hits",
+    /// has no hit words to read and is not measurable here either.</summary>
+    public static ApplicationSummary ApplicationOf(WeaponClass weaponClass, IReadOnlyCollection<(HitQuality Quality, int Count)> shots)
+    {
+        int total = shots.Sum(shot => shot.Count);
+        if (weaponClass is WeaponClass.Missile || (weaponClass is WeaponClass.Unknown && shots.All(shot => shot.Quality is HitQuality.Hits)))
+        {
+            return new ApplicationSummary(ApplicationVerdict.NotMeasurable, null, null);
+        }
+
+        if (total < MinShots)
+        {
+            return new ApplicationSummary(ApplicationVerdict.NotEnoughShots, null, null);
+        }
+
+        double percent = Math.Min(100, 100 * shots.Sum(shot => Score(shot.Quality) * shot.Count) / total);
+        return new ApplicationSummary(ApplicationSummary.VerdictFor(percent), percent, null);
+    }
 
     private readonly Dictionary<string, Queue<Shot>> _shots = new(StringComparer.Ordinal);
     private readonly Dictionary<string, WeaponClass> _classes = new(StringComparer.Ordinal);
