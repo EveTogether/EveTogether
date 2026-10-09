@@ -743,7 +743,8 @@ public sealed class ActivityDetailTests
         {
             db.Set<CombatSample>().AddRange(Hit(90000001, DamageDirection.Outgoing, 500, 10),
                 Hit(90000001, DamageDirection.Outgoing, 998, 20), Hit(90000001, DamageDirection.Incoming, 74, 30),
-                Hit(90000001, DamageDirection.Incoming, 38, 31), Hit(90000001, DamageDirection.Outgoing, 7777, -1),
+                Hit(90000001, DamageDirection.Incoming, 38, 31), Hit(90000001, DamageDirection.Incoming, 0, 32),
+                Hit(90000001, DamageDirection.Outgoing, 7777, -1),
                 Hit(90000002, DamageDirection.Outgoing, 5555, 40), Hit(90000001, DamageDirection.Outgoing, 3333, -86400));
             await db.SaveChangesAsync(cancellationToken);
         }
@@ -755,6 +756,8 @@ public sealed class ActivityDetailTests
         Assert.Equal(hasTimeline ? 0 : 1, texts.Count(text => text == "1,498 hp"));
         Assert.Equal(hasTimeline ? 0 : 1, texts.Count(text => text == "112 hp"));
         Assert.Equal(hasTimeline ? 0 : 4, texts.Count(text => text == "not recorded"));
+        // The stored miss (0 damage) is no hit on you.
+        Assert.Equal(hasTimeline ? 0 : 1, texts.Count(text => text.EndsWith("· 2 hits on you", StringComparison.Ordinal)));
         Assert.Equal(hasTimeline, texts.Any(text => text is "0 GJ" or "0 hp" or "0"));
     }
 
