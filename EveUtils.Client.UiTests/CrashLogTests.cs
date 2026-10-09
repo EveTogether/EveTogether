@@ -78,6 +78,32 @@ public class CrashLogTests
     }
 
     [Fact]
+    public void WriteSessionStart_WritesVersionBuildProcessAndTimestamp()
+    {
+        var dir = Directory.CreateTempSubdirectory("et-crashlog-").FullName;
+        try
+        {
+            CrashLog.Install(dir);
+
+            CrashLog.WriteSessionStart("1.2.3", "nightly.42", 1234);
+
+            var line = LineContaining(dir, "Session start");
+            LogEntry? entry = JsonSerializer.Deserialize<LogEntry>(line);
+            Assert.NotNull(entry);
+            Assert.Equal("Crash", entry.Category);
+            Assert.Contains("version 1.2.3", entry.Message);
+            Assert.Contains("build nightly.42", entry.Message);
+            Assert.Contains("PID 1234", entry.Message);
+            Assert.NotEqual(default, entry.Timestamp);
+            Assert.Null(entry.ExceptionText);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
     public void NothingWritten_NeverContainsClipboardOrPlayerData()
     {
         // Guards the ET-57 promise at the point where it would be easiest to accidentally break: CrashLog must
