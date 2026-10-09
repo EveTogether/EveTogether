@@ -715,8 +715,10 @@ public sealed class HomefrontMoneyScenarioTests
             await ActivityWindowHarness.WaitUntil(() => window.Participants.Count >= pickedIds.Length, timeoutMs: 10_000);
 
             await group.SettleAsync();
+            // Settled once the first list is in the store too: the window writes it a tick or more after it shows it.
             await group.TickUntilAsync(() => settledWhen?.Invoke(group)
-                                             ?? (group.Section.CanDecide && group.Section.Rows.Count(row => row.IsLocal) == toons));
+                                             ?? (group.Section.CanDecide && group.Section.Rows.Count(row => row.IsLocal) == toons
+                                                 && group.Window.Participants.All(participant => participant.AttendanceCount is not null)));
             return group;
         }
 
