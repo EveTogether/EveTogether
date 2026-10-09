@@ -4,6 +4,8 @@ using EveUtils.Shared.DependencyInjection;
 using EveUtils.Shared.Identity;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Gamelog.Aggregation;
+using EveUtils.Shared.Modules.Killmails.Commands;
+using EveUtils.Shared.Modules.Killmails.Entities;
 using EveUtils.Shared.Modules.Runs.Commands;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Entities;
@@ -23,7 +25,10 @@ public sealed class RunSynchronizationApplier(
         CancellationToken cancellationToken = default)
     {
         if (payloads.Count == 0)
+        {
+            await _LinkSharedLossesAsync(cancellationToken);
             return;
+        }
 
         await using ClientDbContext db = await contextFactory.CreateDbContextAsync(cancellationToken);
         await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
@@ -117,6 +122,21 @@ public sealed class RunSynchronizationApplier(
             await eventBus.PublishAsync(new RunsChangedEvent(run.Id, run.GroupCode), EventTarget.Local, cancellationToken);
 
         await _AdoptCommanderAttendanceAsync(applied, cancellationToken);
+
+        await _LinkSharedLossesAsync(cancellationToken);
+    }
+
+    // A mate's loss shared before their run arrived stays unlinked otherwise: the link only ran on a killmail import.
+    private async Task _LinkSharedLossesAsync(CancellationToken cancellationToken)
+    {
+        await using ClientDbContext db = await contextFactory.CreateDbContextAsync(cancellationToken);
+        int[] mates = await db.Set<LocalKillmail>().AsNoTracking()
+            .Where(killmail => killmail.IsLoss && killmail.SharedFromFleetId != null && killmail.RunId == null)
+            .Select(killmail => killmail.CharacterId).Distinct().ToArrayAsync(cancellationToken);
+        foreach (int mate in mates)
+        {
+            await dispatcher.Send(new LinkKillmailsToRunsCommand(mate), cancellationToken);
+        }
     }
 
     /// <summary>
