@@ -219,6 +219,8 @@ public sealed class ModuleHostService
     {
         if (!ReferenceEquals(frame.Popout, popout)) return;   // already put back, dismissed or migrated
         _ReleasePopout(frame);
+        if (_modules.Contains(frame))
+            Render(select: frame);
         PopOutStateChanged?.Invoke();
     }
 
