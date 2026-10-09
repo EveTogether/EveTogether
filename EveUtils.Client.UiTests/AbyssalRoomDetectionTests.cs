@@ -3,6 +3,7 @@ using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Client.ViewModels.Runs.Sections;
 using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Sde;
+using EveUtils.Shared.Modules.Sde.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using EveUtils.Shared.Modules.Gamelog.Aggregation;
 using EveUtils.Shared.Modules.Gamelog.Models;
@@ -126,6 +127,15 @@ public sealed class AbyssalRoomDetectionTests
 
         Assert.Equal(["RoomDetected(sure)@12:00:35"], draft.Parameters.Select(row => $"{row.ParameterKey}({row.TypedValue})@{row.ObservedAtUtc:HH:mm:ss}"));
         Assert.Equal("sure", model.Enemies().EnemyRooms[0].Source?.Word);
+
+        // A name the SDE has no type for shows in its room as a plain row, and the room still names its faction.
+        model.Enemies().RecordCatchUpSighting(ActivityWindowHarness.CharacterId, "Karybdis Tyrannos",
+            new DateTime(2030, 1, 1, 12, 0, 50, DateTimeKind.Utc));
+        Assert.Equal(["Karybdis Tyrannos"], model.Enemies().EnemyRooms[0].Unresolved);
+        Assert.Equal("mixed", model.Enemies().EnemyRooms[0].FactionText);
+        Assert.EndsWith("mixed", model.Enemies().CurrentRoomText(DateTime.UtcNow));
+        Assert.Equal("Vigilant Tyrannos", TargetsWindowSectionViewModel.FactionText(
+            AbyssalNpcKnowledge.Faction(["Ephialtes Entangler", "Karybdis Tyrannos"])));
     }
 
     /// <summary>NEW ROOM sets limits the whole fleet shares, so in a fleet run only the commander gets the button and

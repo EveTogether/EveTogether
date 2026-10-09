@@ -85,11 +85,13 @@ public sealed class TargetsWindowSectionViewModel : RunWindowSection
         RefreshSummary();
     }
 
+    internal static string? FactionText(AbyssalNpcFaction? faction) =>
+        faction is { } known ? known == AbyssalNpcFaction.Mixed ? "mixed" : Regex.Replace(known.ToString(), "(?<=[a-z])(?=[A-Z])", " ") : null;
+
     private static TargetRoomViewModel _Room(int? room, IReadOnlyList<TargetRow> rows)
     {
         AbyssalNpcFaction? faction = AbyssalNpcKnowledge.Faction(rows.Select(row => row.Name));
-        return new TargetRoomViewModel(room is { } number ? $"ROOM {number}" : null,
-            faction is { } known ? known == AbyssalNpcFaction.Mixed ? "mixed" : Regex.Replace(known.ToString(), "(?<=[a-z])(?=[A-Z])", " ") : null,
+        return new TargetRoomViewModel(room is { } number ? $"ROOM {number}" : null, FactionText(faction),
             faction is { } noted && AbyssalNpcKnowledge.FactionNotes.TryGetValue(noted, out string? note) ? note : null, rows);
     }
 
