@@ -51,6 +51,9 @@ internal static class OverlayGeometryStore
     /// <summary>The popped-out map's key (ET-396). One map, so one key; width and height are remembered with the position.</summary>
     public static string ForMap() => "ui.map-window";
 
+    /// <summary>A popped-out tab's key (ET-111): per module id, like the map's.</summary>
+    public static string ForPoppedModule(string moduleId) => $"ui.popout.{moduleId}";
+
     public static async Task<OverlayGeometry?> LoadAsync(string key)
     {
         if (string.IsNullOrWhiteSpace(key)) return null;

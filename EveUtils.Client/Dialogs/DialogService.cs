@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Input.Platform;
 using Avalonia.Threading;
+using CommunityToolkit.Mvvm.Input;
 using EveUtils.Client.Input;
 using EveUtils.Client.Notifications;
 using EveUtils.Client.Opsec;
@@ -619,6 +620,23 @@ public sealed class DialogService : IDialogService, ISingletonService
     public void PutBackMap() => _moduleHost.PutBack(MapModuleId);
 
     public void ShowMapWindow() => _moduleHost.FocusPopout(MapModuleId);
+
+    public bool CanPopOutTab(HostTab? tab) => _moduleHost.PoppableModuleId(tab) is not null;
+
+    public void PopOutTab(HostTab tab)
+    {
+        string? id = _moduleHost.PoppableModuleId(tab);
+        if (id is null) return;
+        if (id == MapModuleId)
+        {
+            PopOutMap();   // the map keeps its own placeholder and header buttons (ET-396)
+            return;
+        }
+
+        var placeholder = new PoppedOutPlaceholderModel(tab.Title,
+            new RelayCommand(() => _moduleHost.PutBack(id)), new RelayCommand(() => _moduleHost.FocusPopout(id)));
+        _moduleHost.PopOut(id, _ => new PoppedOutPlaceholder { DataContext = placeholder }, OverlayGeometryStore.ForPoppedModule(id));
+    }
 
     public KillmailsOverviewViewModel ShowKillmails(KillmailsOverviewViewModel viewModel)
     {

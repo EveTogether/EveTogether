@@ -68,6 +68,11 @@ public sealed class ModuleHostService
 
     public bool IsPoppedOut(string moduleId) => _modules.Any(m => m.Id == moduleId && m.Popout is not null);
 
+    /// <summary>The id of the docked module whose own tab this is (ET-111), or null for a placeholder, no tab, or
+    /// floating mode.</summary>
+    public string? PoppableModuleId(HostTab? tab) =>
+        tab is null || !CanPopOut ? null : _modules.FirstOrDefault(m => m.Popout is null && ReferenceEquals(m.Tab, tab))?.Id;
+
     /// <summary>Close every floating module window (used when the main window is closing).</summary>
     public void CloseFloatingWindows()
     {
