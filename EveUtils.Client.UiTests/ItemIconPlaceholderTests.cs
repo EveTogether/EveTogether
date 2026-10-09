@@ -51,6 +51,15 @@ public sealed class ItemIconPlaceholderTests
         Assert.Same(TypeImagePlaceholder.Bitmap, row.Icon);
     }
 
+    [Theory]
+    [InlineData(true, TypeImageKind.Icon, "types/85957/bp?size=32")]
+    [InlineData(false, TypeImageKind.Icon, "types/85957/icon?size=32")]
+    [InlineData(true, TypeImageKind.Render, "types/85957/render?size=32")]
+    public void ImagePath_BlueprintIcon_UsesBpAsset(bool isBlueprint, TypeImageKind kind, string expected)
+    {
+        Assert.Equal(expected, TypeImageProvider.ImagePath(BlueprintTypeId, kind, 32, isBlueprint));
+    }
+
     private sealed class _ImagesWithout(Bitmap? image = null) : ITypeImageProvider
     {
         public Task<bool> AreImagesEnabledAsync(CancellationToken cancellationToken = default) => Task.FromResult(true);

@@ -18,8 +18,8 @@ namespace EveUtils.Client.Imaging;
 /// is memoised, so concurrent requests for the same image (e.g. eight identical turrets, or the same hull in the browser
 /// and the detail window) share a single download + decode instead of stampeding the server. The bytes are written to a
 /// per-instance disk cache and the decode runs off the UI thread. Any failure (offline, disabled, 404) yields null — and
-/// is not cached, so the next request retries — and the wheel falls back to its offline glyph. A 404 is the exception: the
-/// server has no such image, so retrying within the session only repeats the miss. SKINs never reach the server: they
+/// is not cached, so the next request retries — and the wheel falls back to its offline glyph. A 404 or 400 is the exception:
+/// the server has no such image, so retrying within the session only repeats the miss. SKINs never reach the server: they
 /// resolve to the bundled placeholder.
 /// </summary>
 public sealed class TypeImageProvider(IHttpClientFactory httpClientFactory, ISettingRepository settings, string dataDirectory,
@@ -29,6 +29,15 @@ public sealed class TypeImageProvider(IHttpClientFactory httpClientFactory, ISet
     public const string EnabledSettingKey = "fit.images.enabled";
 
     private const int SkinCategoryId = 91;
+    private const int BlueprintCategoryId = 9;
+
+    // The server has no /icon for a blueprint (it answers 400), only /bp. /bpc (a copy) is not chosen: nothing here
+    // tells a copy from an original, so every blueprint shows its original-style icon.
+    public static string ImagePath(int typeId, TypeImageKind kind, int size, bool isBlueprint)
+    {
+        var asset = kind == TypeImageKind.Render ? "render" : isBlueprint ? "bp" : "icon";
+        return $"types/{typeId}/{asset}?size={size}";
+    }
 
     private readonly string _cacheDirectory = Path.Combine(dataDirectory, "type-images");
     // A measured 28-card render burst needs 28 MiB; keep one window intact with 4 MiB of headroom.
@@ -107,9 +116,8 @@ public sealed class TypeImageProvider(IHttpClientFactory httpClientFactory, ISet
             if (File.Exists(file))
                 return await Task.Run(() => new Bitmap(file));   // decode the cached file off the UI thread
 
-            var asset = kind == TypeImageKind.Render ? "render" : "icon";
             var client = httpClientFactory.CreateClient(HttpClientName);
-            var bytes = await client.GetByteArrayAsync($"types/{typeId}/{asset}?size={size}");
+            var bytes = await client.GetByteArrayAsync(ImagePath(typeId, kind, size, sde?.GetCategoryId(typeId) == BlueprintCategoryId));
 
             Directory.CreateDirectory(_cacheDirectory);
             await File.WriteAllBytesAsync(file, bytes);
@@ -120,7 +128,7 @@ public sealed class TypeImageProvider(IHttpClientFactory httpClientFactory, ISet
                 return new Bitmap(stream);
             });
         }
-        catch (HttpRequestException exception) when (exception.StatusCode == HttpStatusCode.NotFound)
+        catch (HttpRequestException exception) when (exception.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.BadRequest)
         {
             return null;
         }
