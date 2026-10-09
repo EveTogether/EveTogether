@@ -25,7 +25,7 @@ public enum NpcEwarKind { Scram, Neut, Web, Damp, TrackingDisrupt, GuidanceDisru
 
 /// <summary>A Tyrannos ESI agent without an SDE type. <see cref="KnownEwar"/> contains only observed
 /// effects; no ranges are known. See ET-342 research for sources.</summary>
-public sealed record TyrannosAgent(string Name, AbyssalNpcFaction Faction, IReadOnlySet<NpcEwarKind> KnownEwar);
+public sealed record TyrannosAgent(int AgentId, string Name, AbyssalNpcFaction Faction, IReadOnlySet<NpcEwarKind> KnownEwar);
 
 /// <summary>Faction, Tyrannos agents and tactical notes absent from the SDE. E-war and defenses come from
 /// <see cref="ISdeAccessor.GetNpcEwarProfile"/>. Sources: ET-342 research in Depot and the ET-367 PR.</summary>
@@ -76,8 +76,8 @@ public static class AbyssalNpcKnowledge
 
     private static readonly TyrannosAgent[] TyrannosAgents =
     [
-        new("Karybdis Tyrannos", AbyssalNpcFaction.VigilantTyrannos, new HashSet<NpcEwarKind>()),
-        new("Scylla Tyrannos", AbyssalNpcFaction.VigilantTyrannos, new HashSet<NpcEwarKind> { NpcEwarKind.Scram }),
+        new(3019609, "Karybdis Tyrannos", AbyssalNpcFaction.VigilantTyrannos, new HashSet<NpcEwarKind>()),
+        new(3019610, "Scylla Tyrannos", AbyssalNpcFaction.VigilantTyrannos, new HashSet<NpcEwarKind> { NpcEwarKind.Scram }),
     ];
 
     private static readonly Dictionary<string, TyrannosAgent> TyrannosByName =
@@ -87,6 +87,9 @@ public static class AbyssalNpcKnowledge
     /// agents are the one case this table names explicitly rather than through <see cref="FactionByHullWord"/>,
     /// since ET-367 AC3 requires both to resolve to a record rather than silently dropping out.</summary>
     public static TyrannosAgent? TyrannosAgentByName(string name) => TyrannosByName.GetValueOrDefault(name);
+
+    /// <summary>The enemy id a Tyrannos agent is counted under: its ESI agent id negated, so it never meets an SDE type.</summary>
+    public static int? EnemyTypeIdOf(string name) => TyrannosAgentByName(name) is { } agent ? -agent.AgentId : null;
 
     /// <summary>One tactical note per faction, reworded — never the source's own wording. See the class-level
     /// <c>Sources</c> list for what backs each one; a note resting on one source only is marked [vermoeden].</summary>
