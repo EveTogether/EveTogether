@@ -17,6 +17,7 @@ entries under `[Unreleased]` below that were not there yet at the previous night
 
 ## [Unreleased]
 
+- **Fixed: a fleet member no longer sees "The fleet commander called this run off" over a run that is going.** The line is cleared as soon as the member joins the commander's next run or goes in, so it no longer clashes with the DISCARD and clock lines.
 - **Fixed: the server control panel now keeps your sign-in after a restart.** Its security keys stay with the server data, so restart no longer invalidates your session or antiforgery cookie.
 - **Changed: COMBAT and TIMELINE in the run detail are one section, COMBAT / TIMELINE.** The PILOT chips now steer the tiles and the chart together, and the section header carries the hp dealt and taken, the peak dps out and the pilot.
 - **Fixed: older runs no longer count misses as hits in COMBAT.** For a run saved before the combat timeline was kept, the "hits on you" tile counted the shots that missed you as hits; it now counts only the ones that landed.
