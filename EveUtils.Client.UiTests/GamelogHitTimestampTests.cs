@@ -3,8 +3,11 @@ using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Headless.XUnit;
 using EveUtils.Client.Gamelog;
+using EveUtils.Shared.Data;
 using EveUtils.Shared.Modules.Fleet.Metrics;
+using EveUtils.Shared.Modules.Gamelog.Entities;
 using EveUtils.Shared.Modules.Gamelog.Models;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -64,6 +67,14 @@ public class GamelogHitTimestampTests
         await gamelog.AddHitAsync("Pilot", DamageDirection.Outgoing, 500, "Centii Servant", HitQuality.Hits, hitTime);
 
         Assert.Equal(hitTime, observedAt);
+
+        // The parser hands over Kind Unspecified; the stored label must be UTC, not this machine's offset.
+        await gamelog.AddHitAsync("Pilot", DamageDirection.Outgoing, 500, "Karybdis Tyrannos", HitQuality.Hits,
+            new DateTime(2030, 1, 1, 12, 0, 5, DateTimeKind.Unspecified));
+        await using ClientDbContext db = await instance.Services.GetRequiredService<IDbContextFactory<ClientDbContext>>().CreateDbContextAsync();
+        CombatSample stored = await db.Set<CombatSample>().SingleAsync(sample => sample.Target == "Karybdis Tyrannos");
+        Assert.Equal(new DateTimeOffset(2030, 1, 1, 12, 0, 5, TimeSpan.Zero), stored.Timestamp);
+        Assert.Equal(TimeSpan.Zero, stored.Timestamp.Offset);
     }
 
     /// <summary>

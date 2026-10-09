@@ -422,7 +422,9 @@ public sealed class GamelogClientService : IFleetMetricSource, ISingletonService
         using (var scope = _services.CreateScope())
         {
             var dispatcher = scope.ServiceProvider.GetRequiredService<IDispatcher>();
-            await dispatcher.Send(new RecordCombatCommand(ownerId, amount, direction, target, at), cancellationToken);
+            // The log time is UTC; a bare DateTime would take this machine's offset as its label (+02:00).
+            await dispatcher.Send(new RecordCombatCommand(ownerId, amount, direction, target,
+                new DateTimeOffset(DateTime.SpecifyKind(at, DateTimeKind.Utc))), cancellationToken);
         }
 
         // Local delivery is synchronous (drives the bus + UI immediately). The remote leg is NOT sent per hit —
