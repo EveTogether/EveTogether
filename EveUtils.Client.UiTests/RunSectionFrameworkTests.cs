@@ -202,6 +202,8 @@ public sealed class RunSectionFrameworkTests
         ("_SiteTypeSource() => Kind switch", "storage: how the store files the row's site, keyed on the kind it is filed under"),
         ("ActivityKind.Mission => SiteTypeSource.Mission", "storage, the same rule"),
         ("ActivityKind.Site when SignatureName is not null", "storage, the same rule"),
+        ("public string Text => Kind switch", "not the activity's kind: the Kind of an e-war on a target row (ET-369)"),
+        ("_ => Context.Kind is ActivityKind.Abyssal ? ActivityLootMode.CargoDiff", "LOOT's own default: an abyssal run has a hold to name (ET-384)"),
         ("new PendingCopy(ActivityKind.Site", "a copied signature opens a site window"),
         ("new PendingCopy(ActivityKind.Mission", "a copied mission opens a mission window")
     ];
