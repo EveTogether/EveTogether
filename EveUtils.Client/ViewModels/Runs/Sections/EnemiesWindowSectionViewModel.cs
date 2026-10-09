@@ -78,10 +78,14 @@ public sealed partial class EnemiesWindowSectionViewModel : RunWindowSection
         ? []
         :
         [
-            .. collector.Observations.Select(observation => new TargetSighting(observation.RoomNumber, observation.EnemyName, observation.EnemyTypeId)),
+            .. collector.Observations.Select(SightingOf),
             .. collector.UnresolvedSightings.Select(seen => new TargetSighting(
                 RunRooms.RoomOf(collector.RoomBoundaries, seen.FirstObservedAtUtc), seen.Name, null))
         ];
+
+    /// <summary>A row as TARGETS reads it: a Tyrannos agent's negative id is no SDE type, so it goes by name.</summary>
+    internal static TargetSighting SightingOf(RunEnemyObservationViewModel observation) => new(observation.RoomNumber,
+        observation.EnemyName, observation.EnemyTypeId > 0 ? observation.EnemyTypeId : null);
 
     /// <summary>The on-screen pilot's combat, neut and rep lines of the run, each with its room, for TARGETS. Read only.</summary>
     public IReadOnlyList<(int? Room, GameLogEvent Event)> TargetEvents() =>
@@ -273,7 +277,7 @@ public sealed partial class EnemiesWindowSectionViewModel : RunWindowSection
 
         // Rooms find themselves only in an abyssal pocket (ET-368): elsewhere waves and reinforcements look like rooms.
         var collector = new RunEnemyObservationCollector(characterId,
-            name => sde.TryGetTypeId(name, out int typeId) ? typeId : null,
+            name => sde.TryGetTypeId(name, out int typeId) ? typeId : AbyssalNpcKnowledge.EnemyTypeIdOf(name),
             Context.RunType.Space is RunSpace.AbyssalPocket
                 ? typeId => sde.GetType(typeId) is { } type && AbyssalRoomDetector.IsAbyssalEnemyGroup(type.GroupId)
                 : null);
