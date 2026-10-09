@@ -1007,7 +1007,7 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
         DateTime nowUtc = _time.GetUtcNow().UtcDateTime;
         OpenEscalations.ReconcileTo([.. (open.Value ?? []).Select(row => new OpenEscalationRowViewModel(row,
             CharacterNameResolver.Resolve(row.CharacterNameSnapshot, row.CharacterId, _NameOf), nowUtc,
-            _StartEscalationRunAsync, _DeclineEscalationAsync))]);
+            _StartEscalationRunAsync, _DeclineEscalationAsync, _LinkEscalationToRunAsync))]);
         HasOpenEscalations = OpenEscalations.Count > 0;
     }
 
@@ -1017,6 +1017,14 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
     {
         StatusMessage = await new EscalationRunStarter(_dispatcher, _dialogs, _services).StartAsync(
             row.Escalation.SourceRunId, row.Escalation.CharacterId, row.CharacterText, row.Escalation.Escalation);
+    }
+
+    /// <summary>LINK TO A RUN (ET-489): the escalation was flown as an ordinary site run; the band refreshes itself
+    /// through RunsChangedEvent once it is tied to that run.</summary>
+    private async Task _LinkEscalationToRunAsync(OpenEscalationRowViewModel row)
+    {
+        StatusMessage = await new EscalationRunLinker(_dispatcher, _dialogs, _NameOf)
+            .LinkAsync(row.Escalation.SourceRunId, row.Escalation.Escalation);
     }
 
     /// <summary>WON'T DO (ET-453): the escalation leaves the list at once; its badge on the source run turns red.</summary>

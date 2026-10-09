@@ -75,6 +75,10 @@ public interface IDialogService
     /// </summary>
     Task<string?> SelectServerAsync(string prompt, IReadOnlyList<ServerPickOption> options);
 
+    /// <summary>Run-picker dialog (ET-489): choose which saved run an escalation was flown in, best match first and
+    /// preselected. Returns the chosen run's id, or null if cancelled.</summary>
+    Task<Guid?> PickRunAsync(string prompt, IReadOnlyList<RunPickOption> options);
+
     /// <summary>Shows a modal message box (used for error reporting instead of crashing).</summary>
     Task ShowMessageAsync(string title, string message, object? owner = null);
 

@@ -375,6 +375,18 @@ public sealed class RecordingDialogService : IDialogService
         return OnShowEscalationDialog(viewModel);
     }
 
+    /// <summary>Drives the run picker (ET-489): a test chooses from the offered options. Default: cancel (null).</summary>
+    public Func<IReadOnlyList<RunPickOption>, Guid?> OnPickRun { get; set; } = _ => null;
+
+    /// <summary>The options of the last run picker shown, best match first, or null.</summary>
+    public IReadOnlyList<RunPickOption>? LastRunPickerOptions { get; private set; }
+
+    public Task<Guid?> PickRunAsync(string prompt, IReadOnlyList<RunPickOption> options)
+    {
+        LastRunPickerOptions = options;
+        return Task.FromResult(OnPickRun(options));
+    }
+
     /// <summary>The activity detail the shell was asked to open, or null.</summary>
     public ActivityDetailViewModel? LastActivityDetail { get; private set; }
 

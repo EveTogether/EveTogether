@@ -359,6 +359,13 @@ public sealed class DialogService : IDialogService, ISingletonService
         return await _Over(dialog).ShowDialog<string?>(_owner);
     }
 
+    public async Task<Guid?> PickRunAsync(string prompt, IReadOnlyList<RunPickOption> options)
+    {
+        if (_owner is null) return null;
+        var dialog = new RunPickerWindow(prompt, options);
+        return await _Over(dialog).ShowDialog<Guid?>(_owner);
+    }
+
     public async Task ShowMessageAsync(string title, string message, object? owner = null)
     {
         if (_owner is null) return;

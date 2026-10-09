@@ -284,7 +284,7 @@ public sealed partial class ActivityWindowViewModel
             ? null
             : new OpenEscalationRowViewModel(
                 new OpenEscalationDto(sourceRunId, _ActingCharacterId() ?? 0, pilot, SignatureName, AnchorUtc ?? nowUtc, open, null),
-                pilot, nowUtc, _ => Task.CompletedTask, _ => Task.CompletedTask);
+                pilot, nowUtc, _ => Task.CompletedTask, _ => Task.CompletedTask, _ => Task.CompletedTask);
 
         HasCompactAlert = _compactEscalationRow is not null;
         CompactAlertChipText = _compactEscalationRow is { } row ? $"ESCALATION · {row.ExpiresText}" : string.Empty;

@@ -52,6 +52,9 @@
                             <Button Classes="link" Content="mark expired" Margin="0,0,12,0"
                                     IsVisible="{Binding CanMarkDone}"
                                     Command="{Binding MarkExpiredCommand}"/>
+                            <Button Classes="link" Content="Link to a run…" Margin="0,0,12,0"
+                                    IsVisible="{Binding CanMarkDone}"
+                                    Command="{Binding LinkToRunCommand}"/>
                             <Button Classes="link" Content="reopen" Margin="0,0,12,0"
                                     IsVisible="{Binding CanReopen}"
                                     Command="{Binding ReopenCommand}"/>

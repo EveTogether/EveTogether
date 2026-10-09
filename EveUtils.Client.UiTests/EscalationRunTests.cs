@@ -456,6 +456,177 @@ public sealed class EscalationRunTests
         Assert.Equal(RelayOutpost.DungeonId, Assert.Single(matches.Value ?? []).Escalation.DungeonId);
     }
 
+    [AvaloniaFact]
+    public async Task PlainSiteRun_SavedWithoutASystem_MatchesTheEscalation()
+    {
+        using var harness = await _CreateHarnessAsync();
+        var dispatcher = harness.Services.GetRequiredService<IDispatcher>();
+        await _FlySourceRunAsync(harness, "Sansha Refuge", (RelayOutpost, "Ervekam", "23:00:00"));
+        Guid plainRunId = await _SaveSiteRunAsync(dispatcher, RelayOutpost, ActivityWindowHarness.CharacterId, null, DateTime.UtcNow);
+
+        Result<IReadOnlyList<OpenEscalationDto>> matches = await dispatcher.Query(new FindMatchingEscalationsQuery(plainRunId));
+
+        Assert.Equal(RelayOutpost.DungeonId, Assert.Single(matches.Value ?? []).Escalation.DungeonId);
+    }
+
+    [AvaloniaFact]
+    public async Task LinkToARun_FromTheDetail_CompletesTheEscalationWithALinkToThatRun()
+    {
+        using var harness = await _CreateHarnessAsync();
+        var dispatcher = harness.Services.GetRequiredService<IDispatcher>();
+        Guid sourceRunId = await _FlySourceRunAsync(harness, "Sansha Refuge", (RelayOutpost, "Ervekam", "23:00:00"));
+        Guid flownRunId = await _SaveSiteRunAsync(dispatcher, RelayOutpost, ActivityWindowHarness.CharacterId, null, DateTime.UtcNow);
+        harness.Dialogs.OnPickRun = options => options[0].RunId;
+        ActivityDetailViewModel detail = await _SourceDetailAsync(dispatcher, sourceRunId, harness);
+
+        await Assert.Single(detail.Escalation().Entries).LinkToRunCommand.ExecuteAsync(null);
+
+        Assert.Equal((EscalationOutcome.Completed, flownRunId), await _OutcomeAsync(dispatcher, sourceRunId, RelayOutpost));
+        Assert.Empty(await _OpenEscalationsAsync(dispatcher));
+        Assert.Equal(EscalationStanding.Done, await _BadgeAsync(dispatcher, sourceRunId));
+    }
+
+    [AvaloniaFact]
+    public async Task LinkToARun_FromTheBand_CompletesTheEscalation_AndReopenUnlinksIt()
+    {
+        using var harness = await _CreateHarnessAsync();
+        var dispatcher = harness.Services.GetRequiredService<IDispatcher>();
+        Guid sourceRunId = await _FlySourceRunAsync(harness, "Sansha Refuge", (RelayOutpost, "Ervekam", "23:00:00"));
+        Guid flownRunId = await _SaveSiteRunAsync(dispatcher, RelayOutpost, ActivityWindowHarness.CharacterId, ErvekamId, DateTime.UtcNow);
+        harness.Dialogs.OnPickRun = options => options[0].RunId;
+        RunsOverviewViewModel band = await _BandAsync(harness);
+
+        await _Band(band, RelayOutpost).LinkToRunCommand.ExecuteAsync(null);
+
+        Assert.Equal((EscalationOutcome.Completed, flownRunId), await _OutcomeAsync(dispatcher, sourceRunId, RelayOutpost));
+        EscalationEntryViewModel linked = Assert.Single((await _SourceDetailAsync(dispatcher, sourceRunId)).Escalation().Entries);
+        await linked.ReopenCommand.ExecuteAsync(null);
+        Assert.Equal(((EscalationOutcome?)null, (Guid?)null), await _OutcomeAsync(dispatcher, sourceRunId, RelayOutpost));
+        Assert.Single(await _OpenEscalationsAsync(dispatcher));
+    }
+
+    [AvaloniaFact]
+    public async Task LinkToARun_WhenThePilotCancelsThePicker_ChangesNothing()
+    {
+        using var harness = await _CreateHarnessAsync();
+        var dispatcher = harness.Services.GetRequiredService<IDispatcher>();
+        Guid sourceRunId = await _FlySourceRunAsync(harness, "Sansha Refuge", (RelayOutpost, "Ervekam", "23:00:00"));
+        await _SaveSiteRunAsync(dispatcher, RelayOutpost, ActivityWindowHarness.CharacterId, ErvekamId, DateTime.UtcNow);
+        ActivityDetailViewModel detail = await _SourceDetailAsync(dispatcher, sourceRunId, harness);
+
+        await Assert.Single(detail.Escalation().Entries).LinkToRunCommand.ExecuteAsync(null);
+
+        Assert.NotNull(harness.Dialogs.LastRunPickerOptions);
+        Assert.Equal(((EscalationOutcome?)null, (Guid?)null), await _OutcomeAsync(dispatcher, sourceRunId, RelayOutpost));
+    }
+
+    [AvaloniaFact]
+    public async Task LinkToARun_WithNoPlausibleRun_SaysSo_AndShowsNoPicker()
+    {
+        using var harness = await _CreateHarnessAsync();
+        var dispatcher = harness.Services.GetRequiredService<IDispatcher>();
+        Guid sourceRunId = await _FlySourceRunAsync(harness, "Sansha Refuge", (RelayOutpost, "Ervekam", "23:00:00"));
+        await _SaveSiteRunAsync(dispatcher, WarSupplyComplex, ActivityWindowHarness.CharacterId, ErvekamId, DateTime.UtcNow);
+        ActivityDetailViewModel detail = await _SourceDetailAsync(dispatcher, sourceRunId, harness);
+        EscalationEntryViewModel entry = Assert.Single(detail.Escalation().Entries);
+
+        await entry.LinkToRunCommand.ExecuteAsync(null);
+
+        Assert.Null(harness.Dialogs.LastRunPickerOptions);
+        Assert.NotNull(entry.ActionMessage);
+    }
+
+    [AvaloniaFact]
+    public async Task LinkableRuns_OffersOnlyPlausibleRuns_BestMatchFirst()
+    {
+        using var harness = await _CreateHarnessAsync();
+        var dispatcher = harness.Services.GetRequiredService<IDispatcher>();
+        Guid sourceRunId = await _FlySourceRunAsync(harness, "Sansha Refuge", (RelayOutpost, "Ervekam", "23:00:00"));
+        long pilot = ActivityWindowHarness.CharacterId;
+        DateTime now = DateTime.UtcNow;
+        Guid otherPilot = await _SaveSiteRunAsync(dispatcher, RelayOutpost, pilot + 1, ErvekamId, now.AddMinutes(1));
+        Guid otherSystemLate = await _SaveSiteRunAsync(dispatcher, RelayOutpost, pilot, ErvekamId + 1, now.AddMinutes(30));
+        Guid otherSystem = await _SaveSiteRunAsync(dispatcher, RelayOutpost, pilot, ErvekamId + 1, now.AddMinutes(10));
+        Guid sameSystem = await _SaveSiteRunAsync(dispatcher, RelayOutpost, pilot, ErvekamId, now.AddMinutes(20));
+        Guid noSystem = await _SaveSiteRunAsync(dispatcher, RelayOutpost, pilot, null, now.AddMinutes(40));
+        await _SaveSiteRunAsync(dispatcher, WarSupplyComplex, pilot, ErvekamId, now.AddMinutes(5));
+        await _SaveSiteRunAsync(dispatcher, RelayOutpost, pilot, ErvekamId, now.AddHours(-1));
+        await _SaveSiteRunAsync(dispatcher, RelayOutpost, pilot, ErvekamId, now.AddHours(30));
+        Guid deleted = await _SaveSiteRunAsync(dispatcher, RelayOutpost, pilot, ErvekamId, now.AddMinutes(3));
+        await dispatcher.Send(new DeleteRunCommand(deleted, DateTime.UtcNow));
+        Guid escalationRun = (await dispatcher.Send(new StartRunCommand(pilot, ActivityKind.Site, now.AddMinutes(4),
+            RelayOutpost.DungeonId, RelayOutpost.Name, ErvekamId, Origin: RunOrigin.Manual,
+            Parameters:
+            [
+                new RunParameterInput
+                {
+                    ParameterKey = RunParameterKey.EscalationSourceRunId,
+                    TypedValue = Guid.NewGuid().ToString(),
+                    EntryId = Guid.NewGuid(),
+                    ObservedAtUtc = now
+                }
+            ]))).Value;
+        await dispatcher.Send(new SaveRunCommand(escalationRun, now.AddMinutes(5), now.AddMinutes(5), [], [], [], []));
+        await dispatcher.Send(new StartRunCommand(pilot, ActivityKind.Site, now.AddMinutes(2), RelayOutpost.DungeonId,
+            RelayOutpost.Name, ErvekamId, Origin: RunOrigin.Manual));
+        Guid entryId = await _EntryIdAsync(harness, RelayOutpost) ?? throw new InvalidOperationException("No entry.");
+
+        Result<IReadOnlyList<LinkableRunDto>> found = await dispatcher.Query(new GetLinkableRunsQuery(sourceRunId, entryId));
+
+        Assert.Equal([sameSystem, otherSystem, otherSystemLate, noSystem, otherPilot], (found.Value ?? []).Select(run => run.RunId));
+    }
+
+    [AvaloniaFact]
+    public async Task LinkableRuns_ForASettledEscalation_IsEmpty()
+    {
+        using var harness = await _CreateHarnessAsync();
+        var dispatcher = harness.Services.GetRequiredService<IDispatcher>();
+        Guid sourceRunId = await _FlySourceRunAsync(harness, "Sansha Refuge", (RelayOutpost, "Ervekam", "23:00:00"));
+        await _SaveSiteRunAsync(dispatcher, RelayOutpost, ActivityWindowHarness.CharacterId, ErvekamId, DateTime.UtcNow);
+        Guid entryId = await _EntryIdAsync(harness, RelayOutpost) ?? throw new InvalidOperationException("No entry.");
+        await dispatcher.Send(new SetEscalationOutcomeCommand(sourceRunId, entryId, EscalationOutcome.Declined));
+
+        Result<IReadOnlyList<LinkableRunDto>> found = await dispatcher.Query(new GetLinkableRunsQuery(sourceRunId, entryId));
+
+        Assert.Empty(found.Value ?? []);
+    }
+
+    [AvaloniaFact]
+    public async Task LinkableRuns_AfterOneIsLinked_NoLongerOffersThatRunToAnotherEscalation()
+    {
+        using var harness = await _CreateHarnessAsync();
+        var dispatcher = harness.Services.GetRequiredService<IDispatcher>();
+        Guid firstSource = await _FlySourceRunAsync(harness, "Sansha Refuge", (RelayOutpost, "Ervekam", "23:00:00"));
+        Guid secondSource = await _FlySourceRunAsync(harness, "Sansha Hideaway", (RelayOutpost, "Ervekam", "23:00:00"));
+        Guid flown = await _SaveSiteRunAsync(dispatcher, RelayOutpost, ActivityWindowHarness.CharacterId, ErvekamId,
+            DateTime.UtcNow.AddMinutes(1));
+        List<Guid> entries = await _EntryIdsAsync(harness);
+        await dispatcher.Send(new SetEscalationOutcomeCommand(firstSource, entries[0], EscalationOutcome.Completed, flown));
+
+        Result<IReadOnlyList<LinkableRunDto>> found = await dispatcher.Query(new GetLinkableRunsQuery(secondSource, entries[1]));
+
+        Assert.DoesNotContain(found.Value ?? [], run => run.RunId == flown);
+    }
+
+    private static async Task<Guid> _SaveSiteRunAsync(
+        IDispatcher dispatcher, SdeSite site, long pilot, int? solarSystemId, DateTime startedAtUtc)
+    {
+        Result<Guid> started = await dispatcher.Send(new StartRunCommand(pilot, ActivityKind.Site, startedAtUtc,
+            site.DungeonId, site.Name, solarSystemId, Origin: RunOrigin.Manual));
+        await dispatcher.Send(new SaveRunCommand(started.Value, startedAtUtc.AddMinutes(1), startedAtUtc.AddMinutes(1), [], [], [], []));
+        return started.Value;
+    }
+
+    private static async Task<List<Guid>> _EntryIdsAsync(ActivityWindowHarness harness)
+    {
+        await using ClientDbContext db = await harness.Services
+            .GetRequiredService<IDbContextFactory<ClientDbContext>>().CreateDbContextAsync();
+        return [.. (await db.Set<RunParameter>().AsNoTracking()
+                .Where(parameter => parameter.ParameterKey == RunParameterKey.Escalation).ToListAsync())
+            .OrderBy(parameter => parameter.ObservedAtUtc)
+            .Select(parameter => parameter.EntryId ?? throw new InvalidOperationException("No entry."))];
+    }
+
     /// <summary>A site run started the plain way (no source), left running in a window that adopts it.</summary>
     private static async Task<Guid> _StartPlainSiteRunAsync(ActivityWindowHarness harness, SdeSite site, int solarSystemId)
     {

@@ -21,7 +21,7 @@ internal sealed class FindMatchingEscalationsQueryHandler(
         Run? run = await db.Set<Run>().AsNoTracking()
             .FirstOrDefaultAsync(candidate => candidate.Id == query.RunId && !candidate.DeletedAtUtc.HasValue
                 && candidate.State == RunState.Saved && candidate.ActivityKind == ActivityKind.Site, cancellationToken);
-        if (run?.SolarSystemId is not { } solarSystemId)
+        if (run is null)
             return Result<IReadOnlyList<OpenEscalationDto>>.Success([]);
 
         bool isEscalationRun = await db.Set<RunParameter>().AsNoTracking().AnyAsync(parameter =>
@@ -34,14 +34,12 @@ internal sealed class FindMatchingEscalationsQueryHandler(
         return Result<IReadOnlyList<OpenEscalationDto>>.Success(
         [
             .. (open.Value ?? []).Where(row => row.InProgressRunId is null && row.SourceRunId != run.Id
-                && row.Escalation.SolarSystemId == solarSystemId && _IsSameSite(row.Escalation, run))
+                && _IsSameSystem(row.Escalation, run) && RunEscalations.IsSiteOf(row.Escalation, run.SiteTypeId, run.SiteName))
         ]);
     }
 
-    // The dungeon id when both sides have one; a run that never resolved to a single dungeon (SiteTypeId 0) falls back
-    // to the name the pilot saw.
-    private static bool _IsSameSite(RunEscalationDto escalation, Run run) =>
-        escalation.DungeonId is > 0 && run.SiteTypeId > 0
-            ? escalation.DungeonId == run.SiteTypeId
-            : string.Equals(escalation.SiteName, run.SiteName, StringComparison.OrdinalIgnoreCase);
+    // A run saved without a system (a manual start) says nothing against the escalation: only a system known on both
+    // sides and different rules it out.
+    private static bool _IsSameSystem(RunEscalationDto escalation, Run run) =>
+        escalation.SolarSystemId is not { } destination || run.SolarSystemId is not { } flown || destination == flown;
 }
