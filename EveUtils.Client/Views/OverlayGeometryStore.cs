@@ -1,7 +1,6 @@
 using System;
 using System.Linq;
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Modules.Settings.Commands;
@@ -30,7 +29,7 @@ internal sealed class OverlayGeometry
 /// whether the pop-out is one pilot's DPS meter or a whole fleet's readout — see <see cref="ForCharacter"/> and
 /// <see cref="ForFleet"/> for the two key shapes in use.
 /// </summary>
-internal static partial class OverlayGeometryStore
+internal static class OverlayGeometryStore
 {
     /// <summary>The per-character DPS pop-out's key. Unchanged from before the fleet overlay existed, so nobody's
     /// remembered window position moves when they update.</summary>
@@ -52,14 +51,9 @@ internal static partial class OverlayGeometryStore
     /// <summary>The popped-out map's key (ET-396). One map, so one key; width and height are remembered with the position.</summary>
     public static string ForMap() => "ui.map-window";
 
-    /// <summary>A popped-out tab's key (ET-111): per window type, so details opened per item (activity-{id}, killmail-…)
-    /// share one place like <see cref="ForActivity"/> and the store does not grow per item; an id without an item part is its own key.</summary>
-    public static string ForPoppedModule(string moduleId) =>
-        $"ui.popout.{(ModuleType().Match(moduleId) is { Success: true } type ? type.Value : moduleId)}";
-
-    // The leading hyphenated words of a module id: "fleet-metrics:5" → "fleet-metrics", "activity-12" → "activity".
-    [GeneratedRegex("^[a-z]+(?:-[a-z]+)*")]
-    private static partial Regex ModuleType();
+    /// <summary>A popped-out tab's key (ET-111): per screen type, its view model's type name, not per item. Every
+    /// activity or killmail detail shares one place, like <see cref="ForActivity"/>, so the store does not grow per item.</summary>
+    public static string ForPoppedModule(string screenType) => $"ui.popout.{screenType}";
 
     public static async Task<OverlayGeometry?> LoadAsync(string key)
     {
