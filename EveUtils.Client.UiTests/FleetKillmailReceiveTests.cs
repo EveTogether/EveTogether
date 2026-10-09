@@ -11,10 +11,13 @@ using EveUtils.Client.Dialogs;
 using EveUtils.Client.Esi.Testing;
 using EveUtils.Client.Fleet;
 using EveUtils.Client.Killmails;
+using EveUtils.Client.Runs;
 using EveUtils.Client.ViewModels.Killmails;
 using EveUtils.Client.ViewModels.Runs;
 using EveUtils.Client.ViewModels.Runs.Sections;
 using EveUtils.Shared.Cqrs;
+using EveUtils.Shared.Data;
+using Microsoft.EntityFrameworkCore;
 using EveUtils.Shared.Identity;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Esi;
@@ -26,6 +29,7 @@ using EveUtils.Shared.Modules.Killmails.Entities;
 using EveUtils.Shared.Modules.Killmails.Repositories;
 using EveUtils.Shared.Modules.Runs.Commands;
 using EveUtils.Shared.Modules.Runs.Dtos;
+using EveUtils.Shared.Modules.Runs.Entities;
 using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Runs.Queries;
 using EveUtils.Shared.Modules.Sde;
@@ -140,6 +144,41 @@ public sealed class FleetKillmailReceiveTests : IDisposable
             sde: instance.Services.GetRequiredService<ISdeAccessor>());
         await afterWithdrawal.LoadAsync(Ct);
         Assert.DoesNotContain(afterWithdrawal.Sections.OfType<LossDetailSectionViewModel>(), section => section.HasContent);
+    }
+
+    [AvaloniaFact]
+    public async Task ShareThatArrivesBeforeTheMatesRun_LinksOnceTheRunIsSynced()
+    {
+        using TestClientInstance instance = _Instance();
+        IDispatcher dispatcher = instance.Services.GetRequiredService<IDispatcher>();
+        ILocalKillmailRepository repository = instance.Services.GetRequiredService<ILocalKillmailRepository>();
+        _routes[_Path(1)] = _ => Json(200, _Killmail(1, victim: Mate, attackers: [Enemy]));
+        (FleetKillmailShareReceiver receiver, _) = _Receiver(instance);
+        using IDisposable subscription = receiver;
+        await _ShareAsync(instance, Mate, FleetId, 1, 1);
+        await receiver.WhenIdleAsync();
+        Assert.Null(Assert.Single(await repository.GetForCharacterAsync(Mate, Ct)).RunId);
+
+        // The mate's run reaches this client only after their share, as server sync delivers it.
+        Run run = new()
+        {
+            Id = Guid.CreateVersion7(), CharacterId = Mate, GroupCode = "AB-LATE", ActivityKind = ActivityKind.Site,
+            State = RunState.Saved, StartedAtUtc = StartedAtUtc, StoppedAtUtc = StartedAtUtc.AddMinutes(20),
+            SavedAtUtc = StartedAtUtc.AddMinutes(21), SolarSystemId = Jita, Revision = 1,
+        };
+        await instance.Services.GetRequiredService<RunSynchronizationApplier>().ApplyAsync("https://server.example",
+            [new RunWirePayload { Run = RunWireData.FromEntity(run), SentAtUnixMilliseconds = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }],
+            new HashSet<Guid>(), Ct);
+
+        Assert.Equal(run.Id, Assert.Single(await repository.GetForCharacterAsync(Mate, Ct)).RunId);
+
+        // A loss already stored unlinked next to a synced run (before this fix) is linked by the next sync, even an empty one.
+        await using (ClientDbContext db = await instance.Services.GetRequiredService<IDbContextFactory<ClientDbContext>>().CreateDbContextAsync(Ct))
+        {
+            await db.Set<LocalKillmail>().ExecuteUpdateAsync(set => set.SetProperty(killmail => killmail.RunId, (Guid?)null), Ct);
+        }
+        await instance.Services.GetRequiredService<RunSynchronizationApplier>().ApplyAsync("https://server.example", [], new HashSet<Guid>(), Ct);
+        Assert.Equal(run.Id, Assert.Single(await repository.GetForCharacterAsync(Mate, Ct)).RunId);
     }
 
     [Fact]
