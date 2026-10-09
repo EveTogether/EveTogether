@@ -4,7 +4,7 @@ using EveUtils.Shared.Modules.Fleet.Dtos;
 namespace EveUtils.Shared.Modules.Fleet.Events;
 
 public sealed class FleetRunGroupAbyssalUpdatedEvent(RunGroupAbyssalUpdate data, int? characterId = null)
-    : IntegrationEvent<RunGroupAbyssalUpdate>(data, characterId), IFleetScopedEvent
+    : IntegrationEvent<RunGroupAbyssalUpdate>(data, characterId), IFleetScopedEvent, IServerAttributedEvent
 {
     public override string EventType => "fleet.run-group.abyssal-updated";
 

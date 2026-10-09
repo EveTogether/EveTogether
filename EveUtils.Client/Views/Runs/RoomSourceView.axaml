@@ -35,9 +35,10 @@
     <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
         <Panel VerticalAlignment="Center">
             <Rectangle Classes="autobadge"/>
-            <TextBlock Classes="autobadge" Text="AUTO"/>
+            <TextBlock Classes="autobadge" Text="{Binding Badge}"/>
         </Panel>
-        <TextBlock Classes="dots" Classes.sure="{Binding IsSure}" VerticalAlignment="Center" Text="{Binding Dots}"/>
-        <TextBlock Classes="word" VerticalAlignment="Center" Text="{Binding Word}"/>
+        <TextBlock Classes="dots" Classes.sure="{Binding IsSure}" VerticalAlignment="Center" Text="{Binding Dots}"
+                   IsVisible="{Binding HasCertainty}"/>
+        <TextBlock Classes="word" VerticalAlignment="Center" Text="{Binding Word}" IsVisible="{Binding HasCertainty}"/>
     </StackPanel>
 </UserControl>

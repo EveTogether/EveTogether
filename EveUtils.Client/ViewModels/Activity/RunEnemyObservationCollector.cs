@@ -16,7 +16,21 @@ public sealed class RunEnemyObservationCollector(int characterId, Func<string, i
     private readonly List<DateTime> _roomBoundaries = [];
     // Per boundary: how sure the detector was, or null for one the pilot set (ET-368).
     private readonly List<RoomCertainty?> _detectedCertainties = [];
+    // Boundaries another pilot's log found, so an undo does not take a room back from this pilot's own detector (ET-494).
+    private readonly HashSet<DateTime> _notOwnDetection = [];
     private AbyssalRoomDetector? _detector = isAbyssalEnemy is null ? null : new AbyssalRoomDetector();
+
+    /// <summary>Two boundaries this close are one gate seen from two logs (ET-494); the earlier one stands.</summary>
+    public static readonly TimeSpan SameRoom = TimeSpan.FromSeconds(60);
+
+    /// <summary>This pilot's own detector opened a room — what a fleet member offers the commander (ET-494).</summary>
+    public event Action<RoomDetection>? Detected;
+
+    /// <summary>This pilot's own list of boundaries changed — what a fleet commander tells the fleet (ET-494).</summary>
+    public event Action? RoomsChanged;
+
+    /// <summary>Whether the boundaries are the fleet commander's list, not this pilot's own (ET-494).</summary>
+    public bool IsFollowingCommander { get; private set; }
 
     public ObservableCollection<RunEnemyObservationViewModel> Observations { get; } = [];
 
@@ -134,14 +148,81 @@ public sealed class RunEnemyObservationCollector(int characterId, Func<string, i
     {
         if (detection.IsUpgrade)
         {
-            _detectedCertainties[^1] = detection.Certainty;
+            int index = _roomBoundaries.IndexOf(detection.AtUtc);
+            if (index < 0 || _detectedCertainties[index] is null)
+            {
+                return;
+            }
+
+            _detectedCertainties[index] = detection.Certainty;
             // The room headers carry the certainty, so they are laid out again even when no row moved.
             Regrouped?.Invoke();
+            RoomsChanged?.Invoke();
             Changed?.Invoke();
             return;
         }
 
+        if (_IsKnownRoom(detection.AtUtc))
+        {
+            return;
+        }
+
         _AddBoundary(detection.AtUtc, detection.Certainty);
+        Detected?.Invoke(detection);
+    }
+
+    private bool _IsKnownRoom(DateTime atUtc) =>
+        _roomBoundaries.Any(boundary => (boundary - atUtc).Duration() < SameRoom);
+
+    /// <summary>The commander takes a room a fleet member's log found (ET-494): only while the commander's own rooms are
+    /// still detected, after the last boundary, not a gate already known, and never a fourth room.</summary>
+    public bool Adopt(DateTime atUtc, RoomCertainty certainty)
+    {
+        if (_detector is null || _roomBoundaries.Count >= AbyssalRoomDetector.MaxRooms - 1
+            || (_roomBoundaries.Count > 0 && atUtc <= _roomBoundaries[^1]) || _IsKnownRoom(atUtc))
+        {
+            return false;
+        }
+
+        _notOwnDetection.Add(atUtc);
+        _AddBoundary(atUtc, certainty);
+        return true;
+    }
+
+    /// <summary>Take the fleet commander's list over this pilot's own (ET-494): rows move to the room their first
+    /// sighting falls in and merge per type, and a boundary the commander set by hand stops this pilot's detector.</summary>
+    public void Follow(IReadOnlyList<(DateTime AtUtc, RoomCertainty? Certainty)> rooms)
+    {
+        IsFollowingCommander = true;
+        if (rooms.Any(room => room.Certainty is null))
+        {
+            _detector = null;
+        }
+
+        _roomBoundaries.Clear();
+        _detectedCertainties.Clear();
+        _notOwnDetection.Clear();
+        foreach ((DateTime atUtc, RoomCertainty? certainty) in rooms.OrderBy(room => room.AtUtc))
+        {
+            _roomBoundaries.Add(atUtc);
+            _detectedCertainties.Add(certainty);
+            _notOwnDetection.Add(atUtc);
+        }
+
+        // ponytail: a row keeps the room of its first sighting; splitting one that spans a moved boundary needs per-sighting times.
+        foreach (RunEnemyObservationViewModel observation in Observations.ToList())
+        {
+            observation.RoomNumber = RunRooms.RoomOf(_roomBoundaries, observation.FirstObservedAtUtc);
+            if (Observations.FirstOrDefault(kept => kept != observation && kept.EnemyTypeId == observation.EnemyTypeId
+                    && kept.RoomNumber == observation.RoomNumber) is { } kept)
+            {
+                kept.Absorb(observation);
+                Observations.Remove(observation);
+            }
+        }
+
+        Regrouped?.Invoke();
+        Changed?.Invoke();
     }
 
     private void _AddBoundary(DateTime atUtc, RoomCertainty? certainty)
@@ -157,6 +238,7 @@ public sealed class RunEnemyObservationCollector(int characterId, Func<string, i
         _roomBoundaries.Add(atUtc);
         _detectedCertainties.Add(certainty);
         Regrouped?.Invoke();
+        RoomsChanged?.Invoke();
         Changed?.Invoke();
     }
 
@@ -170,7 +252,7 @@ public sealed class RunEnemyObservationCollector(int characterId, Func<string, i
         }
 
         int last = _roomBoundaries.Count + 1;
-        if (_detectedCertainties[^1] is not null)
+        if (_detectedCertainties[^1] is not null && !_notOwnDetection.Remove(_roomBoundaries[^1]))
         {
             _detector?.Undo();
         }
@@ -200,6 +282,7 @@ public sealed class RunEnemyObservationCollector(int characterId, Func<string, i
         }
 
         Regrouped?.Invoke();
+        RoomsChanged?.Invoke();
         Changed?.Invoke();
         return true;
     }

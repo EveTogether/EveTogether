@@ -51,7 +51,8 @@ internal sealed class StartRunCommandHandler(IDbContextFactory<ClientDbContext> 
             Signature = command.Signature,
             AgentId = command.AgentId,
             MissionLevel = command.MissionLevel,
-            Role = command.Role,
+            // The commander's run is marked, so a group's detail can take its rooms (ET-494).
+            Role = command.IsFleetCommander ? RunRole.FleetCommander : command.Role,
             IsParticipant = command.IsParticipant,
             IsPayoutEligible = command.IsPayoutEligible,
             FitContentHash = command.FitContentHash,

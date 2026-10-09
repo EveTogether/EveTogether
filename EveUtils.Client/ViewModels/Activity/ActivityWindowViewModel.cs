@@ -237,6 +237,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     int? IRunWindowContext.ActingCharacterId => _ActingCharacterId();
 
     bool IRunWindowContext.IsFleetCommander => Authority.IsFleetCommander;
+    int? IRunWindowContext.FleetCommanderCharacterId => Authority.FleetCommanderCharacterId;
 
     public bool CanControl => Authority.CanControl;
 
@@ -713,6 +714,15 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
     /// <summary>Said under the buttons only while the detector runs for this pilot, so NEW ROOM is never a guess.</summary>
     public bool IsRoomDetectionHintShown => IsNewRoomButtonVisible && _Enemies()?.IsDetecting == true;
+
+    /// <summary>A member's line in a fleet abyssal (ET-494): the rooms are the commander's, and this log still counts.</summary>
+    public bool IsCommanderRoomsHintShown => IsStopButtonVisible && GroupCode is not null
+        && Authority.Level is RunControlAuthorityLevel.Denied && RunType.Space is RunSpace.AbyssalPocket
+        && _Enemies() is { } enemies && Sections.Contains(enemies);
+
+    public string CommanderRoomsHintText =>
+        $"Rooms follow {(Authority.FleetCommanderName is { Length: > 0 } commander ? commander : "the fleet commander")}. "
+        + "Your game log helps find them.";
 
     RunWindowSection? IRunWindowContext.SectionOf(RunSectionId id) => _sections.GetValueOrDefault(id);
 
@@ -1469,12 +1479,15 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
     /// <summary>The commander changed the pocket's tier or weather after this member already joined (ET-241) — the
     /// same two facts <see cref="JoinFleetRun"/> takes at the start, kept in step for as long as the run runs.
-    /// Unconditional, same reasoning as the join itself: the commander's own answer always wins here.</summary>
+    /// The commander's own answer always wins here, and only the commander's: the server fills in the sender (ET-494).</summary>
     private void _OnFleetAbyssalUpdated(FleetRunGroupAbyssalUpdatedEvent integrationEvent)
     {
         RunGroupAbyssalUpdate changed = integrationEvent.Data;
-        if (GroupCode is not { } groupCode || !string.Equals(groupCode, changed.GroupCode, StringComparison.Ordinal))
+        if (GroupCode is not { } groupCode || !string.Equals(groupCode, changed.GroupCode, StringComparison.Ordinal)
+            || !_IsFromFleetCommander(integrationEvent))
+        {
             return;
+        }
 
         Avalonia.Threading.Dispatcher.UIThread.Post(() =>
         {
@@ -1483,6 +1496,10 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             Refresh(DateTime.UtcNow);
         });
     }
+
+    /// <summary>Whether a commander-only fleet event came from whoever commands this fleet now (the ET-230 rule).</summary>
+    private bool _IsFromFleetCommander(IIntegrationEvent integrationEvent) =>
+        integrationEvent.CharacterId is { } sender && sender == Authority.FleetCommanderCharacterId;
 
     /// <summary>The stored run names its character by id; the gamelog knows pilots by name. Both are needed, so the
     /// id is taken back through the registry rather than left half-resolved.</summary>
@@ -1828,6 +1845,8 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         OnPropertyChanged(nameof(CurrentRoomSource));
         OnPropertyChanged(nameof(IsNewRoomButtonVisible));
         OnPropertyChanged(nameof(IsRoomDetectionHintShown));
+        OnPropertyChanged(nameof(IsCommanderRoomsHintShown));
+        OnPropertyChanged(nameof(CommanderRoomsHintText));
         _RefreshGroupTotalIsk(nowUtc);
         _RefreshSummaries();
         _RefreshCompact(nowUtc);
