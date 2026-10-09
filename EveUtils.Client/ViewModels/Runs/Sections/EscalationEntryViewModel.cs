@@ -16,17 +16,20 @@ public sealed partial class EscalationEntryViewModel : ObservableObject
     private readonly Func<EscalationEntryViewModel, EscalationOutcome?, Task> _setOutcome;
     private readonly Func<EscalationEntryViewModel, Task> _openCompletedRun;
     private readonly Func<EscalationEntryViewModel, Task> _change;
+    private readonly Func<EscalationEntryViewModel, Task> _linkToRun;
 
     public EscalationEntryViewModel(
         Guid sourceRunId, RunEscalationDto escalation, bool isOwn, DateTime nowUtc,
         Func<EscalationEntryViewModel, Task> start,
         Func<EscalationEntryViewModel, EscalationOutcome?, Task> setOutcome,
         Func<EscalationEntryViewModel, Task> openCompletedRun,
-        Func<EscalationEntryViewModel, Task> change)
+        Func<EscalationEntryViewModel, Task> change,
+        Func<EscalationEntryViewModel, Task> linkToRun)
     {
         SourceRunId = sourceRunId;
         Escalation = escalation;
         _change = change;
+        _linkToRun = linkToRun;
         _start = start;
         _setOutcome = setOutcome;
         _openCompletedRun = openCompletedRun;
@@ -90,6 +93,9 @@ public sealed partial class EscalationEntryViewModel : ObservableObject
 
     [RelayCommand]
     private Task StartEscalationRunAsync() => _start(this);
+
+    [RelayCommand]
+    private Task LinkToRunAsync() => _linkToRun(this);
 
     [RelayCommand]
     private Task MarkDoneAsync() => _setOutcome(this, EscalationOutcome.Completed);

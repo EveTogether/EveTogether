@@ -43,6 +43,18 @@ public static class RunEscalations
             ? (sourceRunId, source.EntryId)
             : null;
 
+    /// <summary>Whether a run at this site flew the escalation: the dungeon id when both sides have one; a run that never
+    /// resolved to a single dungeon (id 0) falls back to the name the pilot saw.</summary>
+    public static bool IsSiteOf(RunEscalationDto escalation, int siteTypeId, string? siteName) =>
+        escalation.DungeonId is > 0 && siteTypeId > 0
+            ? escalation.DungeonId == siteTypeId
+            : string.Equals(escalation.SiteName, siteName, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>The last moment a run can have started and still have flown the escalation: its deadline, or without
+    /// one the <see cref="RunEscalationDto.UndatedLifetime"/> after it was registered.</summary>
+    public static DateTime LastFlyableAtUtc(RunEscalationDto escalation) =>
+        escalation.ExpiresAtUtc ?? escalation.RegisteredAtUtc + RunEscalationDto.UndatedLifetime;
+
     private static RunEscalationDto? _ReadEntry(IGrouping<Guid?, RunParameterDto> entry)
     {
         if (entry.FirstOrDefault(parameter => parameter.ParameterKey == RunParameterKey.Escalation) is not { } site)

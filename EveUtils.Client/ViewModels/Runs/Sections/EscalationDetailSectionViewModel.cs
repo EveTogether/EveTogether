@@ -50,7 +50,8 @@ public sealed partial class EscalationDetailSectionViewModel(RunDetailSectionSer
                 .GroupBy(parameter => parameter.RunId)
                 .SelectMany(run => RunEscalations.Read(run).Select(escalation => new EscalationEntryViewModel(
                     run.Key, escalation, _IsOwn(input.Detail, run.Key), nowUtc,
-                    _StartAsync, _SetOutcomeAsync, _OpenCompletedRunAsync, _ChangeAsync)))
+                    _StartAsync, _SetOutcomeAsync, _OpenCompletedRunAsync, _ChangeAsync,
+                    _LinkToRunAsync)))
                 .OrderBy(entry => entry.Escalation.RegisteredAtUtc)
         ];
         foreach (EscalationEntryViewModel entry in Entries)
@@ -168,6 +169,19 @@ public sealed partial class EscalationDetailSectionViewModel(RunDetailSectionSer
         string characterName = _nameOf(source.CharacterId);
         entry.ActionMessage = await new EscalationRunStarter(services.Dispatcher, dialogs, app)
             .StartAsync(entry.SourceRunId, source.CharacterId, characterName, entry.Escalation);
+    }
+
+    private async Task _LinkToRunAsync(EscalationEntryViewModel entry)
+    {
+        if (services.Services is not { } app || app.GetService<IDialogService>() is not { } dialogs)
+            return;
+
+        string? refused = await new EscalationRunLinker(services.Dispatcher, dialogs, _nameOf)
+            .LinkAsync(entry.SourceRunId, entry.Escalation);
+        if (refused is not null)
+            entry.ActionMessage = refused;
+        else
+            RaiseActivityCorrected();
     }
 
     private async Task _SetOutcomeAsync(EscalationEntryViewModel entry, EscalationOutcome? outcome)

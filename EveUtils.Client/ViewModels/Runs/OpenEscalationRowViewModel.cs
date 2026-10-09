@@ -12,15 +12,17 @@ public sealed partial class OpenEscalationRowViewModel
 {
     private readonly Func<OpenEscalationRowViewModel, Task> _start;
     private readonly Func<OpenEscalationRowViewModel, Task> _decline;
+    private readonly Func<OpenEscalationRowViewModel, Task> _linkToRun;
 
     public OpenEscalationRowViewModel(
         OpenEscalationDto escalation, string characterName, DateTime nowUtc, Func<OpenEscalationRowViewModel, Task> start,
-        Func<OpenEscalationRowViewModel, Task> decline)
+        Func<OpenEscalationRowViewModel, Task> decline, Func<OpenEscalationRowViewModel, Task> linkToRun)
     {
         Escalation = escalation;
         CharacterText = characterName;
         _start = start;
         _decline = decline;
+        _linkToRun = linkToRun;
         EscalationSiteText = OpsecText.Mark(escalation.Escalation.SiteName) ?? escalation.Escalation.SiteName;
         EscalationSystemText = OpsecText.Mark(escalation.Escalation.SystemName) ?? "system not recorded";
         SourceSiteText = $"from {OpsecText.Mark(escalation.SourceSiteName) ?? "a run"} · " +
@@ -48,6 +50,9 @@ public sealed partial class OpenEscalationRowViewModel
 
     [RelayCommand]
     private Task DeclineAsync() => _decline(this);
+
+    [RelayCommand]
+    private Task LinkToRunAsync() => _linkToRun(this);
 
     /// <summary>Hours and minutes, the precision the Agency itself shows — never seconds that are stale on arrival.</summary>
     private static string _Remaining(TimeSpan left) => left.TotalHours >= 1
