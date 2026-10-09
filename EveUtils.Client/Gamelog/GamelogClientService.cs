@@ -130,6 +130,10 @@ public sealed class GamelogClientService : IFleetMetricSource, ISingletonService
     /// dreadnought you cap, the arrays you neut, the structure you rep.</summary>
     public event Action<int, string, DateTime, DamageDirection>? CounterpartyObserved;
 
+    /// <summary>Every combat, repair, neut and capacitor line in full, for the run's own record (ET-467); the events
+    /// above carry only who was on the other end. A character with no known id raises nothing.</summary>
+    public event Action<int, GameLogEvent>? TelemetryObserved;
+
     /// <summary>Character name and the payout line, at the gamelog's own time — same rule as
     /// <see cref="CombatObserved"/>. The name is the key because that is what a gamelog line carries; a pilot with no
     /// ESI id still earns bounties.</summary>
@@ -654,6 +658,14 @@ public sealed class GamelogClientService : IFleetMetricSource, ISingletonService
             var dispatcher = scope.ServiceProvider.GetRequiredService<IDispatcher>();
             await dispatcher.Send(new AddRunMiningEntryCommand(
                 characterId, mining.Timestamp, mining.OreType, mining.Units, mining.IsCritical, mining.LostResidue));
+        }
+    }
+
+    public void ObserveTelemetry(string characterName, GameLogEvent logEvent)
+    {
+        if (_idByName.TryGetValue(Resolve(characterName), out var characterId))
+        {
+            TelemetryObserved?.Invoke(characterId, logEvent);
         }
     }
 

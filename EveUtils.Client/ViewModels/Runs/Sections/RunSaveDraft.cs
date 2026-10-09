@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using EveUtils.Shared.Modules.Gamelog.Models;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Enums;
 
@@ -22,6 +23,9 @@ public sealed class RunSaveDraft(Guid runId, int? characterId, bool isActingRun)
     public List<RunEnemyObservationInput> Enemies { get; } = [];
 
     public List<RunParameterInput> Parameters { get; } = [];
+
+    /// <summary>Null when nothing recorded this character's combat, which keeps no timeline (ET-467).</summary>
+    public List<GameLogEvent>? CombatEvents { get; set; }
 
     public RunLootStrategy? LootStrategy { get; set; }
 

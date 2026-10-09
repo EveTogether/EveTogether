@@ -33,6 +33,20 @@
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
+                        <!-- The charges the two cargo holds show were fired (ET-471), with the game log's hits as a
+                             check only. Apart from the list above, so a rewrite by hand never writes them in. -->
+                        <ItemsControl ItemsSource="{Binding SpentCharges}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="vr:SpentChargeLineViewModel">
+                                    <StackPanel>
+                                        <vw:ActivityLootLineView DataContext="{Binding Line}"/>
+                                        <TextBlock Classes="hint" Margin="32,0,0,0" Text="from cargo before/after"/>
+                                        <TextBlock Classes="hint" Margin="32,0,0,2" Text="{Binding GamelogText}"
+                                                   IsVisible="{Binding GamelogText, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
                         <TextBlock Classes="note" FontStyle="Normal" Margin="2,2,0,0" IsVisible="{Binding IsBusy}"
                                    Text="Saving the change and counting the totals again…"/>
                     </StackPanel>

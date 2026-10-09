@@ -10,6 +10,7 @@ using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Sde;
 using EveUtils.Shared.Modules.Esi.Http;
 using EveUtils.Shared.Modules.Market.Services;
+using EveUtils.Shared.Modules.Runs;
 using EveUtils.Shared.Modules.Runs.Commands;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Enums;
@@ -35,6 +36,10 @@ public sealed partial class RunLootViewModel : ViewModelBase
     private readonly HashSet<int> _liveTypeIds = [];
     private readonly Dictionary<int, string> _names = [];
     private IReadOnlyList<LootTallyLine> _counted = [];
+    private IReadOnlyList<DateTime> _roomBoundaries = [];
+    private DateTime? _roomsStartedAtUtc;
+    private DateTime? _roomsStoppedAtUtc;
+    private bool _isRoomNewestFirst;
     private string? _pricingBasis;
 
     /// <param name="appraisal">A fixed price source — kept for tests that hand this a stub directly.
@@ -95,6 +100,30 @@ public sealed partial class RunLootViewModel : ViewModelBase
 
     [ObservableProperty] private int _unrecognisedCount;
 
+    /// <summary>The counted rows again, per room (ET-240): each capture in the room that was going when it was copied.
+    /// Empty — and <see cref="ItemRows"/> the whole list — for a run without rooms, a list counted between two cargo
+    /// holds, or a list written out by hand: none of those has a copy moment per item to split on.</summary>
+    public ObservableCollection<LootRoomViewModel> Rooms { get; } = [];
+
+    public bool HasRooms => Rooms.Count > 0;
+
+    /// <summary>The run's room boundaries, oldest first, and the run's own start and stop to bound the first and last
+    /// room. Re-counts only when something changed, so an owner may hand them over on every clock tick.</summary>
+    public void SetRooms(IReadOnlyList<DateTime> boundaries, DateTime? startedAtUtc, DateTime? stoppedAtUtc, bool isNewestFirst)
+    {
+        if (_roomBoundaries.SequenceEqual(boundaries) && _roomsStartedAtUtc == startedAtUtc
+            && _roomsStoppedAtUtc == stoppedAtUtc && _isRoomNewestFirst == isNewestFirst)
+        {
+            return;
+        }
+
+        _roomBoundaries = [.. boundaries];
+        _roomsStartedAtUtc = startedAtUtc;
+        _roomsStoppedAtUtc = stoppedAtUtc;
+        _isRoomNewestFirst = isNewestFirst;
+        _Recompute();
+    }
+
     /// <summary>The run whose loot this section shows — set by the window that owns it, which has known the id all
     /// along. This used to ask "which run is running" instead, so the section read the store's guess rather than
     /// its own run: with eleven runs stopped and never saved that guess is ambiguous forever and the section stayed
@@ -120,6 +149,30 @@ public sealed partial class RunLootViewModel : ViewModelBase
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(NetIskDisplay))]
     private decimal? _netIsk;
+
+    /// <summary>The charges the two holds show were fired (ET-471): out of LOOT, in CONSUMABLES at the same price.</summary>
+    [ObservableProperty] private decimal? _spentChargesIsk;
+
+    public IReadOnlyList<ActivityLootLineViewModel> SpentChargeLines { get; private set; } = [];
+
+    /// <summary>The filament CONSUMABLES counts for this run, handed in by the owner (ET-483): gone from the starting
+    /// hold it is that spend, so LOOT leaves it out rather than counting it a second time as lost.</summary>
+    public (int TypeId, int Count)? SpentFilament
+    {
+        get => _spentFilament;
+        set
+        {
+            if (_spentFilament == value)
+            {
+                return;
+            }
+
+            _spentFilament = value;
+            _Recompute();
+        }
+    }
+
+    private (int TypeId, int Count)? _spentFilament;
 
     /// <summary>Set when the running-run lookup itself failed (none running, or more than one) — a state, not an
     /// empty list left to speak for itself (ET-65 AC-7).</summary>
@@ -750,7 +803,11 @@ public sealed partial class RunLootViewModel : ViewModelBase
     /// on screen are the rows those figures are made of.</summary>
     private void _Recompute()
     {
-        _counted = LootTally.Count(_TallyCaptures());
+        LootTallyCount split = LootTally.Count(_TallyCaptures(), ChargeTypes.Of(_sde), SpentFilament);
+        _counted = split.Loot;
+        SpentChargesIsk = _Sum(split.SpentCharges);
+        SpentChargeLines = [.. split.SpentCharges.Select(line =>
+            _Row(line.ItemTypeId, line.LootKind, line.Quantity ?? 1, isExcluded: false, captureCount: 1))];
         TotalIsk = _Sum(_counted);
         EntriesWithoutPrice = _counted.Count(line => !_unitPrices.ContainsKey(line.ItemTypeId));
         LootIsk = _Sum(_counted.Where(line => line.LootKind == LootKind.Gained));
@@ -788,8 +845,12 @@ public sealed partial class RunLootViewModel : ViewModelBase
         if (gained.Length > 1 && gained[0] is { Value: > 0 } top)
             top.IsTopValue = true;
         if (_images is not null)
-            foreach (ActivityLootLineViewModel line in ItemRows.Concat(ConsumedRows))
+        {
+            foreach (ActivityLootLineViewModel line in ItemRows.Concat(SpentChargeLines).Concat(ConsumedRows))
+            {
                 _ = line.LoadIconAsync(_images);
+            }
+        }
 
         for (int index = 0; index < Captures.Count; index++)
             Captures[index].IsIgnored = LootTally.IsIgnored(tallied, index);
@@ -805,6 +866,9 @@ public sealed partial class RunLootViewModel : ViewModelBase
                 isLivePrice: _liveTypeIds.Contains(entry.ItemTypeId)))];
         }
 
+        OnPropertyChanged(nameof(SpentChargeLines));
+        _ShowRooms(everyCaptureCounts);
+
         OnPropertyChanged(nameof(TotalIskLabel));
         OnPropertyChanged(nameof(DifferenceText));
         OnPropertyChanged(nameof(CanOfferLootEdit));
@@ -818,6 +882,61 @@ public sealed partial class RunLootViewModel : ViewModelBase
         OnPropertyChanged(nameof(AddedAfterEditNote));
         OnPropertyChanged(nameof(HasCaptures));
         OnPropertyChanged(nameof(ExcludedCount));
+    }
+
+    private void _ShowRooms(bool everyCaptureCounts)
+    {
+        Dictionary<int, bool> wasExpanded = Rooms.ToDictionary(room => room.Number, room => room.IsExpanded);
+        Rooms.Clear();
+        if (_roomBoundaries.Count > 0 && everyCaptureCounts && ManualListCaption is null)
+        {
+            IEnumerable<int> numbers = Enumerable.Range(1, _roomBoundaries.Count + 1);
+            foreach (int number in _isRoomNewestFirst ? numbers.Reverse() : numbers)
+            {
+                LootTallyLine[] lines = [.. Captures
+                    .Where(capture => !capture.IsExcluded && RunRooms.RoomOf(_roomBoundaries, capture.CapturedAtUtc) == number)
+                    .SelectMany(capture => capture.Entries)
+                    .Select(entry => new LootTallyLine(entry.ItemTypeId, entry.Quantity, Volume: null, entry.LootKind))];
+                if (lines.Length == 0)
+                {
+                    continue;
+                }
+
+                ActivityLootLineViewModel[] rows = [.. lines
+                    .GroupBy(line => (line.ItemTypeId, line.LootKind))
+                    .Select(group => _Row(group.Key.ItemTypeId, group.Key.LootKind, group.Sum(line => line.Quantity ?? 1),
+                        isExcluded: false, captureCount: 1))
+                    .OrderByDescending(row => row.Value.HasValue)
+                    .ThenByDescending(row => row.Value)];
+                for (int index = 0; index < rows.Length; index++)
+                {
+                    rows[index].IsAlternate = index % 2 == 1;
+                }
+
+                if (_images is not null)
+                {
+                    foreach (ActivityLootLineViewModel row in rows)
+                    {
+                        _ = row.LoadIconAsync(_images);
+                    }
+                }
+
+                Rooms.Add(new LootRoomViewModel(number, _RoomWindowText(number), _Display(_Sum(lines)), rows)
+                {
+                    IsExpanded = wasExpanded.GetValueOrDefault(number, true)
+                });
+            }
+        }
+
+        OnPropertyChanged(nameof(HasRooms));
+    }
+
+    private string _RoomWindowText(int room)
+    {
+        DateTime? start = room == 1 ? _roomsStartedAtUtc : RunRooms.StartOf(_roomBoundaries, room, default);
+        return RunRooms.EndOf(_roomBoundaries, room, _roomsStoppedAtUtc) is { } end
+            ? $"{start?.ToLocalTime():HH:mm:ss} – {end.ToLocalTime():HH:mm:ss}"
+            : $"since {start?.ToLocalTime():HH:mm:ss} · ongoing";
     }
 
     /// <summary>No volume: a capture row carries none, and nothing on this screen totals one.</summary>

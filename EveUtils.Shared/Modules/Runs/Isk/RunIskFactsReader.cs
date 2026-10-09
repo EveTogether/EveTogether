@@ -15,12 +15,13 @@ namespace EveUtils.Shared.Modules.Runs.Isk;
 internal static class RunIskFactsReader
 {
     public static RunIskFacts From(Run run, IEnumerable<RunParameter> parameters, IReadOnlyDictionary<int, double> prices,
-        MiningOreTypes ores, IEnumerable<LocalKillmail> losses)
+        MiningOreTypes ores, IEnumerable<LocalKillmail> losses, Func<int, bool> isCharge)
     {
         IReadOnlyList<LootTallyLine> lostInLosses = LossLines(losses);
         RunParameter[] all = [.. parameters];
         RunPrices runPrices = RunPrices.Of(run, all, prices);
-        IReadOnlyList<LootTallyLine> loot = LootTally.Count(Tally(run));
+        LootTallyCount counted = LootTally.Count(Tally(run), isCharge, SpentFilament(all));
+        IReadOnlyList<LootTallyLine> loot = counted.Loot;
         decimal? gained = KnownLootValue(loot, LootKind.Gained, runPrices.Loot);
         decimal? lost = KnownLootValue(loot, LootKind.Lost, runPrices.Loot);
         int? filamentCount = _ParsedInt(all, RunParameterKey.AbyssalFilamentCount);
@@ -28,7 +29,8 @@ internal static class RunIskFactsReader
             && runPrices.Filament(typeId) is { } price
             ? price * filamentCount.Value
             : null;
-        IReadOnlyList<LootTallyLine> spent = Spent(run);
+        // The charges fired (ET-471) leave LOOT and land here, at the same fixed price, so TOTAL ISK stays as it was.
+        IReadOnlyList<LootTallyLine> spent = [.. Spent(run), .. counted.SpentCharges];
         decimal? spentCost = KnownLootValue(spent, LootKind.Lost, runPrices.Loot);
         decimal? consumableCost = filamentCost is null && spentCost is null
             ? null
@@ -129,6 +131,12 @@ internal static class RunIskFactsReader
     /// runs at once can collect it into the same type-id set loot pricing already builds.</summary>
     public static int? FilamentTypeId(IEnumerable<RunParameter> parameters) =>
         _ParsedInt(parameters, RunParameterKey.AbyssalFilamentTypeId);
+
+    /// <summary>The filament CONSUMABLES counts for a run, for <see cref="LootTally"/> to take out of LOOT (ET-483).</summary>
+    public static (int TypeId, int Count)? SpentFilament(IEnumerable<RunParameter> parameters) =>
+        _ParsedInt(parameters, RunParameterKey.AbyssalFilamentCount) is > 0 and var count && FilamentTypeId(parameters) is { } typeId
+            ? (typeId, count)
+            : null;
 
     private static int? _ParsedInt(IEnumerable<RunParameter> parameters, RunParameterKey key) =>
         parameters.FirstOrDefault(parameter => parameter.ParameterKey == key)?.TypedValue is { } value

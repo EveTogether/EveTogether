@@ -12,8 +12,10 @@ using EveUtils.Client.ViewModels.Runs.Sections;
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Data;
 using EveUtils.Shared.Modules.Runs.Commands;
+using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Entities;
 using EveUtils.Shared.Modules.Runs.Enums;
+using EveUtils.Shared.Modules.Runs.Queries;
 using EveUtils.Shared.Modules.Sde.Dtos;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -49,6 +51,9 @@ public sealed class GamelogCatchUpTests
 
     private static string _IncomingCombatLine(DateTime atUtc, int amount, string target) =>
         $"[ {_Timestamp(atUtc)} ] (combat) <color=0xffcc0000><b>{amount}</b> <color=0x77ffffff><font size=10>from</font> <b><color=0xffffffff>{target}</b><font size=10><color=0x77ffffff> - Penetrates";
+
+    private static string _IncomingNeutLine(DateTime atUtc, int gigajoules, string source) =>
+        $"[ {_Timestamp(atUtc)} ] (combat) <color=0xffe57f7f><b>{gigajoules} GJ</b><color=0x77ffffff><font size=10> energy neutralized </font><b><color=0xffffffff>{source}</b><color=0x77ffffff><font size=10> - {source}</font>";
 
     private static string _SessionHeader(string character, DateTime startedAtUtc) =>
         "------------------------------------------------------------\n"
@@ -112,7 +117,8 @@ public sealed class GamelogCatchUpTests
             cancellationToken);
         await File.WriteAllTextAsync(secondSessionFile,
             _SessionHeader(ActivityWindowHarness.CharacterName, lastAliveUtc.AddSeconds(2))
-            + _IncomingCombatLine(lastAliveUtc.AddSeconds(3), 48, "Centii Servant") + "\n",
+            + _IncomingCombatLine(lastAliveUtc.AddSeconds(3), 48, "Centii Servant") + "\n"
+            + _IncomingNeutLine(lastAliveUtc.AddSeconds(3), 16, "Centii Servant") + "\n",
             cancellationToken);
 
         // Real time has to pass the last gap line's own timestamp before resuming — the catch-up window's upper
@@ -158,6 +164,14 @@ public sealed class GamelogCatchUpTests
         Assert.Contains("bounty payout", message);
         Assert.Contains("mining cycle", message);
         Assert.Contains("enem", message);
+
+        // ET-467: the same lines reach the run's timeline, the neut included rather than dropped by the catch-up read.
+        resumed.StopRun(DateTime.UtcNow);
+        await resumed.SaveRunCommand.ExecuteAsync(null);
+        RunCombatTimelineDto timeline = Assert.IsType<RunCombatTimelineDto>(
+            (await dispatcher.Query(new GetRunCombatTimelineQuery(runId), cancellationToken)).Value);
+        Assert.Equal("DmgIn:48,NeutIn:16",
+            string.Join(",", timeline.Series.OrderBy(pair => pair.Key).Select(pair => $"{pair.Key}:{pair.Value.Sum()}")));
 
         resumed.Dispose();
     }

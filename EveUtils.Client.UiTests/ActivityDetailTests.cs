@@ -7,9 +7,11 @@ using Avalonia.VisualTree;
 using EveUtils.Client.Dialogs;
 using EveUtils.Client.Opsec;
 using EveUtils.Client.ViewModels.Runs;
+using EveUtils.Client.ViewModels.Runs.Sections;
 using EveUtils.Client.Views;
 using EveUtils.Shared.Data;
 using EveUtils.Shared.Messaging;
+using EveUtils.Shared.Modules.Gamelog.Models;
 using EveUtils.Shared.Modules.Market.Entities;
 using EveUtils.Shared.Modules.Market.Repositories;
 using EveUtils.Shared.Modules.Market.Services;
@@ -429,6 +431,45 @@ public sealed class ActivityDetailTests
         Assert.Equal(2, texts.Count(text => text == "Tritanium ×3"));        // and both captures under them
     }
 
+    /// <summary>ET-240 AC-5/AC-6/AC-10: the rooms of a combat site, marked with NEW ROOM, come back after SAVE and
+    /// reopening — in ENEMIES and in LOOT, each copy in the room that was going when it was made, a copy after STOP in
+    /// the last room. Counter-proof: save without the RoomStarted boundary and LOOT falls back to one flat list.</summary>
+    [AvaloniaFact]
+    public async Task SavedRunWithRooms_ShowsEnemiesAndLootPerRoom_AfterReopening()
+    {
+        using var instance = TestClientInstance.Create();
+        ICqrsDispatcher dispatcher = instance.Services.GetRequiredService<ICqrsDispatcher>();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        await instance.Services.GetRequiredService<IMarketPriceRepository>().ReplaceAllAsync(
+            [new LocalMarketPrice { TypeId = 34, AveragePrice = 100, AdjustedPrice = 100, UpdatedAt = DateTimeOffset.UtcNow }],
+            cancellationToken);
+        Result<Guid> started = await dispatcher.Send(new StartRunCommand(90000001, ActivityKind.Site, StartedAtUtc,
+            1234, "Homefront", 30000142), cancellationToken);
+        RunLootCaptureInput CaptureAt(int minute, long quantity) => new()
+        {
+            CapturedAtUtc = StartedAtUtc.AddMinutes(minute), Source = LootCaptureSource.Clipboard, ContentHash = $"C{minute}",
+            Entries = [new RunLootEntryInput { ItemTypeId = 34, Name = "Tritanium", Quantity = quantity, LootKind = LootKind.Gained }]
+        };
+        RunEnemyObservationInput SeenIn(int room, int count, int fromMinute) => new()
+        {
+            RoomNumber = room, Count = count, EnemyTypeId = 111, EnemyName = "Centii Scavenger",
+            FirstObservedAtUtc = StartedAtUtc.AddMinutes(fromMinute), LastObservedAtUtc = StartedAtUtc.AddMinutes(fromMinute + 3)
+        };
+        await dispatcher.Send(new SaveRunCommand(started.Value, StartedAtUtc.AddMinutes(15), StartedAtUtc.AddMinutes(17),
+            [CaptureAt(3, 1), CaptureAt(7, 2), CaptureAt(16, 4)], [], [SeenIn(1, 2, 1), SeenIn(2, 3, 6)],
+            [new RunParameterInput { ParameterKey = RunParameterKey.RoomStarted, TypedValue = string.Empty, ObservedAtUtc = StartedAtUtc.AddMinutes(5) }]),
+            cancellationToken);
+
+        (ActivityDetailWindow window, Window root) = await _PresentAsync(instance, 758, cancellationToken);
+        ActivityDetailViewModel viewModel = Assert.IsType<ActivityDetailViewModel>(window.DataContext);
+        RunLootViewModel loot = Assert.Single(viewModel.Loot().LootOverview.Characters).Loot;
+        List<string> texts = RenderedText.VisibleTexts(root);
+
+        Assert.Equal(["ROOM 1", "ROOM 2"], viewModel.Enemies().EnemyRooms.Select(room => room.Title));
+        Assert.Equal([(1, $"{100m:N0} ISK"), (2, $"{600m:N0} ISK")], loot.Rooms.Select(room => (room.Number, room.SubtotalText)));
+        Assert.Equal(2, texts.Count(text => text == "ROOM 2"));
+    }
+
     /// <summary>AC-5: two runs in one activity that each sighted the same enemy type stay two rows, each with its
     /// own first/last window. Counter-proof: group by enemy type alone and there is one row, with the later
     /// sighting silently overwriting the earlier one's window.</summary>
@@ -566,6 +607,51 @@ public sealed class ActivityDetailTests
         host.SwitchMode();
 
         Assert.Same(docked, window.Content);
+    }
+
+    public static TheoryData<GameLogEvent[]?, string[], string[]> AbyssalCombat => new()
+    {
+        // Run 5 of 18 Sep 2026 as it was saved, with its real combat: the figures are the game log's own (AC1, AC6).
+        {
+            RunCombatTelemetryTests.RealRunEvents(),
+            ["65,732 hp", "1,999 hp", "998 hp", "Nova Fury Light Missile on Ephialtes Dissipator", "74 hp",
+                "Ephialtes Dissipator · Wrecks", "115 GJ", "109", "no rep line in this run", "reps in · none in this run"],
+            [CombatDetailSectionViewModel.NotRecordedText]
+        },
+        // The same run saved before combat was kept: one line in each, never a zero or an empty chart (AC2).
+        {
+            null,
+            [CombatDetailSectionViewModel.NotRecordedText],
+            ["0 hp", "DAMAGE DEALT", "DPS out"]
+        }
+    };
+
+    /// <summary>
+    /// ET-468: COMBAT and TIMELINE stand straight under ACTIVITY and before ENEMIES (B2), with no boundary-damage tile
+    /// (B5), and LOOT says why containers are not counted (B6).
+    /// </summary>
+    [AvaloniaTheory]
+    [MemberData(nameof(AbyssalCombat))]
+    public async Task AbyssalDetail_ShowsItsStoredCombat_OrSaysWhyNot(GameLogEvent[]? combat, string[] shown, string[] absent)
+    {
+        using var instance = TestClientInstance.Create();
+        ICqrsDispatcher dispatcher = instance.Services.GetRequiredService<ICqrsDispatcher>();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        Result<Guid> started = await dispatcher.Send(new StartRunCommand(90000001, ActivityKind.Abyssal,
+            RunCombatTelemetryTests.RunStart, 0, null, 30004079), cancellationToken);
+        await dispatcher.Send(new SaveRunCommand(started.Value, RunCombatTelemetryTests.RunStop,
+            RunCombatTelemetryTests.RunStop.AddMinutes(1), [], [], [],
+            [new RunParameterInput { ParameterKey = RunParameterKey.AbyssalFilament, TypedValue = "3|Dark", ObservedAtUtc = RunCombatTelemetryTests.RunStart }],
+            CombatEvents: combat), cancellationToken);
+
+        List<string> texts = await _RenderAsync(instance, cancellationToken);
+
+        Assert.All(shown, text => Assert.Contains(text, texts));
+        Assert.All(absent, text => Assert.DoesNotContain(text, texts));
+        Assert.DoesNotContain(texts, text => text.Contains("BOUNDARY", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(texts, text => text.StartsWith("Containers opened: not counted", StringComparison.Ordinal));
+        Assert.Equal(["ACTIVITY", "COMBAT", "TIMELINE", "ENEMIES"],
+            texts.Where(text => text is "ACTIVITY" or "COMBAT" or "TIMELINE" or "ENEMIES"));
     }
 
     private static async Task<List<string>> _RenderAsync(TestClientInstance instance, CancellationToken cancellationToken)

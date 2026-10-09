@@ -2,8 +2,24 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vr="using:EveUtils.Client.ViewModels.Runs"
              xmlns:vs="using:EveUtils.Client.ViewModels.Runs.Sections"
+             xmlns:vw="using:EveUtils.Client.Views.Runs"
              x:Class="EveUtils.Client.Views.Runs.Sections.EnemiesDetailSectionView"
              x:DataType="vs:EnemiesDetailSectionViewModel">
+    <UserControl.Resources>
+        <DataTemplate x:Key="EnemyRowTemplate" DataType="vr:ActivityEnemyRowViewModel">
+            <!-- Not Classes="kv" (ET-285): an enemy's name is a NAME, the same row-kind as a character or
+                 an ore, so it takes Classes="charname" rather than the label styling "kv" gave it before —
+                 this was the letter-spaced-caps enemy name Jithran's screenshot contrasted against MINING's
+                 plain ore names. -->
+            <Grid Classes="detailrow" Classes.alt="{Binding IsAlternate}"
+                  ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10" Margin="0,3">
+                <TextBlock Classes="charname" Text="{Binding EnemyName}"/>
+                <TextBlock Grid.Column="1" Classes="hint" Margin="0"
+                           VerticalAlignment="Center" Text="{Binding WindowText}"/>
+                <TextBlock Grid.Column="2" Classes="money" VerticalAlignment="Center" Text="{Binding CountText}"/>
+            </Grid>
+        </DataTemplate>
+    </UserControl.Resources>
     <StackPanel>
         <!-- One row per character, the same breakdown BOUNTY gives (ET-210 review finding,
              2026-09-09, round 4): each toon's own gamelog counts towards its own total, summed
@@ -31,23 +47,30 @@
         </Border>
         <!-- Not folded together on type: two runs that each saw the same enemy keep their own row
              and their own first/last window. -->
-        <ItemsControl x:Name="EnemyList" ItemsSource="{Binding EnemyRows}">
+        <!-- Per room when the run had rooms (ET-240): the same rows under each room's own window. -->
+        <ItemsControl x:Name="EnemyRoomList" ItemsSource="{Binding EnemyRooms}" IsVisible="{Binding HasRooms}">
             <ItemsControl.ItemTemplate>
-                <DataTemplate DataType="vr:ActivityEnemyRowViewModel">
-                    <!-- Not Classes="kv" (ET-285): an enemy's name is a NAME, the same row-kind as a character or
-                         an ore, so it takes Classes="charname" rather than the label styling "kv" gave it before —
-                         this was the letter-spaced-caps enemy name Jithran's screenshot contrasted against MINING's
-                         plain ore names. -->
-                    <Grid Classes="detailrow" Classes.alt="{Binding IsAlternate}"
-                          ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10" Margin="0,3">
-                        <TextBlock Classes="charname" Text="{Binding EnemyName}"/>
-                        <TextBlock Grid.Column="1" Classes="hint" Margin="0"
-                                   VerticalAlignment="Center" Text="{Binding WindowText}"/>
-                        <TextBlock Grid.Column="2" Classes="money" VerticalAlignment="Center" Text="{Binding CountText}"/>
-                    </Grid>
+                <DataTemplate DataType="vr:ActivityEnemyRoomViewModel">
+                    <StackPanel Margin="0,6,0,0">
+                        <Border BorderThickness="0,0,0,1" BorderBrush="{DynamicResource BorderBrush}" Padding="0,0,0,3">
+                            <Grid ColumnDefinitions="Auto,Auto,*,Auto" ColumnSpacing="10">
+                                <TextBlock Classes="label" VerticalAlignment="Center" Text="{Binding Title}"/>
+                                <Panel Grid.Column="1" VerticalAlignment="Center"
+                                       IsVisible="{Binding Source, Converter={x:Static ObjectConverters.IsNotNull}}">
+                                    <vw:RoomSourceView DataContext="{Binding Source}"/>
+                                </Panel>
+                                <TextBlock Grid.Column="2" Classes="hint" Margin="0" VerticalAlignment="Center"
+                                           Text="{Binding WindowText}"/>
+                                <TextBlock Grid.Column="3" Classes="money" VerticalAlignment="Center" Text="{Binding CountText}"/>
+                            </Grid>
+                        </Border>
+                        <ItemsControl ItemsSource="{Binding Rows}" ItemTemplate="{StaticResource EnemyRowTemplate}"/>
+                    </StackPanel>
                 </DataTemplate>
             </ItemsControl.ItemTemplate>
         </ItemsControl>
+        <ItemsControl x:Name="EnemyList" ItemsSource="{Binding EnemyRows}" IsVisible="{Binding !HasRooms}"
+                      ItemTemplate="{StaticResource EnemyRowTemplate}"/>
         <TextBlock x:Name="EnemiesEmpty" Classes="hint" TextWrapping="Wrap"
                    IsVisible="{Binding EnemiesEmptyText, Converter={x:Static ObjectConverters.IsNotNull}}"
                    Text="{Binding EnemiesEmptyText}"/>

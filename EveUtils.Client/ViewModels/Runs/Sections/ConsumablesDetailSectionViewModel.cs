@@ -9,9 +9,12 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using EveUtils.Client.Formatting;
 using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Shared.Messaging;
+using EveUtils.Shared.Modules.Gamelog.Models;
 using EveUtils.Shared.Modules.Market.Services;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Enums;
+using EveUtils.Shared.Modules.Runs.Queries;
+using EveUtils.Shared.Modules.Runs.Tally;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace EveUtils.Client.ViewModels.Runs.Sections;
@@ -23,6 +26,9 @@ public sealed partial class ConsumablesDetailSectionViewModel(RunDetailSectionSe
     : RunDetailSection(RunSectionId.Consumables, "CONSUMABLES")
 {
     private readonly Dictionary<int, decimal> _unitPrices = [];
+
+    /// <summary>Per run, the game log's hit tallies ET-467 kept at SAVE: the check beside a fired charge (ET-471).</summary>
+    private readonly Dictionary<Guid, IReadOnlyList<RunHitTallyDto>> _hitTallies = [];
 
     public ObservableCollection<ConsumablesCharacterViewModel> Characters { get; } = [];
 
@@ -37,10 +43,10 @@ public sealed partial class ConsumablesDetailSectionViewModel(RunDetailSectionSe
     public override void Apply(RunDetailSectionInput input)
     {
         ActivityDetailDto detail = input.Detail;
-        (ActivityRunDetailDto Run, ActivityLootLineViewModel[] Lines)[] spentByRun =
-            [.. detail.Runs.Select(run => (run, _SpentLines(detail, run)))];
+        (ActivityRunDetailDto Run, ActivityLootLineViewModel[] Lines, SpentChargeLineViewModel[] Charges)[] spentByRun =
+            [.. detail.Runs.Select(run => (run, _SpentLines(detail, run), _SpentCharges(run)))];
 
-        HasConsumables = spentByRun.Any(spent => spent.Lines.Length > 0);
+        HasConsumables = spentByRun.Any(spent => spent.Lines.Length > 0 || spent.Charges.Length > 0);
         // This section's share of TOTAL ISK as the registry counted it (ET-256) — already negative, a cost.
         decimal? cost = detail.Isk.Of(IskSource.Consumables) is { Certainty: not IskCertainty.Unknown } share
             ? share.Amount
@@ -50,11 +56,16 @@ public sealed partial class ConsumablesDetailSectionViewModel(RunDetailSectionSe
 
         int filaments = detail.Runs.Sum(run => _FilamentCount(detail, run.RunId));
         long others = detail.Runs.SelectMany(_Spent).Sum(entry => entry.Quantity ?? 1);
+        long charges = spentByRun.SelectMany(spent => spent.Charges).Sum(charge => charge.Line.Quantity ?? 1);
         List<string> summary = [CostText];
         if (filaments > 0)
             summary.Add(filaments == 1 ? "1 filament" : $"{filaments} filaments");
         if (others > 0)
             summary.Add(others == 1 ? "1 other item" : $"{others} other items");
+        if (charges > 0)
+        {
+            summary.Add(charges == 1 ? "1 charge fired" : $"{charges} charges fired");
+        }
         EmptyText = Characters.Count == 0 ? "No filament count or other consumable was confirmed for this activity." : null;
         HeaderSummary = HasConsumables ? string.Join(" · ", summary) : "nothing confirmed";
     }
@@ -64,15 +75,17 @@ public sealed partial class ConsumablesDetailSectionViewModel(RunDetailSectionSe
     public override async Task LoadAsync(RunDetailSectionInput input, bool followUp, CancellationToken cancellationToken)
     {
         _unitPrices.Clear();
-        await _LoadPricesAsync(Characters.SelectMany(character => character.Lines).Select(line => line.ItemTypeId),
-            cancellationToken);
+        await _LoadHitTalliesAsync(input.Detail, cancellationToken);
+        await _LoadPricesAsync(Characters.SelectMany(_AllLines).Select(line => line.ItemTypeId), cancellationToken);
         Apply(input);
 
         if (services.Images is not { } images)
             return;
 
-        foreach (ActivityLootLineViewModel line in Characters.SelectMany(character => character.Lines).Where(line => line.ItemTypeId > 0))
+        foreach (ActivityLootLineViewModel line in Characters.SelectMany(_AllLines).Where(line => line.ItemTypeId > 0))
+        {
             await line.LoadIconAsync(images);
+        }
     }
 
     public override string AbsentReason(string noun) => $"no CONSUMABLES — {noun} used no tracked consumable";
@@ -81,18 +94,20 @@ public sealed partial class ConsumablesDetailSectionViewModel(RunDetailSectionSe
     /// he can say what it did spend. A block already on screen stays the same one, so a box open in it keeps what is
     /// typed while another section's correction reads the activity again.</summary>
     private void _ShowCharacters(RunDetailSectionInput input,
-        IReadOnlyList<(ActivityRunDetailDto Run, ActivityLootLineViewModel[] Lines)> spentByRun)
+        IReadOnlyList<(ActivityRunDetailDto Run, ActivityLootLineViewModel[] Lines, SpentChargeLineViewModel[] Charges)> spentByRun)
     {
         List<ConsumablesCharacterViewModel> wanted = [];
-        foreach ((ActivityRunDetailDto run, ActivityLootLineViewModel[] lines) in spentByRun)
+        foreach ((ActivityRunDetailDto run, ActivityLootLineViewModel[] lines, SpentChargeLineViewModel[] charges) in spentByRun)
         {
             bool isReadOnly = services.OwnCharacterIds is { } own && !own.Contains(run.CharacterId);
-            if (lines.Length == 0 && isReadOnly)
+            if (lines.Length == 0 && charges.Length == 0 && isReadOnly)
+            {
                 continue;
+            }
 
             ConsumablesCharacterViewModel block = Characters.FirstOrDefault(character => character.RunId == run.RunId)
                                                   ?? _NewBlock(run, input.NameOf(run.CharacterId), isReadOnly);
-            block.Show(lines);
+            block.Show(lines, charges);
             wanted.Add(block);
         }
 
@@ -169,6 +184,50 @@ public sealed partial class ConsumablesDetailSectionViewModel(RunDetailSectionSe
             .ThenByDescending(line => line.Value));
         return [.. lines];
     }
+
+    /// <summary>The charges a run's two cargo holds show were fired (ET-471), split off by the same rule the run's
+    /// TOTAL ISK is (<see cref="LootTally"/>), at the price the run fixed for each. None without a starting hold.</summary>
+    private SpentChargeLineViewModel[] _SpentCharges(ActivityRunDetailDto run)
+    {
+        Dictionary<int, decimal> fixedPrices = FixedLootPrices.Of(run.LootCaptures);
+        Dictionary<int, string> names = run.LootCaptures.SelectMany(capture => capture.Entries)
+            .GroupBy(entry => entry.ItemTypeId)
+            .ToDictionary(group => group.Key, group => group.First().Name);
+        IReadOnlyList<RunHitTallyDto> tallies = _hitTallies.GetValueOrDefault(run.RunId) ?? [];
+        LootTallyCapture[] captures = [.. run.LootCaptures
+            .OrderBy(capture => capture.CapturedAtUtc)
+            .Select(capture => new LootTallyCapture(capture.Role, capture.IsExcluded,
+                [.. capture.Entries.Select(entry => new LootTallyLine(entry.ItemTypeId, entry.Quantity, null, entry.LootKind))]))];
+        return [.. LootTally.Count(captures, ChargeTypes.Of(services.Sde)).SpentCharges
+            .Select(charge => _Line(charge.ItemTypeId, names[charge.ItemTypeId], charge.Quantity,
+                fixedPrices.TryGetValue(charge.ItemTypeId, out decimal kept) ? kept : null))
+            .Select(line => new SpentChargeLineViewModel(line, _GamelogHits(tallies, line.Name)))];
+    }
+
+    /// <summary>How many outgoing hits the game log names this charge as the weapon of, or null when it names none:
+    /// turret ammo never has a line of its own.</summary>
+    private static int? _GamelogHits(IReadOnlyList<RunHitTallyDto> tallies, string chargeName)
+    {
+        RunHitTallyDto[] own = [.. tallies.Where(tally => tally.Direction is DamageDirection.Outgoing
+            && tally.Quality is not HitQuality.Misses && tally.Weapon == chargeName)];
+        return own.Length == 0 ? null : own.Sum(tally => tally.Count);
+    }
+
+    private async Task _LoadHitTalliesAsync(ActivityDetailDto detail, CancellationToken cancellationToken)
+    {
+        _hitTallies.Clear();
+        foreach (ActivityRunDetailDto run in detail.Runs)
+        {
+            if (await services.Dispatcher.Query(new GetRunCombatTimelineQuery(run.RunId), cancellationToken)
+                is { IsSuccess: true, Value: { } timeline })
+            {
+                _hitTallies[run.RunId] = timeline.HitTallies;
+            }
+        }
+    }
+
+    private static IEnumerable<ActivityLootLineViewModel> _AllLines(ConsumablesCharacterViewModel character) =>
+        character.Lines.Concat(character.SpentCharges.Select(charge => charge.Line));
 
     private static IEnumerable<RunLootEntryDto> _Spent(ActivityRunDetailDto run) => run.LootCaptures
         .Where(capture => capture.Role is LootCaptureRole.Consumed && !capture.IsExcluded)

@@ -73,7 +73,8 @@ internal static class OneRunPerCharacter
     {
         foreach (RunEnemyObservation seen in duplicate.EnemyObservations.ToList())
         {
-            if (survivor.EnemyObservations.FirstOrDefault(kept => kept.EnemyTypeId == seen.EnemyTypeId && kept.EnemyName == seen.EnemyName)
+            if (survivor.EnemyObservations.FirstOrDefault(kept => kept.EnemyTypeId == seen.EnemyTypeId && kept.EnemyName == seen.EnemyName
+                                                                    && kept.RoomNumber == seen.RoomNumber)
                 is not { } kept)
             {
                 _Move(seen, survivor.EnemyObservations, duplicate.EnemyObservations, survivor.Id, (entry, runId) => entry.RunId = runId);

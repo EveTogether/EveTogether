@@ -2,11 +2,14 @@ using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace EveUtils.Client.ViewModels.Activity;
 
-public sealed partial class RunEnemyObservationViewModel(int enemyTypeId, string enemyName, DateTime observedAtUtc)
-    : ObservableObject
+public sealed partial class RunEnemyObservationViewModel(int enemyTypeId, string enemyName, DateTime observedAtUtc,
+    int? roomNumber = null) : ObservableObject
 {
     public int EnemyTypeId { get; } = enemyTypeId;
     public string EnemyName { get; } = enemyName;
+
+    /// <summary>The room this row was seen in (ET-240) — null until the pilot presses NEW ROOM.</summary>
+    public int? RoomNumber { get; internal set; } = roomNumber;
 
     /// <summary>When this enemy type was first and last seen, over every sighting of it. Stamped as observed rather
     /// than derived from the run's own start and stop, so the stored window is what was witnessed.</summary>
@@ -32,5 +35,13 @@ public sealed partial class RunEnemyObservationViewModel(int enemyTypeId, string
             FirstObservedAtUtc = observedAtUtc;
         if (observedAtUtc > LastObservedAtUtc)
             LastObservedAtUtc = observedAtUtc;
+    }
+
+    /// <summary>Fold another row of the same type into this one — an undone room's row back into the room before it.</summary>
+    internal void Absorb(RunEnemyObservationViewModel other)
+    {
+        Observe(other.FirstObservedAtUtc);
+        Observe(other.LastObservedAtUtc);
+        Count += other.Count;
     }
 }

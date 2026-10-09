@@ -74,10 +74,10 @@ public sealed partial class ActivityLootViewModel : ObservableObject
     /// block has a priced figure — never 0 for "nothing priced" (ET-65 AC-5).</summary>
     public decimal? NetIsk { get; private set; }
 
-    /// <summary>The filament the group's runs used, as the CONSUMABLES section prices it — a positive cost. The
-    /// filament is never a loot line, so the owner hands it in: the window from its own rows, the detail screen from
-    /// the registry's share.</summary>
-    public decimal? FilamentIsk { get; private set; }
+    /// <summary>What CONSUMABLES counts for the group's runs — the filament and the charges fired (ET-471) — as a
+    /// positive cost. None of it is a loot line, so the owner hands it in: the window from its own rows, the detail
+    /// screen from the registry's share.</summary>
+    public decimal? ConsumablesIsk { get; private set; }
 
     public string LootIskDisplay => _Display(LootIsk);
 
@@ -87,12 +87,12 @@ public sealed partial class ActivityLootViewModel : ObservableObject
 
     public string NetIskDisplay => _Display(NetIsk);
 
-    public void SetFilament(decimal? cost)
+    public void SetConsumables(decimal? cost)
     {
-        if (FilamentIsk == cost)
+        if (ConsumablesIsk == cost)
             return;
 
-        FilamentIsk = cost;
+        ConsumablesIsk = cost;
         _RefreshFigures();
     }
 
@@ -251,13 +251,13 @@ public sealed partial class ActivityLootViewModel : ObservableObject
         LootIsk = _SumKnown(Characters.Select(block => block.Loot.LootIsk));
         LootNetIsk = _SumKnown(Characters.Select(block => block.Loot.NetIsk));
         decimal? lostIsk = _SumKnown(Characters.Select(block => block.Loot.ConsumedIsk));
-        ConsumedIsk = lostIsk is null && FilamentIsk is null ? null : lostIsk.GetValueOrDefault() + FilamentIsk.GetValueOrDefault();
-        NetIsk = LootNetIsk is null && FilamentIsk is null ? null : LootNetIsk.GetValueOrDefault() - FilamentIsk.GetValueOrDefault();
+        ConsumedIsk = lostIsk is null && ConsumablesIsk is null ? null : lostIsk.GetValueOrDefault() + ConsumablesIsk.GetValueOrDefault();
+        NetIsk = LootNetIsk is null && ConsumablesIsk is null ? null : LootNetIsk.GetValueOrDefault() - ConsumablesIsk.GetValueOrDefault();
         OnPropertyChanged(nameof(LootIsk));
         OnPropertyChanged(nameof(ConsumedIsk));
         OnPropertyChanged(nameof(LootNetIsk));
         OnPropertyChanged(nameof(NetIsk));
-        OnPropertyChanged(nameof(FilamentIsk));
+        OnPropertyChanged(nameof(ConsumablesIsk));
         OnPropertyChanged(nameof(LootIskDisplay));
         OnPropertyChanged(nameof(ConsumedIskDisplay));
         OnPropertyChanged(nameof(LootNetIskDisplay));

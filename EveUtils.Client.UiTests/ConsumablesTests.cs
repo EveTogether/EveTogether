@@ -21,6 +21,7 @@ using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Entities;
 using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Runs.Isk;
+using EveUtils.Shared.Modules.Runs.Tally;
 using EveUtils.Shared.Modules.Runs.Queries;
 using EveUtils.Shared.Modules.Sde;
 using Microsoft.EntityFrameworkCore;
@@ -250,31 +251,52 @@ public sealed class ConsumablesTests
     }
 
     /// <summary>The run window hands the filament its rows price to the LOOT totals, so CONSUMED and NET there say the
-    /// same as the saved run does. Red without the change: the loot totals never heard of the filament.</summary>
-    [AvaloniaFact]
-    public async Task RunWindow_HandsTheFilamentCostToTheLootTotals()
+    /// same as the saved run does. Red without the change: the loot totals never heard of the filament. The second row
+    /// is a solo run with both holds, the filament in the starting one and 153 Nova Fury fired: LOOT's own block must
+    /// leave the filament out (ET-483) and the CONSUMABLES header must count the charges (ET-471), so NET equals TOTAL
+    /// ISK before SAVE as it does after. Counter-proof (git revert of the fix, this row kept): CONSUMED read -25,300,000, the
+    /// filament twice, so NET -15,300,000 against TOTAL -10,300,000.</summary>
+    [AvaloniaTheory]
+    [InlineData(false, "-5,000,000 ISK", "-5,000,000 ISK — 1x Agitated Dark Filament")]
+    [InlineData(true, "-20,300,000 ISK", "-20,300,000 ISK — 1x Agitated Dark Filament · 153 charges fired")]
+    public async Task RunWindow_HandsTheFilamentCostToTheLootTotals(bool withHolds, string consumed, string header)
     {
         var cruiserFit = new ShipFitDetectionReading(ShipFitDetectionState.Observed, DateTimeOffset.UtcNow, null, null, null,
             new ShipFitCandidate(1, "Chosen fit", 620), ShipFitMatchReason.Manual, []);
         using var harness = await ActivityWindowHarness.CreateAsync(configure: services =>
         {
-            services.AddSingleton<ISdeAccessor>(_Sde().Add(620, "Cruiser", 26, 6, groupName: "Cruiser"));
+            // A filament is no charge (category 8): only the fired missiles may leave LOOT that way.
+            services.AddSingleton<ISdeAccessor>(_Sde().Add(620, "Cruiser", 26, 6, groupName: "Cruiser")
+                .Add(60000, "Agitated Dark Filament", 1979, 17).Add(2629, "Nova Fury Light Missile", 384, 8));
             services.AddSingleton<IShipFitDetectionService>(new FixedFitDetection(cruiserFit));
         });
-        await _PriceAsync(harness.Instance, (60000, 5_000_000));
+        await _PriceAsync(harness.Instance, (60000, 5_000_000), (2629, 100_000), (34, 1_000_000));
         ActivityWindowViewModel model = await harness.OpenAsync(ActivityKind.Abyssal);
         await model.Activity().SelectTierCommand.ExecuteAsync(2);
         await model.Activity().SelectWeatherCommand.ExecuteAsync(0);
         await model.StartRunCommand.ExecuteAsync(null);
+        if (withHolds)
+        {
+            Assert.True(model.RunLoot is not null, "an abyssal window has a LOOT section");
+            RunLootViewModel runLoot = model.RunLoot;
+            runLoot.CargoBeforeText = "Agitated Dark Filament\t1\nNova Fury Light Missile\t200";
+            await runLoot.LastCargoWrite;
+            runLoot.CargoAfterText = "Nova Fury Light Missile\t47\nTritanium\t10";
+            await runLoot.LastCargoWrite;
+        }
 
         await ActivityWindowHarness.WaitUntil(() =>
         {
             model.Refresh(DateTime.UtcNow);
-            return model.LootOverview?.FilamentIsk is not null;
+            return model.LootOverview?.ConsumablesIsk is not null && (!withHolds || model.Consumables().SpentChargeLines.Count > 0);
         });
+        model.Refresh(DateTime.UtcNow);
 
-        Assert.Equal(5_000_000m, model.LootOverview!.FilamentIsk);
-        Assert.Equal("-5,000,000 ISK", model.LootOverview.ConsumedIskDisplay);
+        Assert.True(model.LootOverview is not null, "an abyssal window has a LOOT section");
+        ActivityLootViewModel overview = model.LootOverview;
+        Assert.Equal(consumed, overview.ConsumedIskDisplay);
+        Assert.Equal(model.GroupTotalIskText, overview.NetIskDisplay);
+        Assert.Equal(header, model.Consumables().HeaderSummary);
     }
 
     // ── ET-334: what a pilot spent is rewritten by hand, the way loot is ──────────────────────────────
@@ -370,7 +392,7 @@ public sealed class ConsumablesTests
 
         RunIskFacts facts = RunIskFactsReader.From(received, received.Parameters,
             new Dictionary<int, double> { [34] = 10_000_000, [60000] = 5_000_000, [2488] = 100_000 },
-            RunIskFactsReader.OresOf([received], _Sde()), []);
+            RunIskFactsReader.OresOf([received], _Sde()), [], ChargeTypes.Of(_Sde()));
         Assert.Equal(5_500_000m, facts.ConsumableIskCost);
         Assert.Equal(30_000_000m, facts.LootIskNet);
     }
@@ -465,7 +487,7 @@ public sealed class ConsumablesTests
     /// Red without the change: the count was read from the ship the live detection last saw, so a run with a chosen fit
     /// and no live ship proposed nothing at all.
     /// </summary>
-    [Theory]
+    [AvaloniaTheory]
     [InlineData(587, "Frigate", 25, 3)]
     [InlineData(16240, "Destroyer", 420, 2)]
     [InlineData(620, "Cruiser", 26, 1)]
@@ -482,7 +504,7 @@ public sealed class ConsumablesTests
     /// The live ship stays the source when no fit is chosen. Covered nowhere before, so it stands as the second test
     /// of the ticket's budget.
     /// </summary>
-    [Fact]
+    [AvaloniaFact]
     public async Task ProposedCount_FallsBackToTheLiveShip_WhenNoFitIsChosen()
     {
         var liveOnly = new ShipFitDetectionReading(ShipFitDetectionState.Observed, DateTimeOffset.UtcNow, 620, 9, "Vexor",

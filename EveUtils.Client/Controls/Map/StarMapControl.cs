@@ -60,8 +60,12 @@ public sealed class StarMapControl : Control
     private static readonly ImmutableDashStyle TrailGapDash = new([0.6, 2.6], 0);
     private static readonly TimeSpan FlyDuration = TimeSpan.FromMilliseconds(450);
     private static readonly TimeSpan ZoomDuration = TimeSpan.FromMilliseconds(250);
-    private static readonly Cursor GrabCursor = new(StandardCursorType.Hand);
-    private static readonly Cursor DragCursor = new(StandardCursorType.SizeAll);
+    // Made on first use, not in the type initializer: a cursor needs the platform, and the static helpers
+    // (FleetFrameScale) must not poison the whole type when they are reached before it is up.
+    private static Cursor? _grabCursor;
+    private static Cursor? _dragCursor;
+    private static Cursor GrabCursor => _grabCursor ??= new(StandardCursorType.Hand);
+    private static Cursor DragCursor => _dragCursor ??= new(StandardCursorType.SizeAll);
     private static readonly IImmutableBrush CrossRegionBrush = new ImmutableSolidColorBrush(MapPalette.CrossRegionLine, 0.75);
     private static readonly IImmutableBrush RouteBrush = new ImmutableSolidColorBrush(MapPalette.Route);
     private static readonly IImmutableBrush GatelessBrush = new ImmutableSolidColorBrush(MapPalette.Muted, 0.5);

@@ -25,5 +25,11 @@ public enum RunSectionId
     Loss,
 
     /// <summary>What the fleet of a group run destroyed, information only and never part of TOTAL ISK (ET-373).</summary>
-    FleetKills
+    FleetKills,
+
+    /// <summary>What the pilot dealt, took and was neuted for over the run, from the stored combat (ET-468).</summary>
+    Combat,
+
+    /// <summary>The stored combat over the run's length, per 5 s (ET-468).</summary>
+    Timeline
 }

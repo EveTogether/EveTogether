@@ -1002,6 +1002,9 @@ namespace EveUtils.Migrations.Server.PostgreSql.Migrations
                     b.Property<DateTime>("LastObservedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<int?>("RoomNumber")
+                        .HasColumnType("integer");
+
                     b.Property<Guid>("RunId")
                         .HasColumnType("uuid");
 

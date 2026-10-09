@@ -29,6 +29,9 @@ public sealed partial class ConsumablesWindowSectionViewModel(IRunWindowContext 
     : RunWindowSection(context, RunSectionId.Consumables, "CONSUMABLES")
 {
     private int? _filamentTypeId;
+
+    /// <summary>The filament type this section prices against, once the pocket's tier and weather resolve one.</summary>
+    public int? FilamentTypeId => _filamentTypeId;
     private int? _pricedForTypeId;
 
     public ObservableCollection<ConsumableRowViewModel> Rows { get; } = [];
@@ -41,6 +44,10 @@ public sealed partial class ConsumablesWindowSectionViewModel(IRunWindowContext 
     /// as they do everywhere else (ET-329). Null until the pocket's tier and weather resolve a type.</summary>
     [ObservableProperty] private ActivityLootLineViewModel? _filamentLine;
 
+    /// <summary>The charges LOOT's two holds show were fired (ET-471), drawn here where they are counted. Empty
+    /// without a starting hold: only a before/after difference shows what was fired.</summary>
+    [ObservableProperty] private IReadOnlyList<ActivityLootLineViewModel> _spentChargeLines = [];
+
     public override void Refresh(DateTime nowUtc)
     {
         _SyncRows();
@@ -49,16 +56,30 @@ public sealed partial class ConsumablesWindowSectionViewModel(IRunWindowContext 
 
     public override void RefreshSummary()
     {
+        IReadOnlyList<ActivityLootLineViewModel> charges = Context.LootOverview is { } overview
+            ? [.. overview.Characters.SelectMany(character => character.Loot.SpentChargeLines)]
+            : Context.RunLoot?.SpentChargeLines ?? [];
+        // Swapped only when it changed: this runs every tick, and a new list would redraw the rows each time.
+        if (!charges.SequenceEqual(SpentChargeLines))
+        {
+            SpentChargeLines = charges;
+        }
+
         foreach (ConsumableRowViewModel row in Rows)
             row.Reprice(UnitPrice);
 
         int totalCount = Rows.Sum(row => row.Count ?? 0);
-        string filament = FilamentName ?? "filament";
-        HeaderSummary = totalCount == 0
-            ? "no filament count set"
-            : _TotalCost() is { } cost
-                ? $"-{IskFormat.Whole(cost)} — {totalCount}x {filament}"
-                : $"{totalCount}x {filament} — no price yet";
+        long fired = charges.Sum(line => line.Quantity ?? 1);
+        string filament = totalCount == 0 ? "no filament count set" : $"{totalCount}x {FilamentName ?? "filament"}";
+        string firedText = fired switch { 0 => "", 1 => " · 1 charge fired", _ => $" · {fired} charges fired" };
+        // The cost the window hands LOOT, filament and fired charges together (ET-471), so this header, LOOT's
+        // CONSUMED and TOTAL ISK are one figure; the rows' own price only until the window has handed one in.
+        decimal? cost = Context.LootOverview?.ConsumablesIsk ?? _TotalCost();
+        HeaderSummary = totalCount == 0 && fired == 0
+            ? filament
+            : cost is { } isk
+                ? $"-{IskFormat.Whole(isk)} — {filament}{firedText}"
+                : $"{filament}{firedText} — no price yet";
     }
 
     /// <summary>What SAVE stores for one run of the group: this character's own confirmed count, and the shared

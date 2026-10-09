@@ -7,6 +7,7 @@ using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Entities;
 using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Runs.Events;
+using EveUtils.Shared.Modules.Runs.Telemetry;
 using EveUtils.Shared.Modules.Sde;
 using Microsoft.EntityFrameworkCore;
 
@@ -77,7 +78,8 @@ internal sealed class SaveRunCommandHandler(IDbContextFactory<ClientDbContext> c
                 EnemyTypeId = observation.EnemyTypeId,
                 EnemyName = observation.EnemyName,
                 FirstObservedAtUtc = observation.FirstObservedAtUtc,
-                LastObservedAtUtc = observation.LastObservedAtUtc
+                LastObservedAtUtc = observation.LastObservedAtUtc,
+                RoomNumber = observation.RoomNumber
             });
         foreach (RunParameterInput parameter in command.Parameters)
             db.Set<RunParameter>().Add(new RunParameter
@@ -92,6 +94,10 @@ internal sealed class SaveRunCommandHandler(IDbContextFactory<ClientDbContext> c
                 EntryId = parameter.EntryId,
                 ObservedAtUtc = parameter.ObservedAtUtc
             });
+        if (command.CombatEvents is { } combatEvents)
+        {
+            db.Set<RunCombatTimeline>().Add(RunCombatTelemetry.Build(run.Id, combatEvents, startedAtUtc, command.StoppedAtUtc));
+        }
 
         await db.SaveChangesAsync(cancellationToken);
         int savedRuns = await db.Set<Run>()

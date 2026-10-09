@@ -138,6 +138,9 @@
                     <StackPanel Grid.Column="0" Spacing="2">
                         <TextBlock Classes="label" Text="DURATION"/>
                         <TextBlock x:Name="DurationFigure" Classes="durationfigure" Text="{Binding DurationText}"/>
+                        <!-- ET-468: seconds in stretches of 5 s or more with no damage either way, of the pilot COMBAT shows. -->
+                        <TextBlock x:Name="IdleFigure" Classes="hint" Margin="0" Text="{Binding Combat.IdleText}"
+                                   IsVisible="{Binding Combat.IdleText, Converter={x:Static ObjectConverters.IsNotNull}}"/>
                     </StackPanel>
                     <!-- Same prominence as DURATION beside it (ET-210 review finding, 2026-09-09): bounty, priced
                          loot and every ISK-form reward, added together — see HasTotalIsk/TotalIskText for exactly
@@ -149,6 +152,8 @@
                              overview's own totals are made of. Only where somebody else flew along. -->
                         <TextBlock x:Name="OwnShareFigure" Classes="hint" Margin="0"
                                    IsVisible="{Binding HasOwnShare}" Text="{Binding OwnShareText}"/>
+                        <TextBlock x:Name="LootConsumedFigure" Classes="hint" Margin="0" Text="{Binding LootConsumedText}"
+                                   IsVisible="{Binding LootConsumedText, Converter={x:Static ObjectConverters.IsNotNull}}"/>
                     </StackPanel>
                     <!-- The stamp is the only thing telling a typed duration from a measured one; the figure beside
                          it cannot, because a correction overwrites the moments themselves. -->

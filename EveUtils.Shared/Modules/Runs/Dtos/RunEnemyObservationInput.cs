@@ -12,4 +12,7 @@ public sealed class RunEnemyObservationInput
     public required string EnemyName { get; init; }
     public required DateTime FirstObservedAtUtc { get; init; }
     public required DateTime LastObservedAtUtc { get; init; }
+
+    // Not required: a payload from a client older than ET-240 has none, and reads as a run without rooms.
+    public int? RoomNumber { get; init; }
 }

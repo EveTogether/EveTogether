@@ -123,4 +123,47 @@ public sealed class RunEnemyObservationCollectorTests
 
         Assert.Empty(collector.Observations);
     }
+
+    /// <summary>ET-240 AC-1: the same type seen either side of NEW ROOM is two rows, each with a window on its own side
+    /// of the boundary — and a line EVE flushes late lands by its own time. Counter-proof: key on type alone and there
+    /// is one row whose window runs over the boundary.</summary>
+    [Fact]
+    public void Record_SameTypeEitherSideOfNewRoom_KeepsOneRowPerRoomWithItsOwnWindow()
+    {
+        RunEnemyObservationCollector collector = _Collector();
+
+        collector.Record(90000001, "Centii Servant", Observed);
+        collector.StartRoom(Observed.AddSeconds(30));
+        collector.Record(90000001, "Centii Servant", Observed.AddSeconds(40));
+        collector.Record(90000001, "Centii Servant", Observed.AddSeconds(20));
+
+        Assert.Equal(
+            [((int?)1, Observed, Observed.AddSeconds(20)), (2, Observed.AddSeconds(40), Observed.AddSeconds(40))],
+            collector.ToInputs().Select(input => (input.RoomNumber, input.FirstObservedAtUtc, input.LastObservedAtUtc)));
+    }
+
+    /// <summary>ET-240 AC-4: undo folds the last room back per type — counts added, window widened — and undoing the
+    /// only boundary leaves a run without rooms. Counter-proof: a second undo with no boundary left changes nothing.</summary>
+    [Fact]
+    public void UndoRoom_FoldsTheLastRoomBackPerType_AndLeavesNoRoomsBehind()
+    {
+        RunEnemyObservationCollector collector = _Collector();
+        collector.Record(90000001, "Centii Servant", Observed);
+        collector.StartRoom(Observed.AddSeconds(30));
+        collector.Record(90000001, "Centii Servant", Observed.AddSeconds(40));
+        collector.Record(90000001, "Centii Scavenger", Observed.AddSeconds(50));
+        collector.Observations[0].Count = 2;
+        collector.Observations[1].Count = 3;
+
+        bool undone = collector.UndoRoom();
+        bool undoneAgain = collector.UndoRoom();
+
+        Assert.True(undone);
+        Assert.False(undoneAgain);
+        Assert.Empty(collector.RoomBoundaries);
+        Assert.Equal(
+            [((int?)null, 17155, 5, Observed, Observed.AddSeconds(40)), (null, 17156, 0, Observed.AddSeconds(50), Observed.AddSeconds(50))],
+            collector.ToInputs().Select(input =>
+                (input.RoomNumber, input.EnemyTypeId, input.Count, input.FirstObservedAtUtc, input.LastObservedAtUtc)));
+    }
 }

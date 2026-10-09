@@ -1,9 +1,12 @@
+using System;
+using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using EveUtils.Client.Formatting;
 using EveUtils.Shared.Modules.Market.Services;
+using EveUtils.Shared.Modules.Runs;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Enums;
 using Microsoft.Extensions.DependencyInjection;
@@ -33,6 +36,9 @@ public sealed partial class LootDetailSectionViewModel : RunDetailSection
 
     [ObservableProperty] private string? _lootEmptyText;
 
+    /// <summary>B6 (ET-466): why an abyssal run says nothing about its containers, in place of a count nobody has.</summary>
+    [ObservableProperty] private string? _containersText;
+
     public override bool HasContent => _hasCaptures;
 
     /// <summary>What the summary says about the loot. The figure in the header is this section's share of TOTAL ISK as
@@ -40,6 +46,9 @@ public sealed partial class LootDetailSectionViewModel : RunDetailSection
     public override void Apply(RunDetailSectionInput input)
     {
         ActivityDetailDto detail = input.Detail;
+        ContainersText = input.RunType.Space is RunSpace.AbyssalPocket
+            ? "Containers opened: not counted. Opening or looting a container writes no line to the game log."
+            : null;
         RunLootCaptureDto[] captures = [.. detail.Runs
             .SelectMany(run => run.LootCaptures)
             .Where(capture => capture.Role is not LootCaptureRole.Consumed)];
@@ -49,9 +58,9 @@ public sealed partial class LootDetailSectionViewModel : RunDetailSection
             : "No loot capture was recorded for this activity — nothing was copied, so there is nothing to value.";
         // "no price" and not "0 ISK": a figure nobody has must not look like a figure that came out at zero (ET-65 AC-5).
         decimal? net = detail.Isk.Of(IskSource.Loot) is { Certainty: not IskCertainty.Unknown } loot ? loot.Amount : null;
-        // The filament is the CONSUMABLES section's own share (ET-329), handed to the loot totals so CONSUMED and NET
+        // CONSUMABLES' own share (ET-329, ET-471), handed to the loot totals so CONSUMED and NET
         // say what the run really cost; the header above stays the loot's own share, so it is never taken off twice.
-        LootOverview.SetFilament(detail.Isk.Of(IskSource.Consumables) is { Certainty: not IskCertainty.Unknown } consumables
+        LootOverview.SetConsumables(detail.Isk.Of(IskSource.Consumables) is { Certainty: not IskCertainty.Unknown } consumables
             ? -consumables.Amount
             : null);
         HeaderSummary = captures.Length > 0
@@ -75,6 +84,9 @@ public sealed partial class LootDetailSectionViewModel : RunDetailSection
                 input.NameOf(run.CharacterId));
             block.Loot.IsLocked = true;
             block.Loot.IsReadOnly = _services.OwnCharacterIds is { } own && !own.Contains(run.CharacterId);
+            block.Loot.SpentFilament = _SpentFilament(input.Detail, run.RunId);
+            block.Loot.SetRooms(RunRooms.Boundaries(input.Detail.Parameters, run.RunId), run.StartedAtUtc, run.StoppedAtUtc,
+                isNewestFirst: false);
             await block.Loot.LoadWhenIdleAsync(run.LootCaptures, cancellationToken);
         }
 
@@ -82,6 +94,19 @@ public sealed partial class LootDetailSectionViewModel : RunDetailSection
         if (isFirstRead)
             LootOverview.OrderByValue();
     }
+
+    /// <summary>The filament the run was saved against and its count, which CONSUMABLES counts (ET-483).</summary>
+    private static (int TypeId, int Count)? _SpentFilament(ActivityDetailDto detail, Guid runId) =>
+        _ParsedInt(detail, runId, RunParameterKey.AbyssalFilamentCount) is > 0 and var count
+        && _ParsedInt(detail, runId, RunParameterKey.AbyssalFilamentTypeId) is { } typeId
+            ? (typeId, count)
+            : null;
+
+    private static int? _ParsedInt(ActivityDetailDto detail, Guid runId, RunParameterKey key) =>
+        detail.Parameters.FirstOrDefault(parameter => parameter.RunId == runId && parameter.ParameterKey == key) is { } stored
+        && int.TryParse(stored.TypedValue, NumberStyles.Integer, CultureInfo.InvariantCulture, out int parsed)
+            ? parsed
+            : null;
 
     public override string AbsentReason(string noun) => $"no LOOT — {noun} leaves no wrecks to empty";
 }

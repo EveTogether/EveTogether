@@ -82,10 +82,43 @@
                 <!-- ── The items it is made of ── one row per kind, most valuable first; what was left out
                      follows on rows of its own, struck through and badged, never folded into a row that
                      counts. -->
-                <ItemsControl ItemsSource="{Binding Loot.ItemRows}" IsVisible="{Binding !Loot.LootEditor.IsOpen}">
+                <ItemsControl ItemsSource="{Binding Loot.ItemRows}">
+                    <ItemsControl.IsVisible>
+                        <MultiBinding Converter="{x:Static BoolConverters.And}">
+                            <Binding Path="!Loot.LootEditor.IsOpen"/>
+                            <Binding Path="!Loot.HasRooms"/>
+                        </MultiBinding>
+                    </ItemsControl.IsVisible>
                     <ItemsControl.ItemTemplate>
                         <DataTemplate DataType="vr:ActivityLootLineViewModel">
                             <vw:ActivityLootLineView/>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <!-- ── The same items per room (ET-240) ── each copy in the room that was going when it was made,
+                     every room folding on its own header; the subtotal above stays the whole run's. -->
+                <ItemsControl ItemsSource="{Binding Loot.Rooms}" IsVisible="{Binding !Loot.LootEditor.IsOpen}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="vr:LootRoomViewModel">
+                            <StackPanel Margin="0,4,0,2">
+                                <Button Classes="roomheader" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+                                        Command="{Binding ToggleExpandedCommand}">
+                                    <Grid ColumnDefinitions="Auto,Auto,*,Auto" ColumnSpacing="8">
+                                        <TextBlock Classes="meta" Text="{Binding Chevron}"/>
+                                        <TextBlock Grid.Column="1" Classes="capnum" Text="{Binding Title}"/>
+                                        <TextBlock Grid.Column="2" Classes="meta" Text="{Binding WindowText}"/>
+                                        <TextBlock Grid.Column="3" Classes="money capsub" Text="{Binding SubtotalText}"/>
+                                    </Grid>
+                                </Button>
+                                <ItemsControl ItemsSource="{Binding Rows}" IsVisible="{Binding IsExpanded}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate DataType="vr:ActivityLootLineViewModel">
+                                            <vw:ActivityLootLineView/>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
@@ -327,6 +360,19 @@
             <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
             <Setter Property="FontWeight" Value="Normal"/>
             <Setter Property="TextDecorations" Value="Strikethrough"/>
+        </Style>
+
+        <!-- ── A room's header (ET-240) ── a flat row that folds the room, ruled off from the items under it. -->
+        <Style Selector="Button.roomheader">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+            <Setter Property="BorderThickness" Value="0,0,0,1"/>
+            <Setter Property="Padding" Value="2,3"/>
+            <Setter Property="MinHeight" Value="0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+        </Style>
+        <Style Selector="Button.roomheader:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource BgRowAltBrush}"/>
         </Style>
 
         <!-- ── The counted / excluded switch ── the capture's own state, and the control that changes it. -->
