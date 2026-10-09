@@ -146,6 +146,10 @@ public interface IRunWindowContext : INotifyPropertyChanged
     /// null while they share no ore or none of it is priced yet.</summary>
     decimal? FleetMateOreIsk(int characterId);
 
+    /// <summary>A sibling section of this window, for a section that only reads another's collected facts (TARGETS
+    /// reads ENEMIES); null when the window has no such section.</summary>
+    RunWindowSection? SectionOf(RunSectionId id);
+
     /// <summary>Work the whole window out again, for a section that changed something the window shows.</summary>
     void Refresh(DateTime nowUtc);
 }

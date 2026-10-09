@@ -8,6 +8,8 @@ namespace EveUtils.Client.ViewModels.Activity;
 
 /// <param name="isAbyssalEnemy">Set only in an abyssal pocket (ET-368): which types the room detector reads. Null
 /// keeps rooms to NEW ROOM alone, the way every other run type has them.</param>
+public sealed record UnresolvedSighting(string Name, DateTime FirstObservedAtUtc);
+
 public sealed class RunEnemyObservationCollector(int characterId, Func<string, int?> typeIdResolver,
     Func<int, bool>? isAbyssalEnemy = null)
 {
@@ -17,6 +19,16 @@ public sealed class RunEnemyObservationCollector(int characterId, Func<string, i
     private AbyssalRoomDetector? _detector = isAbyssalEnemy is null ? null : new AbyssalRoomDetector();
 
     public ObservableCollection<RunEnemyObservationViewModel> Observations { get; } = [];
+
+    private readonly List<UnresolvedSighting> _unresolvedSightings = [];
+    private readonly HashSet<(string Name, int? Room)> _unresolvedKeys = [];
+
+    /// <summary>Names the SDE has no type for, once per room they were first seen in — read by TARGETS, never saved
+    /// and never part of the ENEMIES rows (ET-369). A room is read off the sighting's own time.</summary>
+    public IReadOnlyList<UnresolvedSighting> UnresolvedSightings => _unresolvedSightings;
+
+    /// <summary>A name without a type was seen in a room it had not been seen in yet (ET-369).</summary>
+    public event Action? UnresolvedSeen;
 
     /// <summary>Where the pilot pressed NEW ROOM (ET-240), oldest first — empty while the run has no rooms.</summary>
     public IReadOnlyList<DateTime> RoomBoundaries => _roomBoundaries;
@@ -52,8 +64,14 @@ public sealed class RunEnemyObservationCollector(int characterId, Func<string, i
     /// </summary>
     public void Record(int observedCharacterId, string target, DateTime observedAtUtc)
     {
-        if (observedCharacterId != characterId || typeIdResolver(target) is not int enemyTypeId)
+        if (observedCharacterId != characterId)
             return;
+
+        if (typeIdResolver(target) is not int enemyTypeId)
+        {
+            _RecordUnresolved(target, observedAtUtc);
+            return;
+        }
 
         if (_detector is not null && isAbyssalEnemy?.Invoke(enemyTypeId) == true
             && _detector.Observe(enemyTypeId, observedAtUtc) is { } detection)
@@ -74,6 +92,18 @@ public sealed class RunEnemyObservationCollector(int characterId, Func<string, i
         Observations.Add(added);
         Regrouped?.Invoke();
         Changed?.Invoke();
+    }
+
+    private void _RecordUnresolved(string target, DateTime observedAtUtc)
+    {
+        int? room = RunRooms.RoomOf(_roomBoundaries, observedAtUtc);
+        if (!_unresolvedKeys.Add((target, room)))
+        {
+            return;
+        }
+
+        _unresolvedSightings.Add(new UnresolvedSighting(target, observedAtUtc));
+        UnresolvedSeen?.Invoke();
     }
 
     /// <summary>Close the current room at <paramref name="atUtc"/> and begin the next. The first press makes two

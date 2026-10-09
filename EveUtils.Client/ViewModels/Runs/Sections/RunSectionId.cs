@@ -31,5 +31,8 @@ public enum RunSectionId
     Combat,
 
     /// <summary>The stored combat over the run's length, per 5 s (ET-468).</summary>
-    Timeline
+    Timeline,
+
+    /// <summary>The enemies of each abyssal room in the order to shoot them, live only (ET-369).</summary>
+    Targets
 }
