@@ -278,6 +278,7 @@ public sealed partial class FleetsViewModel
         ApplyFilters();
         DescribeTotals(links);
         ApplyLayout();
+        _openStartRoster?.Refresh();
     }
 
     /// <summary>
@@ -844,6 +845,7 @@ public sealed partial class FleetsViewModel
                 _ApplyPresence(row, member, now);
             row.RefreshReadiness();
         }
+        _openStartRoster?.Refresh();
     }
 
     private RunGroupCodeStart? _JoinableRunOf(FleetLaneViewModel lane, DateTimeOffset now) =>
@@ -971,8 +973,17 @@ public sealed partial class FleetsViewModel
                 "The coupled doctrine's minimums are not all met yet. Start the fleet anyway?", okText: "Start anyway"))
             return;
 
-        var prompt = await BuildStartPromptAsync(row, client);
-        var choice = await _dialogs.PickFleetStartAsync(prompt);
+        var roster = await BuildStartRosterAsync(row, client);
+        FleetStartChoice choice;
+        _openStartRoster = roster;
+        try
+        {
+            choice = await _dialogs.PickFleetStartAsync(roster);
+        }
+        finally
+        {
+            _openStartRoster = null;
+        }
         if (choice == FleetStartChoice.Cancel)
             return;
 
@@ -991,7 +1002,7 @@ public sealed partial class FleetsViewModel
         // The ask comes after the start and not with it: a request to come over to a fleet that is not running yet
         // is a request to leave a running one for nothing. Asking failing does not un-start the fleet — it says so
         // and leaves the collision standing, which is exactly what "leave them" would have done.
-        if (choice == FleetStartChoice.AskThemAll && prompt.HasCollision)
+        if (choice == FleetStartChoice.AskThemAll && roster.Current.HasCollision)
             await AskEveryoneElsewhereAsync(row, client);
 
         await _ReloadEverythingAsync();
@@ -1002,22 +1013,25 @@ public sealed partial class FleetsViewModel
     /// knows all of it: this client works out where its <i>own</i> pilots count, over every fleet it can see, local
     /// ones included; the store the fleet lives in answers for someone else's pilot, which no client can see. What
     /// the client knows first-hand wins, because it spans stores and the server's answer does not.
+    /// The members are read again off this screen's row while the dialog is open (ET-492): a reload replaces the row, so
+    /// it is looked up by key each time.
     /// </summary>
-    private async Task<FleetStartPrompt> BuildStartPromptAsync(FleetViewModel row, IFleetClient client)
+    private async Task<FleetStartRoster> BuildStartRosterAsync(FleetViewModel row, IFleetClient client)
     {
         var reported = new Dictionary<int, string>();
         foreach (var member in await client.ListMembersActiveElsewhereAsync(row.Id))
             reported[member.CharacterId] = member.ElsewhereFleetName;
 
-        var members = row.Members
+        // A client-only fleet's roster is your own pilots and external ones: there is no inbox to send a request to.
+        var key = row.Key;
+        return new FleetStartRoster(new FleetStartPrompt(row.Name, StartMembers(row), CanAskThemAll: !row.IsLocal),
+            () => _allRows.FirstOrDefault(r => r.Key == key) is { } current ? StartMembers(current) : null);
+
+        List<FleetStartMember> StartMembers(FleetViewModel fleet) => [.. fleet.Members
             .Select(m => new FleetStartMember(
                 m.CharacterId, m.CharacterName, m.IsMine, m.IsFleetCommander, m.IsExternal,
-                m.IsExternal ? null : ElsewhereFleetNameFor(m.CharacterId, row) ?? Reported(m.CharacterId),
-                m.IsSignedOff, m.Presence, m.StatusText, m.PresenceTooltip, m.IsConnected, m.StatusReason))
-            .ToList();
-
-        // A client-only fleet's roster is your own pilots and external ones: there is no inbox to send a request to.
-        return new FleetStartPrompt(row.Name, members, CanAskThemAll: !row.IsLocal);
+                m.IsExternal ? null : ElsewhereFleetNameFor(m.CharacterId, fleet) ?? Reported(m.CharacterId),
+                m.IsSignedOff, m.Presence, m.StatusText, m.PresenceTooltip, m.IsConnected, m.StatusReason))];
 
         string? Reported(int characterId) => reported.TryGetValue(characterId, out var name) ? name : null;
     }

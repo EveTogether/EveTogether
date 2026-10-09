@@ -53,6 +53,10 @@ public sealed partial class FleetRosterViewModel : ObservableObject, IDisposable
     private readonly IFleetRosterWatch _rosterWatch;
     private readonly IDisposable _rosterSubscription;
     private readonly IDisposable? _presenceSubscription;
+    private readonly IDisposable? _mateConnectionSubscription;
+
+    // The start dialog's roster while it is open, kept current by every presence sweep (ET-492).
+    private FleetStartRoster? _openStartRoster;
     private readonly ILocalCharacterPresence? _presence;
     private readonly FleetMemberBoard? _board;            // the Fleets screen's reading of every fleet mate (ET-444)
     private readonly InGameFleetRosters? _inGameRosters;  // the boss's own ESI read of the in-game fleet
@@ -136,6 +140,12 @@ public sealed partial class FleetRosterViewModel : ObservableObject, IDisposable
         _presenceSweep.Tick += (_, _) => _RefreshPresence(DateTimeOffset.UtcNow);
         _presenceSweep.Start();
 
+        // A mate connecting or going away changes the connection flag the roster was read with, and nothing else says
+        // so (ET-492). Re-read through the reload gate, like every other change to this fleet.
+        _mateConnectionSubscription = _fleets is LocalFleetClient
+            ? null
+            : services.GetService<FleetMateConnectionFeed>()?.Subscribe(_ => ReloadAsync());
+
         _ = ReloadAsync();
     }
 
@@ -170,6 +180,8 @@ public sealed partial class FleetRosterViewModel : ObservableObject, IDisposable
             foreach (var node in nodes)
                 node.ShowStanding(presence, status.Reason, text, tooltip, inGameFleet);
         }
+
+        _openStartRoster?.Refresh();
     }
 
     /// <summary>
@@ -208,6 +220,7 @@ public sealed partial class FleetRosterViewModel : ObservableObject, IDisposable
     {
         _presenceSweep.Stop();
         _presenceSubscription?.Dispose();
+        _mateConnectionSubscription?.Dispose();
         _rosterSubscription.Dispose();
     }
 
@@ -1430,7 +1443,17 @@ public sealed partial class FleetRosterViewModel : ObservableObject, IDisposable
                 "The coupled doctrine's minimums are not all met yet. Start the fleet anyway?", okText: "Start anyway"))
             return;
 
-        var choice = await _dialogs.PickFleetStartAsync(await BuildStartPromptAsync(members));
+        var roster = await BuildStartRosterAsync();
+        FleetStartChoice choice;
+        _openStartRoster = roster;
+        try
+        {
+            choice = await _dialogs.PickFleetStartAsync(roster);
+        }
+        finally
+        {
+            _openStartRoster = null;
+        }
         if (choice == FleetStartChoice.Cancel)
             return;
 
@@ -1463,9 +1486,10 @@ public sealed partial class FleetRosterViewModel : ObservableObject, IDisposable
     /// What the start dialog is shown from this window (ET-168, scherm 2). Unlike the overview this screen sees one
     /// fleet, so the collision comes wholly from the store the fleet lives in — which is also the only place that
     /// can answer for someone else's pilot. Whose pilot is whose comes from this client's own character register,
-    /// because "your own alt you move yourself" turns on exactly that.
+    /// because "your own alt you move yourself" turns on exactly that. The members are read again off this window's
+    /// roster and sweep while the dialog is open (ET-492).
     /// </summary>
-    private async Task<FleetStartPrompt> BuildStartPromptAsync(IReadOnlyList<FleetMemberInfo> members)
+    private async Task<FleetStartRoster> BuildStartRosterAsync()
     {
         var elsewhere = (await _fleets.ListMembersActiveElsewhereAsync(_fleet.Id))
             .ToDictionary(m => m.CharacterId, m => m.ElsewhereFleetName);
@@ -1477,7 +1501,14 @@ public sealed partial class FleetRosterViewModel : ObservableObject, IDisposable
 
         // The same presence the tree shows, read fresh rather than from the last sweep.
         _RefreshPresence(DateTimeOffset.UtcNow);
-        var rows = members
+
+        // A client-only fleet's roster is the owner's own pilots and externals: nobody there has an inbox to ask.
+        // Read off the transport rather than the fleet, because "client-only" is a property of where it lives.
+        return new FleetStartRoster(
+            new FleetStartPrompt(_fleet.Name, StartMembers(), CanAskThemAll: _fleets is not LocalFleetClient),
+            StartMembers);
+
+        List<FleetStartMember> StartMembers() => [.. _members
             .Select(m => (Member: m, Node: _nodesByCharacter.GetValueOrDefault(m.CharacterId)?.FirstOrDefault()))
             .Select(entry => new FleetStartMember(
                 entry.Member.CharacterId,
@@ -1491,12 +1522,7 @@ public sealed partial class FleetRosterViewModel : ObservableObject, IDisposable
                 entry.Node?.StatusText,
                 entry.Node?.PresenceTooltip,
                 entry.Member.IsConnected,
-                entry.Node?.StatusReason))
-            .ToList();
-
-        // A client-only fleet's roster is the owner's own pilots and externals: nobody there has an inbox to ask.
-        // Read off the transport rather than the fleet, because "client-only" is a property of where it lives.
-        return new FleetStartPrompt(_fleet.Name, rows, CanAskThemAll: _fleets is not LocalFleetClient);
+                entry.Node?.StatusReason))];
     }
 
     /// <summary>

@@ -68,6 +68,8 @@ public sealed class TestClientInstance : IDisposable
                 provider.GetRequiredService<ILogger<KillmailsChangeFeed>>(), TimeSpan.Zero));
             collection.AddSingleton(provider => new SkillPlansChangeFeed(provider.GetRequiredService<IEventBus>(),
                 provider.GetRequiredService<ILogger<SkillPlansChangeFeed>>(), TimeSpan.Zero));
+            collection.AddSingleton(provider => new FleetMateConnectionFeed(provider.GetRequiredService<IEventBus>(),
+                provider.GetRequiredService<ILogger<FleetMateConnectionFeed>>(), TimeSpan.Zero));
             configure?.Invoke(collection);
         });
 

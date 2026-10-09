@@ -69,6 +69,10 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
     private readonly FleetMemberBoard? _board;             // what the fleet stream says about everyone else (ET-440)
     private readonly IDisposable? _presenceSubscription;
     private readonly IDisposable? _killmailSubscription;
+    private readonly IDisposable? _mateConnectionSubscription;
+
+    // The start dialog's roster while it is open, kept current by every presence redraw (ET-492).
+    private FleetStartRoster? _openStartRoster;
 
     /// <param name="runClock">Whether the band and the started rows keep a ticking clock. A test hands it the time
     /// itself through <see cref="Tick"/>; a DispatcherTimer there would go on ticking for the rest of the session.</param>
@@ -107,6 +111,10 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
 
         // Killmails are local data: a change refreshes only the killmail fields, not the roster (ET-372).
         _killmailSubscription = services.GetService<KillmailsChangeFeed>()?.Subscribe(_ => RefreshKillmailsAsync());
+
+        // A fleet mate connecting or going away changes the server's connection flag the roster was read with; nothing
+        // else tells this screen, so it read "no link" until it was reopened (ET-492). Only server fleets carry it.
+        _mateConnectionSubscription = services.GetService<FleetMateConnectionFeed>()?.Subscribe(_ => ReloadAsync());
 
         StartClock(runClock);
         _initialized = InitializeAsync();
@@ -166,6 +174,7 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
         _rosterSubscription.Dispose();
         _presenceSubscription?.Dispose();
         _killmailSubscription?.Dispose();
+        _mateConnectionSubscription?.Dispose();
         StopClock();
         _busConnector.CouplingChanged -= _OnCouplingChanged;
     }
