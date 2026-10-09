@@ -594,7 +594,7 @@
                         <TextBlock Grid.Column="2" Text="{Binding DockModeLabel}" Classes="label" FontSize="9"
                                    VerticalAlignment="Center" Margin="0,0,8,0"/>
                         <Button Grid.Column="3" x:Name="PopOutTabButton" Classes="winbtn" Width="30"
-                                Command="{Binding ToggleDockModeCommand}"
+                                Command="{Binding PopOutCurrentTabCommand}"
                                 ToolTip.Tip="Pop out this tab into its own window. The other tabs stay docked.">
                             <mi:MaterialIcon Kind="OpenInNew"/>
                         </Button>
