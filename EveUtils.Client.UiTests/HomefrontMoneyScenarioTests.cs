@@ -377,7 +377,8 @@ public sealed class HomefrontMoneyScenarioTests
         second.SetOutcomeCommand.Execute(HomefrontOutcome.Failed);
         await group.SettleAsync(ticks: 8, also: second);
         await group.AssertRunsCarryAsync(HomefrontOutcome.Failed, n: 3);
-        Assert.Equal(HomefrontOutcome.Failed, group.Section.Outcome);
+        // The first window reads the stored list on the tick after the change and shows it on the tick after that.
+        await group.TickUntilAsync(() => group.Section.Outcome == HomefrontOutcome.Failed);
 
         group.Section.SetOutcomeCommand.Execute(HomefrontOutcome.Completed);
         await group.SettleAsync(ticks: 8, also: second);
