@@ -1369,6 +1369,7 @@ entries under `[Unreleased]` below that were not there yet at the previous night
   and `Google.Protobuf` to 3.36.0. `xunit.v3`/`xunit.runner.visualstudio` 4.0.0 (major) held back
   pending review.
 ### Fixed
+- **A Wing Commander invite now seats the pilot on the wing when accepted, not as a squad member (ET-23).** The member list showed "WC" but the composition tree put the pilot in a squad; accepting now keeps wing-level and fleet-level roles out of any squad.
 - **The runs screen, the home dashboard and an open activity now keep up with everything that happens to a
   run, without being reopened.** Until now each of them only followed a handful of actions, and every other
   change sat unseen until you opened the screen again: a run stopped from its own window never showed up in
