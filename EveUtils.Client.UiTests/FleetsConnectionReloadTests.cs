@@ -53,6 +53,7 @@ public class FleetsConnectionReloadTests
         // The bus connection reaches Connected; the fleet is now fetchable.
         transport.UnreachableServers.Remove(Server);
         connector.RaiseStateChanged(Server, ServerConnectionState.Connected);
+        connector.RaiseCouplingChanged(Server);
 
         for (var i = 0; i < 100 && vm.ServerGroups.Count == 0; i++)
             await Task.Delay(50);
