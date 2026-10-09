@@ -179,6 +179,12 @@ public class GamelogLanguageParsingTests
     [InlineData(GamelogLanguage.Japanese, "[ 2026.09.24 10:00:03 ] (combat) 466リモートアーマーリペアを Fedo - Repairerに与えました", "rep out 466 armor Fedo")]
     [InlineData(GamelogLanguage.Japanese, "[ 2026.09.24 10:00:04 ] (combat) 466リモートアーマーリペアを Fedo - Repairerから受けました", "rep in 466 armor Fedo")]
     [InlineData(GamelogLanguage.Japanese, "[ 2026.09.24 10:00:05 ] (None) Rancerから Hykkotaへジャンプ中", "location Hykkota")]
+    [InlineData(GamelogLanguage.English, "[ 2026.08.29 18:32:16 ] (combat) <color=0xffffffff><b>Warp scramble attempt</b> <color=0x77ffffff><font size=10>from</font> <color=0xffffffff><b>Anchoring Damavik</b> <color=0x77ffffff><font size=10>to <b><color=0xffffffff></font>you!", "ewar Scram Anchoring Damavik")]
+    [InlineData(GamelogLanguage.English, "[ 2026.08.29 18:32:17 ] (combat) <color=0xffffffff><b>Warp  scramble\tattempt</b>\t<color=0x77ffffff><font size=10>from</font>  <color=0xffffffff><b>Anchoring Damavik </b>\t<color=0x77ffffff><font size=10>to\t<b><color=0xffffffff></font>  you!", "ewar Scram Anchoring Damavik")]
+    [InlineData(GamelogLanguage.English, "[ 2025.10.09 17:50:22 ] (combat) <color=0xffffffff><b>Warp disruption attempt</b> <color=0x77ffffff><font size=10>from</font> <color=0xffffffff><b>Harvest Prophet</b> <color=0x77ffffff><font size=10>to <b><color=0xffffffff></font>you!", "ewar Scram Harvest Prophet")]
+    [InlineData(GamelogLanguage.English, "[ 2025.10.09 17:50:23 ] (combat) <color=0xffffffff><b>Warp\tdisruption  attempt</b>  <color=0x77ffffff><font size=10>from</font>\t<color=0xffffffff><b>Harvest Prophet</b>\t<color=0x77ffffff><font size=10>to\t<b><color=0xffffffff></font>\tyou!", "ewar Scram Harvest Prophet")]
+    [InlineData(GamelogLanguage.English, "[ 2025.11.14 14:53:38 ] (combat) <color=0x77ffffff><font size=10>You're</font> <color=0xffffffff><b>jammed</b> <color=0x77ffffff><font size=10>by</font> <color=0xffffffff><b>Pithi Saboteur</b><color=0x77ffffff><font size=10> - Pithi Saboteur</font>", "ewar Jam Pithi Saboteur")]
+    [InlineData(GamelogLanguage.English, "[ 2025.11.14 14:53:39 ] (combat) <color=0x77ffffff><font size=10>You're</font>\t<color=0xffffffff><b>jammed</b>  <color=0x77ffffff><font size=10>by</font>\t<color=0xffffffff><b>Pithi  Saboteur</b><color=0x77ffffff><font size=10>\t-\tPithi Saboteur</font>", "ewar Jam Pithi  Saboteur")]
     public void OtherLanguages_ReadTheirSyntheticLines(GamelogLanguage language, string line, string expected)
     {
         GameLogEvent? parsed = LogLineParser.Parse(line, language);
@@ -236,6 +242,7 @@ public class GamelogLanguageParsingTests
         CombatEvent { Quality: HitQuality.Misses } miss => $"{(miss.Direction == DamageDirection.Outgoing ? "out" : "in")} {miss.Amount} {miss.Target} / {miss.Weapon ?? "-"} / {miss.Quality}",
         CombatEvent hit => $"{(hit.Direction == DamageDirection.Outgoing ? "out" : "in")} {hit.Amount} {hit.Target} / {hit.Weapon ?? "-"} / {hit.Quality}",
         RemoteRepEvent rep => $"rep {(rep.Outgoing ? "out" : "in")} {rep.Amount} {rep.Kind} {rep.Counterparty}",
+        EwarEvent ewar => $"ewar {ewar.Kind} {ewar.Source}",
         NeutEvent neut => $"neut {(neut.Outgoing ? "out" : "in")} {neut.Amount}",
         MiningEvent mined => $"mined {mined.Units} {mined.OreType}",
         LocationEvent location => $"location {location.System}",

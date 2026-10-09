@@ -50,6 +50,11 @@ internal sealed class GamelogTemplates
     public required string EnergyNeutralizedOut { get; init; }
     public required string EnergyNeutralizedIn { get; init; }
 
+    // E-war aimed at the pilot, read from real logs; a language without these templates reads none.
+    public string? WarpScrambleAttempt { get; init; }
+    public string? WarpDisruptionAttempt { get; init; }
+    public string? Jammed { get; init; }
+
     // Mining — 1019582, 1019592, 517487. Bounty — 517488.
     public required string Mined { get; init; }
     public required string CriticalMined { get; init; }
