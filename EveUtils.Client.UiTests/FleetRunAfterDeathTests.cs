@@ -65,8 +65,8 @@ public sealed class FleetRunAfterDeathTests
 
             RunSaveDraft draft = new(raymond.Window.RunId ?? Guid.Empty, FleetOfTwo.RaymondId, isActingRun: true);
             enemies.AddToSave(draft);
-            Assert.Equal([(Ghost, (int?)null)], draft.Enemies.Select(row => (row.EnemyTypeId, row.RoomNumber)));
-            Assert.Empty(draft.Parameters);
+            // Raymond's own sighting only, in the room the commander's list put it in (ET-494) — none of Jithran's rows.
+            Assert.Equal([(Ghost, (int?)1)], draft.Enemies.Select(row => (row.EnemyTypeId, row.RoomNumber)));
         }
     }
 
