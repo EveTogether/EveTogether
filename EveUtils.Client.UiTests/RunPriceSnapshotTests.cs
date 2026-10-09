@@ -9,6 +9,7 @@ using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Data;
 using EveUtils.Shared.Identity;
 using EveUtils.Shared.Messaging;
+using EveUtils.Shared.Modules.Killmails.Entities;
 using EveUtils.Shared.Modules.Market.Entities;
 using EveUtils.Shared.Modules.Market.Repositories;
 using EveUtils.Shared.Modules.Market.Services;
@@ -390,6 +391,13 @@ public sealed class RunPriceSnapshotTests
         ]), Token)).IsSuccess);
         await _MarkPublishedAsync(instance, started.Value);
         int revisionBefore = (await _RunAsync(instance, started.Value)).Revision;
+        // ET-486: a fleet-shared killmail keeps its share columns through the round trip (the merged snapshots lost them).
+        await using (ClientDbContext db = await _DbAsync(instance))
+        {
+            db.Set<LocalKillmail>().Add(new LocalKillmail { CharacterId = (int)Pilot, KillmailId = 1, Hash = "hash",
+                KillmailTimeUtc = StartedAtUtc, SharedFromFleetId = 7, SharedFromServer = "local" });
+            await db.SaveChangesAsync(Token);
+        }
         await _MigrateAsync(instance, "20261006114905_AddUnrecognisedLootLine");
         await _PriceAsync(instance, (Tritanium, 5), (Veldspar, 20), (Filament, 300));
 
@@ -407,6 +415,8 @@ public sealed class RunPriceSnapshotTests
             RunParameter filament = await db.Set<RunParameter>().AsNoTracking()
                 .SingleAsync(parameter => parameter.ParameterKey == RunParameterKey.AbyssalFilamentTypeId, Token);
             Assert.Equal((300m, PriceSnapshotSource.Migrated), (filament.UnitPriceIsk, filament.PriceSource));
+            LocalKillmail shared = await db.Set<LocalKillmail>().AsNoTracking().SingleAsync(Token);
+            Assert.Equal((7L, "local"), (shared.SharedFromFleetId, shared.SharedFromServer));
         }
         Run run = await _RunAsync(instance, started.Value);
         Assert.Equal((RunSyncState.Synced, revisionBefore), (run.SyncState, run.Revision));
