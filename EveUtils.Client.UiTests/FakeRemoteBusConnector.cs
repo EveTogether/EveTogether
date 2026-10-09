@@ -8,9 +8,10 @@ namespace EveUtils.Client.UiTests;
 
 /// <summary>
 /// An <see cref="IRemoteBusConnector"/> double with no real network: a test drives the connection state by hand to
-/// exercise code that reacts to it. Two levels, matching the real connector — <see cref="RaiseStateChanged"/> for the
-/// per-server roll-up, and <see cref="RaiseCharacterStateChanged"/> for one character's own connection, which is what
-/// the per-character link indicators follow.
+/// exercise code that reacts to it. Matching the real connector — <see cref="RaiseStateChanged"/> for the per-server
+/// roll-up, <see cref="RaiseCharacterStateChanged"/> for one character's own connection (what the per-character link
+/// indicators follow), and <see cref="RaiseCouplingChanged"/>, which the real connector raises when a connection reaches
+/// Connected or a server is attached/detached.
 /// </summary>
 public sealed class FakeRemoteBusConnector : IRemoteBusConnector
 {
@@ -42,6 +43,8 @@ public sealed class FakeRemoteBusConnector : IRemoteBusConnector
         _states[serverAddress] = state;
         StateChanged(serverAddress, state);
     }
+
+    public void RaiseCouplingChanged(string serverAddress) => CouplingChanged(serverAddress);
 
     public void RaiseCharacterStateChanged(string serverAddress, int characterId, ServerConnectionState state)
     {
