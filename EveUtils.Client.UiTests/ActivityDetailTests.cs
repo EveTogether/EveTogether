@@ -638,7 +638,7 @@ public sealed class ActivityDetailTests
     };
 
     /// <summary>
-    /// ET-468: COMBAT and TIMELINE stand straight under ACTIVITY and before ENEMIES (B2), with no boundary-damage tile
+    /// ET-468: COMBAT / TIMELINE stands straight under ACTIVITY and before ENEMIES (B2), with no boundary-damage tile
     /// (B5), and LOOT says why containers are not counted (B6).
     /// </summary>
     [AvaloniaTheory]
@@ -663,8 +663,8 @@ public sealed class ActivityDetailTests
         Assert.All(absent, text => Assert.DoesNotContain(text, texts));
         Assert.DoesNotContain(texts, text => text.Contains("BOUNDARY", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(texts, text => text.StartsWith("Containers opened: not counted", StringComparison.Ordinal));
-        Assert.Equal(["ACTIVITY", "COMBAT", "TIMELINE", "ENEMIES"],
-            texts.Where(text => text is "ACTIVITY" or "COMBAT" or "TIMELINE" or "ENEMIES"));
+        Assert.Equal(["ACTIVITY", "COMBAT / TIMELINE", "ENEMIES"],
+            texts.Where(text => text is "ACTIVITY" or "COMBAT / TIMELINE" or "ENEMIES"));
     }
 
     // Hands the saved run back through the pull as the server would (ET-472), as a fleet mate's or as this pilot's own.
@@ -743,7 +743,8 @@ public sealed class ActivityDetailTests
         {
             db.Set<CombatSample>().AddRange(Hit(90000001, DamageDirection.Outgoing, 500, 10),
                 Hit(90000001, DamageDirection.Outgoing, 998, 20), Hit(90000001, DamageDirection.Incoming, 74, 30),
-                Hit(90000001, DamageDirection.Incoming, 38, 31), Hit(90000001, DamageDirection.Outgoing, 7777, -1),
+                Hit(90000001, DamageDirection.Incoming, 38, 31), Hit(90000001, DamageDirection.Incoming, 0, 32),
+                Hit(90000001, DamageDirection.Outgoing, 7777, -1),
                 Hit(90000002, DamageDirection.Outgoing, 5555, 40), Hit(90000001, DamageDirection.Outgoing, 3333, -86400));
             await db.SaveChangesAsync(cancellationToken);
         }
@@ -755,6 +756,8 @@ public sealed class ActivityDetailTests
         Assert.Equal(hasTimeline ? 0 : 1, texts.Count(text => text == "1,498 hp"));
         Assert.Equal(hasTimeline ? 0 : 1, texts.Count(text => text == "112 hp"));
         Assert.Equal(hasTimeline ? 0 : 4, texts.Count(text => text == "not recorded"));
+        // The stored miss (0 damage) is no hit on you.
+        Assert.Equal(hasTimeline ? 0 : 1, texts.Count(text => text.EndsWith("· 2 hits on you", StringComparison.Ordinal)));
         Assert.Equal(hasTimeline, texts.Any(text => text is "0 GJ" or "0 hp" or "0"));
     }
 

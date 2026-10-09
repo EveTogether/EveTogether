@@ -7,6 +7,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
+using EveUtils.Client.Controls;
 using EveUtils.Shared.Modules.Gamelog.Models;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Enums;
@@ -14,14 +15,15 @@ using EveUtils.Shared.Modules.Runs.Enums;
 namespace EveUtils.Client.ViewModels.Runs.Sections;
 
 /// <summary>
-/// COMBAT on the detail screen (ET-468): what the picked pilot dealt, took and was neuted for over the run, read from
-/// the combat SAVE kept (ET-467). A run saved before that says so in one line rather than showing zeros.
+/// COMBAT / TIMELINE on the detail screen (ET-468): what the picked pilot dealt, took and was neuted for over the run
+/// as tiles, and the same series per 5 s as a chart, read from the combat SAVE kept (ET-467). A run saved before that
+/// says so in one line rather than showing zeros.
 /// </summary>
 public sealed partial class CombatDetailSectionViewModel : RunDetailSection
 {
     private readonly CombatTelemetryChoice _choice;
 
-    public CombatDetailSectionViewModel(RunDetailSectionServices services) : base(RunSectionId.Combat, "COMBAT")
+    public CombatDetailSectionViewModel(RunDetailSectionServices services) : base(RunSectionId.Combat, "COMBAT / TIMELINE")
     {
         _choice = services.Combat ?? new CombatTelemetryChoice(services.Dispatcher, services.OwnCharacterIds);
         _choice.PropertyChanged += _OnChoiceChanged;
@@ -32,6 +34,10 @@ public sealed partial class CombatDetailSectionViewModel : RunDetailSection
     public ObservableCollection<CombatPilotChipViewModel> Pilots => _choice.Pilots;
 
     public ObservableCollection<CombatTileViewModel> Tiles { get; } = [];
+
+    public ObservableCollection<CombatLegendItem> Legend { get; } = [];
+
+    [ObservableProperty] private CombatChartModel? _chart;
 
     [ObservableProperty] private string? _combatEmptyText;
 
@@ -52,8 +58,10 @@ public sealed partial class CombatDetailSectionViewModel : RunDetailSection
         }
 
         Tiles.Clear();
+        Legend.Clear();
         if (_choice.Shown is not { } timeline)
         {
+            Chart = null;
             HeaderSummary = "no combat recorded";
             CombatEmptyText = NotRecordedText;
             return;
@@ -65,10 +73,32 @@ public sealed partial class CombatDetailSectionViewModel : RunDetailSection
         {
             Tiles.Add(tile);
         }
+        CombatChartModel chart = CombatChartModel.Of(timeline);
+        Chart = chart;
+        foreach ((CombatSeriesKind kind, string name) in Names)
+        {
+            bool present = chart.Buckets.ContainsKey(kind);
+            string absent = stored ? CombatTelemetryChoice.LiveOnlyText : "none in this run";
+            Legend.Add(new CombatLegendItem(present ? name : $"{name} · {absent}", CombatTimelineChart.InkOf(kind), present));
+        }
+
+        long peak = chart.Buckets.GetValueOrDefault(CombatSeriesKind.DmgOut, []).DefaultIfEmpty().Max() / chart.BucketSeconds;
         HeaderSummary = $"{_Number(_Total(timeline, CombatSeriesKind.DmgOut))} hp dealt · "
-            + $"{_Number(_Total(timeline, CombatSeriesKind.DmgIn))} taken · {_choice.ShownName}"
+            + $"{_Number(_Total(timeline, CombatSeriesKind.DmgIn))} taken · peak {_Number(peak)} dps out · {_choice.ShownName}"
             + (stored ? $" · {CombatTelemetryChoice.StoredHitsLabel}" : string.Empty);
     }
+
+    private static readonly (CombatSeriesKind Kind, string Name)[] Names =
+    [
+        (CombatSeriesKind.DmgOut, "DPS out"),
+        (CombatSeriesKind.DmgIn, "DPS in"),
+        (CombatSeriesKind.RepOut, "reps out"),
+        (CombatSeriesKind.RepIn, "reps in"),
+        (CombatSeriesKind.NeutIn, "neut on you (GJ/s)"),
+        (CombatSeriesKind.NeutOut, "neut out (GJ/s)"),
+        (CombatSeriesKind.CapIn, "cap in"),
+        (CombatSeriesKind.CapOut, "cap out")
+    ];
 
     internal const string NotRecordedText =
         "No combat was recorded for this run: it was saved before EVE Together kept the game log's combat with the run.";

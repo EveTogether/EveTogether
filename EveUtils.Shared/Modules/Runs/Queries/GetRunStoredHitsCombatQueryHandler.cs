@@ -36,7 +36,9 @@ internal sealed class GetRunStoredHitsCombatQueryHandler(IDbContextFactory<Clien
 
         // The stored offset is a label, not the clock (ET-470): the wall-clock value is the game log's EVE time.
         GameLogEvent[] hits = [.. samples
-            .Select(sample => new CombatEvent(sample.Timestamp.DateTime, sample.Direction, sample.Amount, sample.Target, null, HitQuality.Hits))
+            // A miss is stored with no damage (CharacterMetrics reads it the same way), so it must not count as a hit.
+            .Select(sample => new CombatEvent(sample.Timestamp.DateTime, sample.Direction, sample.Amount, sample.Target, null,
+                sample.Amount <= 0 ? HitQuality.Misses : HitQuality.Hits))
             .Where(hit => hit.Timestamp >= run.StartedAtUtc && hit.Timestamp <= stoppedAtUtc)];
         if (hits.Length == 0)
         {

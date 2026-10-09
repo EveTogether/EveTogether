@@ -1,5 +1,6 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ctl="using:EveUtils.Client.Controls"
              xmlns:vs="using:EveUtils.Client.ViewModels.Runs.Sections"
              x:Class="EveUtils.Client.Views.Runs.Sections.CombatDetailSectionView"
              x:DataType="vs:CombatDetailSectionViewModel">
@@ -50,6 +51,29 @@
                 </DataTemplate>
             </ItemsControl.ItemTemplate>
         </ItemsControl>
+        <StackPanel IsVisible="{Binding Chart, Converter={x:Static ObjectConverters.IsNotNull}}">
+            <Border BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1" Background="#38000000"
+                    Padding="8,8,8,4" Margin="0,4,0,0">
+                <ctl:CombatTimelineChart x:Name="CombatChart" Height="250" Model="{Binding Chart}"/>
+            </Border>
+            <ItemsControl x:Name="CombatLegend" ItemsSource="{Binding Legend}" Margin="2,6,2,2">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <WrapPanel/>
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="vs:CombatLegendItem">
+                        <StackPanel Orientation="Horizontal" Spacing="5" Margin="0,2,14,2" Opacity="{Binding Opacity}">
+                            <Border Width="14" Height="2" VerticalAlignment="Center" Background="{Binding Ink}"/>
+                            <TextBlock FontSize="10" Text="{Binding Text}"/>
+                        </StackPanel>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <TextBlock Classes="hint" Text="Idle (no damage either way for at least 5 s) is hatched on the baseline. Hover the chart for the exact 5 s values (1 s samples, shown per 5 s)."
+                       TextWrapping="Wrap"/>
+        </StackPanel>
         <TextBlock x:Name="CombatEmpty" Classes="hint" TextWrapping="Wrap"
                    IsVisible="{Binding CombatEmptyText, Converter={x:Static ObjectConverters.IsNotNull}}"
                    Text="{Binding CombatEmptyText}"/>
