@@ -159,6 +159,7 @@ public sealed class OpsecCoverageTests
     private static readonly IReadOnlyDictionary<string, string> Exempt = new Dictionary<string, string>
     {
         ["Views/FitDetailWindow.axaml|Signature"] = "a ship's signature radius, a fitting stat, not a scanned signature",
+        ["Views/Runs/Sections/TargetsWindowSectionView.axaml|SignatureText"] = "an enemy type's signature radius (\"sig 150\"), a stat of the NPC from the SDE, not a scanned signature or a place",
         ["Views/RunsWindow.axaml|OpenEscalations"] = "the list of open-escalation rows; each row's own site, system and source text is masked",
         ["Views/Widgets/WidgetManagerWindow.axaml|LocationNote"] = "fixed help text about the \"Include my location\" setting, never a system name",
         ["Views/FleetRosterWindow.axaml|EsiAutoApplyStructure"] = "whether the in-game wing and squad structure is applied, a fleet setting",
