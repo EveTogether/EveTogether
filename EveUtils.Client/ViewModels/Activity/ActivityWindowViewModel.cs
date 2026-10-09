@@ -2256,8 +2256,20 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         // their row lives in a database this client cannot reach — so the clock this window's pilot controls is the
         // group's, and stopping every participant alongside this window's own run is never somebody else's to touch.
         // Unlike ET-105, where each member's clock is their own and only THAT member's STOP moves it.
-        foreach (RunParticipantViewModel sibling in Participants.Where(participant => participant.RunId != runId))
-            await dispatcher.Send(new SetRunStoppedCommand(sibling.RunId, stoppedAtUtc));
+        await _ForEachSiblingAsync(runId, sibling => dispatcher.Send(new SetRunStoppedCommand(sibling.RunId, stoppedAtUtc)));
+    }
+
+    /// <summary>Every other run of this group, with Participants read again after each await (ET-484): a tick's refresh
+    /// may fold a joining fleet mate in mid-loop (I7), which is then still visited, where a live foreach threw
+    /// "Collection was modified". A row the refresh removed before its turn is skipped.</summary>
+    private async Task _ForEachSiblingAsync(Guid runId, Func<RunParticipantViewModel, Task> visit)
+    {
+        HashSet<Guid> visited = [runId];
+        while (Participants.FirstOrDefault(participant => !visited.Contains(participant.RunId)) is { } sibling)
+        {
+            visited.Add(sibling.RunId);
+            await visit(sibling);
+        }
     }
 
     /// <summary>
@@ -2776,7 +2788,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             // where each fleet member commits their own part on their own machine — Participants here is always this
             // pilot's own other local runs (a remote member's row is never in this database), never somebody else's
             // to commit.
-            foreach (RunParticipantViewModel sibling in Participants.Where(participant => participant.RunId != runId))
+            await _ForEachSiblingAsync(runId, async sibling =>
             {
                 RunSaveDraft theirs = _SaveDraftFor(sibling.RunId, sibling.CharacterId, isActingRun: false);
                 Result siblingResult = await Task.Run(() => dispatcher.Send(new SaveRunCommand(
@@ -2788,7 +2800,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
                     _services.GetService<IToastService>()?.Show("A run in this group was not saved",
                         siblingResult.Messages.FirstOrDefault()?.Text ?? "Could not save one of the other characters' runs.",
                         ToastKind.Error);
-            }
+            });
 
             // The one rebuild the whole group's saves needed, run once now that every row is in — this group's own
             // activity only (ET-287).
