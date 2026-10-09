@@ -134,6 +134,8 @@ public sealed class HomefrontMoneyScenarioTests
     public async Task S06_ClickedOnASiblingsColumn_LandsOnEveryRunOfTheGroup()
     {
         using Group group = await Group.StartAsync(toons: 5);
+        // The column learns a sibling's run from its own read of the running runs, a tick after the start.
+        await group.TickUntilAsync(() => group.Window.RunCharacters.Any(row => row.CharacterId != ActivityWindowHarness.CharacterId && row.RunId is not null));
         RunCharacterRowViewModel sibling = group.Window.RunCharacters.First(row => row.CharacterId != ActivityWindowHarness.CharacterId && row.RunId is not null);
         group.Window.SelectRunCharacterCommand.Execute(sibling);
         await ActivityWindowHarness.WaitUntil(() => group.Window.RunId == sibling.RunId);
