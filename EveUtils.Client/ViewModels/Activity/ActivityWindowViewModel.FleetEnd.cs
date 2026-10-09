@@ -181,7 +181,7 @@ public sealed partial class ActivityWindowViewModel
         _EndFollowing();
         if (end is FleetEnd.Save)
         {
-            await SaveRunAsync();
+            await _SaveRunAsync(offerNextRun: false);
             return;
         }
 

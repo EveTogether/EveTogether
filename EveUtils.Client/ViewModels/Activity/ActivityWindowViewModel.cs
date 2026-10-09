@@ -2739,7 +2739,11 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     /// <see cref="EffectiveStopUtc"/> — one click doing what used to take STOP followed by a second click on SAVE.
     /// </summary>
     [RelayCommand]
-    private async Task SaveRunAsync()
+    private Task SaveRunAsync() => _SaveRunAsync(offerNextRun: true);
+
+    /// <param name="offerNextRun">False where the save is a means to something else — closing the window, or
+    /// following the commander's save — and "Run another?" would be asked at the wrong moment (ET-493).</param>
+    private async Task _SaveRunAsync(bool offerNextRun)
     {
         if (RunId is not { } runId)
         {
@@ -2835,7 +2839,12 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             // 2026-09-04 the copy simply went with the window.
             _SendPendingCopyToANewWindow();
             await _OfferEscalationTickOffAsync(dispatcher, runId);
+            NextRun? next = offerNextRun ? await _AskForNextRunAsync(dispatcher) : null;
+            IDialogService? dialogs = _services.GetService<IDialogService>();
             CloseRequested?.Invoke();
+            // After the close: the dialog service keeps one run window and would hand the new run to this one.
+            if (next is not null && dialogs is not null)
+                _ArmNextRun(next, dialogs);
         }
         finally
         {
@@ -3039,7 +3048,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
         if (save.Value)
         {
-            await SaveRunCommand.ExecuteAsync(null);
+            await _SaveRunAsync(offerNextRun: false);
             return RunState is ActivityRunState.Saved;   // a refused save keeps the window, with the reason on it
         }
 
