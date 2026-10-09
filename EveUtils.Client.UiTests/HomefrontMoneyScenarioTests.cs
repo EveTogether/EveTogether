@@ -123,8 +123,8 @@ public sealed class HomefrontMoneyScenarioTests
         await group.StopAndSaveAsync();
         await group.AssertOneStoryAsync(HomefrontOutcome.Completed, n: 5, payout: 5 * FivePilots);
 
-        group.Section.SetOutcomeCommand.Execute(HomefrontOutcome.Failed);
-        await group.SettleAsync();
+        // Awaited: the click's write commits the runs before it adds the summary up again.
+        await group.Section.SetOutcomeCommand.ExecuteAsync(HomefrontOutcome.Failed);
 
         await group.AssertOneStoryAsync(HomefrontOutcome.Failed, n: 5, payout: 0m);
     }
