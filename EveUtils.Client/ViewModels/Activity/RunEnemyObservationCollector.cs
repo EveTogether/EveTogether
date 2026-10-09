@@ -65,7 +65,9 @@ public sealed class RunEnemyObservationCollector(int characterId, Func<string, i
     public void Record(int observedCharacterId, string target, DateTime observedAtUtc)
     {
         if (observedCharacterId != characterId)
+        {
             return;
+        }
 
         if (typeIdResolver(target) is not int enemyTypeId)
         {
