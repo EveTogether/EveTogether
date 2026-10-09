@@ -1,5 +1,7 @@
 using EveUtils.Client.ViewModels.Activity;
+using EveUtils.Client.ViewModels.Runs.Sections;
 using EveUtils.Shared.Modules.Runs.Dtos;
+using EveUtils.Shared.Modules.Sde.Storage;
 using Xunit;
 
 namespace EveUtils.Client.UiTests;
@@ -112,6 +114,34 @@ public sealed class RunEnemyObservationCollectorTests
 
         Assert.True(row.IsCounted);
         Assert.NotEqual(atZero, row.CountStateText);
+    }
+
+    /// <summary>A Tyrannos agent the SDE lacks is a counted row under its negative agent id, never a "not in SDE" name.</summary>
+    [Fact]
+    public void Record_TyrannosAgent_IsACountedRowUnderItsNegativeAgentId()
+    {
+        var collector = new RunEnemyObservationCollector(90000001, AbyssalNpcKnowledge.EnemyTypeIdOf);
+        collector.Record(90000001, "Karybdis Tyrannos", Observed);
+        collector.Record(90000001, "Karybdis Tyrannos", Observed.AddSeconds(5));
+
+        Assert.Single(collector.Observations).Count = 3;
+
+        RunEnemyObservationInput saved = Assert.Single(collector.ToInputs());
+        Assert.Equal((-3019609, "Karybdis Tyrannos", 3), (saved.EnemyTypeId, saved.EnemyName, saved.Count));
+        Assert.Empty(collector.UnresolvedSightings);
+    }
+
+    /// <summary>TARGETS reads a Tyrannos row by name, not by its negative id, so it keeps the table's scram.</summary>
+    [Fact]
+    public void TyrannosRow_ReachesTargetsByName_WithTheTablesScram()
+    {
+        TargetSighting sighting = EnemiesWindowSectionViewModel.SightingOf(
+            new RunEnemyObservationViewModel(-3019610, "Scylla Tyrannos", Observed, roomNumber: 2));
+
+        TargetRow? row = TargetsWindowSectionViewModel.RowFor(sighting, null);
+
+        Assert.Equal((2, (int?)null), (sighting.Room, sighting.TypeId));
+        Assert.Contains(NpcEwarKind.Scram, Assert.IsType<TargetRow>(row).Ewar.Select(ewar => ewar.Kind));
     }
 
     [Fact]
