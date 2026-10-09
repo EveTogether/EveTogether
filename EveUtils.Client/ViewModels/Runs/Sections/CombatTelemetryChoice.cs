@@ -36,6 +36,10 @@ public sealed partial class CombatTelemetryChoice(CqrsDispatcher dispatcher, IRe
 
     public bool HasAny => _timelines.Count > 0;
 
+    public IReadOnlyDictionary<Guid, RunCombatTimelineDto> Timelines => _timelines;
+
+    [ObservableProperty] private Guid? _shownRunId;
+
     public async Task LoadAsync(RunDetailSectionInput input, CancellationToken cancellationToken)
     {
         _timelines.Clear();
@@ -80,6 +84,7 @@ public sealed partial class CombatTelemetryChoice(CqrsDispatcher dispatcher, IRe
         }
 
         Shown = null;
+        ShownRunId = null;
         ShownName = string.Empty;
         IdleText = null;
     }
@@ -91,6 +96,7 @@ public sealed partial class CombatTelemetryChoice(CqrsDispatcher dispatcher, IRe
             pilot.IsSelected = pilot.RunId == runId;
         }
 
+        ShownRunId = runId;
         ShownName = _names[runId];
         FromStoredHits = _storedRuns.Contains(runId);
         Shown = _timelines[runId];

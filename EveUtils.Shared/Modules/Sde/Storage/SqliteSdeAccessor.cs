@@ -657,6 +657,29 @@ public sealed class SqliteSdeAccessor : ISdeAccessor
             MaxVelocity: attributes.GetValueOrDefault(DogmaAttributeIds.MaxVelocity));
     }
 
+    public int? GetNpcRawHp(int typeId)
+    {
+        using var connection = Open();
+        if (connection is null)
+        {
+            return null;
+        }
+
+        using var command = connection.CreateCommand();
+        command.CommandText =
+            $"""
+            SELECT SUM(a.value), COUNT(*)
+            FROM TypeDogmaAttribute a
+            JOIN Type t ON t.typeId = a.typeId
+            JOIN InvGroup g ON g.groupId = t.groupId
+            WHERE a.typeId = $id AND g.categoryId = 11
+              AND a.attributeId IN ({DogmaAttributeIds.ShieldCapacity}, {DogmaAttributeIds.ArmorHp}, {DogmaAttributeIds.StructureHp});
+            """;
+        command.Parameters.AddWithValue("$id", typeId);
+        using var reader = command.ExecuteReader();
+        return reader.Read() && !reader.IsDBNull(0) ? (int)Math.Round(reader.GetDouble(0)) : null;
+    }
+
     public IReadOnlyList<SdeSite> SearchSites(string? nameQuery = null, int? archetypeId = null, int? factionId = null)
     {
         using var connection = Open();

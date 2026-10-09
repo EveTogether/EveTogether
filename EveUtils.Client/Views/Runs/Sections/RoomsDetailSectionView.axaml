@@ -1,0 +1,64 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vs="using:EveUtils.Client.ViewModels.Runs.Sections"
+             xmlns:ctl="using:EveUtils.Client.Controls"
+             x:Class="EveUtils.Client.Views.Runs.Sections.RoomsDetailSectionView"
+             x:DataType="vs:RoomsDetailSectionViewModel">
+    <!-- The same ledger columns and styles as MINING (ET-288), one more row kind: a room's figures under their headers.
+         The OVERKILL column is last and only filled when a room has one (B4, ET-469). -->
+    <UserControl.Styles>
+        <StyleInclude Source="avares://EveUtils.Client/Views/Runs/Sections/MiningLedgerStyles.axaml"/>
+    </UserControl.Styles>
+    <UserControl.Resources>
+        <DataTemplate x:Key="RoomRowTemplate" DataType="vs:RoomRowViewModel">
+            <Grid Classes="ledger detailrow" Classes.alt="{Binding IsAlternate}" Background="Transparent"
+                  ColumnDefinitions="*,44,44,62,76,64,36,78,52" Margin="0,2,0,0">
+                <WrapPanel Classes="who">
+                    <TextBlock Classes="label" Text="{Binding Title}"/>
+                    <TextBlock Classes="note" Text="{Binding WindowText}"/>
+                </WrapPanel>
+                <TextBlock Grid.Column="1" Classes="cellnum" Text="{Binding TimeText}"/>
+                <TextBlock Grid.Column="2" Classes="cellnum" Text="{Binding IdleText}"/>
+                <TextBlock Grid.Column="3" Classes="cellnum" Text="{Binding DamageText}"/>
+                <!-- A lower bound is drawn with a dotted line under it, so it cannot pass for a count. -->
+                <Panel Grid.Column="4" ToolTip.Tip="{Binding SpawnTooltip}">
+                    <TextBlock Classes="cellnum" Text="{Binding SpawnText}"/>
+                    <Line StartPoint="0,0" EndPoint="1,0" Stretch="Fill" StrokeThickness="1" StrokeDashArray="1,2"
+                          Stroke="{StaticResource TextDimBrush}" VerticalAlignment="Bottom"
+                          IsVisible="{Binding IsLowerBound}"/>
+                </Panel>
+                <ctl:MeterBar Grid.Column="5" Classes="share" Fraction="{Binding ShareFraction}"
+                              Fill="{DynamicResource AccentBrush}" IsVisible="{Binding HasShare}"
+                              ToolTip.Tip="{Binding ShareTooltip}"/>
+                <TextBlock Grid.Column="6" Classes="sharepct" Text="{Binding ShareText}" ToolTip.Tip="{Binding ShareTooltip}"/>
+                <TextBlock Grid.Column="7" Classes="money" Text="{Binding LootText}" ToolTip.Tip="{Binding LootTooltip}"/>
+                <TextBlock Grid.Column="8" Classes="cellnum" Text="{Binding OverkillText}"
+                           IsVisible="{Binding $parent[UserControl].((vs:RoomsDetailSectionViewModel)DataContext).ShowOverkill}"/>
+            </Grid>
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <StackPanel x:Name="RoomsLedger">
+        <Grid Classes="ledger" ColumnDefinitions="*,44,44,62,76,64,36,78,52" Margin="0,0,0,3"
+              IsVisible="{Binding RoomsEmptyText, Converter={x:Static ObjectConverters.IsNull}}">
+            <TextBlock Classes="colhdr lead" Text="ROOM"/>
+            <TextBlock Grid.Column="1" Classes="colhdr num" Text="TIME"/>
+            <TextBlock Grid.Column="2" Classes="colhdr num" Text="IDLE"/>
+            <TextBlock Grid.Column="3" Classes="colhdr num" Text="DAMAGE"/>
+            <TextBlock Grid.Column="4" Classes="colhdr num" Text="SPAWN HP"/>
+            <TextBlock Grid.Column="5" Grid.ColumnSpan="2" Classes="colhdr num" Text="SHARE"/>
+            <TextBlock Grid.Column="7" Classes="colhdr num" Text="LOOT"/>
+            <TextBlock Grid.Column="8" Classes="colhdr num" Text="OVERKILL" IsVisible="{Binding ShowOverkill}"/>
+        </Grid>
+        <ItemsControl x:Name="RoomsList" ItemsSource="{Binding Rows}" ItemTemplate="{StaticResource RoomRowTemplate}"/>
+        <Border Classes="totals" Padding="0,6" IsVisible="{Binding Total, Converter={x:Static ObjectConverters.IsNotNull}}">
+            <ContentControl Content="{Binding Total}" ContentTemplate="{StaticResource RoomRowTemplate}"/>
+        </Border>
+        <TextBlock x:Name="RoomsOverkillHint" Classes="hint" TextWrapping="Wrap"
+                   IsVisible="{Binding OverkillHint, Converter={x:Static ObjectConverters.IsNotNull}}"
+                   Text="{Binding OverkillHint}"/>
+        <TextBlock x:Name="RoomsEmpty" Classes="hint" TextWrapping="Wrap"
+                   IsVisible="{Binding RoomsEmptyText, Converter={x:Static ObjectConverters.IsNotNull}}"
+                   Text="{Binding RoomsEmptyText}"/>
+    </StackPanel>
+</UserControl>

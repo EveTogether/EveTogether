@@ -48,6 +48,8 @@ public static class RunSectionModules
             context => new MissionWindowSectionViewModel(context),
             services => new MissionDetailSectionViewModel(services.Sde),
             IskSource.Rewards),
+        // B2 (ET-466): before ENEMIES; detail only, it reads the stored combat.
+        new(RunSectionId.Rooms, null, services => new RoomsDetailSectionViewModel(services)),
         new(RunSectionId.Enemies,
             context => new EnemiesWindowSectionViewModel(context),
             _ => new EnemiesDetailSectionViewModel()),

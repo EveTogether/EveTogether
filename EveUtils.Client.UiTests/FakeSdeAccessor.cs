@@ -209,6 +209,11 @@ public sealed class FakeSdeAccessor : ISdeAccessor
 
     public NpcEwarProfile? GetNpcEwarProfile(int typeId) => null;
 
+    public int? GetNpcRawHp(int typeId) =>
+        _attrs.TryGetValue(typeId, out var list) && list.Where(a => a.AttributeId is 263 or 265 or 9).ToList() is { Count: > 0 } hp
+            ? (int)hp.Sum(a => a.Value)
+            : null;
+
     public IReadOnlyList<SdeSite> SearchSites(string? nameQuery = null, int? archetypeId = null, int? factionId = null) =>
         string.IsNullOrWhiteSpace(nameQuery)
             ? _sites
