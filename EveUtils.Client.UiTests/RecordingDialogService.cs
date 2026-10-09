@@ -442,6 +442,12 @@ public sealed class RecordingDialogService : IDialogService
 
     public void ShowMapWindow() => MapWindowShows++;
 
+    public bool CanPopOutTab(HostTab? tab) => false;
+
+    public void PopOutTab(HostTab tab)
+    {
+    }
+
     /// <summary>The killmail detail screen the shell was asked to open, or null — a hook to drive it without
     /// standing up the real window (ET-333).</summary>
     public KillmailDetailViewModel? LastKillmailDetail { get; private set; }

@@ -525,6 +525,128 @@ public class ModuleNavigationTests
         Assert.True(await WaitForAsync(() => vm.IsCharsCollapsed), "collapsed character column was not restored");
     }
 
+    // ── ET-111: the button beside the tab strip pops out the current tab, on ET-396's mechanism ──────────
+
+    [AvaloniaFact]
+    public void PopOutTabButton_PopsOutOnlyTheCurrentTab_LeavingDockModeAndTheOtherTab()
+    {
+        using var instance = TestClientInstance.Create();
+        var (vm, window) = BuildHostedApp(instance.Services);
+        var dialogs = (DialogService)instance.Services.GetRequiredService<IDialogService>();
+        object logs = Launch(vm, "logs");
+        HostTab logsTab = vm.HostTabs.Single();
+        object esi = Launch(vm, "esi");
+
+        Button button = Named(window, "PopOutTabButton");
+        Assert.True(button.IsEffectivelyEnabled);
+        button.Command?.Execute(null);
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.False(vm.IsFloating);
+        Assert.Equal(2, vm.HostTabs.Count);
+        Assert.Same(logsTab, vm.HostTabs[0]);                 // the other tab is untouched and still docked
+        Assert.Null(dialogs.OwnerFor(logs));
+        Assert.IsType<PoppedModuleWindow>(dialogs.OwnerFor(esi));
+        Assert.IsType<PoppedOutPlaceholder>(vm.SelectedHostTab?.Content);
+        Assert.False(button.IsEffectivelyEnabled);           // a placeholder cannot be popped out again
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public void APoppedOutTab_ComesBack_ByThePlaceholdersPutBack_AndByClosingItsWindow()
+    {
+        using var instance = TestClientInstance.Create();
+        var (vm, window) = BuildHostedApp(instance.Services);
+        var dialogs = (DialogService)instance.Services.GetRequiredService<IDialogService>();
+        object logs = Launch(vm, "logs");
+        HostTab logsTab = vm.HostTabs.Single();
+
+        PopOutCurrent(vm);
+        Control placeholder = vm.SelectedHostTab?.Content ?? throw new InvalidOperationException("no placeholder tab");
+        Button putBack = placeholder.FindControl<Button>("PutBackHereButton")
+                         ?? throw new InvalidOperationException("the placeholder has no PUT IT BACK HERE");
+        Assert.NotNull(placeholder.FindControl<Button>("ShowWindowButton"));
+        putBack.Command?.Execute(null);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Same(logsTab, vm.SelectedHostTab);
+        Assert.Null(dialogs.OwnerFor(logs));
+
+        PopOutCurrent(vm);
+        Assert.IsType<PoppedModuleWindow>(dialogs.OwnerFor(logs)).Close();   // the window's own X does the same
+        Dispatcher.UIThread.RunJobs();
+        Assert.Same(logsTab, vm.SelectedHostTab);
+        Assert.Null(dialogs.OwnerFor(logs));
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public void NoOpenModuleGetsLost_AcrossPopOutPutBackDockFloatAndClose()
+    {
+        using var instance = TestClientInstance.Create();
+        var (vm, window) = BuildHostedApp(instance.Services);
+        var dialogs = (DialogService)instance.Services.GetRequiredService<IDialogService>();
+        var open = new List<object> { Launch(vm, "logs"), Launch(vm, "inbox"), Launch(vm, "esi") };
+
+        // Exactly one of the two, judged on the host's state: headless Avalonia has no focus and an empty Windows list.
+        void AssertEachModuleIsATabOrAWindow(string step)
+        {
+            Assert.All(open, module =>
+            {
+                bool tab = vm.HostTabs.Any(t => ReferenceEquals(t.Content.DataContext, module));
+                bool own = dialogs.OwnerFor(module) is { IsVisible: true };
+                Assert.True(tab ^ own, $"after {step}: {module.GetType().Name} tab={tab} window={own}");
+            });
+        }
+
+        void Step(string name, Action act)
+        {
+            act();
+            Dispatcher.UIThread.RunJobs();
+            AssertEachModuleIsATabOrAWindow(name);
+        }
+
+        void Select(object module) => vm.SelectedHostTab = vm.HostTabs.Single(t => ReferenceEquals(t.Content.DataContext, module));
+
+        Step("pop out esi", () => PopOutCurrent(vm));
+        Step("rail to floating", () => vm.ToggleDockModeCommand.Execute(null));
+        Step("rail back to docked", () => vm.ToggleDockModeCommand.Execute(null));
+        Step("pop out logs", () => { Select(open[0]); PopOutCurrent(vm); });
+        Step("pop out inbox", () => { Select(open[1]); PopOutCurrent(vm); });
+        Step("close the logs window", () => Assert.IsType<PoppedModuleWindow>(dialogs.OwnerFor(open[0])).Close());
+        Step("put inbox back", () =>
+        {
+            vm.SelectedHostTab = vm.HostTabs.Single(t => t.Content is PoppedOutPlaceholder);
+            (((Control)vm.SelectedHostTab.Content).FindControl<Button>("PutBackHereButton")?.Command
+             ?? throw new InvalidOperationException("no PUT IT BACK HERE")).Execute(null);
+        });
+        Step("pop out esi again", () => { Select(open[2]); PopOutCurrent(vm); });
+        Step("close esi's placeholder tab", () =>
+        {
+            (vm.SelectedHostTab ?? throw new InvalidOperationException("no tab selected")).CloseCommand.Execute(null);
+            open.RemoveAt(2);
+        });
+        Assert.Null(dialogs.OwnerFor(open[0]));
+        Assert.Equal(2, vm.HostTabs.Count);
+        window.Close();
+    }
+
+    private static object Launch(MainWindowViewModel vm, string module)
+    {
+        vm.LaunchModuleCommand.Execute(module);
+        Dispatcher.UIThread.RunJobs();
+        return vm.SelectedHostTab?.Content.DataContext ?? throw new InvalidOperationException($"{module} did not open");
+    }
+
+    private static void PopOutCurrent(MainWindowViewModel vm)
+    {
+        vm.PopOutCurrentTabCommand.Execute(null);
+        Dispatcher.UIThread.RunJobs();
+        Assert.IsType<PoppedOutPlaceholder>(vm.SelectedHostTab?.Content);   // it really went out
+    }
+
+    private static Button Named(Window window, string name) =>
+        window.FindControl<Button>(name) ?? throw new InvalidOperationException($"{name} was not rendered");
+
     private static async Task SeedFitsAsync(IServiceProvider services, params (string Name, int Ship)[] fits)
     {
         var repo = services.GetRequiredService<IFittingRepository>();

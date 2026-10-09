@@ -304,6 +304,13 @@ public interface IDialogService
     /// <summary>Brings the map's own window forward.</summary>
     void ShowMapWindow();
 
+    /// <summary>This is a docked module's own tab, so it can be popped out (ET-111).</summary>
+    bool CanPopOutTab(HostTab? tab);
+
+    /// <summary>Moves the module behind this tab into its own window, leaving a placeholder tab; the map goes the
+    /// way of <see cref="PopOutMap"/>. Dock mode and the other tabs stay as they are.</summary>
+    void PopOutTab(HostTab tab);
+
     /// <summary>Opens the KILLMAILS overview (ET-332) as a hosted module — a docked tab or a floating window, like
     /// RUNS. One screen for the whole app, not one per character: it reads a single selected character at a time.
     /// Returns the screen now showing — the one already open, when it was.</summary>

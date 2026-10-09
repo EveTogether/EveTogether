@@ -51,6 +51,10 @@ internal static class OverlayGeometryStore
     /// <summary>The popped-out map's key (ET-396). One map, so one key; width and height are remembered with the position.</summary>
     public static string ForMap() => "ui.map-window";
 
+    /// <summary>A popped-out tab's key (ET-111): per screen type, its view model's type name, not per item. Every
+    /// activity or killmail detail shares one place, like <see cref="ForActivity"/>, so the store does not grow per item.</summary>
+    public static string ForPoppedModule(string screenType) => $"ui.popout.{screenType}";
+
     public static async Task<OverlayGeometry?> LoadAsync(string key)
     {
         if (string.IsNullOrWhiteSpace(key)) return null;

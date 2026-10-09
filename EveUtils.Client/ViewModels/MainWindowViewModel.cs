@@ -360,9 +360,23 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         OnPropertyChanged(nameof(IsSkillsActive));
         OnPropertyChanged(nameof(IsToolsActive));
         OnPropertyChanged(nameof(IsRunsActive));
+        PopOutCurrentTabCommand.NotifyCanExecuteChanged();
     }
 
     [RelayCommand] private void ToggleDockMode() => IsFloating = !IsFloating;
+
+    /// <summary>The button beside the tab strip (ET-111): only the selected tab goes into a window of its own. Dock
+    /// mode and the other tabs stay as they are; that is the rail's FLOAT.</summary>
+    [RelayCommand(CanExecute = nameof(CanPopOutCurrentTab))]
+    private void PopOutCurrentTab()
+    {
+        if (SelectedHostTab is { } tab)
+        {
+            _dialogs?.PopOutTab(tab);
+        }
+    }
+
+    private bool CanPopOutCurrentTab() => _dialogs?.CanPopOutTab(SelectedHostTab) == true;
     [RelayCommand] private void ToggleChars() => IsCharsCollapsed = !IsCharsCollapsed;
 
     /// <summary>Rail click: open the module's feature (a docked tab, or a floating window). The rail highlight is
