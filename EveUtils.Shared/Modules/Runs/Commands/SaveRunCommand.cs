@@ -38,4 +38,7 @@ public sealed record SaveRunCommand(
     int? FleetSizeAtStop = null,
     /// <summary>The pilot's combat, repair, neut and capacitor lines while the run was watched, kept as its
     /// timeline (ET-467). Null when nothing recorded them, which keeps no timeline at all.</summary>
-    IReadOnlyList<GameLogEvent>? CombatEvents = null) : ICommand<Result>;
+    IReadOnlyList<GameLogEvent>? CombatEvents = null,
+    /// <summary>The system the pilot is in when saving (ET-490). Only fills a run that was started without one; a
+    /// system the run already has is kept.</summary>
+    int? SolarSystemId = null) : ICommand<Result>;

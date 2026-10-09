@@ -116,6 +116,9 @@ internal sealed class SaveRunCommandHandler(IDbContextFactory<ClientDbContext> c
                     candidate => command.LootStrategy ?? candidate.LootStrategy)
                 .SetProperty(candidate => candidate.FleetSizeAtStop,
                     candidate => command.FleetSizeAtStop ?? candidate.FleetSizeAtStop)
+                // Fills a missing system, never overwrites a known one: the start knew it better than the save does.
+                .SetProperty(candidate => candidate.SolarSystemId,
+                    candidate => candidate.SolarSystemId ?? command.SolarSystemId)
                 .SetProperty(candidate => candidate.SavedAtUtc, command.SavedAtUtc)
                 .SetProperty(candidate => candidate.SyncState,
                     candidate => candidate.SyncState == RunSyncState.Local ? RunSyncState.Local : RunSyncState.Pending)

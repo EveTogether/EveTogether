@@ -2760,7 +2760,8 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
                 LootStrategy: own.LootStrategy,
                 RebuildSummaries: false,
                 FleetSizeAtStop: own.FleetSizeAtStop,
-                CombatEvents: own.CombatEvents)));
+                CombatEvents: own.CombatEvents,
+                SolarSystemId: _ResolveSolarSystemId())));
             if (!result.IsSuccess)
             {
                 RunNoticeText = result.Messages.FirstOrDefault()?.Text ?? "Could not save this run.";

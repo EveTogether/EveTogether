@@ -54,15 +54,23 @@ public sealed partial class RunLootViewModel : ViewModelBase
         _sde = sde;
         _images = images;
         LootEditor = new InventoryListEditorViewModel(sde, _StoreLootListAsync);
-        LootEditor.PropertyChanged += (_, e) =>
-        {
-            if (e.PropertyName != nameof(InventoryListEditorViewModel.IsOpen))
-                return;
+        StartingHoldEditor = new InventoryListEditorViewModel(sde,
+            (reading, cancellationToken) => _StoreHoldAsync(LootCaptureRole.CargoBefore, reading, cancellationToken));
+        EndingHoldEditor = new InventoryListEditorViewModel(sde,
+            (reading, cancellationToken) => _StoreHoldAsync(LootCaptureRole.CargoAfter, reading, cancellationToken));
+        InventoryListEditorViewModel[] editors = [LootEditor, StartingHoldEditor, EndingHoldEditor];
+        foreach (InventoryListEditorViewModel editor in editors)
+            editor.PropertyChanged += (_, e) =>
+            {
+                if (e.PropertyName != nameof(InventoryListEditorViewModel.IsOpen))
+                    return;
 
-            OnPropertyChanged(nameof(CanOfferLootEdit));
-            OnPropertyChanged(nameof(CanEditLoot));
-            _LoadIfDeferred();
-        };
+                OnPropertyChanged(nameof(CanOfferLootEdit));
+                OnPropertyChanged(nameof(CanEditLoot));
+                OnPropertyChanged(nameof(CanOfferHoldEdit));
+                OnPropertyChanged(nameof(IsHoldEditorOpen));
+                _LoadIfDeferred();
+            };
     }
 
     /// <summary>Raised after a correction this section made itself landed — a capture left out or counted again, or
@@ -78,6 +86,13 @@ public sealed partial class RunLootViewModel : ViewModelBase
     /// and left out, so every row above the line is a row that counts and nothing left out is out of sight.
     /// </summary>
     public ObservableCollection<ActivityLootLineViewModel> ItemRows { get; } = [];
+
+    /// <summary>What went down between the two holds (ET-488) — ammunition, charges, boosters — one row per type with
+    /// its count and price, kept out of <see cref="ItemRows"/> so the loot list is only what came in. Empty without a
+    /// starting hold: then nothing is a difference, and the list stays as the clipboard way always showed it.</summary>
+    public ObservableCollection<ActivityLootLineViewModel> ConsumedRows { get; } = [];
+
+    public bool HasConsumedRows => ConsumedRows.Count > 0;
 
     /// <summary>Copied rows the SDE has no name for yet (ET-460), merged by name across the captures that count. They
     /// are never part of a figure above: without a type there is nothing to value, and the rows say so.</summary>
@@ -177,6 +192,8 @@ public sealed partial class RunLootViewModel : ViewModelBase
     /// hand are not (ET-215), because those are how a pilot corrects loot he only sees was wrong once it is totalled.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(EditableUntilText))]
+    [NotifyPropertyChangedFor(nameof(CanOfferHoldEdit))]
+    [NotifyPropertyChangedFor(nameof(CanEditHolds))]
     private bool _isLocked;
 
     /// <summary>Someone else's run, pulled in from a server they published it to. Shown in full and never changed
@@ -186,6 +203,8 @@ public sealed partial class RunLootViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(CanOfferLootEdit))]
     [NotifyPropertyChangedFor(nameof(CanEditLoot))]
     [NotifyPropertyChangedFor(nameof(CanCorrect))]
+    [NotifyPropertyChangedFor(nameof(CanOfferHoldEdit))]
+    [NotifyPropertyChangedFor(nameof(CanEditHolds))]
     private bool _isReadOnly;
 
     /// <summary>A correction is being written — and, on a saved run, the activity's totals rebuilt behind it. The
@@ -193,6 +212,7 @@ public sealed partial class RunLootViewModel : ViewModelBase
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanEditLoot))]
     [NotifyPropertyChangedFor(nameof(CanCorrect))]
+    [NotifyPropertyChangedFor(nameof(CanEditHolds))]
     private bool _isBusy;
 
     /// <summary>Another run of the same activity is mid-correction. Its summary rebuild has to land before this one
@@ -200,6 +220,7 @@ public sealed partial class RunLootViewModel : ViewModelBase
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanEditLoot))]
     [NotifyPropertyChangedFor(nameof(CanCorrect))]
+    [NotifyPropertyChangedFor(nameof(CanEditHolds))]
     private bool _isHeld;
 
     /// <summary>Whether a capture can be left out or counted again right now.</summary>
@@ -207,7 +228,7 @@ public sealed partial class RunLootViewModel : ViewModelBase
 
     /// <summary>An editable section says until when; a fixed one says it is fixed. Never nothing.</summary>
     public string EditableUntilText => IsLocked
-        ? "This run is saved, so its holds are fixed. Captures can still be left out or counted again, and the list rewritten by hand."
+        ? "This run is saved, so its starting hold stays where it is. Its two holds can still be corrected, captures left out or counted again, and the list rewritten by hand."
         : "Pasting, editing the list and moving the starting hold all stay possible until this run is saved.";
 
     /// <summary>What the two paste boxes now hold, as the pilot left them. Writing back what was already stored is
@@ -233,7 +254,7 @@ public sealed partial class RunLootViewModel : ViewModelBase
             return before < 0
                 ? "no starting hold — every capture counts"
                 : after < 0
-                    ? $"starting hold #{Captures[before].Number}, nothing after it yet"
+                    ? $"starting hold #{Captures[before].Number}, no ending hold yet"
                     : $"difference #{Captures[before].Number} → #{Captures[after].Number}";
         }
     }
@@ -297,10 +318,27 @@ public sealed partial class RunLootViewModel : ViewModelBase
     /// <summary><see cref="CanOfferLootEdit"/>, and not while a correction is still being written.</summary>
     public bool CanEditLoot => CanOfferLootEdit && CanCorrect;
 
+    /// <summary>The two boxes a saved run's holds are corrected in (ET-488), each opened on the hold as it is stored.
+    /// Pasting a hold again rewrites that hold and leaves every other capture where it was.</summary>
+    public InventoryListEditorViewModel StartingHoldEditor { get; }
+
+    public InventoryListEditorViewModel EndingHoldEditor { get; }
+
+    /// <summary>The way a saved run with a starting hold is corrected — the counterpart of <see cref="CanOfferLootEdit"/>,
+    /// which that run does not offer. An open run has the paste boxes in its window for this.</summary>
+    public bool CanOfferHoldEdit =>
+        IsLocked && !IsReadOnly && !IsHoldEditorOpen && _sde is not null && LootTally.Ends(_TallyCaptures()).Before >= 0;
+
+    public bool CanEditHolds => CanOfferHoldEdit && CanCorrect;
+
+    public bool IsHoldEditorOpen => StartingHoldEditor.IsOpen || EndingHoldEditor.IsOpen;
+
     /// <summary>What there is to see, said once for the whole block rather than left to an empty table.</summary>
     public bool HasCaptures => Captures.Count > 0;
 
     public int ExcludedCount => Captures.Count(capture => capture.IsExcluded);
+
+    public int IgnoredCount => Captures.Count(capture => capture.IsIgnored);
 
     /// <summary>Set once the pilot has written the list out himself: the list is no longer what the app noticed, and
     /// says since when.</summary>
@@ -429,10 +467,17 @@ public sealed partial class RunLootViewModel : ViewModelBase
     partial void OnIsBusyChanged(bool value)
     {
         LootEditor.IsBusy = value;
+        StartingHoldEditor.IsBusy = value;
+        EndingHoldEditor.IsBusy = value;
         _LoadIfDeferred();
     }
 
-    partial void OnIsHeldChanged(bool value) => LootEditor.IsHeld = value;
+    partial void OnIsHeldChanged(bool value)
+    {
+        LootEditor.IsHeld = value;
+        StartingHoldEditor.IsHeld = value;
+        EndingHoldEditor.IsHeld = value;
+    }
 
     private void _LoadIfDeferred()
     {
@@ -487,6 +532,72 @@ public sealed partial class RunLootViewModel : ViewModelBase
     [RelayCommand]
     private void BeginLootEdit() => LootEditor.Open(_AsPasteText());
 
+    /// <summary>Opens both hold boxes on the holds as they are stored, so a correction starts from what counts now
+    /// rather than from an empty box.</summary>
+    [RelayCommand]
+    private void BeginHoldEdit()
+    {
+        (int before, int after) = LootTally.Ends(_TallyCaptures());
+        StartingHoldEditor.Open(_HoldText(before));
+        EndingHoldEditor.Open(_HoldText(after));
+    }
+
+    /// <summary>A saved run's hold pasted again: the same write the run window's boxes make, which the command takes
+    /// as a correction of a saved run — revision, rebuilt totals, a published copy marked outdated.</summary>
+    private async Task<string?> _StoreHoldAsync(LootCaptureRole role, InventoryTextReading reading, CancellationToken cancellationToken)
+    {
+        if (RunId is not { } runId || !CanCorrect)
+            return "This hold cannot be changed right now.";
+
+        // The corrected hold keeps its place in the run, so the strip and "difference #4 → #7" keep their numbers.
+        DateTime capturedAtUtc = Captures.LastOrDefault(capture => capture.Role == role && !capture.IsExcluded)?.CapturedAtUtc
+                                 ?? DateTime.UtcNow;
+        IsBusy = true;
+        try
+        {
+            Result<Guid> stored = await _dispatcher.Send(new SetRunCargoHoldCommand(runId, role, capturedAtUtc,
+                _AsEntries(reading), reading.UnrecognisedNames), cancellationToken);
+            if (!stored.IsSuccess)
+                return stored.Messages.Count > 0 ? stored.Messages[0].Text : "This hold was not stored.";
+
+            (role is LootCaptureRole.CargoBefore ? StartingHoldEditor : EndingHoldEditor).Close();
+            await RefreshAsync(cancellationToken);
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+
+        LootCorrected?.Invoke();
+        return null;
+    }
+
+    private string _HoldText(int index)
+    {
+        if (index < 0)
+            return string.Empty;
+
+        RunLootCaptureRowViewModel hold = Captures[index];
+        return string.Join(Environment.NewLine, hold.Entries
+            .Select(entry => $"{entry.Name}\t{(entry.Quantity ?? 1).ToString(CultureInfo.InvariantCulture)}")
+            .Concat(hold.UnrecognisedLines.Select(line => $"{line.Name}\t{line.Quantity.ToString(CultureInfo.InvariantCulture)}")));
+    }
+
+    private static List<RunLootEntryInput> _AsEntries(InventoryTextReading reading) =>
+    [
+        .. reading.Lines.Select(resolved => new RunLootEntryInput
+        {
+            ItemTypeId = resolved.Line.TypeId,
+            Name = resolved.Line.Name,
+            Quantity = resolved.Line.Quantity,
+            // The clipboard columns as they stood in the window, not a valuation: the money comes from the
+            // type-id lookup here as it does everywhere else.
+            Volume = resolved.Item.Volume,
+            ClipboardPrice = resolved.Item.Price,
+            LootKind = LootKind.Gained
+        })
+    ];
+
     /// <summary>
     /// The written-out list becomes the loot: one capture of its own, with every capture it was written from
     /// excluded. The truth underneath stays entries and never text — the text is derivable from the rows, and a
@@ -504,17 +615,7 @@ public sealed partial class RunLootViewModel : ViewModelBase
         try
         {
             Result<Guid> stored = await _dispatcher.Send(new SetRunLootManualCommand(runId, DateTime.UtcNow,
-                [.. reading.Lines.Select(resolved => new RunLootEntryInput
-                {
-                    ItemTypeId = resolved.Line.TypeId,
-                    Name = resolved.Line.Name,
-                    Quantity = resolved.Line.Quantity,
-                    // The clipboard columns as they stood in the window, not a valuation: the money comes from the
-                    // type-id lookup here as it does everywhere else.
-                    Volume = resolved.Item.Volume,
-                    ClipboardPrice = resolved.Item.Price,
-                    LootKind = LootKind.Gained
-                })], reading.UnrecognisedNames), cancellationToken);
+                _AsEntries(reading), reading.UnrecognisedNames), cancellationToken);
             if (!stored.IsSuccess)
                 return stored.Messages.Count > 0 ? stored.Messages[0].Text : "This list was not stored.";
 
@@ -573,17 +674,7 @@ public sealed partial class RunLootViewModel : ViewModelBase
         }
 
         Result<Guid> stored = await _dispatcher.Send(new SetRunCargoHoldCommand(runId, role, DateTime.UtcNow,
-            [.. reading.Lines.Select(resolved => new RunLootEntryInput
-            {
-                ItemTypeId = resolved.Line.TypeId,
-                Name = resolved.Line.Name,
-                Quantity = resolved.Line.Quantity,
-                // The clipboard columns as they stood in the window, not a valuation: the money comes from the
-                // type-id lookup here as it does everywhere else.
-                Volume = resolved.Item.Volume,
-                ClipboardPrice = resolved.Item.Price,
-                LootKind = LootKind.Gained
-            })], reading.UnrecognisedNames), cancellationToken);
+            _AsEntries(reading), reading.UnrecognisedNames), cancellationToken);
         if (!stored.IsSuccess)
         {
             _SetCargoStatus(role, stored.Messages.Count > 0 ? stored.Messages[0].Text : "This cargo hold was not stored.");
@@ -727,36 +818,42 @@ public sealed partial class RunLootViewModel : ViewModelBase
         // pilot copies the same can more than once, and three rows of Metal Scraps are one fact. Most valuable first,
         // unpriced last. What was copied and left out follows on rows of its own, so a merge never hides an exclusion
         // inside a row that still counts.
-        bool everyCaptureCounts = LootTally.Ends(_TallyCaptures()).Before < 0;
+        //
+        // With a starting hold the list is the difference (ET-488): what came in stays in it, what went down moves to
+        // CONSUMED, and captures left out are not listed, since no capture between the two holds counts anyway.
+        IReadOnlyList<LootTallyCapture> tallied = _TallyCaptures();
+        bool everyCaptureCounts = LootTally.Ends(tallied).Before < 0;
         ActivityLootLineViewModel[] counted = [.. _counted
             .GroupBy(line => (line.ItemTypeId, line.LootKind))
             .Select(group => _Row(group.Key.ItemTypeId, group.Key.LootKind, group.Sum(line => line.Quantity ?? 1),
                 isExcluded: false, everyCaptureCounts ? _CapturesHolding(group.Key.ItemTypeId, group.Key.LootKind, isExcluded: false) : 1))
             .OrderByDescending(row => row.Value.HasValue)
             .ThenByDescending(row => row.Value)];
-        ActivityLootLineViewModel[] excluded = [.. Captures
-            .Where(capture => capture.IsExcluded)
-            .SelectMany(capture => capture.Entries)
-            .GroupBy(entry => (entry.ItemTypeId, entry.LootKind))
-            .Select(group => _Row(group.Key.ItemTypeId, group.Key.LootKind, group.Sum(entry => entry.Quantity ?? 1),
-                isExcluded: true, _CapturesHolding(group.Key.ItemTypeId, group.Key.LootKind, isExcluded: true)))
-            .OrderByDescending(row => row.Value.HasValue)
-            .ThenByDescending(row => row.Value)];
-        ItemRows.Clear();
-        foreach (ActivityLootLineViewModel row in counted.Concat(excluded))
-        {
-            row.IsAlternate = ItemRows.Count % 2 == 1;
-            ItemRows.Add(row);
-        }
-        if (counted.Length > 1 && counted[0] is { Value: > 0 } top)
+        ActivityLootLineViewModel[] excluded = everyCaptureCounts
+            ? [.. Captures
+                .Where(capture => capture.IsExcluded)
+                .SelectMany(capture => capture.Entries)
+                .GroupBy(entry => (entry.ItemTypeId, entry.LootKind))
+                .Select(group => _Row(group.Key.ItemTypeId, group.Key.LootKind, group.Sum(entry => entry.Quantity ?? 1),
+                    isExcluded: true, _CapturesHolding(group.Key.ItemTypeId, group.Key.LootKind, isExcluded: true)))
+                .OrderByDescending(row => row.Value.HasValue)
+                .ThenByDescending(row => row.Value)]
+            : [];
+        ActivityLootLineViewModel[] gained = everyCaptureCounts ? counted : [.. counted.Where(row => !row.IsLost)];
+        _Fill(ItemRows, [.. gained, .. excluded]);
+        _Fill(ConsumedRows, everyCaptureCounts ? [] : [.. counted.Where(row => row.IsLost)]);
+        if (gained.Length > 1 && gained[0] is { Value: > 0 } top)
             top.IsTopValue = true;
         if (_images is not null)
         {
-            foreach (ActivityLootLineViewModel line in ItemRows.Concat(SpentChargeLines))
+            foreach (ActivityLootLineViewModel line in ItemRows.Concat(SpentChargeLines).Concat(ConsumedRows))
             {
                 _ = line.LoadIconAsync(_images);
             }
         }
+
+        for (int index = 0; index < Captures.Count; index++)
+            Captures[index].IsIgnored = LootTally.IsIgnored(tallied, index);
 
         foreach (RunLootCaptureRowViewModel capture in Captures)
         {
@@ -776,6 +873,10 @@ public sealed partial class RunLootViewModel : ViewModelBase
         OnPropertyChanged(nameof(DifferenceText));
         OnPropertyChanged(nameof(CanOfferLootEdit));
         OnPropertyChanged(nameof(CanEditLoot));
+        OnPropertyChanged(nameof(CanOfferHoldEdit));
+        OnPropertyChanged(nameof(CanEditHolds));
+        OnPropertyChanged(nameof(HasConsumedRows));
+        OnPropertyChanged(nameof(IgnoredCount));
         OnPropertyChanged(nameof(CargoBeforeCapture));
         OnPropertyChanged(nameof(ManualListCaption));
         OnPropertyChanged(nameof(AddedAfterEditNote));
@@ -844,6 +945,16 @@ public sealed partial class RunLootViewModel : ViewModelBase
             [.. capture.Entries.Select(entry => new LootTallyLine(entry.ItemTypeId, entry.Quantity, Volume: null, entry.LootKind))]))];
 
     private decimal? _UnitPrice(int itemTypeId) => _unitPrices.TryGetValue(itemTypeId, out decimal price) ? price : null;
+
+    private static void _Fill(ObservableCollection<ActivityLootLineViewModel> target, IReadOnlyList<ActivityLootLineViewModel> rows)
+    {
+        target.Clear();
+        foreach (ActivityLootLineViewModel row in rows)
+        {
+            row.IsAlternate = target.Count % 2 == 1;
+            target.Add(row);
+        }
+    }
 
     private ActivityLootLineViewModel _Row(int itemTypeId, LootKind lootKind, long quantity, bool isExcluded, int captureCount) =>
         new(itemTypeId, _names.GetValueOrDefault(itemTypeId, $"type {itemTypeId}"), quantity, _UnitPrice(itemTypeId),

@@ -8,7 +8,7 @@ public static class LootTally
 {
     /// <summary>Which two captures the difference runs between, as indexes into <paramref name="captures"/>.
     /// <c>Before</c> is -1 when no starting hold is named and every capture simply counts; <c>After</c> is -1 when a
-    /// starting hold has nothing after it yet. The window names these two on screen and <see cref="Count"/> counts
+    /// starting hold has no ending hold named yet. The window names these two on screen and <see cref="Count"/> counts
     /// between them — one answer, so the caption cannot say one thing while the figures say another.</summary>
     public static (int Before, int After) Ends(IReadOnlyList<LootTallyCapture> captures)
     {
@@ -17,10 +17,18 @@ public static class LootTally
             return (-1, -1);
 
         // A named ending hold is the ending hold wherever it sits in the run: pasting the two boxes in the other
-        // order must not leave the run uncounted. Only when none is named does the last capture become it — which is
-        // what makes a capture arriving late win without the pilot having to say so again.
-        int after = _LastWithRole(captures, LootCaptureRole.CargoAfter);
-        return (before, after >= 0 ? after : _LastCountedAfter(captures, before));
+        // order must not leave the run uncounted. A clipboard copy never stands in for it (ET-488): the last copy of
+        // a run is as often a few cans of loot as the whole hold, and taken as the hold it books everything the run
+        // started with as spent.
+        return (before, _LastWithRole(captures, LootCaptureRole.CargoAfter));
+    }
+
+    /// <summary>Whether a capture is left out of the figures because a starting hold is named and it is neither of the
+    /// two holds — copied during the run, and covered by the difference already.</summary>
+    public static bool IsIgnored(IReadOnlyList<LootTallyCapture> captures, int index)
+    {
+        (int before, int after) = Ends(captures);
+        return before >= 0 && index != before && index != after && _IsLoot(captures[index]);
     }
 
     /// <summary>Without a starting hold, every capture is loot — the reading a pilot who never pastes one keeps.
@@ -32,8 +40,8 @@ public static class LootTally
         if (before < 0)
             return [.. captures.Where(_IsLoot).SelectMany(capture => capture.Lines)];
 
-        // A starting hold with nothing after it is a run that has not been counted yet, not a run that lost its
-        // whole cargo.
+        // A starting hold with no ending hold is a run that has not been counted yet, not a run that lost its whole
+        // cargo.
         return after < 0 ? [] : _Difference(captures[before], captures[after]);
     }
 
@@ -79,15 +87,6 @@ public static class LootTally
     {
         for (int index = captures.Count - 1; index >= 0; index--)
             if (!captures[index].IsExcluded && captures[index].Role == role)
-                return index;
-
-        return -1;
-    }
-
-    private static int _LastCountedAfter(IReadOnlyList<LootTallyCapture> captures, int before)
-    {
-        for (int index = captures.Count - 1; index > before; index--)
-            if (_IsLoot(captures[index]))
                 return index;
 
         return -1;

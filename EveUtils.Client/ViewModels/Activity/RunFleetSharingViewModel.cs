@@ -242,9 +242,10 @@ public sealed partial class RunFleetSharingViewModel(IServiceProvider services) 
             ? [.. loot.Characters.Where(block => block.CharacterId == character)]
             : [];
         // What counts on the run, one line per kind — the rows the pilot's own LOOT section lists above its line of
-        // exclusions, so the others see the pilot's own answer and never the captures it was worked out from.
+        // exclusions, so the others see the pilot's own answer and never the captures it was worked out from. What a
+        // hold difference spent is listed apart (ET-488) and still part of that answer.
         RunShareLootLine[] lines = [.. blocks
-            .SelectMany(block => block.Loot.ItemRows)
+            .SelectMany(block => block.Loot.ItemRows.Concat(block.Loot.ConsumedRows))
             .Where(row => !row.IsExcluded)
             .GroupBy(row => (row.ItemTypeId, Kind: row.IsLost ? LootKind.Lost : LootKind.Gained))
             .Select(group => new RunShareLootLine(group.Key.ItemTypeId, group.Sum(row => row.Quantity ?? 1), group.Key.Kind))

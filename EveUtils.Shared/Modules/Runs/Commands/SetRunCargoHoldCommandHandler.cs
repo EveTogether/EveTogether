@@ -14,17 +14,22 @@ namespace EveUtils.Shared.Modules.Runs.Commands;
 
 [ClientOnly]
 internal sealed class SetRunCargoHoldCommandHandler(
-    IDbContextFactory<ClientDbContext> contextFactory, IEventBus eventBus, IMarketPriceRepository marketPrices, ISdeAccessor sde)
+    IDbContextFactory<ClientDbContext> contextFactory, IEventBus eventBus, IDispatcher dispatcher, IMarketPriceRepository marketPrices,
+    ISdeAccessor sde)
     : ICommandHandler<SetRunCargoHoldCommand, Result<Guid>>
 {
     public async Task<Result<Guid>> Handle(SetRunCargoHoldCommand command, CancellationToken cancellationToken = default)
     {
         await using ClientDbContext db = await contextFactory.CreateDbContextAsync(cancellationToken);
-        Result<Run> opened = await RunLootWrites.OpenRunAsync(db, command.RunId, cancellationToken);
-        if (!opened.IsSuccess)
+        // A saved run takes this too (ET-488): with a starting hold the two holds are the loot, so pasting one again
+        // is the only way to correct it — the hand-written list is not offered beside them.
+        Result<Run> opened = await RunLootWrites.OpenForCorrectionAsync(db, command.RunId, cancellationToken);
+        if (!opened.IsSuccess || opened.Value is not { } run)
             return Result<Guid>.Failure([.. opened.Messages]);
 
-        Run run = opened.Value!;
+        bool isSaved = run.State is RunState.Saved;
+        if (isSaved)
+            RunLootWrites.MarkCorrected(run);
 
         // The box only ever rewrites what the box itself wrote: a clipboard capture that happens to hold the role
         // right now was really copied out of EVE, and typing here must not overwrite it.
@@ -65,7 +70,11 @@ internal sealed class SetRunCargoHoldCommandHandler(
         await RunLootCaptureRoles.AssignAsync(db, capture, command.Role, cancellationToken);
         await db.SaveChangesAsync(cancellationToken);
         await RunPriceSnapshots.FixOnCaptureAsync(db, marketPrices, sde, run.Id, cancellationToken);
+        if (isSaved)
+            await dispatcher.Send(new RebuildActivitySummariesCommand(run.Id), cancellationToken);
         await eventBus.PublishAsync(new RunLootCapturedEvent(run.Id), EventTarget.Local, cancellationToken);
+        if (isSaved)
+            await eventBus.PublishAsync(new RunLootCorrectedEvent(run.Id), EventTarget.Local, cancellationToken);
         await eventBus.PublishAsync(new RunsChangedEvent(run.Id, run.GroupCode), EventTarget.Local, cancellationToken);
         return Result<Guid>.Success(capture.Id);
     }
