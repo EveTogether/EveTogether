@@ -456,10 +456,9 @@ public sealed class HomefrontMoneyScenarioTests
         await group.AssertOneStoryAsync(HomefrontOutcome.Completed, n: 5, payout: 5 * FivePilots);
     }
 
-    /// <summary>S23: a fleet mate joins while the backfill runs — the fifth toon was flying a run of its own (with a
-    /// bounty on it) when the pilot started four, HOMEFRONT's list backfilled it into the group, and then its own run
-    /// joined the group. The two fold into the one it was flying: one run, its bounty once, the payout once. Joined
-    /// during SAVE (ET-484), the window reads the fold between two sibling saves and still saves the joined run.</summary>
+    /// <summary>S23: a fleet mate joins while the backfill runs — the fifth toon's own run (with a bounty) joins the
+    /// group HOMEFRONT's list backfilled it into, and the two fold into the one it was flying: one run, its bounty once,
+    /// the payout once. Joined mid-SAVE (ET-484), the window reads the fold between sibling saves and still saves it.</summary>
     [AvaloniaTheory]
     [InlineData(false)]
     [InlineData(true)]
