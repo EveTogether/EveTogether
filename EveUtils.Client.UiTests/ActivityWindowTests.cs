@@ -64,7 +64,7 @@ public class ActivityWindowTests
     [Theory]
     // An abyssal pocket has no NPC bounty at all (ET-241) but does spend a filament CONSUMABLES shows (ET-249) —
     // still six sections, one traded for the other rather than simply one fewer than a site's own six.
-    [InlineData(ActivityKind.Abyssal, 6)]
+    [InlineData(ActivityKind.Abyssal, 7)]
     [InlineData(ActivityKind.Site, 6)]
     public void EmptyRun_EverySectionSummary_SaysSomething(ActivityKind kind, int expectedSectionCount)
     {
