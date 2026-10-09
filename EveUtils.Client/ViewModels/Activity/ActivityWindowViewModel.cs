@@ -1316,6 +1316,8 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     {
         GroupCode = start.GroupCode;
         FleetId = start.FleetId;
+        // A notice about an earlier group (called off, ended without you) is false once a new one is joined.
+        RunNoticeText = null;
         // The commander's scan id names the same signature on this member's own scanner — the id belongs to the
         // system, not to the pilot (ET-151) — so LOCATION reads RUS-326 · Shousran here too instead of the bare
         // system it showed a member while the commander had the site.
@@ -4091,6 +4093,12 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     /// controls at all, which is the whole difference between an editable section and a fixed one.</summary>
     partial void OnRunStateChanged(ActivityRunState value)
     {
+        // A notice is about the state before the run went in; a running run has none.
+        if (value is ActivityRunState.Running)
+        {
+            RunNoticeText = null;
+        }
+
         if (RunLoot is not null)
             RunLoot.IsLocked = value is ActivityRunState.Saved;
         foreach (ActivityLootCharacterViewModel block in LootOverview?.Characters ?? [])

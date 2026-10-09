@@ -325,6 +325,43 @@ public sealed class FleetAbyssalLifecycleTests
         }
     }
 
+    /// <summary>The "called this run off" line is only true while the pilot is out of a group with no run: once the
+    /// commander's next run is joined and entered, it must be gone (Raymond, ET-494).</summary>
+    [AvaloniaTheory]
+    [InlineData(true, false, true)]   // called off before entry, nothing since
+    [InlineData(true, true, false)]   // called off, then joined the next run and went in
+    [InlineData(false, true, false)]  // an ordinary member flying
+    [InlineData(false, false, false)] // armed, solo of any notice
+    public async Task TheCalledOffNotice_ShowsOnlyForARunCalledOffBeforeEntry(bool calledOff, bool flies, bool noticeShown)
+    {
+        var (instance, _, _, bus, presenter) = _Harness(commander: Commander);
+        using (instance)
+        using (presenter)
+        {
+            using var window = await _ArmedAsync(instance);
+            if (calledOff)
+            {
+                await bus.PublishAsync(new FleetRunDiscardedEvent(
+                    new RunGroupDiscard(FleetId, ActivityKind.Abyssal, GroupCode, DateTime.UtcNow), Commander));
+                await _SettleAsync(() => window.GroupCode is null);
+            }
+
+            if (flies)
+            {
+                window.JoinFleetRun(_Start(DateTime.UtcNow));
+                await window.StartRunCommand.ExecuteAsync(null);
+                await _SettleAsync(() => window.RunId is not null);
+            }
+
+            Assert.Equal(noticeShown, window.HasRunNotice);
+            if (noticeShown)
+            {
+                Assert.Contains("called this run off", window.RunNoticeText, StringComparison.Ordinal);
+                Assert.Null(window.GroupCode);
+            }
+        }
+    }
+
     // ── Harness ─────────────────────────────────────────────────────────────────────────────────────
 
     private static RunGroupCodeStart _Start(DateTime startedAtUtc) => new(
