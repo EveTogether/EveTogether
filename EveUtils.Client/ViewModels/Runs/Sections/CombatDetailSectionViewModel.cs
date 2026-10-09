@@ -60,18 +60,20 @@ public sealed partial class CombatDetailSectionViewModel : RunDetailSection
         }
 
         CombatEmptyText = null;
-        foreach (CombatTileViewModel tile in TilesOf(timeline))
+        bool stored = _choice.FromStoredHits;
+        foreach (CombatTileViewModel tile in TilesOf(timeline, stored))
         {
             Tiles.Add(tile);
         }
         HeaderSummary = $"{_Number(_Total(timeline, CombatSeriesKind.DmgOut))} hp dealt · "
-            + $"{_Number(_Total(timeline, CombatSeriesKind.DmgIn))} taken · {_choice.ShownName}";
+            + $"{_Number(_Total(timeline, CombatSeriesKind.DmgIn))} taken · {_choice.ShownName}"
+            + (stored ? $" · {CombatTelemetryChoice.StoredHitsLabel}" : string.Empty);
     }
 
     internal const string NotRecordedText =
         "No combat was recorded for this run: it was saved before EVE Together kept the game log's combat with the run.";
 
-    private static IEnumerable<CombatTileViewModel> TilesOf(RunCombatTimelineDto timeline)
+    private static IEnumerable<CombatTileViewModel> TilesOf(RunCombatTimelineDto timeline, bool fromStoredHits)
     {
         int seconds = Math.Max(1, timeline.Seconds - 1);
         long dealt = _Total(timeline, CombatSeriesKind.DmgOut);
@@ -81,7 +83,18 @@ public sealed partial class CombatDetailSectionViewModel : RunDetailSection
         yield return new("DAMAGE TAKEN", $"{_Number(taken)} hp",
             $"avg {_Number(taken / seconds)} dps · {_Number(timeline.HitsIn)} hits on you");
         yield return new("MAX HIT DEALT", $"{_Number(timeline.MaxHitOut)} hp", _MaxHitOutNote(timeline));
-        yield return new("MAX HIT TAKEN", $"{_Number(timeline.MaxHitIn)} hp", _MaxHitInNote(timeline));
+        yield return new("MAX HIT TAKEN", $"{_Number(timeline.MaxHitIn)} hp", _MaxHitInNote(timeline, fromStoredHits));
+        if (fromStoredHits)
+        {
+            // The stored hits hold damage only; a zero here would claim the run had none.
+            string note = CombatTelemetryChoice.LiveOnlyText;
+            yield return new("NEUTED (ON YOU)", "not recorded", note);
+            yield return new("REPS", "not recorded", note);
+            yield return new("CAP / NEUT OUT", "not recorded", note);
+            yield return new("MISSES ON YOU", "not recorded", note);
+            yield break;
+        }
+
         yield return new("NEUTED (ON YOU)", $"{_Number(_Total(timeline, CombatSeriesKind.NeutIn))} GJ",
             timeline.Series.ContainsKey(CombatSeriesKind.NeutIn) ? "energy neutralized on you" : "no neut line in this run");
         yield return new("REPS", $"{_Number(_Total(timeline, CombatSeriesKind.RepIn) + _Total(timeline, CombatSeriesKind.RepOut))} hp",
@@ -106,11 +119,11 @@ public sealed partial class CombatDetailSectionViewModel : RunDetailSection
                 ? $"{weapon} on {target}"
                 : $"on {target}";
 
-    private static string _MaxHitInNote(RunCombatTimelineDto timeline) =>
+    private static string _MaxHitInNote(RunCombatTimelineDto timeline, bool fromStoredHits) =>
         timeline.MaxHitInSource is not { } source
             ? "no hit taken"
             : timeline.HitTallies.FirstOrDefault(tally => tally.Direction is DamageDirection.Incoming
-                && tally.Counterparty == source && tally.Max == timeline.MaxHitIn) is { } tally
+                && tally.Counterparty == source && tally.Max == timeline.MaxHitIn) is { } tally && !fromStoredHits
                 ? $"{source} · {_Word(tally.Quality)}"
                 : source;
 

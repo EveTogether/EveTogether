@@ -58,11 +58,13 @@ public sealed partial class TimelineDetailSectionViewModel : RunDetailSection
         foreach ((CombatSeriesKind kind, string name) in Names)
         {
             bool present = chart.Buckets.ContainsKey(kind);
-            Legend.Add(new CombatLegendItem(present ? name : $"{name} · none in this run", CombatTimelineChart.InkOf(kind), present));
+            string absent = _choice.FromStoredHits ? CombatTelemetryChoice.LiveOnlyText : "none in this run";
+            Legend.Add(new CombatLegendItem(present ? name : $"{name} · {absent}", CombatTimelineChart.InkOf(kind), present));
         }
 
         long peak = chart.Buckets.GetValueOrDefault(CombatSeriesKind.DmgOut, []).DefaultIfEmpty().Max() / chart.BucketSeconds;
-        HeaderSummary = $"peak {peak.ToString("N0", CultureInfo.InvariantCulture)} dps out · 1 s samples, shown per {chart.BucketSeconds} s";
+        HeaderSummary = $"peak {peak.ToString("N0", CultureInfo.InvariantCulture)} dps out · 1 s samples, shown per {chart.BucketSeconds} s"
+            + (_choice.FromStoredHits ? $" · {CombatTelemetryChoice.StoredHitsLabel}" : string.Empty);
     }
 
     private static readonly (CombatSeriesKind Kind, string Name)[] Names =
