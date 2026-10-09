@@ -18,7 +18,6 @@ public sealed partial class KillmailDetailItemRowViewModel : ObservableObject
 
         Name = name;
         TypeId = lines[0].TypeId;
-        Initial = name.Length > 0 ? name[..1].ToUpperInvariant() : "?";
         MetaHint = metaHint;
         QuantityText = IskFormat.Number(lines.Sum(line => line.Quantity));
         DroppedText = _AmountText(dropped);
@@ -30,18 +29,12 @@ public sealed partial class KillmailDetailItemRowViewModel : ObservableObject
 
     public string Name { get; }
 
-    public string Initial { get; }
-
     public int TypeId { get; }
 
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasIcon))]
-    private Bitmap? _icon;
-
-    public bool HasIcon => Icon is not null;
+    [ObservableProperty] private Bitmap? _icon;
 
     public async Task LoadIconAsync(ITypeImageProvider images) =>
-        Icon = await images.GetImageAsync(TypeId, TypeImageKind.Icon, 32);
+        Icon = await images.GetImageAsync(TypeId, TypeImageKind.Icon, 32) ?? TypeImagePlaceholder.Bitmap;
 
     /// <summary>"loaded" for a charge sitting in a slot, null otherwise.</summary>
     public string? MetaHint { get; }
