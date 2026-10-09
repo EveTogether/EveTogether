@@ -14,12 +14,7 @@
     <Border Classes="itemrow detailrow" BorderBrush="{DynamicResource DividerBrush}">
         <Grid ColumnDefinitions="20,*,56,128,128" ColumnSpacing="6">
             <Border Classes="icontile">
-                <Panel>
-                    <TextBlock Text="{Binding Initial}" FontSize="10" FontWeight="SemiBold"
-                               Foreground="{DynamicResource AccentBrightBrush}"
-                               HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="{Binding !HasIcon}"/>
-                    <Image Source="{Binding Icon}" IsVisible="{Binding HasIcon}"/>
-                </Panel>
+                <Image Source="{Binding Icon}"/>
             </Border>
             <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6"
                         VerticalAlignment="Center" ClipToBounds="True">
