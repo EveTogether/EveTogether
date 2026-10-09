@@ -238,6 +238,8 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
     bool IRunWindowContext.IsFleetCommander => Authority.IsFleetCommander;
 
+    public bool CanControl => Authority.CanControl;
+
     /// <summary>The run on screen, for what belongs to one run only: the registration way, the two paste boxes and
     /// the starting-hold picker. Follows the character column.</summary>
     public RunLootViewModel? RunLoot { get; }
@@ -284,6 +286,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     [NotifyPropertyChangedFor(nameof(IsNewRoomButtonVisible))]
     [NotifyPropertyChangedFor(nameof(IsDiscardButtonVisible))]
     [NotifyPropertyChangedFor(nameof(IsSaveButtonVisible))]
+    [NotifyPropertyChangedFor(nameof(CanControl))]
     [NotifyPropertyChangedFor(nameof(IsCommandStatusShown))]
     [NotifyPropertyChangedFor(nameof(CommandStatusText))]
     // Unknown, not the four nulls this was built from: those land in From's solo branch, so a window that knows
@@ -697,8 +700,10 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     public bool IsStopButtonVisible => _MayTimeOwnLeg && RunState == ActivityRunState.Running;
 
     /// <summary>NEW ROOM (ET-240) beside STOP, for every run type with an ENEMIES section: only while there is
-    /// something left to bring down, so only while the run is going.</summary>
-    public bool IsNewRoomButtonVisible => IsStopButtonVisible && _Enemies() is { } enemies && Sections.Contains(enemies);
+    /// something left to bring down, so only while the run is going. Room limits are shared, so in a fleet run only
+    /// the commander sets them, the way DISCARD is the commander's.</summary>
+    public bool IsNewRoomButtonVisible =>
+        IsStopButtonVisible && Authority.CanControl && _Enemies() is { } enemies && Sections.Contains(enemies);
 
     /// <summary>"ROOM 2  since 20:44:31 · 03:00" under the clock — null until NEW ROOM was pressed once.</summary>
     public string? CurrentRoomText { get; private set; }
@@ -1985,6 +1990,11 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
     public void StartNewRoom(DateTime nowUtc)
     {
+        if (!Authority.CanControl)
+        {
+            return;
+        }
+
         _Enemies()?.StartRoom(nowUtc);
         Refresh(nowUtc);
     }

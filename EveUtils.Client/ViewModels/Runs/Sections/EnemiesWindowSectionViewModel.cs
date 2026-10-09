@@ -111,6 +111,11 @@ public sealed partial class EnemiesWindowSectionViewModel : RunWindowSection
     [RelayCommand]
     private void UndoRoom()
     {
+        if (!Context.CanControl)
+        {
+            return;
+        }
+
         foreach (RunEnemyObservationCollector collector in _RoomScope())
         {
             collector.UndoRoom();
@@ -144,6 +149,15 @@ public sealed partial class EnemiesWindowSectionViewModel : RunWindowSection
 
         OnPropertyChanged(nameof(EnemyObservations));
         _ShowRooms();
+    }
+
+    /// <summary>The undo button follows who may steer the run.</summary>
+    protected override void OnContextChanged(string? propertyName)
+    {
+        if (propertyName is nameof(IRunWindowContext.CanControl))
+        {
+            _ShowRooms();
+        }
     }
 
     /// <summary>Keeps LOOT's blocks on the same boundaries — a block appears or the clock stops after a room was set.</summary>
@@ -252,7 +266,7 @@ public sealed partial class EnemiesWindowSectionViewModel : RunWindowSection
         EnemyRooms =
         [
             .. Enumerable.Range(1, roomCount).Reverse().Select(room => new RunEnemyRoomViewModel(room,
-                _RoomWindowText(boundaries, room), isUndoShown: room == roomCount,
+                _RoomWindowText(boundaries, room), isUndoShown: room == roomCount && Context.CanControl,
                 [.. EnemyObservations.Where(observation => observation.RoomNumber == room)],
                 RoomSourceViewModel.Of(room > 1 ? _OnScreenCollector()?.DetectedCertainties[room - 2] : null)))
         ];
