@@ -590,7 +590,7 @@ public class ModuleNavigationTests
         Assert.Null(dialogs.OwnerFor(logs));
 
         PopOutCurrent(vm);
-        dialogs.OwnerFor(logs)?.Close();                       // the window's own X does the same
+        Assert.IsType<PoppedModuleWindow>(dialogs.OwnerFor(logs)).Close();   // the window's own X does the same
         Dispatcher.UIThread.RunJobs();
         Assert.Same(logsTab, vm.SelectedHostTab);
         Assert.Null(dialogs.OwnerFor(logs));
@@ -630,11 +630,12 @@ public class ModuleNavigationTests
         Step("rail back to docked", () => vm.ToggleDockModeCommand.Execute(null));
         Step("pop out logs", () => { Select(open[0]); PopOutCurrent(vm); });
         Step("pop out inbox", () => { Select(open[1]); PopOutCurrent(vm); });
-        Step("close the logs window", () => dialogs.OwnerFor(open[0])?.Close());
+        Step("close the logs window", () => Assert.IsType<PoppedModuleWindow>(dialogs.OwnerFor(open[0])).Close());
         Step("put inbox back", () =>
         {
             vm.SelectedHostTab = vm.HostTabs.Single(t => t.Content is PoppedOutPlaceholder);
-            ((Control)vm.SelectedHostTab.Content).FindControl<Button>("PutBackHereButton")?.Command?.Execute(null);
+            (((Control)vm.SelectedHostTab.Content).FindControl<Button>("PutBackHereButton")?.Command
+             ?? throw new InvalidOperationException("no PUT IT BACK HERE")).Execute(null);
         });
         Step("pop out esi again", () => { Select(open[2]); PopOutCurrent(vm); });
         Step("close esi's placeholder tab", () =>
@@ -658,6 +659,7 @@ public class ModuleNavigationTests
     {
         vm.PopOutCurrentTabCommand.Execute(null);
         Dispatcher.UIThread.RunJobs();
+        Assert.IsType<PoppedOutPlaceholder>(vm.SelectedHostTab?.Content);   // it really went out
     }
 
     private static Button Named(Window window, string name) =>

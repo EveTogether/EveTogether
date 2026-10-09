@@ -309,7 +309,15 @@ public sealed class ModuleHostService
         switch (action)
         {
             case ShortcutAction.CloseTab:
-                frame.Window.Close();
+                // A pop-out's frame window is hidden: closing that alone would leave the pop-out up over a disposed module.
+                if (frame.Popout is not null)
+                {
+                    Dismiss(frame);
+                }
+                else
+                {
+                    frame.Window.Close();
+                }
                 break;
             case ShortcutAction.RefreshModule:
                 ShortcutDispatch.RefreshModule(frame.Content);

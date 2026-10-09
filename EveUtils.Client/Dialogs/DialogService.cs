@@ -626,7 +626,11 @@ public sealed class DialogService : IDialogService, ISingletonService
     public void PopOutTab(HostTab tab)
     {
         string? id = _moduleHost.PoppableModuleId(tab);
-        if (id is null) return;
+        if (id is null)
+        {
+            return;
+        }
+
         if (id == MapModuleId)
         {
             PopOutMap();   // the map keeps its own placeholder and header buttons (ET-396)
