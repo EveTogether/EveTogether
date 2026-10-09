@@ -22,6 +22,7 @@ public sealed partial class ActivityLootLineViewModel : ObservableObject
         ItemTypeId = itemTypeId;
         Name = name;
         Quantity = quantity;
+        UnitPrice = unitPrice;
         HasPrice = unitPrice is not null;
         // A market price is per unit, so the quantity is what turns it into a line value; no quantity column means
         // one of it, the same reading SdeInventoryResolver takes.
@@ -47,6 +48,11 @@ public sealed partial class ActivityLootLineViewModel : ObservableObject
 
     /// <summary>"Metal Scraps ×1" — how a capture lists what it brought in.</summary>
     public string NameWithQuantityText => $"{Name} ×{(Quantity ?? 1).ToString("N0", CultureInfo.CurrentCulture)}";
+
+    public decimal? UnitPrice { get; }
+
+    /// <summary>"@ 144.84" — what one of it cost, for CONSUMED (ET-488), where ammunition runs to cents a round.</summary>
+    public string UnitPriceText => UnitPrice is { } price ? $"@ {price.ToString("N2", CultureInfo.InvariantCulture)}" : "no price";
 
     public bool HasPrice { get; }
 

@@ -16,6 +16,9 @@ public sealed partial class RunLootCaptureRowViewModel : ObservableObject
     public int? RepeatOfNumber { get; }
     public IReadOnlyList<RunLootEntryDto> Entries { get; }
 
+    /// <summary>Its rows no SDE type carries yet (ET-460) — part of the hold a correction box opens on.</summary>
+    public IReadOnlyList<UnrecognisedLootLineDto> UnrecognisedLines { get; }
+
     /// <summary>Its place in the run, from 1 — what the section calls it everywhere else ("difference #2 → #4"), so
     /// the strip, the caption and the starting-hold picker name the same capture by the same number. It does the work
     /// the clock used to do, and does it better: "identical to #1" is read in one go where two timestamps have to be
@@ -73,12 +76,20 @@ public sealed partial class RunLootCaptureRowViewModel : ObservableObject
 
     public string CapturedAtText => CapturedAtUtc.ToLocalTime().ToString("HH:mm:ss");
 
+    /// <summary>Copied during a run that has a starting hold (ET-488): stored and shown, never counted, because the
+    /// difference between the two holds already covers it. Set by the section from <c>LootTally.IsIgnored</c>.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(StateText))]
+    private bool _isIgnored;
+
     /// <summary>What the switch beside it stands at, in words — the colour of a switch alone is not a reason.</summary>
-    public string StateText => !IsExcluded
-        ? "counted"
-        : RepeatOfNumber is { } number
+    public string StateText => IsExcluded
+        ? RepeatOfNumber is { } number
             ? $"excluded — repeat of #{number}"
-            : "excluded — a deliberate edit";
+            : "excluded — a deliberate edit"
+        : IsIgnored
+            ? "ignored — only the starting and ending hold count"
+            : "counted";
 
     /// <summary>The named way back in an excluded capture carries beside its switch (ET-215 mockup). A repeat's says
     /// what it is, because that is the one exclusion a pilot is expected to argue with.</summary>
@@ -110,6 +121,7 @@ public sealed partial class RunLootCaptureRowViewModel : ObservableObject
         Number = number;
         RepeatOfNumber = repeatOfNumber;
         Entries = dto.Entries;
+        UnrecognisedLines = dto.UnrecognisedLines ?? [];
         _role = dto.Role;
         _isExcluded = dto.IsExcluded;
     }
