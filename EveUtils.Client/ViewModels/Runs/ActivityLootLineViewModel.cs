@@ -39,10 +39,6 @@ public sealed partial class ActivityLootLineViewModel : ObservableObject
 
     public long? Quantity { get; }
 
-    /// <summary>The tile shown until the item's own icon is there, or instead of it when images are off — the same
-    /// lettered fallback every other hex and tile in the app uses.</summary>
-    public string Initial => string.IsNullOrEmpty(Name) ? "?" : Name[..1].ToUpperInvariant();
-
     /// <summary>"3×" — the loot table's own count column (ET-215 mockup).</summary>
     public string QuantityText => $"{(Quantity ?? 1).ToString("N0", CultureInfo.CurrentCulture)}×";
 
@@ -92,16 +88,12 @@ public sealed partial class ActivityLootLineViewModel : ObservableObject
     /// across the gap between name and value.</summary>
     [ObservableProperty] private bool _isAlternate;
 
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasIcon))]
-    private Bitmap? _icon;
+    [ObservableProperty] private Bitmap? _icon;
 
-    public bool HasIcon => Icon is not null;
-
-    /// <summary>The type's icon from the app's own image cache, best-effort: images off or offline leaves the
-    /// lettered tile, the way the fit browser's cargo strip does.</summary>
+    /// <summary>The type's icon from the app's own image cache; a type with no icon (a blueprint, a new item) or no
+    /// image at all (images off, offline) gets the bundled placeholder.</summary>
     public async Task LoadIconAsync(ITypeImageProvider images)
     {
-        Icon = await images.GetImageAsync(ItemTypeId, TypeImageKind.Icon, 32);
+        Icon = await images.GetImageAsync(ItemTypeId, TypeImageKind.Icon, 32) ?? TypeImagePlaceholder.Bitmap;
     }
 }

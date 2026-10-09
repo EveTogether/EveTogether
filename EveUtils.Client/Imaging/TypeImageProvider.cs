@@ -7,7 +7,6 @@ using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Media.Imaging;
-using Avalonia.Platform;
 using EveUtils.Shared.Modules.Sde;
 using EveUtils.Shared.Modules.Settings.Repositories;
 
@@ -30,9 +29,6 @@ public sealed class TypeImageProvider(IHttpClientFactory httpClientFactory, ISet
     public const string EnabledSettingKey = "fit.images.enabled";
 
     private const int SkinCategoryId = 91;
-    // The image server has no icon or render for any SKIN, so they share one bundled placeholder instead of a download.
-    private static readonly Lazy<Bitmap> SkinPlaceholder =
-        new(() => new Bitmap(AssetLoader.Open(new Uri("avares://EveUtils.Client/Assets/skin-placeholder.png"))));
 
     private readonly string _cacheDirectory = Path.Combine(dataDirectory, "type-images");
     // A measured 28-card render burst needs 28 MiB; keep one window intact with 4 MiB of headroom.
@@ -60,7 +56,7 @@ public sealed class TypeImageProvider(IHttpClientFactory httpClientFactory, ISet
         // The load is shared across callers, so a single caller's cancellation must not abort it for the others — the
         // per-call token is intentionally not threaded into the shared download (image loads are fire-and-forget).
         if (sde?.GetCategoryId(typeId) == SkinCategoryId)
-            return Task.FromResult<Bitmap?>(SkinPlaceholder.Value);
+            return Task.FromResult<Bitmap?>(TypeImagePlaceholder.Bitmap);
 
         var key = $"{typeId}_{kind}_{size}";
         Lazy<Task<Bitmap?>> load = _cache.GetOrAdd(key, k => new Lazy<Task<Bitmap?>>(() => LoadAsync(k, typeId, kind, size)));
