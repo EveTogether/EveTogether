@@ -458,9 +458,12 @@ public sealed class HomefrontMoneyScenarioTests
 
     /// <summary>S23: a fleet mate joins while the backfill runs — the fifth toon was flying a run of its own (with a
     /// bounty on it) when the pilot started four, HOMEFRONT's list backfilled it into the group, and then its own run
-    /// joined the group. The two fold into the one it was flying: one run, its bounty once, the payout once.</summary>
-    [AvaloniaFact]
-    public async Task S23_AFleetMateJoiningWhileTheBackfillRuns_FoldsIntoTheRunItWasFlying()
+    /// joined the group. The two fold into the one it was flying: one run, its bounty once, the payout once. Joined
+    /// during SAVE (ET-484), the window reads the fold between two sibling saves and still saves the joined run.</summary>
+    [AvaloniaTheory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task S23_AFleetMateJoiningWhileTheBackfillRuns_FoldsIntoTheRunItWasFlying(bool isJoinedDuringSave)
     {
         const int late = ActivityWindowHarness.CharacterId + 4;
         using Group group = await Group.StartAsync(toons: 5, isRosterFleet: true, picked: 4);
@@ -477,20 +480,39 @@ public sealed class HomefrontMoneyScenarioTests
             await db.SaveChangesAsync();
         }
 
-        Result linked = await group.Dispatcher.Send(new LinkRunToGroupCodeCommand(ownRun, group.GroupCode, group.Window.FleetId));
+        LinkRunToGroupCodeCommand join = new(ownRun, group.GroupCode, group.Window.FleetId);
+        Guid pilotRun = group.Window.RunId ?? throw new InvalidOperationException("the window has no run");
+        Result? linked = null;
+        if (isJoinedDuringSave)
+        {
+            // Held in the first sibling save until the window's own tick has read the join.
+            group.BeforeSave = async command =>
+            {
+                if (command.RunId == pilotRun || linked is not null)
+                {
+                    return;
+                }
+                linked = await group.Dispatcher.Send(join);
+                await group.TickUntilWindowHoldsAsync(ownRun);
+            };
+            await group.StopAndSaveAsync();
+        }
+        else
+        {
+            linked = await group.Dispatcher.Send(join);
+        }
 
-        Assert.True(linked.IsSuccess);
+        Assert.True(linked?.IsSuccess);
         await group.AssertOneRunPerCharacterAsync(5);
         Run joined = (await group.RunsAsync(includeBounty: true)).Single(run => run.CharacterId == late);
         Assert.Equal(ownRun, joined.Id);
         Assert.Equal(270_000m, Assert.Single(joined.BountyEntries).Isk);
         await using (ClientDbContext db = await group.DbAsync())
             Assert.NotNull((await db.Set<Run>().AsNoTracking().SingleAsync(run => run.Id == backfilled.Id)).DeletedAtUtc);
-        // The window has not read the fold yet: its first sibling save waits until a tick has, so Participants changes
-        // mid-SAVE every time (ET-484) — the joined run is saved with the group, not lost to "Collection was modified".
-        Guid pilotRun = group.Window.RunId ?? throw new InvalidOperationException("the window has no run");
-        group.BeforeSave = command => command.RunId == pilotRun ? Task.CompletedTask : group.TickUntilWindowHoldsAsync(ownRun);
-        await group.StopAndSaveAsync();
+        if (!isJoinedDuringSave)
+        {
+            await group.StopAndSaveAsync();
+        }
         // The window's own bounty in a fleet is the gamelog's live tally, which a line written straight in never reached.
         await group.AssertOneStoryAsync(HomefrontOutcome.Completed, n: 5, payout: 5 * FivePilots, bounty: 270_000m,
             isWindowCompared: false);
