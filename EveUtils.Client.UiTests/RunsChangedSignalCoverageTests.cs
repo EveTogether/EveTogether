@@ -1,5 +1,5 @@
-using EveUtils.Client.Fleet;
 using Avalonia.Headless.XUnit;
+using EveUtils.Client.Fleet;
 using EveUtils.Client.Runs;
 using EveUtils.Client.Transport;
 using EveUtils.Shared.Data;
