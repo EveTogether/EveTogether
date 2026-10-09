@@ -1469,12 +1469,15 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
     /// <summary>The commander changed the pocket's tier or weather after this member already joined (ET-241) — the
     /// same two facts <see cref="JoinFleetRun"/> takes at the start, kept in step for as long as the run runs.
-    /// Unconditional, same reasoning as the join itself: the commander's own answer always wins here.</summary>
+    /// The commander's own answer always wins here, and only the commander's: the server fills in the sender (ET-494).</summary>
     private void _OnFleetAbyssalUpdated(FleetRunGroupAbyssalUpdatedEvent integrationEvent)
     {
         RunGroupAbyssalUpdate changed = integrationEvent.Data;
-        if (GroupCode is not { } groupCode || !string.Equals(groupCode, changed.GroupCode, StringComparison.Ordinal))
+        if (GroupCode is not { } groupCode || !string.Equals(groupCode, changed.GroupCode, StringComparison.Ordinal)
+            || !_IsFromFleetCommander(integrationEvent))
+        {
             return;
+        }
 
         Avalonia.Threading.Dispatcher.UIThread.Post(() =>
         {
@@ -1483,6 +1486,10 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             Refresh(DateTime.UtcNow);
         });
     }
+
+    /// <summary>Whether a commander-only fleet event came from whoever commands this fleet now (the ET-230 rule).</summary>
+    private bool _IsFromFleetCommander(IIntegrationEvent integrationEvent) =>
+        integrationEvent.CharacterId is { } sender && sender == Authority.FleetCommanderCharacterId;
 
     /// <summary>The stored run names its character by id; the gamelog knows pilots by name. Both are needed, so the
     /// id is taken back through the registry rather than left half-resolved.</summary>
