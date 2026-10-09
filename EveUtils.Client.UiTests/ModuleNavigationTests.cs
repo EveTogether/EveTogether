@@ -539,7 +539,7 @@ public class ModuleNavigationTests
         object esi = Launch(vm, "esi");
 
         Button button = Named(window, "PopOutTabButton");
-        Assert.True(button.IsEnabled);
+        Assert.True(button.IsEffectivelyEnabled);
         button.Command?.Execute(null);
         Dispatcher.UIThread.RunJobs();
 
@@ -549,7 +549,7 @@ public class ModuleNavigationTests
         Assert.Null(dialogs.OwnerFor(logs));
         Assert.IsType<PoppedModuleWindow>(dialogs.OwnerFor(esi));
         Assert.IsType<PoppedOutPlaceholder>(vm.SelectedHostTab?.Content);
-        Assert.False(button.IsEnabled);                       // a placeholder cannot be popped out again
+        Assert.False(button.IsEffectivelyEnabled);           // a placeholder cannot be popped out again
         window.Close();
     }
 
