@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Headless.XUnit;
@@ -485,6 +486,10 @@ public sealed class HomefrontMoneyScenarioTests
         Assert.Equal(270_000m, Assert.Single(joined.BountyEntries).Isk);
         await using (ClientDbContext db = await group.DbAsync())
             Assert.NotNull((await db.Set<Run>().AsNoTracking().SingleAsync(run => run.Id == backfilled.Id)).DeletedAtUtc);
+        // The window has not read the fold yet: its first sibling save waits until a tick has, so Participants changes
+        // mid-SAVE every time (ET-484) — the joined run is saved with the group, not lost to "Collection was modified".
+        Guid pilotRun = group.Window.RunId ?? throw new InvalidOperationException("the window has no run");
+        group.BeforeSave = command => command.RunId == pilotRun ? Task.CompletedTask : group.TickUntilWindowHoldsAsync(ownRun);
         await group.StopAndSaveAsync();
         // The window's own bounty in a fleet is the gamelog's live tally, which a line written straight in never reached.
         await group.AssertOneStoryAsync(HomefrontOutcome.Completed, n: 5, payout: 5 * FivePilots, bounty: 270_000m,
@@ -644,12 +649,21 @@ public sealed class HomefrontMoneyScenarioTests
     {
         private readonly ActivityWindowHarness _harness;
         private readonly List<long> _own;
+        private readonly StrongBox<Func<SaveRunCommand, Task>?> _beforeSave;
 
-        private Group(ActivityWindowHarness harness, ActivityWindowViewModel window, long[] own)
+        private Group(ActivityWindowHarness harness, ActivityWindowViewModel window, long[] own,
+            StrongBox<Func<SaveRunCommand, Task>?> beforeSave)
         {
             _harness = harness;
             Window = window;
             _own = [.. own];
+            _beforeSave = beforeSave;
+        }
+
+        /// <summary>Run ahead of every SaveRunCommand, off the UI thread, while SAVE awaits it.</summary>
+        public Func<SaveRunCommand, Task>? BeforeSave
+        {
+            set => _beforeSave.Value = value;
         }
 
         public ActivityWindowViewModel Window { get; private set; }
@@ -686,11 +700,14 @@ public sealed class HomefrontMoneyScenarioTests
             TaskCompletionSource siblingsMayStart = new(TaskCreationOptions.RunContinuationsAsynchronously);
             if (!isStartRaced)
                 siblingsMayStart.SetResult();
+            StrongBox<Func<SaveRunCommand, Task>?> beforeSave = new();
             ActivityWindowHarness harness = await ActivityWindowHarness.CreateAsync(configure: services =>
             {
                 services.AddSingleton<ILocalCharacterPresence>(new ActivityWindowHarness.StubPresence(true, ids));
                 services.AddTransient<ICommandHandler<StartRunCommand, Result<Guid>>>(provider => new SiblingsWaitFor(
                     ActivatorUtilities.CreateInstance<StartRunCommandHandler>(provider), siblingsMayStart.Task));
+                services.AddTransient<ICommandHandler<SaveRunCommand, Result>>(provider => new SavesWaitFor(
+                    ActivatorUtilities.CreateInstance<SaveRunCommandHandler>(provider), beforeSave));
             });
             foreach (int id in ids.Skip(1))
                 await harness.Services.GetRequiredService<ICharacterRegistry>().AddOrUpdateAsync(new Character($"Toon {id}", id));
@@ -713,7 +730,7 @@ public sealed class HomefrontMoneyScenarioTests
             await window.ApplySignatureAsync("AAA-001", "Combat Site", "Raid: Hall of Sacrifice", [Raid]);
             harness.Dialogs.OnPickCharacters = (_, options) =>
                 Task.FromResult<IReadOnlyList<int>?>([.. options.Select(option => option.CharacterId).Where(pickedIds.Contains)]);
-            Group group = new(harness, window, [.. ids.Select(id => (long)id)]);
+            Group group = new(harness, window, [.. ids.Select(id => (long)id)], beforeSave);
             await group._StartAsync(siblingsMayStart);
             await ActivityWindowHarness.WaitUntil(() => window.Participants.Count >= pickedIds.Length, timeoutMs: 10_000);
 
@@ -768,6 +785,19 @@ public sealed class HomefrontMoneyScenarioTests
             {
                 if (command.CharacterId != ActivityWindowHarness.CharacterId)
                     await mayStart;
+                return await inner.Handle(command, cancellationToken);
+            }
+        }
+
+        private sealed class SavesWaitFor(ICommandHandler<SaveRunCommand, Result> inner,
+            StrongBox<Func<SaveRunCommand, Task>?> beforeSave) : ICommandHandler<SaveRunCommand, Result>
+        {
+            public async Task<Result> Handle(SaveRunCommand command, CancellationToken cancellationToken = default)
+            {
+                if (beforeSave.Value is { } before)
+                {
+                    await before(command);
+                }
                 return await inner.Handle(command, cancellationToken);
             }
         }
@@ -845,6 +875,24 @@ public sealed class HomefrontMoneyScenarioTests
                 await Task.Delay(30);
                 Avalonia.Threading.Dispatcher.UIThread.RunJobs();
             }
+        }
+
+        /// <summary>Ticks the window from the UI thread until its Participants hold <paramref name="runId"/>.</summary>
+        public async Task TickUntilWindowHoldsAsync(Guid runId)
+        {
+            for (int tick = 0; tick < 200; tick++)
+            {
+                if (await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+                    {
+                        Window.Refresh(Clock);
+                        return Window.Participants.Any(participant => participant.RunId == runId);
+                    }))
+                {
+                    return;
+                }
+                await Task.Delay(25);
+            }
+            throw new TimeoutException($"the window never read run {runId}");
         }
 
         public async Task TickUntilAsync(Func<bool> until)
