@@ -47,7 +47,7 @@ services:
       Server__AdminSeedPassword: "${ADMIN_SEED_PASSWORD}"
 
     volumes:
-      # Persists the SQLite db, TLS cert, app log, ESI cache and auth store.
+      # Persists the SQLite db, TLS cert, Data Protection keys, app log, ESI cache and auth store.
       - eve-together-data:/data
       # Alternative to the environment variables above: mount a full appsettings file (read-only).
       # - ./appsettings.Production.json:/app/appsettings.Production.json:ro

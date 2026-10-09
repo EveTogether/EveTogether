@@ -93,6 +93,7 @@ builder.WebHost.ConfigureKestrel(options =>
 
 builder.Services.AddSingleton(certificateInfo);
 builder.Services.AddAppLogStore(dataDirectory: dataDirectory); // in-app error log (before other services)
+ServerDataProtection.Configure(builder.Services, dataDirectory);
 builder.Services.AddGrpc();
 builder.Services.AddRazorComponents().AddInteractiveServerComponents(); // Blazor Server admin panel
 
