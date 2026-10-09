@@ -122,6 +122,11 @@
         <Border DockPanel.Dock="Top" Padding="14,12,14,14" BorderThickness="0,0,0,1"
                 BorderBrush="{DynamicResource BorderBrush}" IsVisible="{Binding !IsDeleted}">
             <StackPanel Spacing="10">
+                <!-- A server tab's copy: every correction is gone from this screen, and this line says why. -->
+                <Border x:Name="ReadOnlyBanner" Classes="chip dim" HorizontalAlignment="Left"
+                        IsVisible="{Binding IsReadOnly}">
+                    <TextBlock Text="{Binding ReadOnlyText}"/>
+                </Border>
                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
                     <StackPanel Grid.Column="0" Spacing="2">
                         <TextBlock x:Name="SiteTitle" Classes="panel-title" FontSize="13"

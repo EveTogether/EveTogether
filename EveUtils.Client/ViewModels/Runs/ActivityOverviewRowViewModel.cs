@@ -219,10 +219,6 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase, IRunsA
 
     public ActivityDetailDto? ServerDetail { get; }
 
-    /// <summary>Only a local activity opens ET-162's screen: it is where a pilot corrects, deletes or republishes his
-    /// own runs (ET-214/215), and a server copy is none of his to change there.</summary>
-    public bool CanOpenDetail => ServerDetail is null;
-
     public string? GroupCode { get; }
 
     public Guid? RunId { get; }

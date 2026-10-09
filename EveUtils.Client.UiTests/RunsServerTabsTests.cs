@@ -143,8 +143,39 @@ public sealed class RunsServerTabsTests
 
         Assert.Empty(viewModel.Tabs[0].Days);
         ActivityOverviewRowViewModel row = Assert.Single(Assert.Single(serverTab.Days).Rows);
-        Assert.False(row.CanOpenDetail);
         Assert.False(row.IsLocal);
+    }
+
+    /// <summary>A server row opens the detail, read-only and filled from the server's copy — unless this machine holds
+    /// the activity too, and then the local one opens as ever. Counter-proof: gate the open on <c>ServerDetail is null</c>
+    /// again and the first row has no detail; skip the local lookup and the second opens read-only.</summary>
+    [AvaloniaTheory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ServerRow_OpensTheDetail_ReadOnlyUnlessALocalCopyExists(bool localCopyExists)
+    {
+        var server = new InMemoryRunServer(accepts: true);
+        using var instance = _ConnectedInstance(out RecordingDialogService dialogs, server);
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        dialogs.OnConfirm = (_, _) => Task.FromResult(true);
+        await _CoupleAsync(instance, ServerAddress, cancellationToken);
+        if (localCopyExists)
+        {
+            await _SaveSiteRunAsync(instance, cancellationToken);
+            await _RowOf(await _LoadAsync(instance, cancellationToken, dialogs)).PublishCommand.ExecuteAsync(null);
+        }
+        else
+        {
+            server.Hold(ServerAddress, 90000001);
+        }
+
+        RunsOverviewViewModel viewModel = await _LoadAsync(instance, cancellationToken, dialogs);
+        ActivityOverviewRowViewModel row = Assert.Single(Assert.Single(
+            viewModel.Tabs.Single(tab => tab.ServerAddress == ServerAddress).Days).Rows);
+        await row.OpenDetailCommand.ExecuteAsync(null);
+
+        Assert.NotNull(dialogs.LastActivityDetail);
+        Assert.Equal(!localCopyExists, dialogs.LastActivityDetail.IsReadOnly);
     }
 
     private static ICqrsDispatcher _Dispatcher(TestClientInstance instance) =>

@@ -54,6 +54,7 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
     private readonly Func<Task>? _republish;
     private readonly IDialogService? _dialogs;
     private readonly ISdeAccessor? _sde;
+    private readonly ActivityDetailDto? _serverCopy;
 
     /// <summary>Every detail section there is, in screen order — built once, drawn when the type claims it or the
     /// activity has something for it.</summary>
@@ -77,13 +78,24 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
     /// Null leaves it showing what it read, as it did before.</param>
     /// <param name="services">The app's services, for the live fleet view HOMEFRONT shows beside a saved list (ET-230).
     /// Null shows the list without it.</param>
+    /// <param name="serverCopy">A server tab's copy of the activity, shown instead of a store read and read-only whole:
+    /// no run is this machine's own, so no section offers a correction, and delete, re-value, republish and undo refuse.</param>
     public ActivityDetailViewModel(CqrsDispatcher dispatcher, Guid activitySummaryId,
         IAppraisalProvider? appraisal = null, Func<long, string>? nameOf = null,
         IEsiClient? esi = null, IEsiLocationClient? locations = null, ISdeAccessor? sde = null,
         ICharacterPortraitProvider? portraits = null, ITypeImageProvider? images = null,
         IReadOnlySet<long>? ownCharacterIds = null, Func<Task>? republish = null, IDialogService? dialogs = null,
-        RunChangeFeed? runChanges = null, IServiceProvider? services = null)
+        RunChangeFeed? runChanges = null, IServiceProvider? services = null,
+        ActivityDetailDto? serverCopy = null)
     {
+        _serverCopy = serverCopy;
+        if (serverCopy is not null)
+        {
+            ownCharacterIds = new HashSet<long>();
+            republish = null;
+            runChanges = null;
+        }
+
         _dispatcher = dispatcher;
         _activitySummaryId = activitySummaryId;
         _nameOf = nameOf;
@@ -201,12 +213,23 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
     [NotifyPropertyChangedFor(nameof(UndoDeleteText))]
     private bool _isUndoingDelete;
 
+    public bool IsReadOnly => _serverCopy is not null;
+
+    public string ReadOnlyText => "Server copy · read only";
+
     public string UndoDeleteText => IsUndoingDelete ? "Restoring…" : "Undo";
 
     public void RefreshModule() => _ = LoadAsync();
 
     public async Task LoadAsync(CancellationToken cancellationToken = default)
     {
+        if (_serverCopy is not null)
+        {
+            _lastDetail = _serverCopy;
+            await _ApplyAsync(_serverCopy, followUp: false, cancellationToken);
+            return;
+        }
+
         Result<ActivityDetailDto> detail =
             await _dispatcher.Query(new GetActivityDetailQuery(_activitySummaryId), cancellationToken);
         // The summary is valued at the prices of the day it was built, the loot table below at today's; when the
@@ -320,8 +343,10 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
     [RelayCommand(CanExecute = nameof(CanStartRepublish))]
     private async Task RepublishAsync()
     {
-        if (_republish is null)
+        if (IsReadOnly || _republish is null)
+        {
             return;
+        }
 
         IsRepublishing = true;
         try
@@ -353,8 +378,10 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
     [RelayCommand(CanExecute = nameof(CanStartDelete))]
     private async Task DeleteAsync()
     {
-        if (_dialogs is null || _lastDetail is not { } detail)
+        if (IsReadOnly || _dialogs is null || _lastDetail is not { } detail)
+        {
             return;
+        }
 
         List<Guid> ownRunIds = _OwnRunIds(detail);
         if (ownRunIds.Count == 0)
@@ -407,8 +434,10 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
     [RelayCommand(CanExecute = nameof(CanStartRevalue))]
     private async Task RevalueAsync()
     {
-        if (_dialogs is null || _lastDetail is not { } detail)
+        if (IsReadOnly || _dialogs is null || _lastDetail is not { } detail)
+        {
             return;
+        }
 
         List<Guid> ownRunIds = _OwnRunIds(detail);
         if (ownRunIds.Count == 0)
@@ -444,8 +473,10 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
     [RelayCommand]
     private async Task UndoDeleteAsync()
     {
-        if (!IsDeleted)
+        if (IsReadOnly || !IsDeleted)
+        {
             return;
+        }
 
         IsUndoingDelete = true;
         try
@@ -521,7 +552,7 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
             section.Apply(input);
         _ApplySectionsPerType(type);
         _ApplyTotalIsk(detail);
-        CanDelete = _OwnRunIds(detail).Count > 0;
+        CanDelete = !IsReadOnly && _OwnRunIds(detail).Count > 0;
         return input;
     }
 
@@ -546,7 +577,7 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
         TimeSourceText = detail.Runs.Any(run => run.TimesCorrectedAtUtc is not null)
             ? "times corrected by hand"
             : "measured";
-        IsPublishedCopyBehind = detail.Runs.Any(run => run.SyncState is RunSyncState.Outdated);
+        IsPublishedCopyBehind = !IsReadOnly && detail.Runs.Any(run => run.SyncState is RunSyncState.Outdated);
     }
 
     /// <summary>One character's name for this activity (ET-212): whichever of their own runs recorded one at start
@@ -585,7 +616,7 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
             .Distinct()
             .Where(characterId => _ownCharacterIds?.Contains(characterId) ?? true)
             .Select(characterId => detail.IskByCharacter?.GetValueOrDefault(characterId) ?? IskBreakdown.None));
-        HasOwnShare = HasTotalIsk && detail.IskByCharacter is not null && _ownCharacterIds is not null
+        HasOwnShare = !IsReadOnly && HasTotalIsk && detail.IskByCharacter is not null && _ownCharacterIds is not null
                       && detail.Runs.Any(run => !_ownCharacterIds.Contains(run.CharacterId));
         OwnShareText = "your share " + (own.Total < 0 ? string.Empty : "+")
                        + IskFormat.Compact(own.Total) + " ISK" + IskFormat.ExpectedPart(own);
