@@ -2266,9 +2266,18 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     {
         HashSet<Guid> visited = [runId];
         // A join committed since the last tick's read is a sibling too: wait out that read, which may predate it, then
-        // read again.
-        await _participantsRead;
-        await _RefreshParticipantsAsync();
+        // read again. A failed read costs nobody their save or stop; the loop goes on with the rows it already has.
+        await _participantsRead.ConfigureAwait(
+            ConfigureAwaitOptions.SuppressThrowing | ConfigureAwaitOptions.ContinueOnCapturedContext);
+        try
+        {
+            await _RefreshParticipantsAsync();
+        }
+        catch (Exception ex)
+        {
+            _services.GetService<ILoggerFactory>()?.CreateLogger<ActivityWindowViewModel>()
+                .LogWarning(ex, "Could not re-read the participants of run {RunId} before its siblings.", runId);
+        }
         while (Participants.FirstOrDefault(participant => !visited.Contains(participant.RunId)) is { } sibling)
         {
             visited.Add(sibling.RunId);
