@@ -326,6 +326,12 @@ sealed class Program
             if (repairedSiteTypes.IsSuccess && repairedSiteTypes.Value > 0)
                 Console.Error.WriteLine($"[startup] repaired the dungeon id of {repairedSiteTypes.Value} run(s)");
 
+            // ET-490: saved runs started by hand without a system get the one their group agrees on. Idempotent.
+            Result<int> filledSystems = dispatcher
+                .Send(new FillRunSolarSystemsCommand()).GetAwaiter().GetResult();
+            if (filledSystems.IsSuccess && filledSystems.Value > 0)
+                Console.Error.WriteLine($"[startup] filled the missing system of {filledSystems.Value} run(s)");
+
             // Names copied while the SDE did not know them yet (ET-460) that it knows now.
             Result<int> repricedLoot = dispatcher
                 .Send(new RepriceUnrecognisedLootCommand()).GetAwaiter().GetResult();

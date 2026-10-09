@@ -883,7 +883,8 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
             characters,
             toasts: _services.GetService<IToastService>(),
             fleetParticipation: _services.GetService<IFleetParticipation>(),
-            localPresence: _services.GetService<ILocalCharacterPresence>()));
+            localPresence: _services.GetService<ILocalCharacterPresence>(),
+            systemLocator: _services.GetService<ICharacterSystemLocator>()));
     }
 
     /// <summary>Open the FITS fit-browser window: the Local library plus a tab per coupled server, each a

@@ -89,6 +89,11 @@ public sealed class CommandSignalCoverageTests
         [typeof(RepairSiteTypeIdsCommand)] = "needs the SDE's own site catalogue to do anything, which the shared "
             + "harness has no way to seed per scenario; its signal is proven in RepairSiteTypeIdsCommandHandlerTests "
             + "against a FakeSdeAccessor instead",
+        // ET-490: only fills a run whose group already has another run with a system, which the shared harness has no
+        // scenario seeding; it publishes RunsChangedEvent through the RebuildActivitySummariesCommand it delegates to,
+        // proven in RunSolarSystemTests.
+        [typeof(FillRunSolarSystemsCommand)] = "needs saved group runs with and without a system to do anything; its "
+            + "signal is proven in RunSolarSystemTests",
         // ET-271: only ever writes a line a character's own gamelog file carries, which the shared harness has no
         // directory for; it publishes per run it added to, and HomefrontMoneyScenarioTests.S11 drives it end to end.
         [typeof(ImportRunBountyCommand)] = "needs a character's own gamelog file on disk to add anything, which the "

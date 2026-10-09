@@ -34,4 +34,7 @@ public sealed record SaveRunCommand(
     bool RebuildSummaries = true,
     /// <summary>How many characters were on the fleet's roster at STOP (ET-230), or null to leave the row's own
     /// answer alone — a solo run, or the app's own save of a run nobody had a window open on.</summary>
-    int? FleetSizeAtStop = null) : ICommand<Result>;
+    int? FleetSizeAtStop = null,
+    /// <summary>The system the pilot is in when saving (ET-490). Only fills a run that was started without one; a
+    /// system the run already has is kept.</summary>
+    int? SolarSystemId = null) : ICommand<Result>;
