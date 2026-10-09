@@ -98,19 +98,22 @@ public sealed class TargetsWindowSectionViewModel : RunWindowSection
         _eventCount = events.Count;
         IReadOnlyDictionary<(int? Room, string Name), TargetDamage> damage = DamageByTarget(
             events.Where(pair => pair.Event is CombatEvent).Select(pair => (pair.Room, (CombatEvent)pair.Event)));
-        HashSet<(int? Room, string Name)> neuters = [.. events.Where(pair => pair.Event is NeutEvent { Outgoing: false, Source: not null })
-            .Select(pair => (pair.Room, LogLineParser.CounterpartyOf(((NeutEvent)pair.Event).Source!)))];
+        ILookup<(int? Room, string Name), NpcEwarKind> seen = events.Select(pair => pair.Event switch
+        {
+            NeutEvent { Outgoing: false, Source: not null } neut => ((int? Room, string Name, NpcEwarKind Kind)?)(pair.Room, LogLineParser.CounterpartyOf(neut.Source), NpcEwarKind.Neut),
+            EwarEvent ewar => (pair.Room, ewar.Source, ewar.Kind),
+            _ => null
+        }).OfType<(int? Room, string Name, NpcEwarKind Kind)>().ToLookup(item => (item.Room, item.Name), item => item.Kind);
         Rooms = GroupByRoom(_enemies?.TargetSightings() ?? [], sighting => _ToRow(sighting) is { } row
-            ? WithLoggedNeut(row, neuters.Contains((sighting.Room, sighting.Name))) with { Damage = damage.GetValueOrDefault((sighting.Room, sighting.Name)) }
+            ? WithLoggedEwar(row, seen[(sighting.Room, sighting.Name)]) with { Damage = damage.GetValueOrDefault((sighting.Room, sighting.Name)) }
             : null);
         OnPropertyChanged(nameof(Rooms));
         RefreshSummary();
     }
 
-    /// <summary>A neut the log showed this enemy put on the pilot is a "NEUT log" chip, whatever the SDE or the table
-    /// says; the log carries no other e-war line the parser reads.</summary>
-    internal static TargetRow WithLoggedNeut(TargetRow row, bool neuted) =>
-        neuted && row.Ewar.All(ewar => ewar.Kind != NpcEwarKind.Neut) ? row with { Ewar = [.. row.Ewar, new TargetEwar(NpcEwarKind.Neut, null, true)] } : row;
+    /// <summary>Each e-war the log showed this enemy put on the pilot is a "KIND log" chip; EVE logs no web, paint or damp.</summary>
+    internal static TargetRow WithLoggedEwar(TargetRow row, IEnumerable<NpcEwarKind> seen) =>
+        row with { Ewar = [.. row.Ewar, .. seen.Distinct().Where(kind => row.Ewar.All(ewar => ewar.Kind != kind)).Select(kind => new TargetEwar(kind, null, true) { FromLog = true })] };
 
     /// <summary>The pilot's outgoing damage per enemy name and room, from the run's own combat lines. An enemy is gone
     /// when the room's last hit came <see cref="GoneAfter"/> or more after its own.</summary>

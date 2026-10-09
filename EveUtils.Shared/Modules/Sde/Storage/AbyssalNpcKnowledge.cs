@@ -21,7 +21,7 @@ public enum AbyssalNpcFaction
 
 /// <summary>The e-war kinds this table can name for a type with no SDE dogma at all (see <see cref="TyrannosAgent"/>).
 /// Mirrors the nine behaviors <see cref="ISdeAccessor.GetNpcEwarProfile"/> reads from the SDE for a typed NPC.</summary>
-public enum NpcEwarKind { Scram, Neut, Web, Damp, TrackingDisrupt, GuidanceDisrupt, Paint, RemoteRepair, Vorton }
+public enum NpcEwarKind { Scram, Neut, Web, Damp, TrackingDisrupt, GuidanceDisrupt, Paint, RemoteRepair, Vorton, Jam }
 
 /// <summary>A Tyrannos ESI agent without an SDE type. <see cref="KnownEwar"/> contains only observed
 /// effects; no ranges are known. See ET-342 research for sources.</summary>

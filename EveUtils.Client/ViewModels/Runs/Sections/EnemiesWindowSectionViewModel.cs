@@ -214,10 +214,10 @@ public sealed partial class EnemiesWindowSectionViewModel : RunWindowSection
         _collectors.GetValueOrDefault(characterId)?.Record(characterId, target, observedAtUtc);
 
     /// <summary>One line from the same catch-up read, for the run's timeline: what <see cref="_OnTelemetryObserved"/>
-    /// does live. Lines that are not combat, repair, neut or capacitor are ignored here.</summary>
+    /// does live. Lines that are not combat, repair, neut, capacitor or e-war are ignored here.</summary>
     internal void RecordCatchUpTelemetry(int characterId, GameLogEvent logEvent)
     {
-        if (logEvent is CombatEvent or RemoteRepEvent or NeutEvent or CapTransferEvent)
+        if (logEvent is CombatEvent or RemoteRepEvent or NeutEvent or CapTransferEvent or EwarEvent)
         {
             _combatEvents.GetValueOrDefault(characterId)?.Add(logEvent);
         }

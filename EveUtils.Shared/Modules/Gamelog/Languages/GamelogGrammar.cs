@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Text;
 using System.Text.RegularExpressions;
 using EveUtils.Shared.Modules.Gamelog.Models;
+using EveUtils.Shared.Modules.Sde.Storage;
 
 namespace EveUtils.Shared.Modules.Gamelog.Languages;
 
@@ -63,6 +64,14 @@ internal sealed class GamelogGrammar
                 new(_Compile(t.EnergyNeutralizedIn), LineDirection.Incoming)
             ];
 
+        EwarAttempts =
+        [
+            .. new (string? Template, NpcEwarKind Kind)[]
+            {
+                (t.WarpScrambleAttempt, NpcEwarKind.Scram), (t.WarpDisruptionAttempt, NpcEwarKind.Scram), (t.Jammed, NpcEwarKind.Jam)
+            }.Where(ewar => ewar.Template is not null).Select(ewar => new EwarPattern(_Compile(ewar.Template!, withTail: true), ewar.Kind))
+        ];
+
         string spacing = _WordsNeedSpaces(t.DirectionTo) && _WordsNeedSpaces(t.DirectionFrom) ? @"\s+" : @"\s*";
         DamageHead = new Regex(
             $@"^(?<amount>{Amount}){spacing}(?:(?<to>{Regex.Escape(t.DirectionTo)})|(?<from>{Regex.Escape(t.DirectionFrom)})){spacing}(?<target>.+)$",
@@ -101,6 +110,7 @@ internal sealed class GamelogGrammar
     public IReadOnlyList<DirectedPattern> Repairs { get; }
     public IReadOnlyList<DirectedPattern> CapTransfers { get; }
     public IReadOnlyList<DirectedPattern> Neutralizers { get; }
+    public IReadOnlyList<EwarPattern> EwarAttempts { get; }
     public Regex DamageHead { get; }
     public bool DirectionByColour { get; }
     public IReadOnlyDictionary<string, HitQuality> Qualities { get; }
@@ -188,5 +198,7 @@ internal enum LineDirection
     Incoming,
     ByColour
 }
+
+internal sealed record EwarPattern(Regex Regex, NpcEwarKind Kind);
 
 internal sealed record DirectedPattern(Regex Regex, LineDirection Direction, string? Kind = null);

@@ -128,14 +128,20 @@ public sealed class AbyssalRoomDetectionTests
         Assert.Equal(["RoomDetected(sure)@12:00:35"], draft.Parameters.Select(row => $"{row.ParameterKey}({row.TypedValue})@{row.ObservedAtUtc:HH:mm:ss}"));
         Assert.Equal("sure", model.Enemies().EnemyRooms[0].Source?.Word);
 
-        // A name the SDE has no type for shows in its room as a plain row, and the room still names its faction.
+        // A Tyrannos agent has no SDE type, so it is counted under its reserved negative id and still names the room's faction.
         model.Enemies().RecordCatchUpSighting(ActivityWindowHarness.CharacterId, "Karybdis Tyrannos",
             new DateTime(2030, 1, 1, 12, 0, 50, DateTimeKind.Utc));
-        Assert.Equal(["Karybdis Tyrannos"], model.Enemies().EnemyRooms[0].Unresolved);
+        Assert.Equal(-3019609, Assert.Single(model.Enemies().EnemyRooms[0].Observations,
+            observation => observation.EnemyName == "Karybdis Tyrannos").EnemyTypeId);
         Assert.Equal("mixed", model.Enemies().EnemyRooms[0].FactionText);
         Assert.EndsWith("mixed", model.Enemies().CurrentRoomText(DateTime.UtcNow));
         Assert.Equal("Vigilant Tyrannos", TargetsWindowSectionViewModel.FactionText(
             AbyssalNpcKnowledge.Faction(["Ephialtes Entangler", "Karybdis Tyrannos"])));
+
+        // The catch-up read keeps an e-war line for TARGETS too, like the live feed.
+        model.Enemies().RecordCatchUpTelemetry(ActivityWindowHarness.CharacterId,
+            new EwarEvent(new DateTime(2030, 1, 1, 12, 0, 51, DateTimeKind.Utc), NpcEwarKind.Scram, "Karybdis Tyrannos"));
+        Assert.Contains(model.Enemies().TargetEvents(), pair => pair.Event is EwarEvent);
     }
 
     /// <summary>NEW ROOM sets limits the whole fleet shares, so in a fleet run only the commander gets the button and
