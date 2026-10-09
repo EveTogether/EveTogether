@@ -44,5 +44,5 @@ internal static class ActivityDetails
         run.AgentId, run.MissionLevel, run.Signature, run.FitNameSnapshot,
         [.. run.LootCaptures.OrderBy(capture => capture.CapturedAtUtc).Select(RunLootCaptureMapper.ToDto)],
         run.SyncState, run.CharacterNameSnapshot, run.InSiteAtCompletion, run.FleetSizeAtStop,
-        run.HomefrontPayoutTableVersion);
+        run.HomefrontPayoutTableVersion, run.CombatWithheld);
 }

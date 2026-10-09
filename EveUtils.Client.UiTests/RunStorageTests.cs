@@ -6,6 +6,7 @@ using EveUtils.Client.Runs;
 using EveUtils.Client.Transport;
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Data;
+using EveUtils.Shared.Identity;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Market.Entities;
 using EveUtils.Shared.Modules.Market.Repositories;
@@ -577,6 +578,63 @@ public sealed class RunStorageTests
 
         RunWireData pushed = Assert.Single(client.Pushed).Run;
         Assert.Equal((carried, !carried), (pushed.CombatTimeline?.Series.Single().Total == 998, pushed.CombatWithheld));
+    }
+
+    /// <summary>ET-472: once, a published run of this pilot that kept its combat is queued again while combat is shared; never twice.</summary>
+    [AvaloniaTheory]
+    [InlineData(null, "Pending,Synced,Synced")]
+    [InlineData("false", "Synced,Synced,Synced")]
+    public async Task RunCombatRequeue_QueuesOwnRunsWithCombatOnce_WhileCombatIsShared(string? shareCombat, string expected)
+    {
+        using var instance = TestClientInstance.Create();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        IDbContextFactory<ClientDbContext> contextFactory = instance.Services.GetRequiredService<IDbContextFactory<ClientDbContext>>();
+        await instance.Services.GetRequiredService<ICharacterRegistry>().AddOrUpdateAsync(new Character("Pilot", 90000001));
+        if (shareCombat is { } value)
+        {
+            await instance.Services.GetRequiredService<ISettingRepository>().UpsertAsync(MetricShareSnapshot.CombatShareKey, value, cancellationToken);
+        }
+
+        // Own run with combat, own run without, a fleet mate's run with combat.
+        (Guid Id, long Character, bool Combat)[] runs = [(Guid.CreateVersion7(), 90000001, true), (Guid.CreateVersion7(), 90000001, false), (Guid.CreateVersion7(), 90000002, true)];
+        await using (ClientDbContext db = await contextFactory.CreateDbContextAsync(cancellationToken))
+        {
+            foreach ((Guid id, long character, bool combat) in runs)
+            {
+                db.Set<Run>().Add(new Run
+                {
+                    Id = id, CharacterId = character, GroupCode = $"HF-{id.ToString("N")[^8..]}", ActivityKind = ActivityKind.Abyssal, State = RunState.Saved,
+                    StartedAtUtc = StartedAtUtc, SavedAtUtc = StartedAtUtc, SiteTypeId = 1234, SyncState = RunSyncState.Synced,
+                    SyncServerAddress = ServerAddress, Revision = 2
+                });
+                if (combat)
+                {
+                    db.Set<RunCombatTimeline>().Add(new RunCombatTimeline { RunId = id, Seconds = 1 });
+                }
+            }
+
+            await db.SaveChangesAsync(cancellationToken);
+        }
+
+        RunCombatRequeue requeue = instance.Services.GetRequiredService<RunCombatRequeue>();
+        await requeue.RunOnceAsync(cancellationToken);
+        string first = await _StatesAsync(contextFactory, runs.Select(run => run.Id), cancellationToken);
+        await using (ClientDbContext db = await contextFactory.CreateDbContextAsync(cancellationToken))
+        {
+            await db.Set<Run>().ExecuteUpdateAsync(properties => properties.SetProperty(run => run.SyncState, RunSyncState.Synced), cancellationToken);
+        }
+
+        await requeue.RunOnceAsync(cancellationToken);
+
+        Assert.Equal((expected, "Synced,Synced,Synced"), (first, await _StatesAsync(contextFactory, runs.Select(run => run.Id), cancellationToken)));
+    }
+
+    private static async Task<string> _StatesAsync(IDbContextFactory<ClientDbContext> contextFactory, IEnumerable<Guid> runIds,
+        CancellationToken cancellationToken)
+    {
+        await using ClientDbContext db = await contextFactory.CreateDbContextAsync(cancellationToken);
+        Dictionary<Guid, RunSyncState> states = await db.Set<Run>().ToDictionaryAsync(run => run.Id, run => run.SyncState, cancellationToken);
+        return string.Join(",", runIds.Select(id => states[id]));
     }
 
     [AvaloniaFact]

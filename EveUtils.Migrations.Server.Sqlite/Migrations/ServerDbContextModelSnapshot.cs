@@ -767,6 +767,9 @@ namespace EveUtils.Migrations.Server.Sqlite.Migrations
                         .HasMaxLength(255)
                         .HasColumnType("TEXT");
 
+                    b.Property<bool>("CombatWithheld")
+                        .HasColumnType("INTEGER");
+
                     b.Property<DateTime?>("DeletedAtUtc")
                         .HasColumnType("TEXT");
 

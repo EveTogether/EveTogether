@@ -16,7 +16,8 @@
                 <ItemsControl.ItemTemplate>
                     <DataTemplate DataType="vs:CombatPilotChipViewModel">
                         <Button Classes="chipaction" Classes.actionable="{Binding IsAvailable}"
-                                Command="{Binding ShowCommand}">
+                                Command="{Binding ShowCommand}"
+                                ToolTip.Tip="{Binding Tooltip}">
                             <Border Classes="chip" Classes.ok="{Binding IsSelected}"
                                     Classes.dim="{Binding !IsAvailable}">
                                 <TextBlock Text="{Binding Text}"/>

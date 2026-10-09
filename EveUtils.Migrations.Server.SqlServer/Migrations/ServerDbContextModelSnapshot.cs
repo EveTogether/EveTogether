@@ -806,6 +806,9 @@ namespace EveUtils.Migrations.Server.SqlServer.Migrations
                         .HasMaxLength(255)
                         .HasColumnType("nvarchar(255)");
 
+                    b.Property<bool>("CombatWithheld")
+                        .HasColumnType("bit");
+
                     b.Property<DateTime?>("DeletedAtUtc")
                         .HasColumnType("datetime2");
 
