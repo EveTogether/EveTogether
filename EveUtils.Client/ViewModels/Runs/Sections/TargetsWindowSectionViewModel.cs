@@ -6,6 +6,7 @@ using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Shared.Modules.Dogma;
 using EveUtils.Shared.Modules.Gamelog.Aggregation;
 using EveUtils.Shared.Modules.Gamelog.Models;
+using EveUtils.Shared.Modules.Gamelog.Parsing;
 using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Sde;
 using EveUtils.Shared.Modules.Sde.Storage;
@@ -28,7 +29,7 @@ public sealed class TargetsWindowSectionViewModel : RunWindowSection
     private static readonly TimeSpan PeakWindow = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan GoneAfter = TimeSpan.FromSeconds(10);
     private readonly Dictionary<string, TargetRow?> _rowByName = new(StringComparer.OrdinalIgnoreCase);
-    private int _hitCount;
+    private int _eventCount;
 
     public TargetsWindowSectionViewModel(IRunWindowContext context) : base(context, RunSectionId.Targets, "TARGETS")
     {
@@ -85,7 +86,7 @@ public sealed class TargetsWindowSectionViewModel : RunWindowSection
     // New combat lines change the damage but not the sightings, so the clock tick looks for them.
     public override void Refresh(DateTime nowUtc)
     {
-        if (_enemies is not null && _enemies.TargetHits().Count != _hitCount)
+        if (_enemies is not null && _enemies.TargetEvents().Count != _eventCount)
         {
             _Rebuild();
         }
@@ -93,14 +94,23 @@ public sealed class TargetsWindowSectionViewModel : RunWindowSection
 
     private void _Rebuild()
     {
-        IReadOnlyList<(int? Room, CombatEvent Hit)> hits = _enemies?.TargetHits() ?? [];
-        _hitCount = hits.Count;
-        IReadOnlyDictionary<(int? Room, string Name), TargetDamage> damage = DamageByTarget(hits);
-        Rooms = GroupByRoom(_enemies?.TargetSightings() ?? [],
-            sighting => _ToRow(sighting) is { } row ? row with { Damage = damage.GetValueOrDefault((sighting.Room, sighting.Name)) } : null);
+        IReadOnlyList<(int? Room, GameLogEvent Event)> events = _enemies?.TargetEvents() ?? [];
+        _eventCount = events.Count;
+        IReadOnlyDictionary<(int? Room, string Name), TargetDamage> damage = DamageByTarget(
+            events.Where(pair => pair.Event is CombatEvent).Select(pair => (pair.Room, (CombatEvent)pair.Event)));
+        HashSet<(int? Room, string Name)> neuters = [.. events.Where(pair => pair.Event is NeutEvent { Outgoing: false, Source: not null })
+            .Select(pair => (pair.Room, LogLineParser.CounterpartyOf(((NeutEvent)pair.Event).Source!)))];
+        Rooms = GroupByRoom(_enemies?.TargetSightings() ?? [], sighting => _ToRow(sighting) is { } row
+            ? WithLoggedNeut(row, neuters.Contains((sighting.Room, sighting.Name))) with { Damage = damage.GetValueOrDefault((sighting.Room, sighting.Name)) }
+            : null);
         OnPropertyChanged(nameof(Rooms));
         RefreshSummary();
     }
+
+    /// <summary>A neut the log showed this enemy put on the pilot is a "NEUT log" chip, whatever the SDE or the table
+    /// says; the log carries no other e-war line the parser reads.</summary>
+    internal static TargetRow WithLoggedNeut(TargetRow row, bool neuted) =>
+        neuted && row.Ewar.All(ewar => ewar.Kind != NpcEwarKind.Neut) ? row with { Ewar = [.. row.Ewar, new TargetEwar(NpcEwarKind.Neut, null, true)] } : row;
 
     /// <summary>The pilot's outgoing damage per enemy name and room, from the run's own combat lines. An enemy is gone
     /// when the room's last hit came <see cref="GoneAfter"/> or more after its own.</summary>
