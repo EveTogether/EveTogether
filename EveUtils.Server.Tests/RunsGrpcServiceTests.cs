@@ -1,12 +1,15 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using EveUtils.Grpc;
 using EveUtils.Server.Auth;
 using EveUtils.Server.Grpc;
 using EveUtils.Server.Runs;
 using EveUtils.Shared.Data;
+using EveUtils.Shared.Modules.Gamelog.Models;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Entities;
 using EveUtils.Shared.Modules.Runs.Enums;
+using EveUtils.Shared.Modules.Runs.Telemetry;
 using EveUtils.Shared.Modules.ServerAuth.Repositories.Implementations;
 using EveUtils.Shared.Modules.ServerAuth.Services;
 using Grpc.Core;
@@ -81,8 +84,8 @@ public sealed class RunsGrpcServiceTests
     {
         CancellationToken cancellationToken = TestContext.Current.CancellationToken;
         var repository = new ServerRunSyncRepository((IDbContextFactory<ServerDbContext>)_factory);
-        await repository.UpsertAsync(_SavedRun(Raymond, "HF-Z6U3"), cancellationToken);
-        await repository.UpsertAsync(_SavedRun(Stranger, "HF-9XQ1"), cancellationToken);
+        await repository.UpsertAsync(_SavedRun(Raymond, "HF-Z6U3"), cancellationToken: cancellationToken);
+        await repository.UpsertAsync(_SavedRun(Stranger, "HF-9XQ1"), cancellationToken: cancellationToken);
         var clients = new ConnectedClients();
         RecordingWriter raymond = new(), jithran = new(), stranger = new();
         clients.Add(new ConnectedClient("raymond", (int)Raymond, "Raymond", raymond));
@@ -106,7 +109,7 @@ public sealed class RunsGrpcServiceTests
     {
         CancellationToken cancellationToken = TestContext.Current.CancellationToken;
         var repository = new ServerRunSyncRepository((IDbContextFactory<ServerDbContext>)_factory);
-        await repository.UpsertAsync(_SavedRun(Raymond, groupCode: null), cancellationToken);
+        await repository.UpsertAsync(_SavedRun(Raymond, groupCode: null), cancellationToken: cancellationToken);
         var clients = new ConnectedClients();
         RecordingWriter raymond = new();
         clients.Add(new ConnectedClient("raymond", (int)Raymond, "Raymond", raymond));
@@ -159,7 +162,7 @@ public sealed class RunsGrpcServiceTests
             Status = UnrecognisedItemStatus.Open
         });
         run.LootCaptures.Add(capture);
-        await repository.UpsertAsync(run, cancellationToken);
+        await repository.UpsertAsync(run, cancellationToken: cancellationToken);
 
         IReadOnlyList<Run> published = await repository.ListPublishedAsync(
             Raymond, run.StartedAtUtc.AddDays(-1), run.StartedAtUtc.AddDays(1), cancellationToken);
@@ -198,7 +201,7 @@ public sealed class RunsGrpcServiceTests
             Id = Guid.CreateVersion7(), RunId = run.Id, ParameterKey = RunParameterKey.AbyssalFilamentTypeId, TypedValue = "60000",
             ObservedAtUtc = pricedAtUtc, UnitPriceIsk = 1000m, PricedAtUtc = pricedAtUtc, PriceSource = PriceSnapshotSource.Revalued
         });
-        await repository.UpsertAsync(run, cancellationToken);
+        await repository.UpsertAsync(run, cancellationToken: cancellationToken);
 
         Run published = Assert.Single(await repository.ListPublishedAsync(
             Raymond, run.StartedAtUtc.AddDays(-1), run.StartedAtUtc.AddDays(1), cancellationToken));
@@ -209,6 +212,80 @@ public sealed class RunsGrpcServiceTests
         Assert.Equal((20m, PriceSnapshotSource.Migrated), (ore.UnitPriceIsk, ore.PriceSource));
         RunParameter filament = Assert.Single(published.Parameters, parameter => parameter.ParameterKey == RunParameterKey.AbyssalFilamentTypeId);
         Assert.Equal((1000m, PriceSnapshotSource.Revalued), (filament.UnitPriceIsk, filament.PriceSource));
+    }
+
+    /// <summary>ET-472: Jithran's combat reaches a group mate byte-equal (AC1), a withheld push takes it off the server
+    /// (AC2), a push from an older client leaves it (AC3), and a pilot without a run in the group never gets it.</summary>
+    [Theory]
+    [InlineData("shared", Raymond, true)]
+    [InlineData("withheld", Raymond, false)]
+    [InlineData("older client", Raymond, true)]
+    [InlineData("shared", Stranger, false)]
+    public async Task CombatTimeline_TravelsWithTheRun_OnlyAsFarAsItIsShared(string secondPush, long puller, bool reachesPuller)
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        var repository = new ServerRunSyncRepository((IDbContextFactory<ServerDbContext>)_factory);
+        await repository.UpsertAsync(_SavedRun(Raymond, "HF-472A"), cancellationToken: cancellationToken);
+        await repository.UpsertAsync(_SavedRun(Stranger, "HF-9XQ1"), cancellationToken: cancellationToken);
+        (RunsGrpcService service, string pusherToken) = await _ServiceAsync(repository, new ConnectedClients(), cancellationToken);
+        string pullerToken = await _TokenAsync(puller, cancellationToken);
+        Run run = _SavedRun(Jithran, "HF-472A");
+        RunCombatTimeline timeline = _Timeline(run.Id);
+
+        Assert.True((await service.PushRun(_PushRequest(run, timeline), Context(pusherToken))).Accepted);
+        PushRunRequest second = secondPush switch
+        {
+            "withheld" => _PushRequest(run, timeline, combatWithheld: true),
+            "older client" => _WithoutCombatFields(_PushRequest(run, timeline)),
+            _ => _PushRequest(run, timeline)
+        };
+        Assert.True((await service.PushRun(second, Context(pusherToken))).Accepted);
+
+        await using ServerDbContext db = ((IDbContextFactory<ServerDbContext>)_factory).CreateDbContext();
+        Assert.Equal(secondPush != "withheld", await db.Set<RunCombatTimeline>().AnyAsync(stored => stored.RunId == run.Id, cancellationToken));
+        PullRunsReply pulled = await service.PullRuns(
+            new PullRunsRequest { GroupCodes = { "HF-472A" }, SinceUtc = DateTime.MinValue.ToString("O") }, Context(pullerToken));
+        RunCombatTimelineWireData? received = pulled.PayloadJson.Select(json => JsonSerializer.Deserialize<RunWirePayload>(json)!)
+            .SingleOrDefault(payload => payload.Run.Id == run.Id)?.Run.CombatTimeline;
+        Assert.Equal(reachesPuller ? JsonSerializer.Serialize(RunCombatTimelineWireData.FromEntity(timeline)) : "null",
+            JsonSerializer.Serialize(received));
+    }
+
+    private async Task<string> _TokenAsync(long characterId, CancellationToken cancellationToken)
+    {
+        var authRepository = new ServerAuthRepository(_factory);
+        var character = await authRepository.UpsertSyncedAsync((int)characterId, $"Pilot {characterId}", new EncryptedToken([1], [2], [3]), null, cancellationToken);
+        return (await new ServerSessionService(authRepository, NullLogger<ServerSessionService>.Instance).IssueAsync(character.Id, cancellationToken)).AccessToken;
+    }
+
+    // Twenty minutes of varied damage, so a truncated blob cannot pass for the real one.
+    private static RunCombatTimeline _Timeline(Guid runId)
+    {
+        int[] damage = [.. Enumerable.Range(0, 1200).Select(second => second * 7919 % 1000)];
+        return new RunCombatTimeline
+        {
+            RunId = runId, Seconds = damage.Length, MaxHitOut = 998, MaxHitOutTarget = "Ephialtes Dissipator", MaxHitIn = 74,
+            MaxHitInSource = "Ephialtes Dissipator", HitsOut = 1199, HitsIn = 5, MissesIn = 109,
+            Series =
+            [
+                new RunCombatSeries { Id = Guid.CreateVersion7(), RunId = runId, Kind = CombatSeriesKind.DmgOut, Total = damage.Sum(), Samples = RunCombatTelemetry.Encode(damage) },
+                new RunCombatSeries { Id = Guid.CreateVersion7(), RunId = runId, Kind = CombatSeriesKind.NeutIn, Total = 16, Samples = RunCombatTelemetry.Encode([.. damage.Select(value => value % 2)]) }
+            ],
+            HitTallies =
+            [
+                new RunHitTally { Id = Guid.CreateVersion7(), RunId = runId, Direction = DamageDirection.Outgoing, Counterparty = "Ephialtes Dissipator", Weapon = "Nova Fury Light Missile", Quality = HitQuality.Hits, Count = 27, Sum = 15_178, Min = 154, Max = 998 },
+                new RunHitTally { Id = Guid.CreateVersion7(), RunId = runId, Direction = DamageDirection.Incoming, Counterparty = "Ephialtes Dissipator", Quality = HitQuality.Misses, Count = 109 }
+            ]
+        };
+    }
+
+    // What an older client sends: a payload that has never heard of either field.
+    private static PushRunRequest _WithoutCombatFields(PushRunRequest request)
+    {
+        JsonNode payload = JsonNode.Parse(request.PayloadJson)!;
+        payload["Run"]!.AsObject().Remove(nameof(RunWireData.CombatTimeline));
+        payload["Run"]!.AsObject().Remove(nameof(RunWireData.CombatWithheld));
+        return new PushRunRequest { PayloadJson = payload.ToJsonString() };
     }
 
     private const long Jithran = 90250177;
@@ -244,11 +321,11 @@ public sealed class RunsGrpcServiceTests
         };
     }
 
-    private static PushRunRequest _PushRequest(Run run) => new()
+    private static PushRunRequest _PushRequest(Run run, RunCombatTimeline? combatTimeline = null, bool combatWithheld = false) => new()
     {
         PayloadJson = JsonSerializer.Serialize(new RunWirePayload
         {
-            Run = RunWireData.FromEntity(run),
+            Run = RunWireData.FromEntity(run, combatTimeline, combatWithheld),
             SentAtUnixMilliseconds = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
         })
     };

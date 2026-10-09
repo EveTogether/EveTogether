@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Headless.XUnit;
@@ -10,6 +11,7 @@ using EveUtils.Shared.Modules.Gamelog.Models;
 using EveUtils.Shared.Modules.Gamelog.Parsing;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Entities;
+using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Runs.Queries;
 using EveUtils.Shared.Modules.Runs.Telemetry;
 using Microsoft.Extensions.DependencyInjection;
@@ -78,6 +80,30 @@ public sealed class RunCombatTelemetryTests
             && tally.Counterparty == "Ephialtes Dissipator" && tally.Weapon is null && tally.Quality is HitQuality.Hits);
         Assert.Equal((5, 106L), (guns.Count, guns.Sum));
     }
+
+    /// <summary>ET-472 AC4: a fleet sum per room only when every participant shared; a mate who shared but never fired adds zero.</summary>
+    [Theory]
+    [InlineData("shared", "1:110,2:70")]
+    [InlineData("not shared", "none")]
+    [InlineData("shared, never fired", "1:100,2:50")]
+    public void FleetDamageOutByRoom_OnlyWhenEveryParticipantShared(string mate, string expected)
+    {
+        RunCombatTimelineDto pilot = _Dmg(3, new() { [CombatSeriesKind.DmgOut] = [100, 0, 50] });
+        RunCombatTimelineDto? fleetMate = mate switch
+        {
+            "shared" => _Dmg(2, new() { [CombatSeriesKind.DmgOut] = [10, 20] }),
+            "shared, never fired" => _Dmg(2, []),
+            _ => null
+        };
+
+        IReadOnlyDictionary<int, long>? byRoom = RunCombatTelemetry.FleetDamageOutByRoom(
+            [(RunStart, pilot), (RunStart.AddSeconds(1), fleetMate)], [RunStart.AddSeconds(2)]);
+
+        Assert.Equal(expected, byRoom is null ? "none" : string.Join(",", byRoom.OrderBy(room => room.Key).Select(room => $"{room.Key}:{room.Value}")));
+    }
+
+    private static RunCombatTimelineDto _Dmg(int seconds, Dictionary<CombatSeriesKind, int[]> series) =>
+        new(seconds, series, 0, null, 0, null, 0, 0, 0, 0, []);
 
     /// <summary>
     /// The live path end to end: lines tailed while the run is watched, SAVE, and the stored timeline read back — the

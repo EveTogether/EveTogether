@@ -1,3 +1,4 @@
+using EveUtils.Client.Fleet;
 using System.Data.Common;
 using System.Text.Json;
 using Avalonia.Headless.XUnit;
@@ -526,7 +527,7 @@ public sealed class RunStorageTests
             await db.SaveChangesAsync(cancellationToken);
         }
         var synchronization = new RunSynchronizationService(contextFactory, client, applier,
-            instance.Services.GetRequiredService<IEventBus>());
+            instance.Services.GetRequiredService<IEventBus>(), instance.Services.GetRequiredService<IMetricShareSettings>());
 
         var synchronized = await synchronization.SynchronizeAsync(ServerAddress, 90000001, cancellationToken);
 

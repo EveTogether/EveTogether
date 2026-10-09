@@ -6,10 +6,12 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using EveUtils.Client.Dialogs;
 using EveUtils.Client.Opsec;
+using EveUtils.Client.Runs;
 using EveUtils.Client.ViewModels.Runs;
 using EveUtils.Client.ViewModels.Runs.Sections;
 using EveUtils.Client.Views;
 using EveUtils.Shared.Data;
+using EveUtils.Shared.Identity;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Gamelog.Models;
 using EveUtils.Shared.Modules.Market.Entities;
@@ -609,21 +611,26 @@ public sealed class ActivityDetailTests
         Assert.Same(docked, window.Content);
     }
 
-    public static TheoryData<GameLogEvent[]?, string[], string[]> AbyssalCombat => new()
+    public enum CombatArrival { Saved, FleetMateShared, FleetMateWithheld, OwnPulledBackWithout }
+
+    private static readonly string[] RealRunTiles =
+    [
+        "65,732 hp", "1,999 hp", "998 hp", "Nova Fury Light Missile on Ephialtes Dissipator", "74 hp",
+        "Ephialtes Dissipator · Wrecks", "115 GJ", "109", "no rep line in this run", "reps in · none in this run"
+    ];
+
+    public static TheoryData<GameLogEvent[]?, CombatArrival, string[], string[]> AbyssalCombat => new()
     {
         // Run 5 of 18 Sep 2026 as it was saved, with its real combat: the figures are the game log's own (AC1, AC6).
-        {
-            RunCombatTelemetryTests.RealRunEvents(),
-            ["65,732 hp", "1,999 hp", "998 hp", "Nova Fury Light Missile on Ephialtes Dissipator", "74 hp",
-                "Ephialtes Dissipator · Wrecks", "115 GJ", "109", "no rep line in this run", "reps in · none in this run"],
-            [CombatDetailSectionViewModel.NotRecordedText]
-        },
+        { RunCombatTelemetryTests.RealRunEvents(), CombatArrival.Saved, RealRunTiles, [CombatDetailSectionViewModel.NotRecordedText] },
         // The same run saved before combat was kept: one line in each, never a zero or an empty chart (AC2).
-        {
-            null,
-            [CombatDetailSectionViewModel.NotRecordedText],
-            ["0 hp", "DAMAGE DEALT", "DPS out"]
-        }
+        { null, CombatArrival.Saved, [CombatDetailSectionViewModel.NotRecordedText], ["0 hp", "DAMAGE DEALT", "DPS out"] },
+        // ET-472: a fleet mate's run pulled with its combat shows the same tiles here.
+        { RunCombatTelemetryTests.RealRunEvents(), CombatArrival.FleetMateShared, RealRunTiles, [CombatDetailSectionViewModel.NotRecordedText] },
+        // ET-472: a fleet mate who withholds combat shows none of it.
+        { RunCombatTelemetryTests.RealRunEvents(), CombatArrival.FleetMateWithheld, [CombatDetailSectionViewModel.NotRecordedText], ["65,732 hp"] },
+        // ET-472: this pilot's own run pulled back without combat keeps the stored one.
+        { RunCombatTelemetryTests.RealRunEvents(), CombatArrival.OwnPulledBackWithout, RealRunTiles, [CombatDetailSectionViewModel.NotRecordedText] }
     };
 
     /// <summary>
@@ -632,7 +639,8 @@ public sealed class ActivityDetailTests
     /// </summary>
     [AvaloniaTheory]
     [MemberData(nameof(AbyssalCombat))]
-    public async Task AbyssalDetail_ShowsItsStoredCombat_OrSaysWhyNot(GameLogEvent[]? combat, string[] shown, string[] absent)
+    public async Task AbyssalDetail_ShowsItsStoredCombat_OrSaysWhyNot(GameLogEvent[]? combat, CombatArrival arrival,
+        string[] shown, string[] absent)
     {
         using var instance = TestClientInstance.Create();
         ICqrsDispatcher dispatcher = instance.Services.GetRequiredService<ICqrsDispatcher>();
@@ -643,6 +651,7 @@ public sealed class ActivityDetailTests
             RunCombatTelemetryTests.RunStop.AddMinutes(1), [], [], [],
             [new RunParameterInput { ParameterKey = RunParameterKey.AbyssalFilament, TypedValue = "3|Dark", ObservedAtUtc = RunCombatTelemetryTests.RunStart }],
             CombatEvents: combat), cancellationToken);
+        await _ArriveBySyncAsync(instance, started.Value, arrival, cancellationToken);
 
         List<string> texts = await _RenderAsync(instance, cancellationToken);
 
@@ -652,6 +661,45 @@ public sealed class ActivityDetailTests
         Assert.Contains(texts, text => text.StartsWith("Containers opened: not counted", StringComparison.Ordinal));
         Assert.Equal(["ACTIVITY", "COMBAT", "TIMELINE", "ENEMIES"],
             texts.Where(text => text is "ACTIVITY" or "COMBAT" or "TIMELINE" or "ENEMIES"));
+    }
+
+    // Hands the saved run back through the pull as the server would (ET-472), as a fleet mate's or as this pilot's own.
+    private static async Task _ArriveBySyncAsync(TestClientInstance instance, Guid runId, CombatArrival arrival,
+        CancellationToken cancellationToken)
+    {
+        if (arrival == CombatArrival.Saved)
+        {
+            return;
+        }
+
+        await using ClientDbContext db = await instance.Services.GetRequiredService<IDbContextFactory<ClientDbContext>>()
+            .CreateDbContextAsync(cancellationToken);
+        Run run = await db.Set<Run>().AsNoTracking().Include(saved => saved.Parameters)
+            .SingleAsync(saved => saved.Id == runId, cancellationToken);
+        RunCombatTimeline? timeline = await db.Set<RunCombatTimeline>().AsNoTracking()
+            .Include(saved => saved.Series).Include(saved => saved.HitTallies)
+            .SingleOrDefaultAsync(saved => saved.RunId == runId, cancellationToken);
+        if (arrival == CombatArrival.OwnPulledBackWithout)
+        {
+            await instance.Services.GetRequiredService<ICharacterRegistry>().AddOrUpdateAsync(new Character("Pilot", 90000001));
+            await db.Set<Run>().Where(saved => saved.Id == runId)
+                .ExecuteUpdateAsync(saved => saved.SetProperty(row => row.SyncState, RunSyncState.Synced), cancellationToken);
+        }
+        else
+        {
+            await db.Set<Run>().Where(saved => saved.Id == runId).ExecuteDeleteAsync(cancellationToken);
+            run.CharacterId = 90000002;
+            run.GroupCode = "HF-472A";
+        }
+
+        RunCombatTimeline? sent = arrival == CombatArrival.FleetMateShared ? timeline : null;
+        RunWirePayload payload = new()
+        {
+            Run = RunWireData.FromEntity(run, sent, combatWithheld: arrival == CombatArrival.FleetMateWithheld),
+            SentAtUnixMilliseconds = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+        };
+        await instance.Services.GetRequiredService<RunSynchronizationApplier>()
+            .ApplyAsync("https://server.example", [payload], new HashSet<Guid>(), cancellationToken);
     }
 
     private static async Task<List<string>> _RenderAsync(TestClientInstance instance, CancellationToken cancellationToken)

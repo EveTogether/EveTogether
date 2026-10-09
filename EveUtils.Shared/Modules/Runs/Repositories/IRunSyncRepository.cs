@@ -4,7 +4,13 @@ namespace EveUtils.Shared.Modules.Runs.Repositories;
 
 public interface IRunSyncRepository
 {
-    Task<DateTime?> UpsertAsync(Run run, CancellationToken cancellationToken = default);
+    /// <summary>No timeline keeps the stored one unless withheld (ET-472): an older client must not erase it.</summary>
+    Task<DateTime?> UpsertAsync(Run run, RunCombatTimeline? combatTimeline = null, bool combatWithheld = false,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>The stored combat of <paramref name="runIds"/>, for runs the caller may already see.</summary>
+    Task<IReadOnlyDictionary<Guid, RunCombatTimeline>> ListCombatTimelinesAsync(IReadOnlyCollection<Guid> runIds,
+        CancellationToken cancellationToken = default);
     Task<IReadOnlyList<Run>> ListChangedAsync(long characterId, IReadOnlyCollection<string> groupCodes, DateTime sinceUtc,
         CancellationToken cancellationToken = default);
 

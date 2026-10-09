@@ -19,9 +19,9 @@ public sealed class ServerRunSyncRepositoryTests
         var repository = new ServerRunSyncRepository((IDbContextFactory<ServerDbContext>)_factory);
         var run = _Run("HF-7QK2");
 
-        await repository.UpsertAsync(run, TestContext.Current.CancellationToken);
+        await repository.UpsertAsync(run, cancellationToken: TestContext.Current.CancellationToken);
         run.SiteName = "Updated Homefront";
-        await repository.UpsertAsync(run, TestContext.Current.CancellationToken);
+        await repository.UpsertAsync(run, cancellationToken: TestContext.Current.CancellationToken);
 
         await using ServerDbContext db = ((IDbContextFactory<ServerDbContext>)_factory).CreateDbContext();
         Run stored = Assert.Single(await db.Set<Run>().ToListAsync(TestContext.Current.CancellationToken));
@@ -34,13 +34,13 @@ public sealed class ServerRunSyncRepositoryTests
         var repository = new ServerRunSyncRepository((IDbContextFactory<ServerDbContext>)_factory);
         Run newer = _Run("HF-7QK2");
         newer.Revision = 3;
-        await repository.UpsertAsync(newer, TestContext.Current.CancellationToken);
+        await repository.UpsertAsync(newer, cancellationToken: TestContext.Current.CancellationToken);
 
         Run older = _Run("HF-7QK2");
         older.Id = newer.Id;
         older.Revision = 2;
         older.SiteName = "Stale Homefront";
-        await repository.UpsertAsync(older, TestContext.Current.CancellationToken);
+        await repository.UpsertAsync(older, cancellationToken: TestContext.Current.CancellationToken);
 
         await using ServerDbContext db = ((IDbContextFactory<ServerDbContext>)_factory).CreateDbContext();
         Run stored = Assert.Single(await db.Set<Run>().ToListAsync(TestContext.Current.CancellationToken));
@@ -57,8 +57,8 @@ public sealed class ServerRunSyncRepositoryTests
         Run member = _Run("HF-7QK2");
         member.CharacterId = 90000002;
 
-        await repository.UpsertAsync(run, TestContext.Current.CancellationToken);
-        await repository.UpsertAsync(member, TestContext.Current.CancellationToken);
+        await repository.UpsertAsync(run, cancellationToken: TestContext.Current.CancellationToken);
+        await repository.UpsertAsync(member, cancellationToken: TestContext.Current.CancellationToken);
 
         IReadOnlyList<Run> pulled = await repository.ListChangedAsync(member.CharacterId, ["HF-7QK2"], DateTime.UnixEpoch,
             TestContext.Current.CancellationToken);
@@ -72,7 +72,7 @@ public sealed class ServerRunSyncRepositoryTests
     {
         var repository = new ServerRunSyncRepository((IDbContextFactory<ServerDbContext>)_factory);
         Run run = _Run("HF-7QK2");
-        await repository.UpsertAsync(run, TestContext.Current.CancellationToken);
+        await repository.UpsertAsync(run, cancellationToken: TestContext.Current.CancellationToken);
 
         IReadOnlyList<Run> pulled = await repository.ListChangedAsync(90000002, ["HF-7QK2"], DateTime.UnixEpoch,
             TestContext.Current.CancellationToken);
@@ -95,9 +95,9 @@ public sealed class ServerRunSyncRepositoryTests
         long characterId, string? groupCode, bool deleted, int startedDaysFromNow, bool listed)
     {
         var repository = new ServerRunSyncRepository((IDbContextFactory<ServerDbContext>)_factory);
-        await repository.UpsertAsync(_Run("HF-7QK2"), TestContext.Current.CancellationToken);
+        await repository.UpsertAsync(_Run("HF-7QK2"), cancellationToken: TestContext.Current.CancellationToken);
         Run candidate = _Run(groupCode, characterId, deleted, startedDaysFromNow);
-        await repository.UpsertAsync(candidate, TestContext.Current.CancellationToken);
+        await repository.UpsertAsync(candidate, cancellationToken: TestContext.Current.CancellationToken);
 
         IReadOnlyList<Run> published = await repository.ListPublishedAsync(90000001,
             DateTime.UtcNow.AddDays(-30), DateTime.UtcNow.AddDays(1), TestContext.Current.CancellationToken);

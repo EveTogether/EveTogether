@@ -75,8 +75,14 @@ public sealed class RunWireData
     public required IReadOnlyList<RunParameterInput> Parameters { get; init; }
     public required IReadOnlyList<RunMiningEntryInput> MiningEntries { get; init; }
 
-    public static RunWireData FromEntity(Run run) => new()
+    // ET-472: null from an older client keeps the stored copy; withheld means the pilot does not share combat.
+    public RunCombatTimelineWireData? CombatTimeline { get; init; }
+    public bool CombatWithheld { get; init; }
+
+    public static RunWireData FromEntity(Run run, RunCombatTimeline? combatTimeline = null, bool combatWithheld = false) => new()
     {
+        CombatTimeline = combatWithheld || combatTimeline is null ? null : RunCombatTimelineWireData.FromEntity(combatTimeline),
+        CombatWithheld = combatWithheld,
         Id = run.Id,
         CharacterId = run.CharacterId,
         GroupCode = run.GroupCode,

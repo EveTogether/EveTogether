@@ -1,8 +1,10 @@
+using EveUtils.Client.Fleet;
 using EveUtils.Client.Transport;
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Data;
 using EveUtils.Shared.DependencyInjection;
 using EveUtils.Shared.Messaging;
+using EveUtils.Shared.Modules.Fleet.Metrics;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Entities;
 using EveUtils.Shared.Modules.Runs.Enums;
@@ -15,7 +17,8 @@ public sealed class RunSynchronizationService(
     IDbContextFactory<ClientDbContext> contextFactory,
     IServerRunSyncClient client,
     RunSynchronizationApplier applier,
-    IEventBus eventBus) : IScopedService
+    IEventBus eventBus,
+    IMetricShareSettings shares) : IScopedService
 {
     public Task<(bool Accepted, string Message)> SynchronizeAsync(string serverAddress, long characterId,
         CancellationToken cancellationToken = default) =>
@@ -42,12 +45,17 @@ public sealed class RunSynchronizationService(
         IReadOnlyList<Run> pendingRuns = pushPending
             ? await _LoadPendingAsync(serverAddress, characterId, onlyGroupCodes, cancellationToken)
             : [];
+        // The one combat switch, read at push (ET-472): turning it off withdraws a run's combat on its next push.
+        bool combatWithheld = pendingRuns.Count > 0 && !(await shares.LoadAsync(cancellationToken)).IsShared(MetricKind.Dps);
+        IReadOnlyDictionary<Guid, RunCombatTimeline> timelines = combatWithheld
+            ? new Dictionary<Guid, RunCombatTimeline>()
+            : await _LoadCombatTimelinesAsync([.. pendingRuns.Select(run => run.Id)], cancellationToken);
         var pushedRunIds = new HashSet<Guid>();
         foreach (Run run in pendingRuns)
         {
             var payload = new RunWirePayload
             {
-                Run = RunWireData.FromEntity(run),
+                Run = RunWireData.FromEntity(run, timelines.GetValueOrDefault(run.Id), combatWithheld),
                 SentAtUnixMilliseconds = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
             };
             var push = await client.PushAsync(serverAddress, payload, characterId, cancellationToken);
@@ -89,6 +97,17 @@ public sealed class RunSynchronizationService(
         if (onlyGroupCodes is not null)
             grouped = grouped.Where(run => run.GroupCode != null && onlyGroupCodes.Contains(run.GroupCode));
         return await grouped.ToListAsync(cancellationToken);
+    }
+
+    private async Task<IReadOnlyDictionary<Guid, RunCombatTimeline>> _LoadCombatTimelinesAsync(Guid[] runIds,
+        CancellationToken cancellationToken)
+    {
+        await using ClientDbContext db = await contextFactory.CreateDbContextAsync(cancellationToken);
+        return await db.Set<RunCombatTimeline>().AsNoTracking()
+            .Where(timeline => runIds.Contains(timeline.RunId))
+            .Include(timeline => timeline.Series)
+            .Include(timeline => timeline.HitTallies)
+            .ToDictionaryAsync(timeline => timeline.RunId, cancellationToken);
     }
 
     private async Task _MarkSyncedAsync(Guid runId, string serverAddress, DateTime? lastPushedAtUtc, CancellationToken cancellationToken)
