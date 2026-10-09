@@ -709,6 +709,8 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     /// <summary>Said under the buttons only while the detector runs for this pilot, so NEW ROOM is never a guess.</summary>
     public bool IsRoomDetectionHintShown => IsNewRoomButtonVisible && _Enemies()?.IsDetecting == true;
 
+    RunWindowSection? IRunWindowContext.SectionOf(RunSectionId id) => _sections.GetValueOrDefault(id);
+
     private EnemiesWindowSectionViewModel? _Enemies() =>
         _sections.GetValueOrDefault(RunSectionId.Enemies) as EnemiesWindowSectionViewModel;
 

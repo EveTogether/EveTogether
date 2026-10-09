@@ -56,6 +56,20 @@ public sealed partial class EnemiesWindowSectionViewModel : RunWindowSection
 
     public bool HasRooms => EnemyRooms.Count > 0;
 
+    /// <summary>The rows or rooms of the on-screen pilot changed, or a name without a type was seen (ET-369).</summary>
+    public event Action? SightingsChanged;
+
+    /// <summary>Everything the on-screen pilot saw, per room, for TARGETS: the rows, and the names the SDE has no
+    /// type for. Read only — TARGETS writes nothing here.</summary>
+    public IReadOnlyList<TargetSighting> TargetSightings() => _OnScreenCollector() is not { } collector
+        ? []
+        :
+        [
+            .. collector.Observations.Select(observation => new TargetSighting(observation.RoomNumber, observation.EnemyName, observation.EnemyTypeId)),
+            .. collector.UnresolvedSightings.Select(seen => new TargetSighting(
+                RunRooms.RoomOf(collector.RoomBoundaries, seen.FirstObservedAtUtc), seen.Name, null))
+        ];
+
     /// <summary>The window's line under the clock while the run has rooms: which room, since when, for how long.</summary>
     public string? CurrentRoomText(DateTime nowUtc)
     {
@@ -164,6 +178,7 @@ public sealed partial class EnemiesWindowSectionViewModel : RunWindowSection
         {
             collector.Changed -= RefreshSummary;
             collector.Regrouped -= _ShowRooms;
+            collector.UnresolvedSeen -= _AnnounceSightings;
         }
 
         _collectors.Clear();
@@ -216,6 +231,7 @@ public sealed partial class EnemiesWindowSectionViewModel : RunWindowSection
         // every character, not just the one on screen, so a background sibling's count still moves the summary.
         collector.Changed += RefreshSummary;
         collector.Regrouped += _ShowRooms;
+        collector.UnresolvedSeen += _AnnounceSightings;
         _collectors[characterId] = collector;
     }
 
@@ -226,6 +242,8 @@ public sealed partial class EnemiesWindowSectionViewModel : RunWindowSection
         Context.RunType.ClockPerPilot
             ? _OnScreenCollector() is { } own ? [own] : []
             : _collectors.Values;
+
+    private void _AnnounceSightings() => SightingsChanged?.Invoke();
 
     private void _ShowRooms()
     {
@@ -242,6 +260,7 @@ public sealed partial class EnemiesWindowSectionViewModel : RunWindowSection
         OnPropertyChanged(nameof(HasRooms));
         RefreshSummary();
         _ShowLootRooms();
+        SightingsChanged?.Invoke();
     }
 
     private string _RoomWindowText(IReadOnlyList<DateTime> boundaries, int room)

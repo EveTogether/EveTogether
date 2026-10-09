@@ -151,8 +151,8 @@ public static class RunTypeCatalogue
     // opened it, which only an abyssal pocket ever spends.
     private static readonly IReadOnlyList<RunSectionId> AbyssalWindow =
     [
-        RunSectionId.Activity, RunSectionId.Enemies, RunSectionId.Fit, RunSectionId.Fleet, RunSectionId.Loot,
-        RunSectionId.Consumables
+        RunSectionId.Activity, RunSectionId.Enemies, RunSectionId.Targets, RunSectionId.Fit, RunSectionId.Fleet,
+        RunSectionId.Loot, RunSectionId.Consumables
     ];
 
     // MINING is not claimed here either (ET-229) — the detail screen's own ET-162 rule already shows an unclaimed

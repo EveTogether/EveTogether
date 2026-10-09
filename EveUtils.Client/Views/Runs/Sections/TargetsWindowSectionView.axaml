@@ -1,0 +1,78 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vs="using:EveUtils.Client.ViewModels.Runs.Sections"
+             x:Class="EveUtils.Client.Views.Runs.Sections.TargetsWindowSectionView"
+             x:DataType="vs:TargetsWindowSectionViewModel">
+    <!-- TARGETS (ET-369, mockup (b)): per room the enemies in shooting order. The e-war chip is outlined in what the
+         effect does to you; a value from ET's own table is dashed, the way the AUTO badge draws it. -->
+    <UserControl.Styles>
+        <Style Selector="Rectangle.chip">
+            <Setter Property="StrokeThickness" Value="1"/>
+            <Setter Property="RadiusX" Value="2"/>
+            <Setter Property="RadiusY" Value="2"/>
+        </Style>
+        <Style Selector="Rectangle.chip"><Setter Property="Stroke" Value="{StaticResource BlueBrush}"/></Style>
+        <Style Selector="TextBlock.chip"><Setter Property="Foreground" Value="{StaticResource BlueBrush}"/></Style>
+        <Style Selector="TextBlock.first"><Setter Property="FontWeight" Value="Bold"/></Style>
+        <Style Selector="Rectangle.chip.table">
+            <Setter Property="StrokeDashArray" Value="3,2"/>
+        </Style>
+        <Style Selector="Rectangle.chip.stops"><Setter Property="Stroke" Value="{StaticResource RedBrush}"/></Style>
+        <Style Selector="Rectangle.chip.slows"><Setter Property="Stroke" Value="{StaticResource WarnBrush}"/></Style>
+        <Style Selector="Rectangle.chip.repairs"><Setter Property="Stroke" Value="{StaticResource GreenBrush}"/></Style>
+        <Style Selector="TextBlock.chip">
+            <Setter Property="Margin" Value="4,2"/>
+            <Setter Property="FontSize" Value="8.5"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="LetterSpacing" Value="0.7"/>
+        </Style>
+        <Style Selector="TextBlock.chip.stops"><Setter Property="Foreground" Value="{StaticResource RedBrush}"/></Style>
+        <Style Selector="TextBlock.chip.slows"><Setter Property="Foreground" Value="{StaticResource WarnBrush}"/></Style>
+        <Style Selector="TextBlock.chip.repairs"><Setter Property="Foreground" Value="{StaticResource GreenBrush}"/></Style>
+    </UserControl.Styles>
+    <UserControl.DataTemplates>
+        <DataTemplate DataType="vs:TargetEwar">
+            <Panel VerticalAlignment="Center">
+                <Rectangle Classes="chip" Classes.table="{Binding IsFromTable}" Classes.stops="{Binding IsStops}" Classes.slows="{Binding IsSlows}" Classes.repairs="{Binding IsRepairs}"/>
+                <TextBlock Classes="chip" Classes.stops="{Binding IsStops}" Classes.slows="{Binding IsSlows}" Classes.repairs="{Binding IsRepairs}" Text="{Binding Text}"/>
+            </Panel>
+        </DataTemplate>
+    </UserControl.DataTemplates>
+    <ItemsControl x:Name="TargetRoomList" ItemsSource="{Binding Rooms}">
+        <ItemsControl.ItemTemplate>
+            <DataTemplate DataType="vs:TargetRoomViewModel">
+                <StackPanel Spacing="2" Margin="0,6,0,0">
+                    <Border BorderThickness="0,0,0,1" BorderBrush="{DynamicResource BorderBrush}" Padding="0,0,0,3">
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <TextBlock Classes="label" VerticalAlignment="Center" Text="{Binding Title}"
+                                       IsVisible="{Binding Title, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+                            <TextBlock Classes="hint" Margin="0" VerticalAlignment="Center" Text="{Binding FactionText}"/>
+                        </StackPanel>
+                    </Border>
+                    <ItemsControl ItemsSource="{Binding Rows}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="vs:TargetRow">
+                                <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="8" Margin="0,3">
+                                    <TextBlock Text="{Binding Number}" VerticalAlignment="Center" Foreground="{StaticResource WarnBrush}"
+                                               Classes.first="{Binding IsFirst}"/>
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" HorizontalAlignment="Left" VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding Name}" Foreground="{StaticResource TextBrightBrush}"/>
+                                        <TextBlock Classes="hint" Margin="0" Text="{Binding SignatureText}"/>
+                                    </StackPanel>
+                                    <ItemsControl Grid.Column="2" ItemsSource="{Binding Ewar}" VerticalAlignment="Center">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate><StackPanel Orientation="Horizontal" Spacing="3"/></ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                    </ItemsControl>
+                                    <TextBlock Grid.Column="3" Text="{Binding EhpText}" MinWidth="34" TextAlignment="Right" Foreground="{StaticResource TextBrightBrush}"/>
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <TextBlock Classes="hint" TextWrapping="Wrap" Margin="0,2,0,0" Text="{Binding Note}"
+                               IsVisible="{Binding Note, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+                </StackPanel>
+            </DataTemplate>
+        </ItemsControl.ItemTemplate>
+    </ItemsControl>
+</UserControl>
