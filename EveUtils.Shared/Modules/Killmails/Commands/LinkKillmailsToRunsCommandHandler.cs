@@ -30,7 +30,8 @@ internal sealed class LinkKillmailsToRunsCommandHandler(
         DateTime retryFromUtc = DateTime.UtcNow - RetryWindow;
         List<LocalKillmail> open = await losses
             .Where(killmail => killmail.LinkSource != KillmailLinkSource.Manual
-                               && (killmail.KillmailTimeUtc >= retryFromUtc || killmail.ImportedAtUtc >= retryFromUtc)
+                               && (command.IncludeOlder && killmail.LinkSource == KillmailLinkSource.Auto
+                                   || killmail.KillmailTimeUtc >= retryFromUtc || killmail.ImportedAtUtc >= retryFromUtc)
                                && (killmail.RunId == null
                                    || db.Set<Run>().Any(run => run.Id == killmail.RunId && run.DeletedAtUtc != null)))
             // A pod lost in the same second as its ship comes after it, so it finds the ship already linked.
