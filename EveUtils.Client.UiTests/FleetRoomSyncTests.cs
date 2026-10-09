@@ -40,7 +40,7 @@ public class FleetRoomSyncTests
                 .Add(48235, "Ephialtes Entangler", 1982, 11)));
         // Each pilot times their own way into the pocket (ET-243).
         await fleet.Jithran.Window.StartRunCommand.ExecuteAsync(null);
-        await fleet.Raymond.Window.StartRunCommand.ExecuteAsync(null);
+        await fleet.Raymond.Window.StartOnAbyssalEntryAsync(DateTime.UtcNow);
         await fleet.SettleAsync(() => fleet.Jithran.Window.RunState is ActivityRunState.Running
                                       && fleet.Raymond.Window.RunState is ActivityRunState.Running);
         IEventBus memberBus = fleet.Raymond.Instance.Services.GetRequiredService<IEventBus>();
