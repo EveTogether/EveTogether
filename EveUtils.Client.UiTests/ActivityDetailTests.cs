@@ -473,6 +473,52 @@ public sealed class ActivityDetailTests
         Assert.Equal(2, texts.Count(text => text == "ROOM 2"));
     }
 
+    /// <summary>ET-494: in a group the rooms are one set — the commander's run when it has rooms, else the fullest — and every
+    /// pilot's row lands in them by its first sighting — so "NO ROOMS MARKED" is gone, and a mate with rooms of his own
+    /// a few seconds off draws the same rooms on every client. One type is one row per room across the pilots: the
+    /// widest window and the largest count. A group with no rooms stays one list. Counter-proof: keep the stored room
+    /// and one row per pilot, and the mate's rows come back under "NO ROOMS MARKED" or twice in a room; take the fullest
+    /// list over the commander's and "commander-fewer-rooms" opens a third room.</summary>
+    [AvaloniaTheory]
+    [InlineData("mate-without-rooms", "ROOM 1:Scavenger×2 ROOM 2:Scavenger×2,Servant×3 ROOM 3:Keeper×3")]
+    [InlineData("mate-with-own-rooms", "ROOM 1:Scavenger×2 ROOM 2:Scavenger×3,Keeper×3")]
+    [InlineData("commander-fewer-rooms", "ROOM 1:Scavenger×2 ROOM 2:Scavenger×3,Keeper×3")]
+    [InlineData("no-rooms", "")]
+    public async Task GroupRun_EveryPilotsRows_LandInTheGroupsRoomsByTime(string scenario, string expected)
+    {
+        using var instance = TestClientInstance.Create();
+        ICqrsDispatcher dispatcher = instance.Services.GetRequiredService<ICqrsDispatcher>();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        RunEnemyObservationInput Seen(int typeId, string name, int count, int minute, int? room) => new()
+        {
+            RoomNumber = scenario == "no-rooms" ? null : room, Count = count, EnemyTypeId = typeId, EnemyName = $"Centii {name}",
+            FirstObservedAtUtc = StartedAtUtc.AddMinutes(minute), LastObservedAtUtc = StartedAtUtc.AddMinutes(minute)
+        };
+        RunParameterInput Boundary(int minute) => new()
+        {
+            ParameterKey = RunParameterKey.RoomDetected, TypedValue = "sure", ObservedAtUtc = StartedAtUtc.AddMinutes(minute)
+        };
+        await _SaveSiteRunAsync(dispatcher, 90000001, "AB-7QK2", cancellationToken,
+            enemies: [Seen(111, "Scavenger", 2, 1, 1), Seen(111, "Scavenger", 2, 6, 2)],
+            parameters: scenario switch { "no-rooms" => [], "commander-fewer-rooms" => [Boundary(5)], _ => [Boundary(5), Boundary(10)] },
+            role: scenario == "commander-fewer-rooms" ? RunRole.FleetCommander : RunRole.Member);
+        await _SaveSiteRunAsync(dispatcher, 90000002, "AB-7QK2", cancellationToken,
+            enemies: scenario is "mate-with-own-rooms" or "commander-fewer-rooms"
+                ? [Seen(111, "Scavenger", 3, 7, 2), Seen(113, "Keeper", 3, 9, 3)]
+                : [Seen(112, "Servant", 3, 7, null), Seen(113, "Keeper", 3, 11, null)],
+            parameters: scenario is "mate-with-own-rooms" or "commander-fewer-rooms" ? [Boundary(4), Boundary(8)] : []);
+
+        (ActivityDetailWindow window, _) = await _PresentAsync(instance, 758, cancellationToken);
+        ActivityDetailViewModel viewModel = Assert.IsType<ActivityDetailViewModel>(window.DataContext);
+
+        Assert.Equal(expected, string.Join(" ", viewModel.Enemies().EnemyRooms.Select(room =>
+            $"{room.Title}:{string.Join(",", room.Rows.Select(row => $"{row.EnemyName["Centii ".Length..]}×{row.CountText}"))}")));
+        if (scenario == "mate-with-own-rooms")
+        {
+            Assert.Equal(_Window(6, 7), viewModel.Enemies().EnemyRooms[1].Rows[0].WindowText);
+        }
+    }
+
     /// <summary>AC-5: two runs in one activity that each sighted the same enemy type stay two rows, each with its
     /// own first/last window. Counter-proof: group by enemy type alone and there is one row, with the later
     /// sighting silently overwriting the earlier one's window.</summary>
@@ -1077,12 +1123,13 @@ public sealed class ActivityDetailTests
     }
 
     private static async Task _SaveSiteRunAsync(ICqrsDispatcher dispatcher, long characterId, string? groupCode,
-        CancellationToken cancellationToken, IReadOnlyList<RunEnemyObservationInput>? enemies = null)
+        CancellationToken cancellationToken, IReadOnlyList<RunEnemyObservationInput>? enemies = null,
+        IReadOnlyList<RunParameterInput>? parameters = null, RunRole role = RunRole.Member)
     {
         Result<Guid> started = await dispatcher.Send(new StartRunCommand(characterId, ActivityKind.Site, StartedAtUtc,
-            1234, "Homefront", 30000142, groupCode), cancellationToken);
+            1234, "Homefront", 30000142, groupCode, Role: role), cancellationToken);
         await dispatcher.Send(new SaveRunCommand(started.Value, StartedAtUtc.AddMinutes(15),
-            StartedAtUtc.AddMinutes(16), [], [], enemies ?? [], []), cancellationToken);
+            StartedAtUtc.AddMinutes(16), [], [], enemies ?? [], parameters ?? []), cancellationToken);
     }
 
     private static string _Window(int firstMinute, int lastMinute) =>

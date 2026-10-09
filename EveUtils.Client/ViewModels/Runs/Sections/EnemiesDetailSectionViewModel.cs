@@ -48,7 +48,7 @@ public sealed partial class EnemiesDetailSectionViewModel() : RunDetailSection(R
         int enemyTypeCount = detail.EnemyObservations.Select(observation => observation.EnemyTypeId).Distinct().Count();
         int countedEnemyCount = detail.EnemyObservations.Sum(observation => observation.Count);
         _ShowRooms(detail);
-        string rooms = HasRooms ? $"{detail.EnemyObservations.Max(observation => observation.RoomNumber)} rooms · " : string.Empty;
+        string rooms = HasRooms ? $"{EnemyRooms.Count} rooms · " : string.Empty;
         HeaderSummary = rooms + (countedEnemyCount > 0
             ? $"{countedEnemyCount} counted · {enemyTypeCount} types"
             : enemyTypeCount > 0 ? $"none counted · {enemyTypeCount} types" : "none counted");
@@ -73,54 +73,63 @@ public sealed partial class EnemiesDetailSectionViewModel() : RunDetailSection(R
         EnemyTotalCountText = countedEnemyCount == 1 ? "1 enemy" : $"{countedEnemyCount} enemies";
     }
 
-    // A room's window spans every run that had it: the pilots of one group can each have pressed NEW ROOM a moment apart.
+    // One set of rooms for the whole group, so every client of the fleet draws the same ones (ET-494): the commander's
+    // run decides when it has rooms, else the fullest list, the earliest run on a tie.
     private void _ShowRooms(ActivityDetailDto detail)
     {
         EnemyRooms.Clear();
-        if (detail.EnemyObservations.All(observation => observation.RoomNumber is null))
+        List<(ActivityRunDetailDto Run, IReadOnlyList<DateTime> Boundaries)> withRooms = [.. detail.Runs
+            .OrderBy(run => run.StartedAtUtc).ThenBy(run => run.RunId)
+            .Select(run => (Run: run, Boundaries: RunRooms.Boundaries(detail.Parameters, run.RunId)))
+            .Where(entry => entry.Boundaries.Count > 0)];
+        HasRooms = withRooms.Count > 0;
+        if (!HasRooms)
         {
-            HasRooms = false;
             return;
         }
 
-        // A toon of the group that never pressed NEW ROOM keeps its rows, under a header of their own after the rooms.
+        (ActivityRunDetailDto Run, IReadOnlyList<DateTime> Boundaries) rooms =
+            withRooms.FirstOrDefault(entry => entry.Run.Role is RunRole.FleetCommander) is { Run: not null } commanders
+                ? commanders
+                : withRooms.MaxBy(entry => entry.Boundaries.Count);
+
+        // Every pilot's row lands in a room by its first sighting, and one type is one row per room across the pilots.
         foreach (IGrouping<int, RunEnemyObservationDto> room in detail.EnemyObservations
-                     .GroupBy(observation => observation.RoomNumber ?? int.MaxValue)
+                     .GroupBy(observation => RunRooms.RoomOf(rooms.Boundaries, observation.FirstObservedAtUtc) ?? 1)
                      .OrderBy(room => room.Key))
         {
-            (DateTime Start, DateTime? End)[] windows = [.. detail.Runs
-                .Select(run => (Run: run, Boundaries: RunRooms.Boundaries(detail.Parameters, run.RunId)))
-                .Where(entry => entry.Boundaries.Count + 1 >= room.Key && entry.Boundaries.Count > 0)
-                .Select(entry => (RunRooms.StartOf(entry.Boundaries, room.Key, entry.Run.StartedAtUtc),
-                    RunRooms.EndOf(entry.Boundaries, room.Key, entry.Run.StoppedAtUtc)))];
-            string windowText = windows.Length == 0 ? string.Empty : _WindowText(windows.Min(window => window.Start),
-                windows.Any(window => window.End is null) ? null : windows.Max(window => window.End));
             List<ActivityEnemyRowViewModel> rows = [];
-            foreach (RunEnemyObservationDto observation in room)
+            int counted = 0;
+            foreach (IGrouping<int, RunEnemyObservationDto> type in room.GroupBy(observation => observation.EnemyTypeId))
             {
-                rows.Add(new ActivityEnemyRowViewModel(observation) { IsAlternate = rows.Count % 2 == 1 });
+                // The pilots saw the same spawn, so the count is the largest anyone typed, not a sum.
+                RunEnemyObservationDto merged = type.First() with
+                {
+                    Count = type.Max(observation => observation.Count),
+                    FirstObservedAtUtc = type.Min(observation => observation.FirstObservedAtUtc),
+                    LastObservedAtUtc = type.Max(observation => observation.LastObservedAtUtc)
+                };
+                counted += merged.Count;
+                rows.Add(new ActivityEnemyRowViewModel(merged) { IsAlternate = rows.Count % 2 == 1 });
             }
 
-            EnemyRooms.Add(new ActivityEnemyRoomViewModel(room.Key == int.MaxValue ? "NO ROOMS MARKED" : $"ROOM {room.Key}",
-                room.Key == int.MaxValue ? string.Empty : windowText,
-                room.Sum(observation => observation.Count), rows, RoomSourceViewModel.Of(_CertaintyOf(detail, room.Key))));
+            EnemyRooms.Add(new ActivityEnemyRoomViewModel($"ROOM {room.Key}",
+                _WindowText(RunRooms.StartOf(rooms.Boundaries, room.Key, rooms.Run.StartedAtUtc),
+                    RunRooms.EndOf(rooms.Boundaries, room.Key, rooms.Run.StoppedAtUtc)),
+                counted, rows, RoomSourceViewModel.Of(_CertaintyOf(detail, rooms.Run.RunId, room.Key))));
         }
-
-        HasRooms = true;
     }
 
     /// <summary>A room the detector opened on a run with no boundary of the pilot's says so, and how sure (ET-368).</summary>
-    private static RoomCertainty? _CertaintyOf(ActivityDetailDto detail, int room)
+    private static RoomCertainty? _CertaintyOf(ActivityDetailDto detail, Guid runId, int room)
     {
-        string? certainty = detail.Runs
-            .Select(run => detail.Parameters
-                .Where(parameter => parameter.RunId == run.RunId
-                                    && parameter.ParameterKey is RunParameterKey.RoomStarted or RunParameterKey.RoomDetected)
-                .OrderBy(parameter => parameter.ObservedAtUtc)
-                .ToList())
-            .Where(rows => room > 1 && rows.Count >= room - 1 && rows.All(row => row.ParameterKey == RunParameterKey.RoomDetected))
-            .Select(rows => rows[room - 2].TypedValue)
-            .FirstOrDefault(value => !string.IsNullOrEmpty(value));
+        List<RunParameterDto> rows = [.. detail.Parameters
+            .Where(parameter => parameter.RunId == runId
+                                && parameter.ParameterKey is RunParameterKey.RoomStarted or RunParameterKey.RoomDetected)
+            .OrderBy(parameter => parameter.ObservedAtUtc)];
+        string? certainty = room > 1 && rows.Count >= room - 1 && rows.All(row => row.ParameterKey == RunParameterKey.RoomDetected)
+            ? rows[room - 2].TypedValue
+            : null;
         return Enum.TryParse(certainty, ignoreCase: true, out RoomCertainty parsed) ? parsed : null;
     }
 
