@@ -50,6 +50,14 @@ namespace EveUtils.Client.UiTests;
 /// </summary>
 public sealed class HomefrontMoneyScenarioTests
 {
+    /// <summary>When S23's fleet mate joins: before SAVE, the window not having read it yet, or in SAVE's first
+    /// sibling save (ET-484).</summary>
+    public enum JoinMoment
+    {
+        BeforeSave,
+        DuringFirstSiblingSave
+    }
+
     private const decimal FivePilots = 15_000_000m;
     private const decimal ThreePilots = 9_600_000m;
 
@@ -460,20 +468,14 @@ public sealed class HomefrontMoneyScenarioTests
     /// group HOMEFRONT's list backfilled it into, and the two fold into the one it was flying: one run, its bounty once,
     /// the payout once. Joined mid-SAVE (ET-484), the window reads the fold between sibling saves and still saves it.</summary>
     [AvaloniaTheory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task S23_AFleetMateJoiningWhileTheBackfillRuns_FoldsIntoTheRunItWasFlying(bool isJoinedDuringSave)
+    [InlineData(JoinMoment.BeforeSave)]
+    [InlineData(JoinMoment.DuringFirstSiblingSave)]
+    public async Task S23_AFleetMateJoiningWhileTheBackfillRuns_FoldsIntoTheRunItWasFlying(JoinMoment joinedAt)
     {
         const int late = ActivityWindowHarness.CharacterId + 4;
         using Group group = await Group.StartAsync(toons: 5, isRosterFleet: true, picked: 4);
         // The roster read puts the fifth toon on the list; that change is written once the bundle window has passed.
-        Run? backfilled = null;
-        for (int tick = 0; tick < 60 && backfilled is null; tick++)
-        {
-            await group.SettleAsync(ticks: 1);
-            backfilled = (await group.RunsAsync()).SingleOrDefault(run => run.CharacterId == late);
-        }
-        Assert.NotNull(backfilled);
+        Run backfilled = await group.BackfilledRunAsync(late);
         Guid ownRun = (await group.Dispatcher.Send(new StartRunCommand(late, ActivityKind.Site, group.Clock.AddMinutes(-2),
             Raid.DungeonId, "Raid: Hall of Sacrifice", null))).Value;
         // Its gamelog's line, on the run it was flying — written straight in, since with the backfilled copy beside it
@@ -484,38 +486,17 @@ public sealed class HomefrontMoneyScenarioTests
             await db.SaveChangesAsync();
         }
 
-        LinkRunToGroupCodeCommand join = new(ownRun, group.GroupCode, group.Window.FleetId);
-        Guid pilotRun = group.Window.RunId ?? throw new InvalidOperationException("the window has no run");
-        Result? linked = null;
-        if (isJoinedDuringSave)
-        {
-            // Held in the first sibling save until the window's own tick has read the join.
-            group.BeforeSave = async command =>
-            {
-                if (command.RunId == pilotRun || linked is not null)
-                {
-                    return;
-                }
-                linked = await group.Dispatcher.Send(join);
-                await group.TickUntilWindowHoldsAsync(ownRun);
-            };
-            await group.StopAndSaveAsync();
-        }
-        else
-        {
-            linked = await group.Dispatcher.Send(join);
-        }
+        Task<Result> linked = group.JoinAsync(new LinkRunToGroupCodeCommand(ownRun, group.GroupCode, group.Window.FleetId), joinedAt);
+        await group.StopAndSaveAsync();
 
-        Assert.True(linked?.IsSuccess);
+        Assert.True((await linked).IsSuccess);
         await group.AssertOneRunPerCharacterAsync(5);
         Run joined = (await group.RunsAsync(includeBounty: true)).Single(run => run.CharacterId == late);
         Assert.Equal(ownRun, joined.Id);
         Assert.Equal(270_000m, Assert.Single(joined.BountyEntries).Isk);
         await using (ClientDbContext db = await group.DbAsync())
-            Assert.NotNull((await db.Set<Run>().AsNoTracking().SingleAsync(run => run.Id == backfilled.Id)).DeletedAtUtc);
-        if (!isJoinedDuringSave)
         {
-            await group.StopAndSaveAsync();
+            Assert.NotNull((await db.Set<Run>().AsNoTracking().SingleAsync(run => run.Id == backfilled.Id)).DeletedAtUtc);
         }
         // The window's own bounty in a fleet is the gamelog's live tally, which a line written straight in never reached.
         await group.AssertOneStoryAsync(HomefrontOutcome.Completed, n: 5, payout: 5 * FivePilots, bounty: 270_000m,
@@ -684,12 +665,6 @@ public sealed class HomefrontMoneyScenarioTests
             Window = window;
             _own = [.. own];
             _beforeSave = beforeSave;
-        }
-
-        /// <summary>Run ahead of every SaveRunCommand, off the UI thread, while SAVE awaits it.</summary>
-        public Func<SaveRunCommand, Task>? BeforeSave
-        {
-            set => _beforeSave.Value = value;
         }
 
         public ActivityWindowViewModel Window { get; private set; }
@@ -903,8 +878,45 @@ public sealed class HomefrontMoneyScenarioTests
             }
         }
 
+        /// <summary>The run HOMEFRONT's list backfilled for <paramref name="characterId"/>, ticked until it is written.</summary>
+        public async Task<Run> BackfilledRunAsync(long characterId)
+        {
+            for (int tick = 0; tick < 60; tick++)
+            {
+                await SettleAsync(ticks: 1);
+                if ((await RunsAsync()).SingleOrDefault(run => run.CharacterId == characterId) is { } backfilled)
+                {
+                    return backfilled;
+                }
+            }
+            throw new TimeoutException($"no run was backfilled for character {characterId}");
+        }
+
+        /// <summary>Links a run into this group now, or — held in SAVE's first sibling save, off the UI thread — while
+        /// SAVE awaits it, ticking the window until it has read the join. Completes with the link's own result.</summary>
+        public Task<Result> JoinAsync(LinkRunToGroupCodeCommand join, JoinMoment moment)
+        {
+            if (moment == JoinMoment.BeforeSave)
+            {
+                return Dispatcher.Send(join);
+            }
+
+            Guid pilotRun = Window.RunId ?? throw new InvalidOperationException("the window has no run");
+            TaskCompletionSource<Result> linked = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            _beforeSave.Value = async command =>
+            {
+                if (command.RunId == pilotRun || linked.Task.IsCompleted)
+                {
+                    return;
+                }
+                linked.SetResult(await Dispatcher.Send(join));
+                await _TickUntilWindowHoldsAsync(join.RunId);
+            };
+            return linked.Task;
+        }
+
         /// <summary>Ticks the window from the UI thread until its Participants hold <paramref name="runId"/>.</summary>
-        public async Task TickUntilWindowHoldsAsync(Guid runId)
+        private async Task _TickUntilWindowHoldsAsync(Guid runId)
         {
             for (int tick = 0; tick < 200; tick++)
             {
