@@ -203,15 +203,18 @@ public sealed class RecordingDialogService : IDialogService
     /// to prove the window stays put.</summary>
     public List<(string Title, string Message, string Primary, string Secondary)> ChoicePrompts { get; } = [];
 
+    public List<(string Title, bool OfferCancel, bool? DefaultAnswer)> ChoiceOptions { get; } = [];
+
     /// <summary>What to answer: true = primary, false = secondary, null = cancel. Unset answers "discard" rather
     /// than throwing: closing a window is teardown for most tests here, and a question refused would hang the close
     /// on a run made of scratch data. A test that cares what the answer does sets this.</summary>
     public Func<string, string, bool?>? OnChoose { get; set; }
 
     public Task<bool?> ChooseAsync(string title, string message, string primaryText, string secondaryText,
-        object? owner = null)
+        object? owner = null, bool offerCancel = true, bool? defaultAnswer = null)
     {
         ChoicePrompts.Add((title, message, primaryText, secondaryText));
+        ChoiceOptions.Add((title, offerCancel, defaultAnswer));
         return Task.FromResult(OnChoose is null ? false : OnChoose(title, message));
     }
 

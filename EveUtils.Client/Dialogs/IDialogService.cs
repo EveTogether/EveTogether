@@ -121,7 +121,11 @@ public interface IDialogService
     /// <summary>A question with two answers and a way out: true for <paramref name="primaryText"/>, false for
     /// <paramref name="secondaryText"/>, null for cancel. Cancel is not a third opinion but the absence of one —
     /// somebody who hit the close button by accident has to be able to take it back.</summary>
-    Task<bool?> ChooseAsync(string title, string message, string primaryText, string secondaryText, object? owner = null);
+    /// <param name="offerCancel">False hides the Cancel button; Esc still answers null.</param>
+    /// <param name="defaultAnswer">Opt-in Enter button: true is <paramref name="primaryText"/>, false is
+    /// <paramref name="secondaryText"/>. Null (the default) leaves the dialog with no default button.</param>
+    Task<bool?> ChooseAsync(string title, string message, string primaryText, string secondaryText, object? owner = null,
+        bool offerCancel = true, bool? defaultAnswer = null);
 
     /// <summary>Opens the per-character settings dialog: ESI scopes, coupled servers, couple/decouple.</summary>
     Task ShowCharacterAsync(CharacterDialogViewModel viewModel);

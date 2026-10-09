@@ -431,10 +431,11 @@ public sealed class DialogService : IDialogService, ISingletonService
     }
 
     public async Task<bool?> ChooseAsync(string title, string message, string primaryText, string secondaryText,
-        object? owner = null)
+        object? owner = null, bool offerCancel = true, bool? defaultAnswer = null)
     {
         if (_owner is null) return null;
-        var dialog = new MessageBoxWindow(title, message, confirm: true, okText: primaryText, secondaryText: secondaryText);
+        var dialog = new MessageBoxWindow(title, message, confirm: true, okText: primaryText, secondaryText: secondaryText,
+            offerCancel: offerCancel, defaultAnswer: defaultAnswer);
         return await _Over(dialog).ShowDialog<bool?>(OwnerFor(owner) ?? _owner);
     }
 
