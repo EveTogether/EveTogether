@@ -64,6 +64,16 @@ internal sealed class RespondToFleetInviteCommandHandler(IFleetRepository reposi
             else
                 (wingId, squadId) = await FleetMemberPlacement.ResolveOrCreateSquadAsync(repository, invite.FleetId, cancellationToken);
 
+            // Wing-level and fleet-level roles carry no squad (the composition tree seats a WC at squad -1).
+            if (invite.Role == FleetRole.WingCommander)
+            {
+                squadId = -1;
+            }
+            else if (invite.Role is FleetRole.FleetCommander or FleetRole.Unassigned)
+            {
+                (wingId, squadId) = (-1, -1);
+            }
+
             await repository.AddMemberAsync(new FleetMember
             {
                 FleetId = invite.FleetId,
