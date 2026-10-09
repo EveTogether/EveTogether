@@ -700,6 +700,14 @@
                     <Button x:Name="JoinFleetRunButton" Grid.Column="1" Classes="accent" VerticalAlignment="Center"
                             Content="JOIN FLEET RUN" Command="{Binding JoinRunningFleetRunCommand}"/>
                 </Grid>
+                <!-- Another own character is in the pocket without a leg in this run (ET-500). -->
+                <Grid x:Name="LateJoin" ColumnDefinitions="*,Auto" ColumnSpacing="10"
+                      IsVisible="{Binding IsLateJoinShown}">
+                    <TextBlock Classes="hint" Margin="0" TextWrapping="Wrap" VerticalAlignment="Center"
+                               Text="{Binding LateJoinText}"/>
+                    <Button x:Name="JoinRunningRunButton" Grid.Column="1" Classes="accent" VerticalAlignment="Center"
+                            Content="JOIN RUNNING RUN" Command="{Binding JoinRunningRunCommand}"/>
+                </Grid>
                 <TextBlock Classes="hint" Margin="0" Text="{Binding ClockHint}"/>
                 <!-- Why there are no run controls, when there are none. An unknown fleet boss is a state, not
                      silence — the same rule as ET-65 AC-7. -->
