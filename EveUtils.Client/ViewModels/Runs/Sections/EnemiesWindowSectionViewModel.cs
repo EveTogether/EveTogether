@@ -10,6 +10,7 @@ using EveUtils.Shared.Modules.Runs;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Sde;
+using EveUtils.Shared.Modules.Sde.Storage;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace EveUtils.Client.ViewModels.Runs.Sections;
@@ -80,8 +81,12 @@ public sealed partial class EnemiesWindowSectionViewModel : RunWindowSection
 
         DateTime since = boundaries[^1];
         TimeSpan inRoom = TimeSpan.FromTicks(Math.Max(0, ((Context.EffectiveStopUtc ?? nowUtc) - since).Ticks));
-        return $"ROOM {boundaries.Count + 1}  since {since.ToLocalTime():HH:mm:ss} · {(int)inRoom.TotalMinutes:00}:{inRoom.Seconds:00}";
+        string? faction = _FactionText(boundaries.Count + 1);
+        return $"ROOM {boundaries.Count + 1}  since {since.ToLocalTime():HH:mm:ss} · {(int)inRoom.TotalMinutes:00}:{inRoom.Seconds:00}{(faction is null ? string.Empty : $" · {faction}")}";
     }
+
+    /// <summary>Names the SDE has no type for, shown as plain rows while the run has no rooms (ET-369).</summary>
+    public IReadOnlyList<string> UnresolvedNames => _UnresolvedIn(null);
 
     /// <summary>The AUTO badge for the room going on now, when the detector opened it (ET-368).</summary>
     public RoomSourceViewModel? CurrentRoomSource =>
@@ -192,7 +197,7 @@ public sealed partial class EnemiesWindowSectionViewModel : RunWindowSection
         {
             collector.Changed -= RefreshSummary;
             collector.Regrouped -= _ShowRooms;
-            collector.UnresolvedSeen -= _AnnounceSightings;
+            collector.UnresolvedSeen -= _ShowRooms;
         }
 
         _collectors.Clear();
@@ -245,7 +250,7 @@ public sealed partial class EnemiesWindowSectionViewModel : RunWindowSection
         // every character, not just the one on screen, so a background sibling's count still moves the summary.
         collector.Changed += RefreshSummary;
         collector.Regrouped += _ShowRooms;
-        collector.UnresolvedSeen += _AnnounceSightings;
+        collector.UnresolvedSeen += _ShowRooms;
         _collectors[characterId] = collector;
     }
 
@@ -257,7 +262,15 @@ public sealed partial class EnemiesWindowSectionViewModel : RunWindowSection
             ? _OnScreenCollector() is { } own ? [own] : []
             : _collectors.Values;
 
-    private void _AnnounceSightings() => SightingsChanged?.Invoke();
+    private IReadOnlyList<string> _UnresolvedIn(int? room) => _OnScreenCollector() is not { } collector
+        ? []
+        : [.. collector.UnresolvedSightings.Where(seen => RunRooms.RoomOf(collector.RoomBoundaries, seen.FirstObservedAtUtc) == room)
+            .Select(seen => seen.Name).Distinct()];
+
+    // The same faction text as TARGETS, read off the room's rows and its names without a type.
+    private string? _FactionText(int room) => TargetsWindowSectionViewModel.FactionText(AbyssalNpcKnowledge.Faction(
+        EnemyObservations.Where(observation => observation.RoomNumber == room).Select(observation => observation.EnemyName)
+            .Concat(_UnresolvedIn(room))));
 
     private void _ShowRooms()
     {
@@ -268,9 +281,11 @@ public sealed partial class EnemiesWindowSectionViewModel : RunWindowSection
             .. Enumerable.Range(1, roomCount).Reverse().Select(room => new RunEnemyRoomViewModel(room,
                 _RoomWindowText(boundaries, room), isUndoShown: room == roomCount && Context.CanControl,
                 [.. EnemyObservations.Where(observation => observation.RoomNumber == room)],
-                RoomSourceViewModel.Of(room > 1 ? _OnScreenCollector()?.DetectedCertainties[room - 2] : null)))
+                RoomSourceViewModel.Of(room > 1 ? _OnScreenCollector()?.DetectedCertainties[room - 2] : null),
+                _FactionText(room), _UnresolvedIn(room)))
         ];
         OnPropertyChanged(nameof(EnemyRooms));
+        OnPropertyChanged(nameof(UnresolvedNames));
         OnPropertyChanged(nameof(HasRooms));
         RefreshSummary();
         _ShowLootRooms();

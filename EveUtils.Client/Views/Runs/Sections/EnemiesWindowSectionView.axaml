@@ -16,31 +16,41 @@
                                FormatString="0" Value="{Binding Count, Mode=TwoWay}"/>
             </Grid>
         </DataTemplate>
+        <DataTemplate DataType="x:String">
+            <Grid Classes="kv" ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                <TextBlock Text="{Binding}" VerticalAlignment="Center"/>
+                <TextBlock Grid.Column="1" Classes="hint" Margin="0" VerticalAlignment="Center" Text="not in SDE"/>
+            </Grid>
+        </DataTemplate>
     </UserControl.DataTemplates>
     <!-- Its own section, folded by default: a site's worth of rats inside ACTIVITY pushed FIT, FLEET,
          BOUNTY and LOOT under the fold. The count is typed after the fight, so the rows outlive STOP. -->
     <StackPanel>
         <ItemsControl x:Name="EnemyList" ItemsSource="{Binding EnemyObservations}" IsVisible="{Binding !HasRooms}"/>
+        <ItemsControl x:Name="UnresolvedList" ItemsSource="{Binding UnresolvedNames}" IsVisible="{Binding !HasRooms}"/>
         <!-- Per room once NEW ROOM was pressed (ET-240), the room going on now first. -->
         <ItemsControl x:Name="EnemyRoomList" ItemsSource="{Binding EnemyRooms}" IsVisible="{Binding HasRooms}">
             <ItemsControl.ItemTemplate>
                 <DataTemplate DataType="va:RunEnemyRoomViewModel">
                     <StackPanel Spacing="2" Margin="0,6,0,0">
                         <Border BorderThickness="0,0,0,1" BorderBrush="{DynamicResource BorderBrush}" Padding="0,0,0,3">
-                            <Grid ColumnDefinitions="Auto,Auto,*,Auto" ColumnSpacing="10">
+                            <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto" ColumnSpacing="10">
                                 <TextBlock Classes="label" VerticalAlignment="Center" Text="{Binding Title}"/>
                                 <Panel Grid.Column="1" VerticalAlignment="Center"
                                        IsVisible="{Binding Source, Converter={x:Static ObjectConverters.IsNotNull}}">
                                     <vw:RoomSourceView DataContext="{Binding Source}"/>
                                 </Panel>
                                 <TextBlock Grid.Column="2" Classes="hint" Margin="0" VerticalAlignment="Center"
+                                           Text="{Binding FactionText}"/>
+                                <TextBlock Grid.Column="3" Classes="hint" Margin="0" VerticalAlignment="Center"
                                            Text="{Binding WindowText}"/>
-                                <Button Grid.Column="3" Classes="link" Content="undo" IsVisible="{Binding IsUndoShown}"
+                                <Button Grid.Column="4" Classes="link" Content="undo" IsVisible="{Binding IsUndoShown}"
                                         ToolTip.Tip="Take this room back: its enemies and loot fold into the room before it."
                                         Command="{Binding #EnemyRoomList.((vs:EnemiesWindowSectionViewModel)DataContext).UndoRoomCommand}"/>
                             </Grid>
                         </Border>
                         <ItemsControl ItemsSource="{Binding Observations}"/>
+                        <ItemsControl ItemsSource="{Binding Unresolved}"/>
                     </StackPanel>
                 </DataTemplate>
             </ItemsControl.ItemTemplate>
