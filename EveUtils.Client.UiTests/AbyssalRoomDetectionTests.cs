@@ -128,6 +128,53 @@ public sealed class AbyssalRoomDetectionTests
         Assert.Equal("sure", model.Enemies().EnemyRooms[0].Source?.Word);
     }
 
+    /// <summary>NEW ROOM sets limits the whole fleet shares, so in a fleet run only the commander gets the button and
+    /// the command; solo keeps it. Counter-proof: drop the CanControl check and the member row turns red.</summary>
+    [AvaloniaTheory]
+    [InlineData(false, 1, 1, true)]
+    [InlineData(true, 1, 1, true)]
+    [InlineData(true, 1, 2, false)]
+    public async Task NewRoom_InAFleetRun_IsTheCommandersAlone(bool inFleet, int commander, int actingCharacter, bool allowed)
+    {
+        using var harness = await ActivityWindowHarness.CreateAsync();
+        ActivityWindowViewModel model = await harness.OpenAsync(ActivityKind.Abyssal);
+        await model.StartRunCommand.ExecuteAsync(null);
+        // Every refresh re-asks a roster this harness has no fleet for, so the commander is told again before each step.
+        void TellTheCommander()
+        {
+            if (inFleet)
+            {
+                model.ApplyFleetCommand(fleetId: 7, fleetCommanderCharacterId: commander, actingCharacterId: actingCharacter);
+            }
+        }
+
+        if (inFleet)
+        {
+            model.GroupCode = "HF-7Q2";
+            await model.RefreshFleetCommandAsync(DateTime.UtcNow);
+        }
+
+        TellTheCommander();
+
+        var pocket = model.Sections.OfType<ActivityWindowSectionViewModel>().Single();
+        bool visible = model.IsNewRoomButtonVisible && pocket.CanPickPocket;
+        await pocket.SelectTierCommand.ExecuteAsync(3);
+        TellTheCommander();
+
+        // A room made past the guard (as a detection would) is the member's to look at, not to take back.
+        model.Enemies().StartRoom(DateTime.UtcNow);
+        TellTheCommander();
+        model.Enemies().UndoRoomCommand.Execute(null);
+        Assert.Equal(!allowed, model.Enemies().HasRooms);
+
+        TellTheCommander();
+        model.StartNewRoomCommand.Execute(null);
+
+        Assert.Equal(allowed, visible);
+        Assert.Equal(2, model.Enemies().EnemyRooms.Count);
+        Assert.Equal(allowed, model.TierIndex == 3);
+    }
+
     /// <summary>One run's combat lines through ET's own catch-up reader, into a collector that detects the way an
     /// abyssal window's does.</summary>
     private static string _Replay(string directory, DateTime startUtc, DateTime stopUtc)

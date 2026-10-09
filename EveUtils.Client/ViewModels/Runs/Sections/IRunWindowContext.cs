@@ -40,6 +40,9 @@ public interface IRunWindowContext : INotifyPropertyChanged
     /// shared fact (a pocket's tier and weather, ET-241) is announced to the rest of the group.</summary>
     bool IsFleetCommander { get; }
 
+    /// <summary>Whether the acting pilot may steer this run: solo, or the commander of the shared one (ET-105).</summary>
+    bool CanControl { get; }
+
     /// <summary>The instant the run stopped, times-corrected if it was — null while it is still running. A section
     /// that judges something against "when the run ended" (a mission's bonus window) freezes on this the moment the
     /// clock stops, rather than keep judging it against wall-clock time while the window sits open before SAVE.</summary>

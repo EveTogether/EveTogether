@@ -94,15 +94,27 @@ public sealed partial class ActivityWindowSectionViewModel : RunWindowSection
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsPickerShown))]
+    [NotifyPropertyChangedFor(nameof(IsOpenPickerShown))]
     private bool _isPickerOpen;
 
     /// <summary>Twelve buttons are worth the room while the question is open and in the way once it is answered, so
     /// the picker folds behind one line as soon as both halves are set.</summary>
-    public bool IsPickerShown => !Context.HasWeatherAndTier || IsPickerOpen;
+    public bool IsPickerShown => Context.CanControl && (!Context.HasWeatherAndTier || IsPickerOpen);
+
+    /// <summary>The pocket is the commander's to set in a fleet run (the NEW ROOM and DISCARD rule); a member gets the
+    /// commander's answer announced.</summary>
+    public bool CanPickPocket => Context.CanControl;
+
+    public bool IsOpenPickerShown => CanPickPocket && !IsPickerShown;
 
     [RelayCommand]
     private async Task SelectWeatherAsync(int index)
     {
+        if (!Context.CanControl)
+        {
+            return;
+        }
+
         Context.WeatherIndex = index;
         _AfterChoice();
         await _PersistAsync(WeatherSettingKey, index.ToString(CultureInfo.InvariantCulture));
@@ -112,6 +124,11 @@ public sealed partial class ActivityWindowSectionViewModel : RunWindowSection
     [RelayCommand]
     private async Task SelectTierAsync(int index)
     {
+        if (!Context.CanControl)
+        {
+            return;
+        }
+
         Context.TierIndex = index;
         _AfterChoice();
         await _PersistAsync(TierSettingKey, index.ToString(CultureInfo.InvariantCulture));
@@ -121,6 +138,11 @@ public sealed partial class ActivityWindowSectionViewModel : RunWindowSection
     [RelayCommand]
     private async Task ClearWeatherAndTierAsync()
     {
+        if (!Context.CanControl)
+        {
+            return;
+        }
+
         Context.WeatherIndex = null;
         Context.TierIndex = null;
         _AfterChoice();
@@ -420,8 +442,14 @@ public sealed partial class ActivityWindowSectionViewModel : RunWindowSection
             case nameof(IRunWindowContext.RunId):
                 _ShareLivePocket();
                 break;
+            case nameof(IRunWindowContext.CanControl):
+                OnPropertyChanged(nameof(CanPickPocket));
+                OnPropertyChanged(nameof(IsOpenPickerShown));
+                OnPropertyChanged(nameof(IsPickerShown));
+                break;
             case nameof(IRunWindowContext.HasWeatherAndTier):
                 OnPropertyChanged(nameof(HasWeatherAndTier));
+                OnPropertyChanged(nameof(IsOpenPickerShown));
                 OnPropertyChanged(nameof(IsPickerShown));
                 break;
         }

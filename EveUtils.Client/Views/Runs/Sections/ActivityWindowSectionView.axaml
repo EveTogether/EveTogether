@@ -100,7 +100,7 @@
         <StackPanel IsVisible="{Binding IsInPocket}">
         <Button Classes="pick" Content="change tier / weather" HorizontalAlignment="Left"
                 Margin="0,8,0,0"
-                IsVisible="{Binding !IsPickerShown}"
+                IsVisible="{Binding IsOpenPickerShown}"
                 Command="{Binding OpenPickerCommand}"/>
 
         <StackPanel IsVisible="{Binding IsPickerShown}" Margin="0,8,0,0">
