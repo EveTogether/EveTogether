@@ -2,7 +2,6 @@ using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Data;
 using EveUtils.Shared.DependencyInjection;
 using EveUtils.Shared.Messaging;
-using EveUtils.Shared.Modules.Killmails.Entities;
 using EveUtils.Shared.Modules.Market.Repositories;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Entities;
@@ -36,7 +35,7 @@ internal sealed class GetRunningActivitiesQueryHandler(
             return Result<IReadOnlyList<RunningActivityDto>>.Success([]);
 
         MiningOreTypes ores = RunIskFactsReader.OresOf(runs, sde);
-        ILookup<Guid, LocalKillmail> lossesByRun = await RunIskFactsReader.LinkedLossesAsync(db,
+        ILookup<Guid, LinkedLoss> lossesByRun = await RunIskFactsReader.LinkedLossesAsync(db,
             [.. runs.Select(run => run.Id)], cancellationToken);
         IReadOnlyList<int> priceTypeIds = RunIskFactsReader.PricedTypeIds(runs, runs.SelectMany(run => run.Parameters), ores,
             lossesByRun.SelectMany(group => group));

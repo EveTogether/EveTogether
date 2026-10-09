@@ -17,6 +17,7 @@ entries under `[Unreleased]` below that were not there yet at the previous night
 
 ## [Unreleased]
 
+- **Changed: a lost ship now counts in TOTAL ISK at what it was worth when it was linked to the activity.** The hull and everything aboard keep the price they had at that moment, like loot, ore and filament already do, so the total no longer moves with the market afterwards. An item that had no price yet is filled in once, and "Re-value at current prices" updates the loss as well.
 - **Fixed: a fleet member no longer sees "The fleet commander called this run off" over a run that is going.** The line is cleared as soon as the member joins the commander's next run or goes in, so it no longer clashes with the DISCARD and clock lines.
 - **Added: a server row in RUNS opens its detail, read-only.** OPEN DETAIL now also shows for a row on a server tab: the same sections as a local run, filled from the server's copy, with "Server copy · read only" at the top and no way to correct, re-value, delete or republish it. If this PC also holds the run, the local detail opens as before.
 - **Fixed: the server control panel now keeps your sign-in after a restart.** Its security keys stay with the server data, so restart no longer invalidates your session or antiforgery cookie.

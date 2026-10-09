@@ -51,7 +51,9 @@ internal sealed class SetKillmailRunLinkCommandHandler(
 
         await db.SaveChangesAsync(cancellationToken);
         // Both activities change: the one the loss left and the one it joined.
-        foreach (Guid affected in new[] { previousRunId, command.RunId }.OfType<Guid>().Distinct())
+        Guid[] affectedRunIds = [.. new[] { previousRunId, command.RunId }.OfType<Guid>().Distinct()];
+        await dispatcher.Send(new SnapshotRunLossPricesCommand(affectedRunIds), cancellationToken);
+        foreach (Guid affected in affectedRunIds)
         {
             await dispatcher.Send(new RebuildActivitySummariesCommand(affected), cancellationToken);
         }

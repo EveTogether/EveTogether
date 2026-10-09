@@ -52,6 +52,8 @@ internal sealed class LinkKillmailsToRunsCommandHandler(
 
         DateTime nowUtc = DateTime.UtcNow;
         List<Guid> linkedRunIds = [];
+        // The folded run a loss leaves drops the prices it fixed for it, as the run it joins fixes its own (ET-464).
+        HashSet<Guid> pricedRunIds = [];
         bool isChanged = false;
         foreach (LocalKillmail loss in open)
         {
@@ -59,6 +61,11 @@ internal sealed class LinkKillmailsToRunsCommandHandler(
                 [.. nearby.Where(killmail => killmail.RunId is not null)], nowUtc);
             KillmailLinkSource source = match.RunId is null ? KillmailLinkSource.None : KillmailLinkSource.Auto;
             isChanged |= loss.RunId != match.RunId || loss.LinkSource != source;
+            if (loss.RunId is { } previousRunId)
+            {
+                pricedRunIds.Add(previousRunId);
+            }
+
             loss.RunId = match.RunId;
             loss.LinkSource = source;
             if (match.RunId is { } runId)
@@ -68,6 +75,9 @@ internal sealed class LinkKillmailsToRunsCommandHandler(
         }
 
         await db.SaveChangesAsync(cancellationToken);
+        pricedRunIds.UnionWith(linkedRunIds);
+        await dispatcher.Send(new SnapshotRunLossPricesCommand([.. pricedRunIds]), cancellationToken);
+
         foreach (Guid runId in linkedRunIds.Distinct())
         {
             await dispatcher.Send(new RebuildActivitySummariesCommand(runId), cancellationToken);

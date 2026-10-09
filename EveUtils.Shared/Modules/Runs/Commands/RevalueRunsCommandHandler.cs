@@ -42,11 +42,14 @@ internal sealed class RevalueRunsCommandHandler(
 
         IReadOnlySet<Guid> revalued = await RunPriceSnapshots.FixAsync(db, marketPrices, sde, runIds,
             PriceSnapshotSource.Revalued, cancellationToken);
-        if (revalued.Count == 0)
+        // Losses are re-valued too (ET-464), but never published, so a run whose losses alone moved is no correction.
+        IReadOnlySet<Guid> lossesRevalued = await RunLossPriceSnapshots.FixAsync(db, marketPrices, runIds,
+            PriceSnapshotSource.Revalued, cancellationToken);
+        Run[] changed = [.. runs.Where(run => revalued.Contains(run.Id) || lossesRevalued.Contains(run.Id))];
+        if (changed.Length == 0)
             return Result<int>.Success(0);
 
-        Run[] changed = [.. runs.Where(run => revalued.Contains(run.Id))];
-        foreach (Run saved in changed.Where(run => run.State is RunState.Saved))
+        foreach (Run saved in changed.Where(run => run.State is RunState.Saved && revalued.Contains(run.Id)))
             RunLootWrites.MarkCorrected(saved);
         await db.SaveChangesAsync(cancellationToken);
 
@@ -55,7 +58,7 @@ internal sealed class RevalueRunsCommandHandler(
             await dispatcher.Send(new RebuildActivitySummariesCommand(saved.Id), cancellationToken);
         foreach (Run run in changed)
         {
-            if (run.State is RunState.Saved)
+            if (run.State is RunState.Saved && revalued.Contains(run.Id))
                 await eventBus.PublishAsync(new RunLootCorrectedEvent(run.Id), EventTarget.Local, cancellationToken);
             await eventBus.PublishAsync(new RunsChangedEvent(run.Id, run.GroupCode), EventTarget.Local, cancellationToken);
         }

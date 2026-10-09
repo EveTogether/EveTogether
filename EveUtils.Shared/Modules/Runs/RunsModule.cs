@@ -27,6 +27,8 @@ public static class RunsModule
         // Client-only, never synced (ET-182): where a group code came from is this client's own observation, not a
         // fact the fleet's other members need to agree on.
         modelBuilder.ApplyConfiguration(new RunGroupOriginConfiguration());
+        // Client-only (ET-464): a loss is never published, so neither is the price it is valued at.
+        modelBuilder.ApplyConfiguration(new RunLossPriceConfiguration());
         ConfigureCombatTelemetry(modelBuilder);
     }
 

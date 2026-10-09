@@ -115,6 +115,10 @@ public sealed class CommandSignalCoverageTests
             + "which the shared harness cannot seed per scenario; its signals are proven in RunPriceSnapshotTests instead",
         [typeof(RevalueRunsCommand)] = "needs a market price that moved since the capture and a local character, which the "
             + "shared harness cannot seed per scenario; its signals are proven in RunPriceSnapshotTests instead",
+        // ET-464: prices the losses linked to a run, which only a stored loss linked straight in the store can set up. It
+        // publishes RunsChangedEvent per run whose loss prices changed, proven in RunPriceSnapshotTests.
+        [typeof(SnapshotRunLossPricesCommand)] = "needs a stored loss linked to a run, which the shared harness cannot seed "
+            + "per scenario; its signal is proven in RunPriceSnapshotTests instead",
         [typeof(ImportMissingGroupBountyCommand)] ="writes no run of its own: it only picks the runs and hands them to "
             + "ImportRunBountyCommand, whose own writes are the ones that signal",
         // ET-381: asking members to come over changes no fleet — no roster, no seat, no invite. It only enqueues a

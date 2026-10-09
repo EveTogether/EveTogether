@@ -2,7 +2,6 @@ using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Data;
 using EveUtils.Shared.DependencyInjection;
 using EveUtils.Shared.Messaging;
-using EveUtils.Shared.Modules.Killmails.Entities;
 using EveUtils.Shared.Modules.Market.Repositories;
 using EveUtils.Shared.Modules.Runs.Entities;
 using EveUtils.Shared.Modules.Runs.Enums;
@@ -98,7 +97,7 @@ internal sealed class RebuildActivitySummariesCommandHandler(
         // Valuation always goes through ET's own type-id lookup (the LocalMarketPrice cache), never the clipboard's
         // own ISK column — the same rule RunLootViewModel._LoadPricesAsync follows for the running run.
         MiningOreTypes ores = RunIskFactsReader.OresOf(runs, sde);
-        ILookup<Guid, LocalKillmail> lossesByRun = await RunIskFactsReader.LinkedLossesAsync(db,
+        ILookup<Guid, LinkedLoss> lossesByRun = await RunIskFactsReader.LinkedLossesAsync(db,
             [.. runs.Select(run => run.Id)], cancellationToken);
         // A run whose every line carries its own fixed price adds up the same after any refresh (ET-463).
         if (command.OnlyWhenPricesChanged

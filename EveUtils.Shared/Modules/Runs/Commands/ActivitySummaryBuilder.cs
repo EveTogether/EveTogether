@@ -1,6 +1,5 @@
 using System.Security.Cryptography;
 using System.Text;
-using EveUtils.Shared.Modules.Killmails.Entities;
 using EveUtils.Shared.Modules.Runs.Entities;
 using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Runs.Isk;
@@ -22,7 +21,7 @@ internal static class ActivitySummaryBuilder
 
     public static ActivitySummary Build(string activityKey, IReadOnlyList<Run> runs,
         ILookup<Guid, RunParameter> parametersByRun, IReadOnlyDictionary<int, double> prices, MiningOreTypes ores,
-        ILookup<Guid, LocalKillmail> lossesByRun, Func<int, bool> isCharge)
+        ILookup<Guid, LinkedLoss> lossesByRun, Func<int, bool> isCharge)
     {
         Run source = runs.OrderBy(run => run.StartedAtUtc).ThenBy(run => run.Id).First();
         DateTime startedAtUtc = runs.Min(run => run.StartedAtUtc);
