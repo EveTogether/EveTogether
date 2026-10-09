@@ -40,20 +40,6 @@ public enum FleetStatusFilter
     Finished,
 }
 
-/// <summary>One chip of the CHARACTER filter: a name, and whether it is the one pressed.</summary>
-public sealed partial class FleetFilterChipViewModel(string label, int? characterId, IRelayCommand select) : ObservableObject
-{
-    public string Label { get; } = label;
-    public int? CharacterId { get; } = characterId;
-    public IRelayCommand SelectCommand { get; } = select;
-    [ObservableProperty] private bool _isOn;
-
-    /// <summary>What the chip reads on the bar. The "all N" chip drops its count in the narrow toolbar: with it the
-    /// bar's width depended on how many pilots you have — twelve pushed it onto a second row where six fit — and the
-    /// count is already in the header chip beside the title.</summary>
-    [ObservableProperty] private string _displayLabel = label;
-}
-
 /// <summary>
 /// The overview half of the fleets screen (ET-170): the band with one lane per own character, the three bands
 /// ACTIVE · STANDING BY · FINISHED, the link rule that says which started fleet each pilot counts for, and the two
@@ -94,31 +80,60 @@ public sealed partial class FleetsViewModel
     public ObservableCollection<FleetViewModel> StandingByFleets { get; } = [];
     public ObservableCollection<FleetViewModel> FinishedFleets { get; } = [];
 
-    public ObservableCollection<FleetFilterChipViewModel> CharacterChips { get; } = [];
+    /// <summary>The CHARACTER filter (ET-491): "All characters (N)" and one entry per own pilot, in one dropdown. A
+    /// chip per pilot pushed the toolbar onto a second line at six pilots, and folded behind "⋯" when narrow.</summary>
+    public ObservableCollection<FleetCharacterOptionViewModel> CharacterOptions { get; } = [];
 
-    /// <summary>The character chips the toolbar draws, and the ones it folds behind "⋯". At 758 there is no room for
-    /// a chip per pilot — scherm 10 keeps "all N" and the pick that is on, and puts the rest in the overflow — while
-    /// the wide toolbar shows every one and folds nothing.</summary>
-    public ObservableCollection<FleetFilterChipViewModel> VisibleCharacterChips { get; } = [];
+    [ObservableProperty] private FleetCharacterOptionViewModel? _selectedCharacterOption;
 
-    /// <summary>The folded ones as menu lines, so they use the one fleet menu theme this app already has.</summary>
-    public ObservableCollection<FleetMemberMenuItemViewModel> HiddenCharacterChips { get; } = [];
+    // The ComboBox pushes null into the selection while its list is rebuilt; that is not the user picking anyone.
+    private bool _isRebuildingCharacterOptions;
 
-    public bool HasHiddenCharacterChips => HiddenCharacterChips.Count > 0;
-
-    private void SplitCharacterChips()
+    partial void OnSelectedCharacterOptionChanged(FleetCharacterOptionViewModel? value)
     {
-        VisibleCharacterChips.Clear();
-        HiddenCharacterChips.Clear();
-        foreach (var chip in CharacterChips)
+        if (_isRebuildingCharacterOptions || value is null)
+            return;
+        CharacterFilter = value.CharacterId;
+        ApplyFilters();
+    }
+
+    /// <summary>Rebuilt only when the pilots changed: every presence redraw comes through here, and a rebuild under an
+    /// open dropdown would close it.</summary>
+    private void _RebuildCharacterOptions(int pilots)
+    {
+        List<(int? CharacterId, string Name)> wanted = pilots == 0
+            ? []
+            :
+            [
+                (null, string.Create(CultureInfo.InvariantCulture, $"All characters ({pilots})")),
+                .. _knownCharacters
+                    .Where(character => character.EsiCharacterId is not null)
+                    .Select(character => (character.EsiCharacterId, character.Name)),
+            ];
+        if (CharacterOptions.Select(option => (option.CharacterId, option.Name)).SequenceEqual(wanted))
+            return;
+
+        _isRebuildingCharacterOptions = true;
+        try
         {
-            chip.DisplayLabel = chip.CharacterId is null && !Layout.IsWide ? "all" : chip.Label;
-            if (Layout.IsWide || chip.CharacterId is null || chip.IsOn)
-                VisibleCharacterChips.Add(chip);
-            else
-                HiddenCharacterChips.Add(new(chip.Label, chip.SelectCommand));
+            CharacterOptions.Clear();
+            foreach (var (characterId, name) in wanted)
+                CharacterOptions.Add(new FleetCharacterOptionViewModel(characterId, name,
+                    characterId is { } id ? _faces.FaceOf(id, name) : null));
+            SelectedCharacterOption = CharacterOptions.FirstOrDefault(option => option.CharacterId == CharacterFilter);
         }
-        OnPropertyChanged(nameof(HasHiddenCharacterChips));
+        finally
+        {
+            _isRebuildingCharacterOptions = false;
+        }
+
+        // The pilot filtered on is gone: show everyone rather than a filter nobody can see or undo.
+        if (SelectedCharacterOption is null && CharacterFilter is not null)
+        {
+            CharacterFilter = null;
+            SelectedCharacterOption = CharacterOptions.FirstOrDefault();
+            ApplyFilters();
+        }
     }
 
     /// <summary>The two states of the table and the two densities of the band, from the width the view reports.</summary>
@@ -211,15 +226,6 @@ public sealed partial class FleetsViewModel
     }
 
     [ObservableProperty] private int? _characterFilter;
-
-    private void SetCharacterFilter(int? characterId)
-    {
-        CharacterFilter = characterId;
-        foreach (var chip in CharacterChips)
-            chip.IsOn = chip.CharacterId == characterId;
-        SplitCharacterChips();
-        ApplyFilters();
-    }
 
     [ObservableProperty] private string _searchText = "";
 
@@ -646,19 +652,7 @@ public sealed partial class FleetsViewModel
             (false, var n) => Count(n, "server", "servers"),
         };
 
-        CharacterChips.Clear();
-        if (pilots > 0)
-        {
-            CharacterChips.Add(new(string.Create(CultureInfo.InvariantCulture, $"all {pilots}"), null, new RelayCommand(() => SetCharacterFilter(null))) { IsOn = CharacterFilter is null });
-            foreach (var character in _knownCharacters)
-            {
-                if (character.EsiCharacterId is not { } id)
-                    continue;
-                CharacterChips.Add(new(character.Name, id, new RelayCommand(() => SetCharacterFilter(id))) { IsOn = CharacterFilter == id });
-            }
-        }
-
-        SplitCharacterChips();
+        _RebuildCharacterOptions(pilots);
     }
 
     private static string Count(int n, string noun) => string.Create(CultureInfo.InvariantCulture, $"{n} {noun}");
@@ -680,8 +674,6 @@ public sealed partial class FleetsViewModel
 
         foreach (var lane in Lanes)
             lane.IsSlim = !Layout.ShowLaneButtons;
-
-        SplitCharacterChips();
 
         // Column-first: the first half of the roster down the left column, the rest down the right.
         int left = (Lanes.Count + 1) / 2;

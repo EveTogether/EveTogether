@@ -40,9 +40,15 @@ public sealed class FillGridPanel : Panel
     public static readonly StyledProperty<double> RowSpacingProperty =
         AvaloniaProperty.Register<FillGridPanel, double>(nameof(RowSpacing));
 
+    /// <summary>Every card as tall as the tallest one in the grid, so the rows line up whatever each card holds
+    /// (ET-491): the Fleets band's cards differ by an optional foot line, and a short card read as a broken row.</summary>
+    public static readonly StyledProperty<bool> UniformItemHeightProperty =
+        AvaloniaProperty.Register<FillGridPanel, bool>(nameof(UniformItemHeight));
+
     static FillGridPanel()
     {
-        AffectsMeasure<FillGridPanel>(MinItemWidthProperty, ColumnSpacingProperty, RowSpacingProperty);
+        AffectsMeasure<FillGridPanel>(MinItemWidthProperty, ColumnSpacingProperty, RowSpacingProperty,
+            UniformItemHeightProperty);
     }
 
     public double MinItemWidth
@@ -61,6 +67,12 @@ public sealed class FillGridPanel : Panel
     {
         get => GetValue(RowSpacingProperty);
         set => SetValue(RowSpacingProperty, value);
+    }
+
+    public bool UniformItemHeight
+    {
+        get => GetValue(UniformItemHeightProperty);
+        set => SetValue(UniformItemHeightProperty, value);
     }
 
     protected override Size MeasureOverride(Size availableSize)
@@ -85,6 +97,13 @@ public sealed class FillGridPanel : Panel
             rowHeight = column == 0 ? child.DesiredSize.Height : Math.Max(rowHeight, child.DesiredSize.Height);
         }
 
+        if (UniformItemHeight && Children.Count > 0)
+        {
+            int rows = (Children.Count + columns - 1) / columns;
+            rowHeight = _TallestChild();
+            height = (rows - 1) * (rowHeight + RowSpacing);
+        }
+
         // Report back exactly the width that was offered rather than the columns re-added: a hair over the offer is
         // enough for a host to fit a scrollbar it did not need.
         double width = double.IsFinite(availableSize.Width)
@@ -101,6 +120,7 @@ public sealed class FillGridPanel : Panel
 
         double top = 0;
         double rowHeight = 0;
+        double? uniformHeight = UniformItemHeight ? _TallestChild() : null;
 
         for (var i = 0; i < Children.Count; i++)
         {
@@ -114,12 +134,13 @@ public sealed class FillGridPanel : Panel
 
             // The arrange slot is what gives the card its width: it has no Width of its own, and a Stretch alignment
             // alone would only fill whatever the card asked for.
+            double itemHeight = uniformHeight ?? child.DesiredSize.Height;
             child.Arrange(new Rect(
                 Edge(column, columns, finalSize.Width, scale),
                 top,
                 ColumnWidth(column, columns, finalSize.Width, scale),
-                child.DesiredSize.Height));
-            rowHeight = Math.Max(rowHeight, child.DesiredSize.Height);
+                itemHeight));
+            rowHeight = Math.Max(rowHeight, itemHeight);
         }
 
         // Take the WHOLE rect that was offered, not just the part the rows fill. A panel that hands back less than
@@ -130,6 +151,14 @@ public sealed class FillGridPanel : Panel
         // extent and its scrollbar are built from — so a grid taller than the viewport still scrolls, and there
         // finalSize.Height already IS the content height (the presenter arranges its child at max(desired, viewport)).
         return new Size(finalSize.Width, Math.Max(finalSize.Height, top + rowHeight));
+    }
+
+    private double _TallestChild()
+    {
+        double tallest = 0;
+        foreach (Control child in Children)
+            tallest = Math.Max(tallest, child.DesiredSize.Height);
+        return tallest;
     }
 
     private int ColumnCount(double available) =>

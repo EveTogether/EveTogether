@@ -151,7 +151,8 @@
                 <Setter Property="Margin" Value="8,0,8,0"/>
             </Style>
             <!-- Measured, not guessed: at 758 the picks plus the character chips and their overflow need 635 px, and
-                 the toolbar has 606 to give at a 120 px search box. 88 puts the whole bar back on one row. -->
+                 the toolbar has 606 to give at a 120 px search box. 88 puts the whole bar back on one row. The
+                 character dropdown that replaced the chips (ET-491) fits that row at 140 px without its label. -->
             <Style Selector="Border.toolbar TextBox.search">
                 <Setter Property="Width" Value="88"/>
                 <Setter Property="FontSize" Value="10"/>
@@ -163,6 +164,12 @@
                 <Setter Property="Width" Value="186"/>
                 <Setter Property="FontSize" Value="11"/>
                 <Setter Property="Padding" Value="8,5"/>
+            </Style>
+            <Style Selector="Border.toolbar ComboBox#CharacterFilter">
+                <Setter Property="Width" Value="140"/>
+            </Style>
+            <Style Selector="DockPanel.wide Border.toolbar ComboBox#CharacterFilter">
+                <Setter Property="Width" Value="210"/>
             </Style>
 
             <!-- ── Chips: the theme's Border.chip, plus the mockup's amber value chip. ── -->
@@ -641,7 +648,7 @@
             </Grid>
         </Border>
 
-        <!-- ══ Toolbar ══ + NEW FLEET · STATUS picks · CHARACTER chips · search -->
+        <!-- ══ Toolbar ══ + NEW FLEET · STATUS picks · CHARACTER dropdown · search -->
         <Border DockPanel.Dock="Top" Classes="toolbar" Padding="12,7" Background="#04FFFFFF"
                 BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
             <Grid ColumnDefinitions="*,Auto">
@@ -661,28 +668,28 @@
                             Command="{Binding SetStatusFilterCommand}" CommandParameter="{x:Static vm:FleetStatusFilter.StandingBy}"/>
                     <Button Classes="pick" Classes.on="{Binding IsStatusFinished}" Content="finished"
                             Command="{Binding SetStatusFilterCommand}" CommandParameter="{x:Static vm:FleetStatusFilter.Finished}"/>
-                    <TextBlock Classes="label" Text="CHARACTER"
-                               IsVisible="{Binding CharacterChips.Count}"/>
-                    <ItemsControl ItemsSource="{Binding VisibleCharacterChips}">
-                        <ItemsControl.ItemsPanel>
-                            <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
-                        </ItemsControl.ItemsPanel>
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate DataType="vm:FleetFilterChipViewModel">
-                                <Button Classes="pick" Classes.on="{Binding IsOn}" Content="{Binding DisplayLabel}"
-                                        ToolTip.Tip="{Binding Label}" Command="{Binding SelectCommand}"/>
+                    <TextBlock Classes="label" Text="CHARACTER">
+                        <TextBlock.IsVisible>
+                            <MultiBinding Converter="{x:Static BoolConverters.And}">
+                                <Binding Path="IsWide"/>
+                                <Binding Path="SelectedCharacterOption" Converter="{x:Static ObjectConverters.IsNotNull}"/>
+                            </MultiBinding>
+                        </TextBlock.IsVisible>
+                    </TextBlock>
+                    <!-- One dropdown however many pilots (ET-491), the KILLMAILS character filter's shape (ET-405). -->
+                    <ComboBox x:Name="CharacterFilter" FontSize="10.5" VerticalAlignment="Center"
+                              IsVisible="{Binding CharacterOptions.Count}"
+                              ItemsSource="{Binding CharacterOptions}" SelectedItem="{Binding SelectedCharacterOption, Mode=TwoWay}">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate DataType="vf:FleetCharacterOptionViewModel">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <ctl:HexPortrait Size="18" IsVisible="{Binding !IsAll}"
+                                                     Source="{Binding Face.Portrait}" Initial="{Binding Face.Initial}"/>
+                                    <TextBlock VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Text="{Binding Name}"/>
+                                </StackPanel>
                             </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                    <!-- Narrow: the pilots that do not fit on the bar, in the same pick menu the rows use. -->
-                    <Button x:Name="CharacterOverflow" Classes="pick" IsVisible="{Binding HasHiddenCharacterChips}"
-                            ToolTip.Tip="Filter on one of your other characters">
-                        <Button.Flyout>
-                            <MenuFlyout ItemsSource="{Binding HiddenCharacterChips}"
-                                        ItemContainerTheme="{StaticResource FleetMemberMenuItemTheme}"/>
-                        </Button.Flyout>
-                        <mi:MaterialIcon Classes="icon-sm" Kind="DotsHorizontal"/>
-                    </Button>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
                 </WrapPanel>
                 <TextBox Grid.Column="1" x:Name="SearchBox" Classes="search" PlaceholderText="search fleet, FC, member…"
                          Text="{Binding SearchText, Mode=TwoWay}" VerticalAlignment="Center"/>
@@ -771,11 +778,13 @@
 
                 <!-- Lanes: cards, as many per row as fit at 236 px, filling the width (ET-108's grid). The card
                      itself (Border.statuscard and friends) is the app-level style shared with Runs' running band —
-                     see Themes/EveUtils.axaml (ET-200). -->
+                     see Themes/EveUtils.axaml (ET-200). Every card is as tall as the tallest (ET-491): a lane without
+                     the standing-by foot keeps that line empty instead of cutting the row short. -->
                 <ItemsControl x:Name="LaneList" ItemsSource="{Binding Lanes}" IsVisible="{Binding IsLaneBand}">
                     <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>
-                            <ctl:FillGridPanel MinItemWidth="{Binding LaneMinWidth}" ColumnSpacing="6" RowSpacing="6"/>
+                            <ctl:FillGridPanel MinItemWidth="{Binding LaneMinWidth}" ColumnSpacing="6" RowSpacing="6"
+                                               UniformItemHeight="True"/>
                         </ItemsPanelTemplate>
                     </ItemsControl.ItemsPanel>
                     <ItemsControl.ItemTemplate>

@@ -14,6 +14,7 @@ using EveUtils.Client.Notifications;
 using EveUtils.Client.Platform;
 using EveUtils.Client.Transport;
 using EveUtils.Client.ViewModels.FitBrowser;
+using EveUtils.Client.ViewModels.Runs;
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Transport;
 using EveUtils.Shared.Identity;
@@ -70,6 +71,7 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
     private readonly IDisposable? _presenceSubscription;
     private readonly IDisposable? _killmailSubscription;
     private readonly IDisposable? _mateConnectionSubscription;
+    private readonly CharacterFaceCache _faces;   // the CHARACTER filter's faces (ET-491)
 
     // The start dialog's roster while it is open, kept current by every presence redraw (ET-492).
     private FleetStartRoster? _openStartRoster;
@@ -91,6 +93,7 @@ public sealed partial class FleetsViewModel : ObservableObject, IDisposable
         _toasts = services.GetRequiredService<IToastService>();
         _metricsLauncher = services.GetRequiredService<IFleetMetricsLauncher>();
         _characterInfo = services.GetRequiredService<ICharacterInfoService>();
+        _faces = new CharacterFaceCache(services.GetService<ICharacterPortraitProvider>());
 
         // Any change to a fleet's roster reaches this window on the one shared watch: a server's fleet.changed
         // (start/conclude/join/leave), and equally a pilot removed in fleet metrics or in the roster window — including
