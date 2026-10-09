@@ -61,6 +61,7 @@ public sealed class FleetRunWindowPresenter : ISingletonService, IDisposable
     private readonly IServiceProvider _services;
     private readonly IDisposable _subscription;
     private readonly IDisposable _preparedSubscription;
+    private readonly IDisposable _runningSubscription;
     private readonly IDisposable _discardSubscription;
     private readonly HashSet<string> _endedGroupCodes = new(StringComparer.Ordinal);
     // The group codes whose card on screen is still the prepared one — the only cards a call-off takes down.
@@ -69,6 +70,9 @@ public sealed class FleetRunWindowPresenter : ISingletonService, IDisposable
     // and the real start it turns into share a group code, so without this a second auto-eligible event for the
     // same run opens a second picker while the first is still waiting on an answer.
     private readonly HashSet<string> _autoAccepting = new(StringComparer.Ordinal);
+    // The runs already offered from here, so the heartbeat of a run going on (ET-500) offers it once: a pilot who
+    // dismissed the card has answered.
+    private readonly HashSet<string> _offeredGroupCodes = new(StringComparer.Ordinal);
     private readonly object _gate = new();
 
     public FleetRunWindowPresenter(IEventBus eventBus, IDialogService dialogs, IServiceProvider services)
@@ -81,6 +85,9 @@ public sealed class FleetRunWindowPresenter : ISingletonService, IDisposable
         _preparedSubscription = eventBus.Subscribe<FleetRunGroupPreparedEvent>((integrationEvent, cancellationToken) =>
             _OnCommanderOfferAsync(new Offer(integrationEvent.Data, IsPrepared: true), integrationEvent.CharacterId,
                 cancellationToken));
+        _runningSubscription = eventBus.Subscribe<FleetRunRunningEvent>((integrationEvent, cancellationToken) =>
+            _OnCommanderOfferAsync(new Offer(integrationEvent.Data, IsPrepared: false, IsInProgress: true),
+                integrationEvent.CharacterId, cancellationToken));
         _discardSubscription = eventBus.Subscribe<FleetRunDiscardedEvent>(_OnFleetRunEndedAsync);
     }
 
@@ -88,6 +95,7 @@ public sealed class FleetRunWindowPresenter : ISingletonService, IDisposable
     {
         _subscription.Dispose();
         _preparedSubscription.Dispose();
+        _runningSubscription.Dispose();
         _discardSubscription.Dispose();
     }
 
@@ -110,6 +118,12 @@ public sealed class FleetRunWindowPresenter : ISingletonService, IDisposable
         {
             return;
         }
+
+        // A member who joined the fleet after the start never heard it (ET-500): the commander's heartbeat stands in
+        // for the start they missed, once. A start or a prepared run is offered as it always was.
+        lock (_gate)
+            if (!_offeredGroupCodes.Add(offer.Start.GroupCode) && offer.IsInProgress)
+                return;
 
         if (await _AutoJoinsAsync(offer.Start.FleetId, cancellationToken))
         {
@@ -228,10 +242,11 @@ public sealed class FleetRunWindowPresenter : ISingletonService, IDisposable
                 _preparedOffers.Remove(offer.Start.GroupCode);
 
         Dispatcher.UIThread.Post(() => _services.GetService<IToastService>()?.Show(
-            offer.IsPrepared ? "Fleet run prepared" : "Fleet run started",
+            offer.IsPrepared ? "Fleet run prepared" : offer.IsInProgress ? "Fleet run in progress" : "Fleet run started",
             offer.IsPrepared ? $"{_Where(offer.Start)} — your run starts when you jump in" : _Where(offer.Start),
             ToastKind.Information,
-            [new ToastAction("Join run", () => _Accept(offer), ToastActionStyle.Affirmative)],
+            [new ToastAction(offer.IsInProgress ? "Join running run" : "Join run", () => _Accept(offer),
+                ToastActionStyle.Affirmative)],
             onClosed: null, replacementKey: _OfferKey(offer.Start.GroupCode)));
     }
 
@@ -340,7 +355,7 @@ public sealed class FleetRunWindowPresenter : ISingletonService, IDisposable
     }
 
     /// <summary>What the commander announced, and whether it was only prepared rather than started (ET-246).</summary>
-    private sealed record Offer(RunGroupCodeStart Start, bool IsPrepared);
+    private sealed record Offer(RunGroupCodeStart Start, bool IsPrepared, bool IsInProgress = false);
 
     private static string _Where(RunGroupCodeStart start) =>
         string.Join(" · ", new[] { OpsecText.Mark(_SiteOf(start)), OpsecText.Mark(start.SolarSystemName) }

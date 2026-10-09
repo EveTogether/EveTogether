@@ -32,7 +32,8 @@ public sealed record CharacterMetricsSnapshot(
     long NeutOut,
     long NeutIn,
     DateTime? AbyssalAnchor,
-    EsiErrorKind? LocationUnavailableReason)
+    EsiErrorKind? LocationUnavailableReason,
+    bool IsSeenInsideAbyssal = false)
 {
     public int Shots => Hits + Misses;
     public double HitRate => Shots == 0 ? 0 : (double)Hits / Shots;
@@ -63,6 +64,9 @@ public sealed class CharacterMetrics
     // saw them leave. Only such a moment may anchor a countdown, because only it is certainly before the entry.
     private DateTime? _lastKnownOutsideAt;
     private DateTime? _abyssalAnchor;
+    // The last ESI reading placed the character inside, anchored or not: a client that came up while they were already
+    // in a pocket knows they are in, only not since when (ET-500).
+    private bool _isSeenInside;
     private double _peakDealtDps;
     // Why the ESI location watch could report nothing, the last time it said so — null once a real reading arrives,
     // and also null before the watch has said anything at all (ET-96: that silence is not itself a reason).
@@ -174,6 +178,7 @@ public sealed class CharacterMetrics
         lock (_gate)
         {
             _abyssalAnchor = null;
+            _isSeenInside = false;
             _lastKnownOutsideAt = atUtc;
             _locationUnavailableReason = null; // a real reading arrived — any earlier refusal no longer applies
         }
@@ -191,6 +196,7 @@ public sealed class CharacterMetrics
         {
             if (_abyssalAnchor is null && _lastKnownOutsideAt is { } anchor)
                 _abyssalAnchor = anchor;
+            _isSeenInside = true;
             _locationUnavailableReason = null; // a real reading arrived — any earlier refusal no longer applies
         }
     }
@@ -203,6 +209,7 @@ public sealed class CharacterMetrics
         lock (_gate)
         {
             _abyssalAnchor = null;
+            _isSeenInside = false;
             _locationUnavailableReason = reason;
         }
     }
@@ -256,7 +263,7 @@ public sealed class CharacterMetrics
                 _bounty, _kills, _location, _peakDealtDps,
                 DateTime.UtcNow - _sessionStart, recent,
                 _mining.Totals(), _mining.TotalUnits, _repairedOut, _repairedIn, _neutOut, _neutIn, _abyssalAnchor,
-                _locationUnavailableReason);
+                _locationUnavailableReason, _isSeenInside);
         }
     }
 }

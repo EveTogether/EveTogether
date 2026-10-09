@@ -108,7 +108,7 @@ public sealed partial class ActivityWindowViewModel
     /// missing a price, the tier and weather, why a save failed or why there are no run buttons.</summary>
     public bool HasCompactNoticeContent =>
         HasCompactAlert || HasCompactPricingNotice || NeedsWeatherAndTier || HasRunNotice || IsCommandStatusShown
-        || IsFleetCarryingOn;
+        || IsFleetCarryingOn || IsLateJoinShown;
 
     /// <summary>The HUD's second line: the notices, or the countdown that follows the commander's save.</summary>
     public bool HasCompactNotice => HasCompactNoticeContent || IsFollowShown;
