@@ -814,23 +814,21 @@ public sealed class HomefrontMoneyScenarioTests
                 if (!isIndexUp)
                     await db.GetService<IMigrator>().MigrateAsync("20260912144246_AddHomefrontOutcomeSource");
                 List<Run> originals = await db.Set<Run>().AsNoTracking()
-                    .Include(run => run.AttendanceEntries).Include(run => run.EnemyObservations)
+                    .Include(run => run.AttendanceEntries)
                     .Where(run => run.GroupCode == GroupCode && run.DeletedAtUtc == null).ToListAsync();
                 DateTime lineAt = originals.Min(run => run.StartedAtUtc).AddMinutes(1);
+                List<(Guid Original, Guid Copy)> copies = [];
                 foreach (Run original in originals)
                 {
                     Run copy = new();
                     db.Entry(copy).CurrentValues.SetValues(original);
                     copy.Id = Guid.CreateVersion7();
                     db.Set<Run>().Add(copy);
+                    copies.Add((original.Id, copy.Id));
                     foreach (RunAttendanceEntry entry in original.AttendanceEntries)
                         db.Set<RunAttendanceEntry>().Add(new RunAttendanceEntry { Id = Guid.CreateVersion7(), RunId = copy.Id,
                             CharacterId = entry.CharacterId, CharacterName = entry.CharacterName, IsInSite = entry.IsInSite,
                             IsExternal = entry.IsExternal, Reason = entry.Reason, ReasonAmount = entry.ReasonAmount });
-                    foreach (RunEnemyObservation seen in original.EnemyObservations)
-                        db.Set<RunEnemyObservation>().Add(new RunEnemyObservation { Id = Guid.CreateVersion7(), RunId = copy.Id,
-                            EnemyTypeId = seen.EnemyTypeId, EnemyName = seen.EnemyName, Count = seen.Count,
-                            FirstObservedAtUtc = seen.FirstObservedAtUtc, LastObservedAtUtc = seen.LastObservedAtUtc });
                     if (original.CharacterId == ActivityWindowHarness.CharacterId && !isIndexUp)
                     {
                         db.Set<RunBountyEntry>().Add(new RunBountyEntry { Id = Guid.CreateVersion7(), RunId = original.Id, OccurredAtUtc = lineAt, Isk = 84_375m });
@@ -840,6 +838,21 @@ public sealed class HomefrontMoneyScenarioTests
                         db.Set<RunBountyEntry>().Add(new RunBountyEntry { Id = Guid.CreateVersion7(), RunId = copy.Id, OccurredAtUtc = lineAt, Isk = 67_500m });
                 }
                 await db.SaveChangesAsync();
+                // The enemies go by hand, in the columns the table had at that migration: the current model reads and
+                // writes RunEnemyObservation.RoomNumber (ET-240), which the table only gets later.
+                foreach ((Guid original, Guid copy) in copies)
+                {
+                    List<Guid> seen = await db.Database
+                        .SqlQuery<Guid>($"SELECT Id AS Value FROM RunEnemyObservation WHERE RunId = {original}").ToListAsync();
+                    foreach (Guid seenId in seen)
+                    {
+                        await db.Database.ExecuteSqlAsync($"""
+                            INSERT INTO RunEnemyObservation (Id, RunId, EnemyTypeId, EnemyName, Count, FirstObservedAtUtc, LastObservedAtUtc)
+                            SELECT {Guid.CreateVersion7()}, {copy}, EnemyTypeId, EnemyName, Count, FirstObservedAtUtc, LastObservedAtUtc
+                            FROM RunEnemyObservation WHERE Id = {seenId}
+                            """);
+                    }
+                }
                 await db.Set<ActivitySummary>().Where(summary => summary.GroupCode == GroupCode)
                     .ExecuteUpdateAsync(properties => properties
                         .SetProperty(summary => summary.TotalIsk, 135_000_000m)
