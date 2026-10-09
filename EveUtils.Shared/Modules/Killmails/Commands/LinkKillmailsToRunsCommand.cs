@@ -5,5 +5,5 @@ namespace EveUtils.Shared.Modules.Killmails.Commands;
 
 /// <summary>Links each of the character's unlinked losses to its run by <see cref="KillmailRunLinker"/> (ET-331) and
 /// returns how many were linked, adding their activities up again. A pilot's own choice, linked or unlinked, is never
-/// touched.</summary>
-public sealed record LinkKillmailsToRunsCommand(int CharacterId) : ICommand<Result<int>>;
+/// touched. <paramref name="IncludeOlder"/> drops the one-day retry window for a loss that was linked automatically, for a repair that must reach old ones.</summary>
+public sealed record LinkKillmailsToRunsCommand(int CharacterId, bool IncludeOlder = false) : ICommand<Result<int>>;

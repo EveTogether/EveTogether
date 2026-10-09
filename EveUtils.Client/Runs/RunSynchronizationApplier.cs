@@ -66,6 +66,17 @@ public sealed class RunSynchronizationApplier(
             .Include(timeline => timeline.Series)
             .Include(timeline => timeline.HitTallies)
             .ToDictionaryAsync(timeline => timeline.RunId, cancellationToken);
+        // The delete below sets the run's loss links to null and cascades to the prices it fixed for them; neither is on the
+        // wire, so both are kept here and put back with the copy that replaces the run (ET-499).
+        List<KillmailRunLink> lossLinks = await db.Set<LocalKillmail>().AsNoTracking()
+            .Where(killmail => killmail.RunId != null && runIds.Contains(killmail.RunId.Value))
+            .Select(killmail => new KillmailRunLink(killmail.CharacterId, killmail.KillmailId, killmail.RunId.GetValueOrDefault(),
+                killmail.LinkSource))
+            .ToListAsync(cancellationToken);
+        ILookup<Guid, RunLossPrice> lossPrices = (await db.Set<RunLossPrice>().AsNoTracking()
+            .Where(price => runIds.Contains(price.RunId))
+            .ToListAsync(cancellationToken)).ToLookup(price => price.RunId);
+        HashSet<Guid> replacedIds = [];
         List<Run> applied = [];
         // Tombstones first, so a deleted copy has left its place before a live one is weighed against it; then the
         // oldest id first, the same run every client keeps when a server holds two.
@@ -108,12 +119,23 @@ public sealed class RunSynchronizationApplier(
             run.SyncServerAddress = serverAddress;
             await db.Set<Run>().Where(candidate => candidate.Id == run.Id).ExecuteDeleteAsync(cancellationToken);
             db.Set<Run>().Add(run);
+            replacedIds.Add(run.Id);
+            db.Set<RunLossPrice>().AddRange(lossPrices[run.Id]);
             if ((payload.Run.CombatTimeline?.ToEntity(run.Id) ?? keptCombat.GetValueOrDefault(run.Id)) is { } combat)
             {
                 db.Set<RunCombatTimeline>().Add(combat);
             }
         }
         await db.SaveChangesAsync(cancellationToken);
+        foreach (KillmailRunLink link in lossLinks.Where(link => replacedIds.Contains(link.RunId)))
+        {
+            await db.Set<LocalKillmail>()
+                .Where(killmail => killmail.CharacterId == link.CharacterId && killmail.KillmailId == link.KillmailId)
+                .ExecuteUpdateAsync(properties => properties
+                    .SetProperty(killmail => killmail.RunId, link.RunId)
+                    .SetProperty(killmail => killmail.LinkSource, link.LinkSource), cancellationToken);
+        }
+
         await transaction.CommitAsync(cancellationToken);
         await dispatcher.Send(new RebuildActivitySummariesCommand(), cancellationToken);
         // Per run and with its group code: a group-mate's run arriving is exactly the change an open detail screen of
@@ -167,6 +189,8 @@ public sealed class RunSynchronizationApplier(
             .Select(character => character.EsiCharacterId)
             .OfType<int>()
             .Select(characterId => (long)characterId)];
+
+    private sealed record KillmailRunLink(int CharacterId, int KillmailId, Guid RunId, KillmailLinkSource LinkSource);
 
     private static DateTime _Anchor(DateTime sourceUtc, long sentAtUnixMilliseconds) =>
         AbyssalSpace.AnchorFromWireUtc(sourceUtc, sentAtUnixMilliseconds, DateTime.UtcNow);

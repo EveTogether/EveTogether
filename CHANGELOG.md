@@ -17,6 +17,7 @@ entries under `[Unreleased]` below that were not there yet at the previous night
 
 ## [Unreleased]
 
+- **Fixed: a lost ship linked to your run no longer comes loose when the run is synced again.** A copy of your own run coming back from the server unlinked its loss and dropped the price it had fixed, and a link you set by hand was lost for good. Links and prices now survive, and a loss that was already unlinked this way is matched to its run again when the client starts.
 - **Changed: a lost ship now counts in TOTAL ISK at what it was worth when it was linked to the activity.** The hull and everything aboard keep the price they had at that moment, like loot, ore and filament already do, so the total no longer moves with the market afterwards. An item that had no price yet is filled in once, and "Re-value at current prices" updates the loss as well.
 - **Fixed: a fleet mate's lost ship now shows under LINKED LOSS in your copy of the group run, also when their run reached you after their share.** The mate's shared killmail was stored but never linked to their run once that run was synced later, so you saw no loss and a group total without it.
 - **Fixed: a fleet member no longer sees "The fleet commander called this run off" over a run that is going.** The line is cleared as soon as the member joins the commander's next run or goes in, so it no longer clashes with the DISCARD and clock lines.

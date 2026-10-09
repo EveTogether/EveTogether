@@ -357,6 +357,12 @@ sealed class Program
             if (dedupedMissionRewards.IsSuccess && dedupedMissionRewards.Value > 0)
                 Console.Error.WriteLine($"[startup] removed duplicated mission rewards from {dedupedMissionRewards.Value} run(s)");
 
+            // ET-499: losses a pulled run copy unlinked from their run are matched again. Idempotent.
+            int relinkedLosses = scope.ServiceProvider.GetRequiredService<EveUtils.Client.Runs.OrphanedRunLinkRepair>()
+                .RepairAsync().GetAwaiter().GetResult();
+            if (relinkedLosses > 0)
+                Console.Error.WriteLine($"[startup] matched {relinkedLosses} unlinked loss(es) to their run again");
+
             // ET-271: an own character's run added to a group after the site (ET-269) never had its bounty recorded,
             // since a bounty line only lands on a running run. Read back from that character's gamelog, once per run.
             Result<int> importedBounty = dispatcher
