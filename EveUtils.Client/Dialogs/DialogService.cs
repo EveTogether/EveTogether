@@ -634,7 +634,7 @@ public sealed class DialogService : IDialogService, ISingletonService
         }
 
         var placeholder = new PoppedOutPlaceholderModel(tab.Title,
-            new RelayCommand(() => { }), new RelayCommand(() => _moduleHost.FocusPopout(id)));
+            new RelayCommand(() => _moduleHost.PutBack(id)), new RelayCommand(() => _moduleHost.FocusPopout(id)));
         _moduleHost.PopOut(id, _ => new PoppedOutPlaceholder { DataContext = placeholder }, OverlayGeometryStore.ForPoppedModule(id));
     }
 
