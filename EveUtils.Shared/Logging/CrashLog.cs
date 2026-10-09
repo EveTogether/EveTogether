@@ -55,6 +55,10 @@ public static class CrashLog
     public static void WriteShutdownMarker(string context) =>
         AppendLine(new LogEntry(DateTimeOffset.Now, LogLevel.Information, "Crash", $"Clean shutdown: {context}", null));
 
+    public static void WriteSessionStart(string version, string? build, int processId) =>
+        AppendLine(new LogEntry(DateTimeOffset.Now, LogLevel.Information, "Crash",
+            $"Session start: version {version}, build {build ?? "unknown"}, PID {processId}", null));
+
     /// <summary>
     /// A startup fact recorded before DI and <c>ILogStore</c> exist, next to the crash lines in the same file.
     /// </summary>

@@ -12,6 +12,7 @@ using EveUtils.Client.Esi;
 using EveUtils.Client.Formatting;
 using EveUtils.Client.Messaging;
 using EveUtils.Client.Opsec;
+using EveUtils.Shared.App;
 using EveUtils.Shared.Data;
 using EveUtils.Shared.Identity;
 using EveUtils.Shared.Modules.Esi.Http;
@@ -41,6 +42,7 @@ sealed class Program
         // Last-chance net (ET-197): armed as early as possible so a fault anywhere further in startup still
         // leaves a trace. Writes straight to app-errors.jsonl, bypassing ILogger/DI — see CrashLog for why.
         CrashLog.Install(ClientServices.DataDirectory());
+        CrashLog.WriteSessionStart(AppInfo.Version, AppInfo.BuildDetails, Environment.ProcessId);
         LogDataFolderMove(ClientDataLocation.Migration);
 
         // Before anything opens the store (ET-465): a second client on this data directory hands over to the first
