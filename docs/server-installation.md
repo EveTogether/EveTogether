@@ -145,6 +145,7 @@ records who downloaded it.
 - **The archive does not carry your configuration.** The ESI client id and secret, the control-panel admin
   password and the database connection string are per-installation and stay out of it. Put those in place first on
   the new machine (§3), then restore. `esi-cache/` and the SDE are left out too — both rebuild themselves.
+- **The archive leaves out Data Protection keys.** A restored server generates a new key ring, so every control-panel user signs in again; the server data volume keeps those keys across ordinary restarts.
 - **Restoring is destructive.** The database is dropped and rebuilt from the archive, and the TLS certificate and
   token-protector key are replaced. Anyone who paired after the archive was taken has to pair again. Before it
   drops anything the server writes an archive of its current state into the data directory under the same

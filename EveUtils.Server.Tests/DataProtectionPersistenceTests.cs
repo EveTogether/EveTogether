@@ -19,6 +19,8 @@ public sealed class DataProtectionPersistenceTests
             var firstProvider = firstHost.Services.GetRequiredService<IDataProtectionProvider>();
             var protectedPayload = firstProvider.CreateProtector("control-panel").Protect("session payload");
 
+            Assert.NotEmpty(Directory.EnumerateFiles(Path.Combine(dataDirectory, "data-protection-keys"), "*.xml"));
+
             using IHost secondHost = _CreateHost(dataDirectory);
             var secondProvider = secondHost.Services.GetRequiredService<IDataProtectionProvider>();
 
