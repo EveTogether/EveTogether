@@ -22,6 +22,11 @@ namespace EveUtils.Shared.Modules.Fleet.Dtos;
 /// lets a receiver draw a per-ore group row for a fleet mate exactly as it does for its own characters. Empty on an
 /// older client that has not been rebuilt for this field yet, in which case the receiver falls back to
 /// <see cref="MinedUnits"/>/<see cref="ResidueUnits"/>'s total-only row (ET-234).
+///
+/// <see cref="RoomStartsUnixMs"/>/<see cref="Enemies"/> (ET-498) are the rooms and enemies of the pilot's run as their
+/// own ENEMIES section has them, sent whatever the loot, bounty and mining choices say: they are no figure of the
+/// pilot's own. A fleet mate who is out of the pocket reads them from whoever is still inside. A receiver from before
+/// them ignores the fields; a sender from before them leaves them empty.
 /// </summary>
 /// <param name="CaptureCount">How many of the pilot's captures the list was counted from.</param>
 /// <param name="Loot">The items that count, one line per kind — empty while <see cref="SharesLoot"/> is false.</param>
@@ -41,8 +46,15 @@ public sealed record RunShareUpdate(
     bool SharesMining = false,
     int MinedUnits = 0,
     int ResidueUnits = 0,
-    IReadOnlyList<RunShareMiningLine>? Mining = null)
+    IReadOnlyList<RunShareMiningLine>? Mining = null,
+    IReadOnlyList<long>? RoomStartsUnixMs = null,
+    IReadOnlyList<RunShareEnemyLine>? Enemies = null)
 {
     /// <summary>Never null on the reading side — an older sender's JSON simply omits the field.</summary>
     public IReadOnlyList<RunShareMiningLine> Mining { get; init; } = Mining ?? [];
+
+    /// <summary>Where the pilot's rooms 2, 3, … began, oldest first — empty while their run has no rooms.</summary>
+    public IReadOnlyList<long> RoomStartsUnixMs { get; init; } = RoomStartsUnixMs ?? [];
+
+    public IReadOnlyList<RunShareEnemyLine> Enemies { get; init; } = Enemies ?? [];
 }

@@ -565,6 +565,10 @@
                                Classes.waiting="{Binding IsWaitingForFleet}" Text="{Binding FleetClockText}"/>
                 </Grid>
 
+                <!-- Out of the pocket while the fleet is still in it (ET-498): ROOM and ENEMIES follow a mate inside. -->
+                <TextBlock x:Name="FleetCarriesOnText" Classes="hint" Margin="0" TextWrapping="Wrap"
+                           IsVisible="{Binding IsFleetCarryingOn}" Text="{Binding FleetCarriesOnText}"/>
+
                 <!-- What this pilot offers the fleet of this run (ET-242, mining added by ET-234): on a shared run
                      loot, bounty and mining go out unless switched off here, so it is said on the window's face, in
                      words, with the switch one click away — not in a section that may be folded shut. -->
