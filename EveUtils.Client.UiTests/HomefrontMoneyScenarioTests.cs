@@ -123,8 +123,8 @@ public sealed class HomefrontMoneyScenarioTests
         await group.StopAndSaveAsync();
         await group.AssertOneStoryAsync(HomefrontOutcome.Completed, n: 5, payout: 5 * FivePilots);
 
-        group.Section.SetOutcomeCommand.Execute(HomefrontOutcome.Failed);
-        await group.SettleAsync();
+        // Awaited: the click's write commits the runs before it adds the summary up again.
+        await group.Section.SetOutcomeCommand.ExecuteAsync(HomefrontOutcome.Failed);
 
         await group.AssertOneStoryAsync(HomefrontOutcome.Failed, n: 5, payout: 0m);
     }
@@ -134,6 +134,8 @@ public sealed class HomefrontMoneyScenarioTests
     public async Task S06_ClickedOnASiblingsColumn_LandsOnEveryRunOfTheGroup()
     {
         using Group group = await Group.StartAsync(toons: 5);
+        // The column learns a sibling's run from its own read of the running runs, a tick after the start.
+        await group.TickUntilAsync(() => group.Window.RunCharacters.Any(row => row.CharacterId != ActivityWindowHarness.CharacterId && row.RunId is not null));
         RunCharacterRowViewModel sibling = group.Window.RunCharacters.First(row => row.CharacterId != ActivityWindowHarness.CharacterId && row.RunId is not null);
         group.Window.SelectRunCharacterCommand.Execute(sibling);
         await ActivityWindowHarness.WaitUntil(() => group.Window.RunId == sibling.RunId);
@@ -375,7 +377,8 @@ public sealed class HomefrontMoneyScenarioTests
         second.SetOutcomeCommand.Execute(HomefrontOutcome.Failed);
         await group.SettleAsync(ticks: 8, also: second);
         await group.AssertRunsCarryAsync(HomefrontOutcome.Failed, n: 3);
-        Assert.Equal(HomefrontOutcome.Failed, group.Section.Outcome);
+        // The first window reads the stored list on the tick after the change and shows it on the tick after that.
+        await group.TickUntilAsync(() => group.Section.Outcome == HomefrontOutcome.Failed);
 
         group.Section.SetOutcomeCommand.Execute(HomefrontOutcome.Completed);
         await group.SettleAsync(ticks: 8, also: second);
@@ -715,8 +718,10 @@ public sealed class HomefrontMoneyScenarioTests
             await ActivityWindowHarness.WaitUntil(() => window.Participants.Count >= pickedIds.Length, timeoutMs: 10_000);
 
             await group.SettleAsync();
+            // Settled once the first list is in the store too: the window writes it a tick or more after it shows it.
             await group.TickUntilAsync(() => settledWhen?.Invoke(group)
-                                             ?? (group.Section.CanDecide && group.Section.Rows.Count(row => row.IsLocal) == toons));
+                                             ?? (group.Section.CanDecide && group.Section.Rows.Count(row => row.IsLocal) == toons
+                                                 && group.Window.Participants.All(participant => participant.AttendanceCount is not null)));
             return group;
         }
 
@@ -959,8 +964,9 @@ public sealed class HomefrontMoneyScenarioTests
 
             if (!isWindowCompared)
                 return;
-            // The window follows a change made elsewhere on its next ticks (it reads the store the tick after the change).
-            await SettleAsync(ticks: 3);
+            // The window follows a change made elsewhere once its own reads of the store come back, a tick or more later.
+            await TickUntilAsync(() => Window.GroupTotalIskText == total && Window.Fleet().TotalText == total);
+            await SettleAsync(ticks: 1);
             Assert.Equal(total, Window.GroupTotalIskText);
             Assert.Equal(total, Window.Fleet().TotalText);
         }

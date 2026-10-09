@@ -250,9 +250,16 @@ public sealed partial class HomefrontWindowSectionViewModel : RunWindowSection
         _handChangeCount++;
         _isChangedByHand = true;
         _changedSinceUtc ??= _nowUtc;
-        // _WriteUnderGateAsync drops any write, forced included, until _own/_stored are loaded (ET-287, ET-375).
-        // Read directly here rather than through _LoadOwnAsync/_ReadStoredIfDueAsync's own "already running, skip"
-        // guards, which a tick's unawaited attempt may still be holding (see PR for the full race).
+        await _LoadOwnAndStoredNowAsync();
+        _Rebuild(_nowUtc);
+        await _WriteIfDueAsync(_nowUtc, isForced: true);
+    }
+
+    // _WriteUnderGateAsync drops any write, forced included, until _own/_stored are loaded (ET-287, ET-375).
+    // Read directly here rather than through _LoadOwnAsync/_ReadStoredIfDueAsync's own "already running, skip"
+    // guards, which a tick's unawaited attempt may still be holding — SAVE went on without its list (ET-487).
+    private async Task _LoadOwnAndStoredNowAsync()
+    {
         if (!_isOwnLoaded)
         {
             _own = await Task.Run(() => AttendanceRoster.OwnCharacterIdsAsync(Context.Services));
@@ -277,8 +284,6 @@ public sealed partial class HomefrontWindowSectionViewModel : RunWindowSection
                 }
             }
         }
-        _Rebuild(_nowUtc);
-        await _WriteIfDueAsync(_nowUtc, isForced: true);
     }
 
     /// <summary>What the pilot typed over the table's figure for <paramref name="characterId"/>, or null when they
@@ -340,9 +345,7 @@ public sealed partial class HomefrontWindowSectionViewModel : RunWindowSection
             await pending;
         }
         DateTime nowUtc = DateTime.UtcNow;
-        await _LoadOwnAsync();
-        if (_storedReadAtUtc is null)
-            await _ReadStoredIfDueAsync(nowUtc);
+        await _LoadOwnAndStoredNowAsync();
         _Rebuild(nowUtc);
         await _WriteIfDueAsync(nowUtc, isForced: true);
     }
