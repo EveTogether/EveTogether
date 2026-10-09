@@ -20,20 +20,33 @@ public sealed class ConnectedClients
     // character, and the bucket count is bounded by the (small) number of distinct characters.
     private readonly ConcurrentDictionary<int, ConcurrentDictionary<string, ConnectedClient>> _byCharacter = new();
 
+    /// <summary>Raised when a character's first connection comes up (<c>true</c>) or its last one goes away
+    /// (<c>false</c>) — the moment the roster's connection flag for them changes (ET-492). Raised on the caller's thread,
+    /// inside the attach or the keepalive sweep, so a handler hands its work off rather than doing it here.</summary>
+    public event Action<int, bool>? CharacterConnectionChanged;
+
     public void Add(ConnectedClient client)
     {
         _clients[client.Key] = client;
-        if (client.CharacterId != 0)
-            _byCharacter.GetOrAdd(client.CharacterId, _ => new()).AddOrUpdate(client.Key, client, (_, _) => client);
+        if (client.CharacterId == 0)
+            return;
+
+        var connections = _byCharacter.GetOrAdd(client.CharacterId, _ => new());
+        bool wasOffline = connections.IsEmpty;
+        connections.AddOrUpdate(client.Key, client, (_, _) => client);
+        if (wasOffline)
+            CharacterConnectionChanged?.Invoke(client.CharacterId, true);
     }
 
     public void Remove(string key)
     {
         if (_clients.TryRemove(key, out var client)
             && client.CharacterId != 0
-            && _byCharacter.TryGetValue(client.CharacterId, out var connections))
+            && _byCharacter.TryGetValue(client.CharacterId, out var connections)
+            && connections.TryRemove(key, out _)
+            && connections.IsEmpty)
         {
-            connections.TryRemove(key, out _);
+            CharacterConnectionChanged?.Invoke(client.CharacterId, false);
         }
     }
 

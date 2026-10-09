@@ -41,11 +41,7 @@ public partial class StartFleetWindow : ChromedWindow
         ArgumentNullException.ThrowIfNull(prompt);
 
         this.FindControl<TextBlock>("FleetNameChip")!.Text = prompt.FleetName;
-        foreach (var member in prompt.Members)
-            Members.Add(member);
-
-        this.FindControl<TextBlock>("MembersLabel")!.Text = DescribeRoster(prompt);
-        this.FindControl<TextBlock>("WillLinkText")!.Text = DescribeWhatStarts(prompt);
+        _ShowRoster(prompt);
 
         // The ESI seam only makes sense while there is anyone it could apply to.
         this.FindControl<StackPanel>("EsiBlock")!.IsVisible = prompt.ExternalCount > 0;
@@ -54,6 +50,26 @@ public partial class StartFleetWindow : ChromedWindow
             ApplyCollision(prompt);
 
         ApplyCollisionChoice();
+    }
+
+    /// <summary>The dialog over a roster that goes on changing while it is open (ET-492): a pilot logging in or a mate
+    /// connecting redraws the list and its counts. The collision stays as it was read: that is the decision being asked.</summary>
+    public StartFleetWindow(FleetStartRoster roster) : this(roster.Current)
+    {
+        roster.Changed += _ShowRoster;
+        Closed += (_, _) => roster.Changed -= _ShowRoster;
+    }
+
+    private void _ShowRoster(FleetStartPrompt prompt)
+    {
+        Members.Clear();
+        foreach (var member in prompt.Members)
+            Members.Add(member);
+
+        if (this.FindControl<TextBlock>("MembersLabel") is { } label)
+            label.Text = DescribeRoster(prompt);
+        if (this.FindControl<TextBlock>("WillLinkText") is { } willLink)
+            willLink.Text = DescribeWhatStarts(prompt);
     }
 
     private void ApplyCollision(FleetStartPrompt prompt)

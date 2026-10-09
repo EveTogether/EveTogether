@@ -23,6 +23,22 @@ public sealed class FleetBroadcastResolver(IFleetReader repository, ConnectedCli
             .ToList();
     }
 
+    /// <summary>Everyone who shares a roster with the character and holds a live connection, the character itself left
+    /// out — who has to hear that it connected or went away (ET-492). Finished fleets do not count: nobody starts those.</summary>
+    public async Task<IReadOnlyList<int>> ConnectedFleetMatesAsync(int characterId, CancellationToken cancellationToken = default)
+    {
+        HashSet<int> mates = [];
+        foreach (var fleet in await repository.ListForParticipantAsync(characterId, cancellationToken: cancellationToken))
+        {
+            var members = await repository.ListMembersAsync(fleet.Id, cancellationToken);
+            mates.UnionWith(members
+                .Select(m => m.CharacterId)
+                .Where(id => id != characterId && connectedClients.IsConnected(id)));
+        }
+
+        return [.. mates];
+    }
+
     /// <summary>True if the fleet has at least one connected member — the inactivity signal. Activation-agnostic:
     /// a connected member of a Forming fleet (signed up in advance) still keeps it alive.</summary>
     public async Task<bool> HasConnectedMemberAsync(long fleetId, CancellationToken cancellationToken = default) =>

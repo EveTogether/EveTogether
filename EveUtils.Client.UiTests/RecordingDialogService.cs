@@ -508,10 +508,18 @@ public sealed class RecordingDialogService : IDialogService
 
     public FleetStartPrompt? FleetStartPrompt { get; private set; }
 
-    public Task<FleetStartChoice> PickFleetStartAsync(FleetStartPrompt prompt)
+    public FleetStartRoster? FleetStartRoster { get; private set; }
+
+    /// <summary>Runs while the start dialog would be open, so a test can change the world under it (ET-492).</summary>
+    public Func<FleetStartRoster, Task>? WhileFleetStartOpen { get; set; }
+
+    public async Task<FleetStartChoice> PickFleetStartAsync(FleetStartRoster roster)
     {
-        FleetStartPrompt = prompt;
-        return Task.FromResult(FleetStart);
+        FleetStartRoster = roster;
+        FleetStartPrompt = roster.Current;
+        if (WhileFleetStartOpen is not null)
+            await WhileFleetStartOpen(roster);
+        return FleetStart;
     }
 
     /// <summary>What the switch dialog answers with, and what it was asked (ET-168).</summary>

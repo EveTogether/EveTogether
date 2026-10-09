@@ -153,5 +153,12 @@ public sealed class FleetWireEvents : IWireEventCatalog
                           ?? throw new InvalidOperationException("Invalid fleet.relay-refused payload.");
             return new FleetRelayRefusedEvent(payload, characterId);
         });
+
+        registry.Register("fleet.mate-connection", (payloadJson, characterId) =>
+        {
+            var payload = JsonSerializer.Deserialize<FleetMateConnectionPayload>(payloadJson)
+                          ?? throw new InvalidOperationException("Invalid fleet.mate-connection payload.");
+            return new FleetMateConnectionEvent(payload, characterId);
+        });
     }
 }

@@ -372,9 +372,10 @@ public interface IDialogService
     /// Starting a fleet, and the collision when a member is already flying elsewhere (ET-168, scherm 2). One summary
     /// line and one button, whether one member is elsewhere or fifty; nothing is decided per member here. The
     /// no-op "invite via ESI" seam lives in the same dialog. Returns what the commander chose, or
-    /// <see cref="FleetStartChoice.Cancel"/> when they backed out.
+    /// <see cref="FleetStartChoice.Cancel"/> when they backed out. The roster stays live while the dialog is open
+    /// (ET-492).
     /// </summary>
-    Task<FleetStartChoice> PickFleetStartAsync(FleetStartPrompt prompt);
+    Task<FleetStartChoice> PickFleetStartAsync(FleetStartRoster roster);
 
     /// <summary>
     /// Moving one of my own pilots out of the fleet it counts for and into another one (ET-168, scherm 7). Shows

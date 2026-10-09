@@ -755,10 +755,10 @@ public sealed class DialogService : IDialogService, ISingletonService
         return await _Over(dialog).ShowDialog<string?>(_owner);
     }
 
-    public async Task<FleetStartChoice> PickFleetStartAsync(FleetStartPrompt prompt)
+    public async Task<FleetStartChoice> PickFleetStartAsync(FleetStartRoster roster)
     {
         if (_owner is null) return FleetStartChoice.Cancel;
-        var dialog = new StartFleetWindow(prompt);
+        var dialog = new StartFleetWindow(roster);
         return await _Over(dialog).ShowDialog<FleetStartChoice>(_owner);
     }
 
