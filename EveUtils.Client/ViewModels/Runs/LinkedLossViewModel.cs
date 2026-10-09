@@ -1,5 +1,8 @@
+using Avalonia.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using EveUtils.Client.Formatting;
+using EveUtils.Client.Imaging;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Killmails.Commands;
 using CqrsDispatcher = EveUtils.Shared.Cqrs.IDispatcher;
@@ -27,6 +30,27 @@ public sealed partial class LinkedLossViewModel(
     [RelayCommand(CanExecute = nameof(CanOpenKillmail))]
     private void OpenKillmail() => openKillmail?.Invoke();
 
+    public required int ShipTypeId { get; init; }
+
+    /// <summary>What this loss cost the run, as the positive amount the run fixed for it (ET-464); null when nothing
+    /// on it could be priced.</summary>
+    public decimal? IskValue { get; init; }
+
+    /// <summary>"-342,000,000 ISK" — the same sign the LINKED LOSS total carries.</summary>
+    public string IskText => IskValue is { } value ? IskFormat.Whole(-value) : "no price";
+
+    public string TitleText => $"{ShipText} · {FitText}";
+
+    /// <summary>Time and final blow on one line.</summary>
+    public string DetailLineText => $"{TimeText} · final blow {FinalBlowText}";
+
+    [ObservableProperty] private Bitmap? _icon;
+
+    /// <summary>The hull's render — the capsule's own for a pod — or the bundled placeholder when images are off.</summary>
+    public async Task LoadIconAsync(ITypeImageProvider images)
+    {
+        Icon = await images.GetImageAsync(ShipTypeId, TypeImageKind.Icon, 64) ?? TypeImagePlaceholder.Bitmap;
+    }
 
     public required string PilotText { get; init; }
 

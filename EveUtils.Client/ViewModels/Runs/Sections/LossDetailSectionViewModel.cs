@@ -31,6 +31,10 @@ public sealed partial class LossDetailSectionViewModel(RunDetailSectionServices 
 
     [ObservableProperty] private string? _emptyText;
 
+    /// <summary>The rows' own sum — the figure the header carries, put into the section where the rows can be checked
+    /// against it.</summary>
+    [ObservableProperty] private string? _totalText;
+
     private bool _hasLoss;
 
     // Built once, from whatever RunDetailSectionServices.Services can resolve — a section built without an
@@ -85,6 +89,8 @@ public sealed partial class LossDetailSectionViewModel(RunDetailSectionServices 
                 _ChangedAsync,
                 services.Services is not null ? () => _OpenKillmail(lossCharacterId, lossKillmailId) : null)
             {
+                ShipTypeId = loss.VictimShipTypeId,
+                IskValue = loss.IskValue,
                 PilotText = input.NameOf(loss.CharacterId),
                 ShipText = _ShipName(loss.VictimShipTypeId),
                 FitText = run?.FitNameSnapshot ?? "no fit recorded",
@@ -92,6 +98,15 @@ public sealed partial class LossDetailSectionViewModel(RunDetailSectionServices 
                 FinalBlowText = loss.FinalBlow is { } finalBlow ? _FinalBlowText(finalBlow) : "unknown",
                 ReasonText = _Reason(loss)
             });
+        }
+
+        TotalText = Losses.Any(row => row.IskValue is not null)
+            ? IskFormat.Whole(-Losses.Sum(row => row.IskValue.GetValueOrDefault()))
+            : null;
+
+        if (services.Images is { } images)
+        {
+            await Task.WhenAll(Losses.Select(row => row.LoadIconAsync(images)));
         }
 
         EmptyText = Losses.Count == 0 ? "No loss is linked to this activity." : null;
