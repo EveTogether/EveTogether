@@ -68,6 +68,7 @@ public partial class ManualRunStartViewModel : ViewModelBase
     private readonly IToastService? _toasts;
     private readonly IFleetParticipation? _fleetParticipation;
     private readonly ILocalCharacterPresence? _localPresence;
+    private readonly ICharacterSystemLocator? _systemLocator;
     private readonly Func<ActivityKind, ActivityWindowViewModel> _runWindowFor;
 
     /// <summary>The anchor <see cref="LoadAsync"/> keys the fleet-first default and the remembered pick on (ET-270,
@@ -105,8 +106,9 @@ public partial class ManualRunStartViewModel : ViewModelBase
         Func<ActivityKind, ActivityWindowViewModel> runWindowFor, IReadOnlyList<Character> characters,
         Character? preselectedCharacter = null, IToastService? toasts = null,
         IFleetParticipation? fleetParticipation = null, ILocalCharacterPresence? localPresence = null,
-        bool isCharacterFixed = false)
+        bool isCharacterFixed = false, ICharacterSystemLocator? systemLocator = null)
     {
+        _systemLocator = systemLocator;
         IsCharacterFixed = isCharacterFixed && preselectedCharacter is not null;
         _dispatcher = dispatcher;
         _sde = sde;
@@ -644,7 +646,7 @@ public partial class ManualRunStartViewModel : ViewModelBase
             startedAtUtc,
             siteTypeId,
             name,
-            SolarSystemId: agent?.SolarSystemId,
+            SolarSystemId: agent?.SolarSystemId ?? _systemLocator?.SolarSystemIdOf(pilotCharacterId),
             GroupCode: groupCode,
             SiteTypeSource: siteTypeSource,
             SignatureGroupSnapshot: signatureGroup,
@@ -681,7 +683,7 @@ public partial class ManualRunStartViewModel : ViewModelBase
                 startedAtUtc,
                 siteTypeId,
                 name,
-                SolarSystemId: agent?.SolarSystemId,
+                SolarSystemId: agent?.SolarSystemId ?? _systemLocator?.SolarSystemIdOf(extraId),
                 GroupCode: groupCode,
                 SiteTypeSource: siteTypeSource,
                 SignatureGroupSnapshot: signatureGroup,

@@ -9,6 +9,7 @@ using EveUtils.Client.Dialogs;
 using EveUtils.Client.Fleet;
 using EveUtils.Client.Notifications;
 using EveUtils.Client.Platform;
+using EveUtils.Client.Runs;
 using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Shared.Identity;
 using EveUtils.Shared.Messaging;
@@ -159,7 +160,8 @@ public sealed partial class RunningBandViewModel : ObservableObject
             kind => new ActivityWindowViewModel(kind, _services), [lane.Character],
             preselectedCharacter: lane.Character, toasts: _services.GetService<IToastService>(),
             fleetParticipation: _services.GetService<IFleetParticipation>(),
-            localPresence: _services.GetService<ILocalCharacterPresence>(), isCharacterFixed: true));
+            localPresence: _services.GetService<ILocalCharacterPresence>(), isCharacterFixed: true,
+            systemLocator: _services.GetService<ICharacterSystemLocator>()));
     }
 
     private Task _OpenRunningGroupAsync(RunningGroupViewModel group)
@@ -193,6 +195,7 @@ public sealed partial class RunningBandViewModel : ObservableObject
             kind => new ActivityWindowViewModel(kind, _services), characters,
             toasts: _services.GetService<IToastService>(),
             fleetParticipation: _services.GetService<IFleetParticipation>(),
-            localPresence: _services.GetService<ILocalCharacterPresence>()));
+            localPresence: _services.GetService<ILocalCharacterPresence>(),
+            systemLocator: _services.GetService<ICharacterSystemLocator>()));
     }
 }
