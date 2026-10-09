@@ -1839,6 +1839,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         // falling out of expiry, ET-237) — summarising first would describe last tick's answer instead of this one's.
         foreach (RunWindowSection section in _AllSections())
             section.Refresh(nowUtc);
+        _RefreshFleetCarriesOn();
         CurrentRoomText = _Enemies()?.CurrentRoomText(nowUtc);
         CurrentRoomSource = _Enemies()?.CurrentRoomSource;
         OnPropertyChanged(nameof(CurrentRoomText));
@@ -1859,7 +1860,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         _RefreshJoinableFleetRun(nowUtc);
         _ = FleetSharing.SyncAsync(nowUtc, FleetId, GroupCode,
             RunState is ActivityRunState.Running or ActivityRunState.Stopped, _RunCharacterIds(), LootOverview,
-            Participants);
+            Participants, _Enemies());
     }
 
     /// <summary>Every character with a run in this group as the window knows it: the participants, and its own pilot
