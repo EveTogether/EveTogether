@@ -1,6 +1,8 @@
 using System.Linq;
 using System.Threading.Tasks;
+using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
+using EveUtils.Client.Views;
 using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Shared.Modules.Runs.Enums;
 using Xunit;
@@ -71,6 +73,40 @@ public sealed class RunAnotherPromptTests
         Assert.True(closed);
         Assert.DoesNotContain(harness.Dialogs.ChoicePrompts, prompt => prompt.Title == Question);
         Assert.Empty(harness.Dialogs.ShownActivityWindows);
+    }
+
+    [AvaloniaFact]
+    public async Task SaveRun_Abyssal_AsksWithArmAsTheEnterAnswerAndNoCancelButton()
+    {
+        using var harness = await ActivityWindowHarness.CreateAsync();
+        ActivityWindowViewModel model = await StartAbyssalAsync(harness);
+
+        await model.SaveRunCommand.ExecuteAsync(null);
+
+        var options = Assert.Single(harness.Dialogs.ChoiceOptions, option => option.Title == Question);
+        Assert.True(options.DefaultAnswer);
+        Assert.False(options.OfferCancel);
+    }
+
+    [AvaloniaFact]
+    public void MessageBoxWindow_WithDefaultAnswerTrue_MakesOnlyThePrimaryButtonTheEnterButtonAndHidesCancel()
+    {
+        var window = new MessageBoxWindow("Run another?", "msg", confirm: true, okText: "Arm next run",
+            secondaryText: "Done", offerCancel: false, defaultAnswer: true);
+
+        Assert.True(window.FindControl<Button>("OkButton")!.IsDefault);
+        Assert.False(window.FindControl<Button>("SecondaryButton")!.IsDefault);
+        Assert.False(window.FindControl<Button>("CancelButton")!.IsVisible);
+    }
+
+    [AvaloniaFact]
+    public void MessageBoxWindow_WithoutOptIn_HasNoDefaultButtonAndKeepsCancel()
+    {
+        var window = new MessageBoxWindow("Close this run?", "msg", confirm: true, okText: "Save", secondaryText: "Discard");
+
+        Assert.False(window.FindControl<Button>("OkButton")!.IsDefault);
+        Assert.False(window.FindControl<Button>("SecondaryButton")!.IsDefault);
+        Assert.True(window.FindControl<Button>("CancelButton")!.IsVisible);
     }
 
     private static async Task<ActivityWindowViewModel> StartAbyssalAsync(ActivityWindowHarness harness)

@@ -39,7 +39,7 @@ public sealed partial class ActivityWindowViewModel
 
         bool? another = await dialogs.ChooseAsync("Run another?",
             "Arm the next abyssal run with the same pilot and filament settings. It starts when you jump in.",
-            "Arm next run", "Done", this);
+            "Arm next run", "Done", this, offerCancel: false, defaultAnswer: true);
         return another == true ? new NextRun(characterId, characterName, additional) : null;
     }
 

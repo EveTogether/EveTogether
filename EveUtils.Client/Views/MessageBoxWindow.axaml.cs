@@ -1,4 +1,5 @@
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
 
@@ -19,16 +20,30 @@ public partial class MessageBoxWindow : ChromedWindow
 
     // A three-answer box hands back bool? and cancel is null; a plain confirm keeps its bool and cancel is false.
     private bool _threeWay;
+    private bool _escapeCancels;
+
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        if (_escapeCancels && e.Key == Key.Escape)
+        {
+            e.Handled = true;
+            OnCancel(this, new RoutedEventArgs());
+            return;
+        }
+
+        base.OnKeyDown(e);
+    }
 
     public MessageBoxWindow(string title, string message, bool confirm = false, string okText = "OK",
-        string? optOutText = null, string? secondaryText = null) : this()
+        string? optOutText = null, string? secondaryText = null, bool offerCancel = true,
+        bool? defaultAnswer = null) : this()
     {
         Title = string.IsNullOrWhiteSpace(title) ? "EVE Together" : title;
         this.FindControl<TextBlock>("TitleBlock")!.Text = title;
         this.FindControl<TextBlock>("MessageBlock")!.Text = message;
         if (confirm)
         {
-            this.FindControl<Button>("CancelButton")!.IsVisible = true;
+            this.FindControl<Button>("CancelButton")!.IsVisible = offerCancel;
             this.FindControl<Button>("OkButton")!.Content = okText;
         }
         if (!string.IsNullOrWhiteSpace(secondaryText))
@@ -37,6 +52,12 @@ public partial class MessageBoxWindow : ChromedWindow
             var secondary = this.FindControl<Button>("SecondaryButton")!;
             secondary.Content = secondaryText;
             secondary.IsVisible = true;
+        }
+        if (defaultAnswer is { } primaryIsDefault)
+        {
+            // Opt-in: every other dialog keeps no default button, so Enter never confirms something destructive.
+            this.FindControl<Button>(primaryIsDefault || !_threeWay ? "OkButton" : "SecondaryButton")!.IsDefault = true;
+            _escapeCancels = true;
         }
         if (!string.IsNullOrWhiteSpace(optOutText))
         {
