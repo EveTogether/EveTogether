@@ -467,8 +467,13 @@ public sealed class HomefrontMoneyScenarioTests
         const int late = ActivityWindowHarness.CharacterId + 4;
         using Group group = await Group.StartAsync(toons: 5, isRosterFleet: true, picked: 4);
         // The roster read puts the fifth toon on the list; that change is written once the bundle window has passed.
-        await group.SettleAsync(ticks: 4);
-        Run backfilled = (await group.RunsAsync()).Single(run => run.CharacterId == late);
+        Run? backfilled = null;
+        for (int tick = 0; tick < 60 && backfilled is null; tick++)
+        {
+            await group.SettleAsync(ticks: 1);
+            backfilled = (await group.RunsAsync()).SingleOrDefault(run => run.CharacterId == late);
+        }
+        Assert.NotNull(backfilled);
         Guid ownRun = (await group.Dispatcher.Send(new StartRunCommand(late, ActivityKind.Site, group.Clock.AddMinutes(-2),
             Raid.DungeonId, "Raid: Hall of Sacrifice", null))).Value;
         // Its gamelog's line, on the run it was flying — written straight in, since with the backfilled copy beside it

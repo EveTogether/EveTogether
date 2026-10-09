@@ -1616,7 +1616,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             await row.LoadPortraitAsync(portraits);
     }
 
-    /// <summary>Guards <see cref="_RefreshRunCharactersAsync"/> the same way <see cref="_isRefreshingParticipants"/>
+    /// <summary>Guards <see cref="_RefreshRunCharactersAsync"/> the same way <see cref="_participantsRead"/>
     /// guards its participants counterpart: a slow query outliving one tick must not race the next tick's own read.</summary>
     private bool _isRefreshingRunCharacters;
 
@@ -1880,7 +1880,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             await scope.ServiceProvider.GetRequiredService<CqrsDispatcher>().Send(new TouchRunAliveCommand(runId, atUtc));
         });
 
-    /// <summary>Guards <see cref="_RefreshActingCharacterAsync"/>'s registry lookup the way <see cref="_isRefreshingParticipants"/>
+    /// <summary>Guards <see cref="_RefreshActingCharacterAsync"/>'s registry lookup the way <see cref="_participantsRead"/>
     /// guards its own read (ET-287): a lookup outliving one tick must not be started again by the next.</summary>
     private bool _isNamingActingCharacter;
 
@@ -2259,12 +2259,16 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         await _ForEachSiblingAsync(runId, sibling => dispatcher.Send(new SetRunStoppedCommand(sibling.RunId, stoppedAtUtc)));
     }
 
-    /// <summary>Every other run of this group, with Participants read again after each await (ET-484): a tick's refresh
-    /// may fold a joining fleet mate in mid-loop (I7), which is then still visited, where a live foreach threw
-    /// "Collection was modified". A row the refresh removed before its turn is skipped.</summary>
+    /// <summary>Every other run of this group, read fresh first and again after each await (ET-484): a fleet mate folded
+    /// in (I7) before or during the loop is visited, where a live foreach threw "Collection was modified" or missed the
+    /// joined run. A row a refresh removed before its turn is skipped.</summary>
     private async Task _ForEachSiblingAsync(Guid runId, Func<RunParticipantViewModel, Task> visit)
     {
         HashSet<Guid> visited = [runId];
+        // A join committed since the last tick's read is a sibling too: wait out that read, which may predate it, then
+        // read again.
+        await _participantsRead;
+        await _RefreshParticipantsAsync();
         while (Participants.FirstOrDefault(participant => !visited.Contains(participant.RunId)) is { } sibling)
         {
             visited.Add(sibling.RunId);
@@ -2583,9 +2587,9 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             ? _Participation().FirstOrDefault(participant => participant.FleetId == id).FleetCommanderCharacterId
             : null;
 
-    /// <summary>Guards <see cref="_RefreshParticipantsAsync"/> against overlapping ticks: a slow query outliving one
-    /// second would otherwise let two calls both pass the "not there yet" check on the same row and add it twice.</summary>
-    private bool _isRefreshingParticipants;
+    /// <summary>The participants read in flight, which <see cref="_RefreshParticipantsAsync"/> hands back rather than start
+    /// a second: a slow query outliving one second would otherwise let two reads both add the same row.</summary>
+    private Task _participantsRead = Task.CompletedTask;
 
     /// <summary>
     /// Who has a run in this activity, on the definition <c>ActivitySummary.ParticipantCount</c> already uses
@@ -2593,84 +2597,87 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     /// kept and updated rather than rebuilt, the same as <see cref="_SyncFleetMembers"/>, so a loot-split toggle on
     /// FLEET is not raced by the next tick's read of the same row.
     /// </summary>
-    private async Task _RefreshParticipantsAsync()
+    private Task _RefreshParticipantsAsync()
     {
-        if (RunId is not { } runId || _services.GetService<CqrsDispatcher>() is null || _isRefreshingParticipants)
+        if (_participantsRead.IsCompleted)
+        {
+            _participantsRead = _ReadParticipantsAsync();
+        }
+        return _participantsRead;
+    }
+
+    private async Task _ReadParticipantsAsync()
+    {
+        if (RunId is not { } runId || _services.GetService<CqrsDispatcher>() is null)
+        {
+            return;
+        }
+
+        // Off the UI thread (ET-287), like every other store read on this clock: Microsoft.Data.Sqlite's async API
+        // does its work synchronously, so awaiting it straight from a tick blocks the window once a second.
+        string? groupCode = GroupCode;
+        Result<IReadOnlyList<RunGroupParticipantDto>> result = await Task.Run(async () =>
+        {
+            using var scope = _services.CreateScope();
+            return await scope.ServiceProvider.GetRequiredService<CqrsDispatcher>()
+                .Query(new GetRunGroupParticipantsQuery(groupCode, runId));
+        });
+        if (!result.IsSuccess || result.Value is not { } participants)
             return;
 
-        _isRefreshingParticipants = true;
-        try
+        foreach (RunGroupParticipantDto dto in participants)
         {
-            // Off the UI thread (ET-287), like every other store read on this clock: Microsoft.Data.Sqlite's async API
-            // does its work synchronously, so awaiting it straight from a tick blocks the window once a second.
-            string? groupCode = GroupCode;
-            Result<IReadOnlyList<RunGroupParticipantDto>> result = await Task.Run(async () =>
+            if (Participants.FirstOrDefault(row => row.RunId == dto.RunId) is { } existing)
             {
-                using var scope = _services.CreateScope();
-                return await scope.ServiceProvider.GetRequiredService<CqrsDispatcher>()
-                    .Query(new GetRunGroupParticipantsQuery(groupCode, runId));
-            });
-            if (!result.IsSuccess || result.Value is not { } participants)
-                return;
-
-            foreach (RunGroupParticipantDto dto in participants)
-            {
-                if (Participants.FirstOrDefault(row => row.RunId == dto.RunId) is { } existing)
-                {
-                    existing.IsParticipant = dto.IsParticipant;
-                    existing.IsPayoutEligible = dto.IsPayoutEligible;
-                    existing.BountyIsk = dto.BountyIsk;
-                    existing.MiningEntries = dto.MiningEntries;
-                    existing.InSiteAtCompletion = dto.InSiteAtCompletion;
-                    existing.AttendanceCount = dto.AttendanceCount;
-                    existing.HomefrontOutcome = dto.HomefrontOutcome;
-                    existing.HomefrontCompletedWaveCount = dto.HomefrontCompletedWaveCount;
-                    existing.FixedPayoutIsk = dto.FixedPayoutIsk;
-                    continue;
-                }
-
-                // Never actually wider than int32: every other table in this schema stores an EVE character id as
-                // int (EsiCharacterId, FleetParticipant, gamelog's CharacterId, ...); Run.CharacterId is long only
-                // because Run predates that convention, not because a real id needs the extra room.
-                int characterId = checked((int)dto.CharacterId);
-                string name = await _NameOfAsync(characterId) ?? $"Char {characterId}";
-                Participants.Add(new RunParticipantViewModel(
-                    dto.RunId, characterId, name, dto.IsParticipant, dto.IsPayoutEligible, dto.BountyIsk, dto.MiningEntries)
-                {
-                    InSiteAtCompletion = dto.InSiteAtCompletion,
-                    AttendanceCount = dto.AttendanceCount,
-                    HomefrontOutcome = dto.HomefrontOutcome,
-                    HomefrontCompletedWaveCount = dto.HomefrontCompletedWaveCount,
-                    FixedPayoutIsk = dto.FixedPayoutIsk
-                });
-
-                // A character this window did not itself just start (ET-259): the acting character's own
-                // OnRunStarted already ensured its collector, and a sibling just started this tick already got
-                // OnCharacterRunStarted from _SendAdditionalStartRunCommandAsync — but a window that ADOPTS an
-                // already-running group (RESUME, ET-254/258, or simply reopening a closed run window) only ever
-                // adopts the ONE run it was pointed at, never the rest of the group, so a sibling discovered here
-                // for the first time had no collector at all and every hit on their own gamelog had nowhere to go,
-                // even though bounty and loot never depended on this per-window wiring and kept working. Idempotent
-                // per section (RunEnemyObservationCollector._Ensure no-ops for a character it already knows).
-                foreach (RunWindowSection section in _AllSections())
-                    section.OnCharacterRunStarted(characterId);
+                existing.IsParticipant = dto.IsParticipant;
+                existing.IsPayoutEligible = dto.IsPayoutEligible;
+                existing.BountyIsk = dto.BountyIsk;
+                existing.MiningEntries = dto.MiningEntries;
+                existing.InSiteAtCompletion = dto.InSiteAtCompletion;
+                existing.AttendanceCount = dto.AttendanceCount;
+                existing.HomefrontOutcome = dto.HomefrontOutcome;
+                existing.HomefrontCompletedWaveCount = dto.HomefrontCompletedWaveCount;
+                existing.FixedPayoutIsk = dto.FixedPayoutIsk;
+                continue;
             }
 
-            foreach (RunParticipantViewModel gone in Participants
-                         .Where(row => participants.All(dto => dto.RunId != row.RunId)).ToList())
-                Participants.Remove(gone);
-            _SyncLootOverview();
+            // Never actually wider than int32: every other table in this schema stores an EVE character id as
+            // int (EsiCharacterId, FleetParticipant, gamelog's CharacterId, ...); Run.CharacterId is long only
+            // because Run predates that convention, not because a real id needs the extra room.
+            int characterId = checked((int)dto.CharacterId);
+            string name = await _NameOfAsync(characterId) ?? $"Char {characterId}";
+            Participants.Add(new RunParticipantViewModel(
+                dto.RunId, characterId, name, dto.IsParticipant, dto.IsPayoutEligible, dto.BountyIsk, dto.MiningEntries)
+            {
+                InSiteAtCompletion = dto.InSiteAtCompletion,
+                AttendanceCount = dto.AttendanceCount,
+                HomefrontOutcome = dto.HomefrontOutcome,
+                HomefrontCompletedWaveCount = dto.HomefrontCompletedWaveCount,
+                FixedPayoutIsk = dto.FixedPayoutIsk
+            });
 
-            OnPropertyChanged(nameof(IsFleetShown));
-            // A group with more than one participant is what turns the header chip from one name into the group's
-            // (ET-130 deel 3) — this is the only place Participants changes outside the constructor, so it is the
-            // only place that has to say so.
-            OnPropertyChanged(nameof(ActingCharacterText));
+            // A character this window did not itself just start (ET-259): the acting character's own
+            // OnRunStarted already ensured its collector, and a sibling just started this tick already got
+            // OnCharacterRunStarted from _SendAdditionalStartRunCommandAsync — but a window that ADOPTS an
+            // already-running group (RESUME, ET-254/258, or simply reopening a closed run window) only ever
+            // adopts the ONE run it was pointed at, never the rest of the group, so a sibling discovered here
+            // for the first time had no collector at all and every hit on their own gamelog had nowhere to go,
+            // even though bounty and loot never depended on this per-window wiring and kept working. Idempotent
+            // per section (RunEnemyObservationCollector._Ensure no-ops for a character it already knows).
+            foreach (RunWindowSection section in _AllSections())
+                section.OnCharacterRunStarted(characterId);
         }
-        finally
-        {
-            _isRefreshingParticipants = false;
-        }
+
+        foreach (RunParticipantViewModel gone in Participants
+                     .Where(row => participants.All(dto => dto.RunId != row.RunId)).ToList())
+            Participants.Remove(gone);
+        _SyncLootOverview();
+
+        OnPropertyChanged(nameof(IsFleetShown));
+        // A group with more than one participant is what turns the header chip from one name into the group's
+        // (ET-130 deel 3) — this is the only place Participants changes outside the constructor, so it is the
+        // only place that has to say so.
+        OnPropertyChanged(nameof(ActingCharacterText));
     }
 
     /// <summary>Set for the whole of <see cref="SaveRunAsync"/> — saving a group of five runs used to look like
