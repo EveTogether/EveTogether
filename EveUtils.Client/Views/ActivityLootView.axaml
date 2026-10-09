@@ -43,11 +43,19 @@
                             <TextBlock Text="{Binding SharedText}"/>
                         </Border>
                     </StackPanel>
-                    <Button Grid.Column="2" Classes="rewrite" Content="{Binding RewriteButtonText}"
-                            IsVisible="{Binding Loot.CanOfferLootEdit}"
-                            IsEnabled="{Binding Loot.CanEditLoot}"
-                            Command="{Binding Loot.BeginLootEditCommand}"
-                            ToolTip.Tip="{Binding RewriteButtonTip}"/>
+                    <StackPanel Grid.Column="2" Orientation="Horizontal">
+                        <Button Classes="rewrite" Content="{Binding RewriteButtonText}"
+                                IsVisible="{Binding Loot.CanOfferLootEdit}"
+                                IsEnabled="{Binding Loot.CanEditLoot}"
+                                Command="{Binding Loot.BeginLootEditCommand}"
+                                ToolTip.Tip="{Binding RewriteButtonTip}"/>
+                        <!-- ET-488: a run counted between two holds is corrected by its holds, not by a list. -->
+                        <Button Classes="rewrite" Content="✎  CORRECT HOLDS"
+                                IsVisible="{Binding Loot.CanOfferHoldEdit}"
+                                IsEnabled="{Binding Loot.CanEditHolds}"
+                                Command="{Binding Loot.BeginHoldEditCommand}"
+                                ToolTip.Tip="Paste the starting or ending hold again. Loot, consumed and net are counted again from the two."/>
+                    </StackPanel>
                     <TextBlock Grid.Column="3" Classes="subtotal" Text="{Binding SubtotalText}"/>
                 </Grid>
 
@@ -58,6 +66,18 @@
                      what is in the box is what this character's loot becomes. -->
                 <vw:InventoryListEditorView DataContext="{Binding Loot.LootEditor}"
                                             IsVisible="{Binding IsOpen}"/>
+
+                <!-- ── Correct the holds ── each box opens on the hold as stored and saves on its own. -->
+                <StackPanel IsVisible="{Binding Loot.IsHoldEditorOpen}">
+                    <TextBlock Classes="kvlabel" Margin="2,4,0,2" Text="STARTING HOLD"
+                               IsVisible="{Binding Loot.StartingHoldEditor.IsOpen}"/>
+                    <vw:InventoryListEditorView DataContext="{Binding Loot.StartingHoldEditor}"
+                                                IsVisible="{Binding IsOpen}"/>
+                    <TextBlock Classes="kvlabel" Margin="2,4,0,2" Text="ENDING HOLD"
+                               IsVisible="{Binding Loot.EndingHoldEditor.IsOpen}"/>
+                    <vw:InventoryListEditorView DataContext="{Binding Loot.EndingHoldEditor}"
+                                                IsVisible="{Binding IsOpen}"/>
+                </StackPanel>
 
                 <!-- ── The items it is made of ── one row per kind, most valuable first; what was left out
                      follows on rows of its own, struck through and badged, never folded into a row that
@@ -82,6 +102,29 @@
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
+
+                <!-- ── What the run spent ── ET-488: with a starting hold, what went down between the two holds,
+                     per type with its count, unit price and value; never mixed into the loot above. -->
+                <StackPanel IsVisible="{Binding Loot.HasConsumedRows}" Margin="0,6,0,0">
+                    <Grid ColumnDefinitions="*,Auto" Margin="2,0,2,2">
+                        <TextBlock Classes="kvlabel" Text="CONSUMED"/>
+                        <TextBlock Grid.Column="1" Classes="money" Text="{Binding Loot.ConsumedIskDisplay}"/>
+                    </Grid>
+                    <ItemsControl ItemsSource="{Binding Loot.ConsumedRows}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="vr:ActivityLootLineViewModel">
+                                <Border Classes="itemrow detailrow" Classes.alt="{Binding IsAlternate}">
+                                    <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="10">
+                                        <TextBlock Classes="itemname" Text="{Binding Name}"/>
+                                        <TextBlock Grid.Column="1" Classes="money" MinWidth="44" Text="{Binding QuantityText}"/>
+                                        <TextBlock Grid.Column="2" Classes="money" MinWidth="80" Text="{Binding UnitPriceText}"/>
+                                        <TextBlock Grid.Column="3" Classes="money" MinWidth="104" Text="{Binding AmountText}"/>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
 
                 <!-- ── Every capture behind the subtotal ── folded until asked for. -->
                 <ToggleButton Classes="disclosure" IsVisible="{Binding IsCapturesDisclosureShown}"
@@ -116,6 +159,10 @@
                                                 <Border Classes="badge excluded" Margin="0,0,6,0"
                                                         IsVisible="{Binding IsExcludedBadgeShown}">
                                                     <TextBlock Text="EXCLUDED"/>
+                                                </Border>
+                                                <Border Classes="badge" Margin="0,0,6,0" IsVisible="{Binding IsIgnored}"
+                                                        ToolTip.Tip="This run has a starting hold, so only the difference between the starting and the ending hold counts.">
+                                                    <TextBlock Text="IGNORED"/>
                                                 </Border>
                                                 <Border Classes="badge repeat" Margin="0,0,6,0"
                                                         IsVisible="{Binding RepeatBadgeText, Converter={x:Static ObjectConverters.IsNotNull}}">

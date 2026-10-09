@@ -62,7 +62,7 @@
                 <TextBlock Classes="hint" Margin="0" Text="{Binding RunLoot.CargoBeforeStatus}"/>
                 <TextBlock Classes="hint" Margin="0" Text="ENDING HOLD"/>
                 <TextBox AcceptsReturn="True" MinHeight="54" TextWrapping="NoWrap"
-                         PlaceholderText="Leave this empty and the last capture is the ending hold."
+                         PlaceholderText="Paste the hold you came back with. Until you do, nothing is counted."
                          Text="{Binding RunLoot.CargoAfterText, Mode=TwoWay}"/>
                 <TextBlock Classes="hint" Margin="0" Text="{Binding RunLoot.CargoAfterStatus}"/>
             </StackPanel>

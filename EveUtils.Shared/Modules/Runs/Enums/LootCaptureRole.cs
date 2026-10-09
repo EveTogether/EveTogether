@@ -12,7 +12,8 @@ public enum LootCaptureRole
     /// <summary>The cargo hold the run started from — the zero point, never loot itself.</summary>
     CargoBefore,
 
-    /// <summary>The cargo hold the run ended on. Left unset, the last capture is it.</summary>
+    /// <summary>The cargo hold the run ended on. Left unset, a run with a starting hold counts nothing yet — a
+    /// clipboard copy is never taken for it (ET-488).</summary>
     CargoAfter,
 
     /// <summary>What the run's own pilot spent besides the filament — ammo, drones, boosters — written out by hand

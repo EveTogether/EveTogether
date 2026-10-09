@@ -6,23 +6,14 @@ using Microsoft.EntityFrameworkCore;
 
 namespace EveUtils.Shared.Modules.Runs.Commands;
 
-/// <summary>The lock every loot write holds, written once. Saving is that lock, and it lives in the commands rather
-/// than in the controls a window happens to be showing — ET-179 saves a run left standing with no window open at
-/// all.</summary>
+/// <summary>How a loot write opens its run and marks a saved one corrected, written once. The rules live in the
+/// commands rather than in the controls a window happens to be showing — ET-179 saves a run left standing with no
+/// window open at all.</summary>
 internal static class RunLootWrites
 {
-    public static async Task<Result<Run>> OpenRunAsync(ClientDbContext db, Guid runId, CancellationToken cancellationToken)
-    {
-        Result<Run> opened = await OpenForCorrectionAsync(db, runId, cancellationToken);
-        return opened.Value is { State: RunState.Saved }
-            ? Result<Run>.Failure(new ResultMessage(MessageSeverity.Error, MessageCodes.ValidationFailed,
-                "This run is saved, so its loot can no longer be changed.", "Runs"))
-            : opened;
-    }
-
-    /// <summary>The two corrections a saved run still takes (ET-215): leaving a capture out or counting it again, and
-    /// writing the list out by hand. Everything that decides what a capture IS — a pasted hold, the starting-hold
-    /// role — keeps the lock above.</summary>
+    /// <summary>The corrections a saved run still takes: leaving a capture out or counting it again, writing the list
+    /// out by hand (ET-215), and pasting one of its two holds again (ET-488). Which capture is the starting hold stays
+    /// fixed once the run is saved — <see cref="SetRunLootCaptureRoleCommandHandler"/> keeps that lock.</summary>
     public static async Task<Result<Run>> OpenForCorrectionAsync(ClientDbContext db, Guid runId, CancellationToken cancellationToken)
     {
         Run? run = await db.Set<Run>()
