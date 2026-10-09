@@ -638,7 +638,7 @@ public sealed class ActivityDetailTests
     };
 
     /// <summary>
-    /// ET-468: COMBAT and TIMELINE stand straight under ACTIVITY and before ENEMIES (B2), with no boundary-damage tile
+    /// ET-468: COMBAT / TIMELINE stands straight under ACTIVITY and before ENEMIES (B2), with no boundary-damage tile
     /// (B5), and LOOT says why containers are not counted (B6).
     /// </summary>
     [AvaloniaTheory]
@@ -663,8 +663,8 @@ public sealed class ActivityDetailTests
         Assert.All(absent, text => Assert.DoesNotContain(text, texts));
         Assert.DoesNotContain(texts, text => text.Contains("BOUNDARY", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(texts, text => text.StartsWith("Containers opened: not counted", StringComparison.Ordinal));
-        Assert.Equal(["ACTIVITY", "COMBAT", "TIMELINE", "ENEMIES"],
-            texts.Where(text => text is "ACTIVITY" or "COMBAT" or "TIMELINE" or "ENEMIES"));
+        Assert.Equal(["ACTIVITY", "COMBAT / TIMELINE", "ENEMIES"],
+            texts.Where(text => text is "ACTIVITY" or "COMBAT / TIMELINE" or "ENEMIES"));
     }
 
     // Hands the saved run back through the pull as the server would (ET-472), as a fleet mate's or as this pilot's own.

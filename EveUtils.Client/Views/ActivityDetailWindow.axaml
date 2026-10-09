@@ -40,7 +40,8 @@
             <DataTemplate x:Key="DetailSectionHeader" DataType="va:ActivitySection">
                 <Grid ColumnDefinitions="Auto,Auto,*" ColumnSpacing="10">
                     <TextBlock Grid.Column="0" Classes="caret" Text="&#x25B6;"/>
-                    <TextBlock Grid.Column="1" Classes="sectiontitle" Text="{Binding Title}"/>
+                    <!-- Width="NaN" over the theme's 96: COMBAT / TIMELINE is longer than that, the summary is right-aligned anyway. -->
+                    <TextBlock Grid.Column="1" Classes="sectiontitle" Width="NaN" MinWidth="96" Text="{Binding Title}"/>
                     <TextBlock Grid.Column="2" Classes="sectionsummary" Text="{Binding HeaderSummary}"/>
                 </Grid>
             </DataTemplate>
