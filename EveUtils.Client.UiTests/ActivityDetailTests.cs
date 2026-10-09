@@ -612,6 +612,51 @@ public sealed class ActivityDetailTests
         Assert.Same(docked, window.Content);
     }
 
+    /// <summary>A server copy corrects nothing, whatever asks: delete, re-value, republish and undo all refuse in the
+    /// view-model while the local store they would change stays as it was, and the rendered screen says it is read-only
+    /// and offers no re-value. Counter-proof: drop <c>IsReadOnly</c> from a command's guard (or from <c>CanDelete</c>)
+    /// and that row goes red.</summary>
+    [AvaloniaTheory]
+    [InlineData("delete")]
+    [InlineData("revalue")]
+    [InlineData("republish")]
+    [InlineData("undo")]
+    public async Task ServerCopy_RefusesCorrections_AndSaysItIsReadOnly(string command)
+    {
+        using var instance = TestClientInstance.Create();
+        ICqrsDispatcher dispatcher = instance.Services.GetRequiredService<ICqrsDispatcher>();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        await _SaveSiteRunAsync(dispatcher, 90000001, groupCode: null, cancellationToken);
+        await dispatcher.Send(new RebuildActivitySummariesCommand(), cancellationToken);
+        ActivityOverviewRowDto row = Assert.Single(_Value(await dispatcher.Query(new GetActivityOverviewQuery(), cancellationToken)));
+        ActivityDetailDto copy = _Value(await dispatcher.Query(new GetActivityDetailQuery(row.ActivitySummaryId), cancellationToken));
+        var dialogs = new RecordingDialogService { OnConfirm = (_, _) => Task.FromResult(true) };
+        bool republished = false;
+        var viewModel = new ActivityDetailViewModel(dispatcher, row.ActivitySummaryId, dialogs: dialogs,
+            ownCharacterIds: new HashSet<long> { 90000001 }, republish: () => { republished = true; return Task.CompletedTask; },
+            serverCopy: copy);
+        await viewModel.LoadAsync(cancellationToken);
+
+        await (command switch
+        {
+            "delete" => viewModel.DeleteCommand.ExecuteAsync(null),
+            "revalue" => viewModel.RevalueCommand.ExecuteAsync(null),
+            "republish" => viewModel.RepublishCommand.ExecuteAsync(null),
+            _ => viewModel.UndoDeleteCommand.ExecuteAsync(null)
+        });
+        (_, Window root) = _Present(new ActivityDetailWindow(viewModel) { Width = 758, Height = 1400 }, 758);
+
+        Assert.True(viewModel.IsReadOnly);
+        Assert.False(viewModel.CanDelete);
+        Assert.False(viewModel.IsDeleted);
+        Assert.False(republished);
+        Assert.Single(_Value(await dispatcher.Query(new GetActivityOverviewQuery(), cancellationToken)));
+        Assert.NotEmpty(viewModel.Sections);
+        Assert.True(root.GetVisualDescendants().OfType<Border>().Single(border => border.Name == "ReadOnlyBanner").IsEffectivelyVisible);
+        Assert.DoesNotContain(root.GetVisualDescendants().OfType<Button>(),
+            button => button.Name == "RevalueButton" && button.IsEffectivelyVisible);
+    }
+
     public enum CombatArrival { Saved, FleetMateShared, FleetMateWithheld, MateBesideOwnNotSynced, MateBesideOwnWithheld, OwnPulledBackWithout }
 
     private static readonly string[] RealRunTiles =
@@ -772,7 +817,11 @@ public sealed class ActivityDetailTests
     private static async Task<(ActivityDetailWindow Window, Window Root)> _PresentAsync(
         TestClientInstance instance, double width, CancellationToken cancellationToken)
     {
-        ActivityDetailWindow window = await _WindowAsync(instance, width, cancellationToken);
+        return _Present(await _WindowAsync(instance, width, cancellationToken), width);
+    }
+
+    private static (ActivityDetailWindow Window, Window Root) _Present(ActivityDetailWindow window, double width)
+    {
         var display = new FakeDisplay();
         var host = new ModuleHostService();
         host.SetOwner(new Window());

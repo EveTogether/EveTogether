@@ -1611,17 +1611,23 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
 
     /// <summary>A row is the way into ET-162's detail screen. The screen reads itself once it is routed, so nothing is
     /// fetched here.</summary>
-    private Task _OpenDetailAsync(ActivityOverviewRowViewModel row)
+    private async Task _OpenDetailAsync(ActivityOverviewRowViewModel row)
     {
-        // A server copy is nobody's to correct or delete there (ET-214/215); the expanded row and the pane are its detail.
-        if (!row.CanOpenDetail)
-            return Task.CompletedTask;
+        // A server copy opens read-only, unless this machine holds the activity too: then the local one opens, as ever.
+        Guid summaryId = row.ActivitySummaryId;
+        ActivityDetailDto? serverCopy = row.ServerDetail;
+        if (serverCopy is not null
+            && await _dispatcher.Query(new FindActivitySummaryIdQuery(row.GroupCode, row.RunId)) is { IsSuccess: true, Value: { } localId })
+        {
+            summaryId = localId;
+            serverCopy = null;
+        }
 
         _dialogs.ShowActivityDetail(
             // Appraisal.Appraisal itself is left null on purpose: the detail sections resolve the user's chosen
             // provider through Services (below) via IAppraisalProviderSelector, ET-364 — a fixed provider here
             // would go stale the moment a second one is registered.
-            new ActivityDetailViewModel(_dispatcher, row.ActivitySummaryId,
+            new ActivityDetailViewModel(_dispatcher, summaryId,
                 appraisal: null, nameOf: _NameOf,
                 esi: _services.GetService<IEsiClient>(), locations: _services.GetService<IEsiLocationClient>(),
                 sde: _services.GetService<ISdeAccessor>(), portraits: _services.GetService<ICharacterPortraitProvider>(),
@@ -1629,10 +1635,9 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
                 // Only this machine's own pilots' runs can be corrected there, or deleted from there (ET-214):
                 // anyone else's came in from a server and could never be published back (ET-215).
                 ownCharacterIds: _namesById.Keys.ToHashSet(),
-                republish: _canPublish ? () => _PublishAsync(row) : null, dialogs: _dialogs,
-                runChanges: _services.GetService<RunChangeFeed>(), services: _services),
-            row.ActivitySummaryId);
-        return Task.CompletedTask;
+                republish: _canPublish && serverCopy is null ? () => _PublishAsync(row) : null, dialogs: _dialogs,
+                runChanges: _services.GetService<RunChangeFeed>(), services: _services, serverCopy: serverCopy),
+            summaryId);
     }
 
     public void Dispose()
