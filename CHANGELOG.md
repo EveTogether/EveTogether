@@ -17,6 +17,8 @@ entries under `[Unreleased]` below that were not there yet at the previous night
 
 ## [Unreleased]
 
+- **Fixed: the server control panel now keeps your sign-in after a restart.** Its security keys stay with the server data, so restart no longer invalidates your session or antiforgery cookie.
+
 - **Fixed: in a fleet run only the fleet commander can press NEW ROOM, undo a room and change the tier or weather.** A fleet member saw these in the run window and they worked, though the room limits and the pocket are shared. They are now hidden for members, like DISCARD, and the window ignores them too; solo runs keep them. Members keep only their own AUTO room detection for now.
 - **Fixed: a fleet mate's combat missing from your run detail no longer always reads "not shared".** After the first start on this version, runs you already published that kept their combat are queued again once, so their next publish carries it to the server; this only happens while "Share my live combat data" is on. In COMBAT a mate whose combat is missing now reads "not shared" only when they withheld it, and "not synced yet" when their EVE Together is older and never sent it; hover for what they need. Servers need this update and its database migration (ET-472).
 - **Added: saving an abyssal run asks "Run another?".** Choose "Arm next run" and a new run window opens, armed for the same pilot or pilots and the same filament, ready to start when you jump in. "Done" does nothing. In a fleet only the commander is asked; members follow the commander's offer as before. Nothing is asked if a run is already under way, or when the save was part of closing the window or following the commander's save.

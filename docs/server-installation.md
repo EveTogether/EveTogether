@@ -50,8 +50,8 @@ Configure via **environment variables**. Nested keys use a double underscore (`_
 
 ### Data directory
 
-The data directory holds the SQLite database, TLS certificate, token-protector key, app log, ESI cache and
-SDE. It is resolved in this order:
+The data directory holds the SQLite database, TLS certificate, token-protector key, Data Protection keys, app log,
+ESI cache and SDE. It is resolved in this order:
 
 1. `EVEUTILS_SERVER_DATA_DIR` — what the Docker image sets (`/data`); mount a volume there to persist it.
 2. `Server__DataDirectory`.
