@@ -2632,7 +2632,9 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
                 .Query(new GetRunGroupParticipantsQuery(groupCode, runId));
         });
         if (!result.IsSuccess || result.Value is not { } participants)
+        {
             return;
+        }
 
         foreach (RunGroupParticipantDto dto in participants)
         {
@@ -2665,21 +2667,20 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
                 FixedPayoutIsk = dto.FixedPayoutIsk
             });
 
-            // A character this window did not itself just start (ET-259): the acting character's own
-            // OnRunStarted already ensured its collector, and a sibling just started this tick already got
-            // OnCharacterRunStarted from _SendAdditionalStartRunCommandAsync — but a window that ADOPTS an
-            // already-running group (RESUME, ET-254/258, or simply reopening a closed run window) only ever
-            // adopts the ONE run it was pointed at, never the rest of the group, so a sibling discovered here
-            // for the first time had no collector at all and every hit on their own gamelog had nowhere to go,
-            // even though bounty and loot never depended on this per-window wiring and kept working. Idempotent
-            // per section (RunEnemyObservationCollector._Ensure no-ops for a character it already knows).
+            // A sibling first seen here (ET-259): a window that adopts a running group (RESUME, ET-254/258, a
+            // reopened window) only adopts the one run it was pointed at, so this sibling has no collector yet and
+            // its gamelog hits would go nowhere. Idempotent per section (RunEnemyObservationCollector._Ensure).
             foreach (RunWindowSection section in _AllSections())
+            {
                 section.OnCharacterRunStarted(characterId);
+            }
         }
 
         foreach (RunParticipantViewModel gone in Participants
                      .Where(row => participants.All(dto => dto.RunId != row.RunId)).ToList())
+        {
             Participants.Remove(gone);
+        }
         _SyncLootOverview();
 
         OnPropertyChanged(nameof(IsFleetShown));
