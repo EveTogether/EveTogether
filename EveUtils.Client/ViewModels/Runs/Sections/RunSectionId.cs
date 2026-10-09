@@ -30,6 +30,9 @@ public enum RunSectionId
     /// <summary>What the pilot dealt, took and was neuted for over the run, as tiles and a chart, from the stored combat (ET-468).</summary>
     Combat,
 
+    /// <summary>Per room the time, idle, damage, spawn HP, share, overkill and loot, on the group's one room set (ET-469).</summary>
+    Rooms,
+
     /// <summary>The enemies of each abyssal room in the order to shoot them, live only (ET-369).</summary>
     Targets
 }

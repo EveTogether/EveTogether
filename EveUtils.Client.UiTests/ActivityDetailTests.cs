@@ -470,7 +470,7 @@ public sealed class ActivityDetailTests
 
         Assert.Equal(["ROOM 1", "ROOM 2"], viewModel.Enemies().EnemyRooms.Select(room => room.Title));
         Assert.Equal([(1, $"{100m:N0} ISK"), (2, $"{600m:N0} ISK")], loot.Rooms.Select(room => (room.Number, room.SubtotalText)));
-        Assert.Equal(2, texts.Count(text => text == "ROOM 2"));
+        Assert.Equal(3, texts.Count(text => text == "ROOM 2"));      // ENEMIES, ROOMS and LOOT
     }
 
     /// <summary>ET-494: in a group the rooms are one set — the commander's run when it has rooms, else the fullest — and every
@@ -850,6 +850,57 @@ public sealed class ActivityDetailTests
         // The stored miss (0 damage) is no hit on you.
         Assert.Equal(hasTimeline ? 0 : 1, texts.Count(text => text.EndsWith("· 2 hits on you", StringComparison.Ordinal)));
         Assert.Equal(hasTimeline, texts.Any(text => text is "0 GJ" or "0 hp" or "0"));
+    }
+
+    /// <summary>ET-469 AC4/AC5: run 5 with the two rooms the pilot marked reads as three rooms whose time and damage add up to
+    /// the run's, whose loot adds up to LOOT's own total; without any boundary the section says why in one line and draws no
+    /// room. Counter-proof: let the whole run be "room 1" and the no-rooms row draws a room; price the room loot unlike LOOT.</summary>
+    [AvaloniaTheory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task AbyssalDetail_ShowsItsRooms_OrOneLineWhy(bool hasRooms)
+    {
+        using var instance = TestClientInstance.Create();
+        ICqrsDispatcher dispatcher = instance.Services.GetRequiredService<ICqrsDispatcher>();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        await instance.Services.GetRequiredService<IMarketPriceRepository>().ReplaceAllAsync(
+            [new LocalMarketPrice { TypeId = 34, AveragePrice = 100, AdjustedPrice = 100, UpdatedAt = DateTimeOffset.UtcNow }],
+            cancellationToken);
+        DateTime start = RunCombatTelemetryTests.RunStart;
+        Result<Guid> started = await dispatcher.Send(new StartRunCommand(90000001, ActivityKind.Abyssal, start, 0, null, 30004079),
+            cancellationToken);
+        RunLootCaptureInput CaptureAt(int minute, long quantity) => new()
+        {
+            CapturedAtUtc = start.AddMinutes(minute), Source = LootCaptureSource.Clipboard, ContentHash = $"C{minute}",
+            Entries = [new RunLootEntryInput { ItemTypeId = 34, Name = "Tritanium", Quantity = quantity, LootKind = LootKind.Gained }]
+        };
+        RunParameterInput Boundary(int seconds) => new()
+        {
+            ParameterKey = RunParameterKey.RoomStarted, TypedValue = string.Empty, ObservedAtUtc = start.AddSeconds(seconds)
+        };
+        await dispatcher.Send(new SaveRunCommand(started.Value, RunCombatTelemetryTests.RunStop,
+            RunCombatTelemetryTests.RunStop.AddMinutes(1), [CaptureAt(2, 3), CaptureAt(6, 2)], [], [],
+            [new RunParameterInput { ParameterKey = RunParameterKey.AbyssalFilament, TypedValue = "3|Dark", ObservedAtUtc = start },
+                .. hasRooms ? new[] { Boundary(284), Boundary(481) } : []],
+            CombatEvents: RunCombatTelemetryTests.RealRunEvents()), cancellationToken);
+
+        (ActivityDetailWindow window, Window root) = await _PresentAsync(instance, 758, cancellationToken);
+        RoomsDetailSectionViewModel rooms = Assert.IsType<ActivityDetailViewModel>(window.DataContext).Rooms();
+        List<string> texts = RenderedText.VisibleTexts(root);
+
+        Assert.Contains("ROOMS", texts);
+        if (!hasRooms)
+        {
+            Assert.Equal((RoomsDetailSectionViewModel.NoRoomsText, 0), (rooms.RoomsEmptyText, rooms.Rows.Count));
+            Assert.Contains(RoomsDetailSectionViewModel.NoRoomsText, texts);
+            return;
+        }
+
+        Assert.Equal(["ROOM 1", "ROOM 2", "ROOM 3"], rooms.Rows.Select(row => row.Title));
+        Assert.Equal(("10:36", "65,732"), (rooms.Total!.TimeText, rooms.Total.DamageText));
+        Assert.StartsWith(rooms.Total.LootText, Assert.IsType<ActivityDetailViewModel>(window.DataContext).Loot().HeaderSummary);
+        Assert.Equal(["300 ISK", "200 ISK", "—"], rooms.Rows.Select(row => row.LootText));
+        Assert.Equal("3 rooms · by hand · 0 of 3 counted", rooms.HeaderSummary);
     }
 
     private static async Task<List<string>> _RenderAsync(TestClientInstance instance, CancellationToken cancellationToken)
