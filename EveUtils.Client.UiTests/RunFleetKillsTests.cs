@@ -15,6 +15,7 @@ using EveUtils.Client.ViewModels.Runs.Sections;
 using EveUtils.Client.Views;
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Identity;
+using EveUtils.Shared.Modules.Killmails.Commands;
 using EveUtils.Shared.Modules.Killmails.Entities;
 using EveUtils.Shared.Modules.Killmails.Repositories;
 using EveUtils.Shared.Modules.Market.Entities;
@@ -156,6 +157,34 @@ public sealed class RunFleetKillsTests
         // The opposite figure: 105M destroyed, and TOTAL ISK is exactly what it was before any kill existed.
         Assert.Equal(before, after.TotalIskText);
         Assert.Null(RunSectionModules.All.Single(module => module.Id == RunSectionId.FleetKills).IskSource);
+    }
+
+    /// <summary>ET-497: a ship and its pod are two rows, each with its own fixed ISK, and the rows add up to the total.</summary>
+    [AvaloniaFact]
+    public async Task LinkedLoss_ShowsShipAndPodAsOwnRows_EachAtItsFixedPrice_SummingToTheTotal()
+    {
+        using TestClientInstance instance = _Instance();
+        IDispatcher dispatcher = instance.Services.GetRequiredService<IDispatcher>();
+        ILocalKillmailRepository store = instance.Services.GetRequiredService<ILocalKillmailRepository>();
+        IMarketPriceRepository prices = instance.Services.GetRequiredService<IMarketPriceRepository>();
+        Guid runId = await _SaveRunAsync(dispatcher, Own, "Ravnholt", null);
+        await store.AddMissingAsync(Own, [
+            _Loss(Own, 30, Gila, StartedAtUtc.AddMinutes(8), runId),
+            _Loss(Own, 31, Capsule, StartedAtUtc.AddMinutes(8).AddSeconds(1), runId)], Ct);
+        await prices.ReplaceAllAsync([_Price(Gila, 95_000_000), _Price(Capsule, 100_000)], Ct);
+        await dispatcher.Send(new SetKillmailRunLinkCommand(Own, 30, runId), Ct);
+        await dispatcher.Send(new SetKillmailRunLinkCommand(Own, 31, runId), Ct);
+        await prices.ReplaceAllAsync([_Price(Gila, 1_000_000), _Price(Capsule, 5_000)], Ct);
+
+        LossDetailSectionViewModel section = (await _LoadAsync(instance, dispatcher, runId, group: null))
+            .Sections.OfType<LossDetailSectionViewModel>().Single();
+
+        Assert.Equal(["Gila", "pod"], section.Losses.Select(loss => loss.ShipText));
+        Assert.Equal([Gila, Capsule], section.Losses.Select(loss => loss.ShipTypeId));
+        Assert.Equal([95_000_000m, 100_000m], section.Losses.Select(loss => loss.IskValue.GetValueOrDefault()));
+        Assert.Equal(IskFormat.Whole(-95_100_000m), section.TotalText);
+        Assert.Equal(section.HeaderSummary, section.TotalText);
+        Assert.All(section.Losses, loss => Assert.Contains(" · final blow ", loss.DetailLineText));
     }
 
     private static TestClientInstance _Instance() =>

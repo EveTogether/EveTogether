@@ -4,46 +4,49 @@
              xmlns:vr="using:EveUtils.Client.ViewModels.Runs"
              x:Class="EveUtils.Client.Views.Runs.Sections.LossDetailSectionView"
              x:DataType="vs:LossDetailSectionViewModel">
+    <UserControl.Styles>
+        <StyleInclude Source="avares://EveUtils.Client/Views/Runs/LootItemStyles.axaml"/>
+    </UserControl.Styles>
     <StackPanel>
+        <Border Classes="itemrow" IsVisible="{Binding TotalText, Converter={x:Static ObjectConverters.IsNotNull}}">
+            <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Classes="meta" Text="TOTAL LOSS" VerticalAlignment="Center"/>
+                <TextBlock Grid.Column="1" Classes="money" FontWeight="Bold" Text="{Binding TotalText}"/>
+            </Grid>
+        </Border>
         <ItemsControl ItemsSource="{Binding Losses}">
             <ItemsControl.ItemTemplate>
                 <DataTemplate DataType="vr:LinkedLossViewModel">
-                    <StackPanel Margin="0,0,0,8">
-                        <Grid Classes="kv" ColumnDefinitions="Auto,*">
-                            <TextBlock Text="PILOT"/>
-                            <TextBlock Grid.Column="1" Text="{Binding PilotText}"/>
-                        </Grid>
-                        <Grid Classes="kv" ColumnDefinitions="Auto,*">
-                            <TextBlock Text="SHIP"/>
-                            <TextBlock Grid.Column="1" Text="{Binding ShipText}"/>
-                        </Grid>
-                        <Grid Classes="kv" ColumnDefinitions="Auto,*">
-                            <TextBlock Text="FIT"/>
-                            <TextBlock Grid.Column="1" Text="{Binding FitText}"/>
-                        </Grid>
-                        <Grid Classes="kv" ColumnDefinitions="Auto,*">
-                            <TextBlock Text="LOST AT"/>
-                            <TextBlock Grid.Column="1" Text="{Binding TimeText}"/>
-                        </Grid>
-                        <Grid Classes="kv" ColumnDefinitions="Auto,*">
-                            <TextBlock Text="FINAL BLOW"/>
-                            <TextBlock Grid.Column="1" Text="{Binding FinalBlowText}"/>
-                        </Grid>
-                        <Grid Classes="kv" ColumnDefinitions="Auto,*">
-                            <TextBlock Text="LINKED"/>
-                            <TextBlock Grid.Column="1" Text="{Binding ReasonText}"/>
-                        </Grid>
-                        <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,4,0,0">
+                    <StackPanel>
+                        <Border Classes="itemrow detailrow" ToolTip.Tip="{Binding ReasonText}">
+                            <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="10">
+                                <Border Classes="icontile" Width="44" Height="44">
+                                    <Image Source="{Binding Icon}"/>
+                                </Border>
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1" ClipToBounds="True">
+                                    <TextBlock Classes="itemname" FontSize="12" FontWeight="SemiBold" Text="{Binding TitleText}"/>
+                                    <TextBlock Classes="itemname" Text="{Binding PilotText}"/>
+                                    <TextBlock Classes="itemname" Text="{Binding DetailLineText}"/>
+                                    <TextBlock Classes="meta" TextTrimming="CharacterEllipsis" Text="{Binding ReasonText}"/>
+                                </StackPanel>
+                                <TextBlock Grid.Column="2" Classes="money" FontWeight="Bold" VerticalAlignment="Center"
+                                           HorizontalAlignment="Right" TextAlignment="Right" MinWidth="120"
+                                           Text="{Binding IskText}"/>
+                                <StackPanel Grid.Column="3" VerticalAlignment="Center" Spacing="4">
+                                    <Button Classes="small" Content="KILLMAIL" IsVisible="{Binding CanOpenKillmail}"
+                                            Command="{Binding OpenKillmailCommand}"/>
+                                    <Button Classes="small ghost" Content="UNLINK" Command="{Binding UnlinkCommand}"/>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+                        <StackPanel Orientation="Horizontal" Spacing="6" Margin="6,4,0,8" IsVisible="{Binding HasOtherRuns}">
                             <ComboBox MinWidth="200" ItemsSource="{Binding OtherRuns}"
-                                      SelectedItem="{Binding SelectedRun}" IsVisible="{Binding HasOtherRuns}"
+                                      SelectedItem="{Binding SelectedRun}"
                                       PlaceholderText="another run of this pilot…"/>
                             <Button Classes="rowaction" Content="LINK TO OTHER RUN…"
-                                    IsVisible="{Binding HasOtherRuns}" Command="{Binding LinkToOtherRunCommand}"/>
-                            <Button Classes="rowaction" Content="UNLINK" Command="{Binding UnlinkCommand}"/>
-                            <Button Classes="rowaction" Content="OPEN KILLMAIL" IsVisible="{Binding CanOpenKillmail}"
-                                    Command="{Binding OpenKillmailCommand}"/>
+                                    Command="{Binding LinkToOtherRunCommand}"/>
                         </StackPanel>
-                        <TextBlock Classes="hint" TextWrapping="Wrap" Margin="0"
+                        <TextBlock Classes="hint" TextWrapping="Wrap"
                                    IsVisible="{Binding ErrorText, Converter={x:Static ObjectConverters.IsNotNull}}"
                                    Text="{Binding ErrorText}"/>
                     </StackPanel>

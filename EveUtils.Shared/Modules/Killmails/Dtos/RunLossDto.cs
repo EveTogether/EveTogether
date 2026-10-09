@@ -8,7 +8,9 @@ public sealed record KillmailFinalBlowDto(int? CharacterId, int? CorporationId, 
 /// <summary>A run the pilot may move a loss to: one of the same character's runs whose time holds the loss.</summary>
 public sealed record KillmailRunChoiceDto(Guid RunId, string? SiteName, DateTime StartedAtUtc);
 
-/// <summary>One own loss linked to a run (ET-331), with the runs it may be moved to instead.</summary>
+/// <summary>One own loss linked to a run (ET-331), with the runs it may be moved to instead. <paramref name="IskValue"/>
+/// is what the loss cost the run — the hull and every item at the price the run fixed for it (ET-464) — or null when
+/// nothing on it could be priced.</summary>
 public sealed record RunLossDto(
     int CharacterId,
     int KillmailId,
@@ -17,4 +19,5 @@ public sealed record RunLossDto(
     int VictimShipTypeId,
     KillmailLinkSource LinkSource,
     KillmailFinalBlowDto? FinalBlow,
-    IReadOnlyList<KillmailRunChoiceDto> OtherRuns);
+    IReadOnlyList<KillmailRunChoiceDto> OtherRuns,
+    decimal? IskValue = null);
