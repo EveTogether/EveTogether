@@ -48,7 +48,7 @@ public sealed partial class CombatTelemetryChoice(CqrsDispatcher dispatcher, IRe
         foreach (ActivityRunDetailDto run in input.Detail.Runs)
         {
             bool isAvailable = _timelines.ContainsKey(run.RunId);
-            // A fleet mate's run never carries its combat until it is synced with the run (ET-472).
+            // A fleet mate's run carries its combat only when that pilot shares it (ET-472).
             string why = ownCharacterIds is { } own && !own.Contains(run.CharacterId) ? "not shared" : "not recorded";
             Pilots.Add(new CombatPilotChipViewModel(run.RunId,
                 isAvailable ? _names[run.RunId] : $"{_names[run.RunId]} · {why}", isAvailable, _Show));

@@ -1,6 +1,7 @@
 using System.Data.Common;
 using System.Text.Json;
 using Avalonia.Headless.XUnit;
+using EveUtils.Client.Fleet;
 using EveUtils.Client.Runs;
 using EveUtils.Client.Transport;
 using EveUtils.Shared.Cqrs;
@@ -12,6 +13,8 @@ using EveUtils.Shared.Modules.Runs.Commands;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Entities;
 using EveUtils.Shared.Modules.Runs.Enums;
+using EveUtils.Shared.Modules.Runs.Telemetry;
+using EveUtils.Shared.Modules.Settings.Repositories;
 using EveUtils.Shared.Transport;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
@@ -526,13 +529,54 @@ public sealed class RunStorageTests
             await db.SaveChangesAsync(cancellationToken);
         }
         var synchronization = new RunSynchronizationService(contextFactory, client, applier,
-            instance.Services.GetRequiredService<IEventBus>());
+            instance.Services.GetRequiredService<IEventBus>(), instance.Services.GetRequiredService<IMetricShareSettings>());
 
         var synchronized = await synchronization.SynchronizeAsync(ServerAddress, 90000001, cancellationToken);
 
         Assert.True(synchronized.Accepted);
         Assert.Equal(["push", "pull"], client.Calls);
         Assert.Equal(waterline, client.PulledSinceUtc);
+    }
+
+    /// <summary>ET-472: a push carries the run's combat only while combat is shared; switched off it says withheld.</summary>
+    [AvaloniaTheory]
+    [InlineData(null, true)]
+    [InlineData("false", false)]
+    public async Task Synchronize_CarriesTheRunsCombat_OnlyWhileCombatIsShared(string? shareCombat, bool carried)
+    {
+        using var instance = TestClientInstance.Create();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        IDbContextFactory<ClientDbContext> contextFactory = instance.Services.GetRequiredService<IDbContextFactory<ClientDbContext>>();
+        if (shareCombat is { } value)
+        {
+            await instance.Services.GetRequiredService<ISettingRepository>().UpsertAsync(MetricShareSnapshot.CombatShareKey, value, cancellationToken);
+        }
+
+        Guid runId = Guid.CreateVersion7();
+        await using (ClientDbContext db = await contextFactory.CreateDbContextAsync(cancellationToken))
+        {
+            db.Set<Run>().Add(new Run
+            {
+                Id = runId, CharacterId = 90000001, GroupCode = "HF-7QK2", ActivityKind = ActivityKind.Abyssal, State = RunState.Saved,
+                StartedAtUtc = StartedAtUtc, SavedAtUtc = StartedAtUtc, SiteTypeId = 1234, SyncState = RunSyncState.Pending,
+                SyncServerAddress = ServerAddress, Revision = 2
+            });
+            db.Set<RunCombatTimeline>().Add(new RunCombatTimeline
+            {
+                RunId = runId, Seconds = 1,
+                Series = [new RunCombatSeries { Id = Guid.CreateVersion7(), RunId = runId, Kind = CombatSeriesKind.DmgOut, Total = 998, Samples = RunCombatTelemetry.Encode([998]) }]
+            });
+            await db.SaveChangesAsync(cancellationToken);
+        }
+        var client = new TestRunSyncClient();
+        var synchronization = new RunSynchronizationService(contextFactory, client,
+            instance.Services.GetRequiredService<RunSynchronizationApplier>(), instance.Services.GetRequiredService<IEventBus>(),
+            instance.Services.GetRequiredService<IMetricShareSettings>());
+
+        await synchronization.SynchronizeAsync(ServerAddress, 90000001, cancellationToken);
+
+        RunWireData pushed = Assert.Single(client.Pushed).Run;
+        Assert.Equal((carried, !carried), (pushed.CombatTimeline?.Series.Single().Total == 998, pushed.CombatWithheld));
     }
 
     [AvaloniaFact]
@@ -776,12 +820,14 @@ public sealed class RunStorageTests
     private sealed class TestRunSyncClient : IServerRunSyncClient
     {
         public List<string> Calls { get; } = [];
+        public List<RunWirePayload> Pushed { get; } = [];
         public DateTime? PulledSinceUtc { get; private set; }
 
         public Task<(bool Accepted, string Message, DateTime? LastPushedAtUtc)> PushAsync(
             string serverAddress, RunWirePayload payload, long actingCharacterId, CancellationToken cancellationToken = default)
         {
             Calls.Add("push");
+            Pushed.Add(payload);
             return Task.FromResult((true, "accepted", (DateTime?)DateTime.UtcNow));
         }
 

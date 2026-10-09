@@ -52,6 +52,15 @@ public sealed class RunSynchronizationApplier(
                 .Select(run => new { GroupCode = run.GroupCode ?? string.Empty, run.CharacterId, run.Id })
                 .ToListAsync(cancellationToken))
             .ToDictionary(run => (run.GroupCode, run.CharacterId), run => run.Id);
+        // The delete below cascades to the stored combat (ET-472); a copy without any keeps only this pilot's own.
+        long[] own = await _OwnCharacterIdsAsync(cancellationToken);
+        Guid[] keepCombatOf = [.. payloads.Where(payload => payload.Run.CombatTimeline is null && own.Contains(payload.Run.CharacterId))
+            .Select(payload => payload.Run.Id)];
+        Dictionary<Guid, RunCombatTimeline> keptCombat = await db.Set<RunCombatTimeline>().AsNoTracking()
+            .Where(timeline => keepCombatOf.Contains(timeline.RunId))
+            .Include(timeline => timeline.Series)
+            .Include(timeline => timeline.HitTallies)
+            .ToDictionaryAsync(timeline => timeline.RunId, cancellationToken);
         List<Run> applied = [];
         // Tombstones first, so a deleted copy has left its place before a live one is weighed against it; then the
         // oldest id first, the same run every client keeps when a server holds two.
@@ -94,6 +103,10 @@ public sealed class RunSynchronizationApplier(
             run.SyncServerAddress = serverAddress;
             await db.Set<Run>().Where(candidate => candidate.Id == run.Id).ExecuteDeleteAsync(cancellationToken);
             db.Set<Run>().Add(run);
+            if ((payload.Run.CombatTimeline?.ToEntity(run.Id) ?? keptCombat.GetValueOrDefault(run.Id)) is { } combat)
+            {
+                db.Set<RunCombatTimeline>().Add(combat);
+            }
         }
         await db.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
@@ -124,13 +137,16 @@ public sealed class RunSynchronizationApplier(
         if (newest.Count == 0)
             return;
 
-        long[] own = [.. (await characters.GetAllAsync(cancellationToken))
-            .Select(character => character.EsiCharacterId)
-            .OfType<int>()
-            .Select(characterId => (long)characterId)];
+        long[] own = await _OwnCharacterIdsAsync(cancellationToken);
         foreach ((string groupCode, RunAttendanceDecision decision) in newest)
             await dispatcher.Send(new SetRunAttendanceCommand(decision, own, groupCode), cancellationToken);
     }
+
+    private async Task<long[]> _OwnCharacterIdsAsync(CancellationToken cancellationToken) =>
+        [.. (await characters.GetAllAsync(cancellationToken))
+            .Select(character => character.EsiCharacterId)
+            .OfType<int>()
+            .Select(characterId => (long)characterId)];
 
     private static DateTime _Anchor(DateTime sourceUtc, long sentAtUnixMilliseconds) =>
         AbyssalSpace.AnchorFromWireUtc(sourceUtc, sentAtUnixMilliseconds, DateTime.UtcNow);

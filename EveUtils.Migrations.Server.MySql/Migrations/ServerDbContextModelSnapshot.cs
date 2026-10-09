@@ -979,6 +979,71 @@ namespace EveUtils.Migrations.Server.MySql.Migrations
                     b.ToTable("RunBountyEntry");
                 });
 
+            modelBuilder.Entity("EveUtils.Shared.Modules.Runs.Entities.RunCombatSeries", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("char(36)");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("RunId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<byte[]>("Samples")
+                        .IsRequired()
+                        .HasColumnType("longblob");
+
+                    b.Property<long>("Total")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RunId");
+
+                    b.ToTable("RunCombatSeries");
+                });
+
+            modelBuilder.Entity("EveUtils.Shared.Modules.Runs.Entities.RunCombatTimeline", b =>
+                {
+                    b.Property<Guid>("RunId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<int>("HitsIn")
+                        .HasColumnType("int");
+
+                    b.Property<int>("HitsOut")
+                        .HasColumnType("int");
+
+                    b.Property<int>("MaxHitIn")
+                        .HasColumnType("int");
+
+                    b.Property<string>("MaxHitInSource")
+                        .HasMaxLength(255)
+                        .HasColumnType("varchar(255)");
+
+                    b.Property<int>("MaxHitOut")
+                        .HasColumnType("int");
+
+                    b.Property<string>("MaxHitOutTarget")
+                        .HasMaxLength(255)
+                        .HasColumnType("varchar(255)");
+
+                    b.Property<int>("MissesIn")
+                        .HasColumnType("int");
+
+                    b.Property<int>("MissesOut")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Seconds")
+                        .HasColumnType("int");
+
+                    b.HasKey("RunId");
+
+                    b.ToTable("RunCombatTimeline");
+                });
+
             modelBuilder.Entity("EveUtils.Shared.Modules.Runs.Entities.RunEnemyObservation", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1013,6 +1078,49 @@ namespace EveUtils.Migrations.Server.MySql.Migrations
                     b.HasIndex("RunId");
 
                     b.ToTable("RunEnemyObservation");
+                });
+
+            modelBuilder.Entity("EveUtils.Shared.Modules.Runs.Entities.RunHitTally", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("char(36)");
+
+                    b.Property<int>("Count")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Counterparty")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("varchar(255)");
+
+                    b.Property<int>("Direction")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Max")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Min")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Quality")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("RunId")
+                        .HasColumnType("char(36)");
+
+                    b.Property<long>("Sum")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Weapon")
+                        .HasMaxLength(255)
+                        .HasColumnType("varchar(255)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RunId");
+
+                    b.ToTable("RunHitTally");
                 });
 
             modelBuilder.Entity("EveUtils.Shared.Modules.Runs.Entities.RunLootCapture", b =>
@@ -1656,6 +1764,24 @@ namespace EveUtils.Migrations.Server.MySql.Migrations
                     b.Navigation("Run");
                 });
 
+            modelBuilder.Entity("EveUtils.Shared.Modules.Runs.Entities.RunCombatSeries", b =>
+                {
+                    b.HasOne("EveUtils.Shared.Modules.Runs.Entities.RunCombatTimeline", null)
+                        .WithMany("Series")
+                        .HasForeignKey("RunId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("EveUtils.Shared.Modules.Runs.Entities.RunCombatTimeline", b =>
+                {
+                    b.HasOne("EveUtils.Shared.Modules.Runs.Entities.Run", null)
+                        .WithOne()
+                        .HasForeignKey("EveUtils.Shared.Modules.Runs.Entities.RunCombatTimeline", "RunId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("EveUtils.Shared.Modules.Runs.Entities.RunEnemyObservation", b =>
                 {
                     b.HasOne("EveUtils.Shared.Modules.Runs.Entities.Run", "Run")
@@ -1665,6 +1791,15 @@ namespace EveUtils.Migrations.Server.MySql.Migrations
                         .IsRequired();
 
                     b.Navigation("Run");
+                });
+
+            modelBuilder.Entity("EveUtils.Shared.Modules.Runs.Entities.RunHitTally", b =>
+                {
+                    b.HasOne("EveUtils.Shared.Modules.Runs.Entities.RunCombatTimeline", null)
+                        .WithMany("HitTallies")
+                        .HasForeignKey("RunId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("EveUtils.Shared.Modules.Runs.Entities.RunLootCapture", b =>
@@ -1768,6 +1903,13 @@ namespace EveUtils.Migrations.Server.MySql.Migrations
                     b.Navigation("MiningEntries");
 
                     b.Navigation("Parameters");
+                });
+
+            modelBuilder.Entity("EveUtils.Shared.Modules.Runs.Entities.RunCombatTimeline", b =>
+                {
+                    b.Navigation("HitTallies");
+
+                    b.Navigation("Series");
                 });
 
             modelBuilder.Entity("EveUtils.Shared.Modules.Runs.Entities.RunLootCapture", b =>

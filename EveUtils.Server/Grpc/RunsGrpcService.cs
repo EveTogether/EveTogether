@@ -35,7 +35,8 @@ public sealed class RunsGrpcService(ServerSessionService sessions, IRunSyncRepos
             ? _Anchor(stoppedAtUtc, payload.SentAtUnixMilliseconds)
             : null;
         run.SyncState = EveUtils.Shared.Modules.Runs.Enums.RunSyncState.Synced;
-        DateTime? pushedAtUtc = await repository.UpsertAsync(run, context.CancellationToken);
+        RunCombatTimeline? combatTimeline = payload.Run.CombatWithheld ? null : payload.Run.CombatTimeline?.ToEntity(run.Id);
+        DateTime? pushedAtUtc = await repository.UpsertAsync(run, combatTimeline, payload.Run.CombatWithheld, context.CancellationToken);
         if (pushedAtUtc is null)
             return new RunActionReply { Accepted = false, Message = "A newer run revision is already stored." };
 
@@ -74,7 +75,10 @@ public sealed class RunsGrpcService(ServerSessionService sessions, IRunSyncRepos
 
         long characterId = session.SyncedCharacter?.EsiCharacterId ?? 0;
         IReadOnlyList<Run> runs = await repository.ListChangedAsync(characterId, request.GroupCodes, sinceUtc, context.CancellationToken);
-        return _ToReply(runs, "Runs synchronized.");
+        // Only runs the holder rule above already lets this pilot pull carry their combat (ET-472).
+        IReadOnlyDictionary<Guid, RunCombatTimeline> timelines =
+            await repository.ListCombatTimelinesAsync([.. runs.Select(run => run.Id)], context.CancellationToken);
+        return _ToReply(runs, "Runs synchronized.", timelines);
     }
 
     public override async Task<PullRunsReply> ListPublishedRuns(ListPublishedRunsRequest request, ServerCallContext context)
@@ -88,13 +92,14 @@ public sealed class RunsGrpcService(ServerSessionService sessions, IRunSyncRepos
         return _ToReply(await repository.ListPublishedAsync(characterId, fromUtc, toUtc, context.CancellationToken), "Runs read.");
     }
 
-    private static PullRunsReply _ToReply(IReadOnlyList<Run> runs, string message)
+    private static PullRunsReply _ToReply(IReadOnlyList<Run> runs, string message,
+        IReadOnlyDictionary<Guid, RunCombatTimeline>? timelines = null)
     {
         var reply = new PullRunsReply { Accepted = true, Message = message };
         long sentAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         reply.PayloadJson.AddRange(runs.Select(run => JsonSerializer.Serialize(new RunWirePayload
         {
-            Run = RunWireData.FromEntity(run),
+            Run = RunWireData.FromEntity(run, timelines?.GetValueOrDefault(run.Id)),
             SentAtUnixMilliseconds = sentAt
         }, SerializerOptions)));
         return reply;

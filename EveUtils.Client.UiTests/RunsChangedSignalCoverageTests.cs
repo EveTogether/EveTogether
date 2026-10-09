@@ -1,4 +1,5 @@
 using Avalonia.Headless.XUnit;
+using EveUtils.Client.Fleet;
 using EveUtils.Client.Runs;
 using EveUtils.Client.Transport;
 using EveUtils.Shared.Data;
@@ -353,7 +354,8 @@ public sealed class RunsChangedSignalCoverageTests
         IEventBus bus = instance.Services.GetRequiredService<IEventBus>();
         var synchronization = new RunSynchronizationService(
             instance.Services.GetRequiredService<IDbContextFactory<ClientDbContext>>(), new AcceptingSyncClient([]),
-            instance.Services.GetRequiredService<RunSynchronizationApplier>(), bus);
+            instance.Services.GetRequiredService<RunSynchronizationApplier>(), bus,
+            instance.Services.GetRequiredService<IMetricShareSettings>());
 
         List<RunsChangedEventData> signalled = [];
         using IDisposable listening = bus.Subscribe<RunsChangedEvent>(changed => signalled.Add(changed.Data));

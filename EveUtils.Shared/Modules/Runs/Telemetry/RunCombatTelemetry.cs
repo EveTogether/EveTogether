@@ -2,6 +2,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.IO.Compression;
 using System.Runtime.InteropServices;
 using EveUtils.Shared.Modules.Gamelog.Models;
+using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Entities;
 using EveUtils.Shared.Modules.Runs.Enums;
 
@@ -101,6 +102,31 @@ public static class RunCombatTelemetry
     /// </summary>
     public static long[] Resample(IEnumerable<int> perSecond, int bucketSeconds) =>
         [.. perSecond.Chunk(bucketSeconds).Select(bucket => bucket.Sum(value => (long)value))];
+
+    /// <summary>Damage out per room summed over every participant (ET-472, B4); null as soon as one has no shared timeline.</summary>
+    public static IReadOnlyDictionary<int, long>? FleetDamageOutByRoom(
+        IEnumerable<(DateTime StartedAtUtc, RunCombatTimelineDto? Timeline)> participants, IReadOnlyList<DateTime> boundaries)
+    {
+        Dictionary<int, long> byRoom = [];
+        foreach ((DateTime startedAtUtc, RunCombatTimelineDto? timeline) in participants)
+        {
+            if (timeline is null)
+            {
+                return null;
+            }
+
+            int[] damage = timeline.Series.GetValueOrDefault(CombatSeriesKind.DmgOut) ?? [];
+            for (int second = 0; second < damage.Length; second++)
+            {
+                if (RunRooms.RoomOf(boundaries, startedAtUtc.AddSeconds(second)) is { } room)
+                {
+                    byRoom[room] = byRoom.GetValueOrDefault(room) + damage[second];
+                }
+            }
+        }
+
+        return byRoom;
+    }
 
     private static void _Add(Dictionary<CombatSeriesKind, int[]> series, CombatSeriesKind kind, int seconds, int second,
         int amount)

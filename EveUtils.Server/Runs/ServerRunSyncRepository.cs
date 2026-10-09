@@ -9,7 +9,8 @@ namespace EveUtils.Server.Runs;
 
 internal sealed class ServerRunSyncRepository(IDbContextFactory<ServerDbContext> contextFactory) : IRunSyncRepository, IScopedService
 {
-    public async Task<DateTime?> UpsertAsync(Run run, CancellationToken cancellationToken = default)
+    public async Task<DateTime?> UpsertAsync(Run run, RunCombatTimeline? combatTimeline = null, bool combatWithheld = false,
+        CancellationToken cancellationToken = default)
     {
         await using ServerDbContext db = await contextFactory.CreateDbContextAsync(cancellationToken);
         await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
@@ -18,10 +19,21 @@ internal sealed class ServerRunSyncRepository(IDbContextFactory<ServerDbContext>
         if (revision is { } currentRevision && currentRevision > run.Revision)
             return null;
 
+        // The delete below cascades to the stored combat, so a push without any puts the stored copy back (ET-472).
+        if (combatTimeline is null && !combatWithheld)
+        {
+            combatTimeline = await _CombatTimelines(db, [run.Id]).SingleOrDefaultAsync(cancellationToken);
+        }
+
         DateTime pushedAtUtc = DateTime.UtcNow;
         run.LastPushedAtUtc = pushedAtUtc;
         await db.Set<Run>().Where(candidate => candidate.Id == run.Id).ExecuteDeleteAsync(cancellationToken);
         db.Set<Run>().Add(run);
+        if (combatTimeline is not null)
+        {
+            db.Set<RunCombatTimeline>().Add(combatTimeline);
+        }
+
         await db.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         return pushedAtUtc;
@@ -64,6 +76,19 @@ internal sealed class ServerRunSyncRepository(IDbContextFactory<ServerDbContext>
                                    member.GroupCode == run.GroupCode && !member.DeletedAtUtc.HasValue)))))
             .ToListAsync(cancellationToken);
     }
+
+    public async Task<IReadOnlyDictionary<Guid, RunCombatTimeline>> ListCombatTimelinesAsync(IReadOnlyCollection<Guid> runIds,
+        CancellationToken cancellationToken = default)
+    {
+        await using ServerDbContext db = await contextFactory.CreateDbContextAsync(cancellationToken);
+        return await _CombatTimelines(db, runIds).ToDictionaryAsync(timeline => timeline.RunId, cancellationToken);
+    }
+
+    private static IQueryable<RunCombatTimeline> _CombatTimelines(ServerDbContext db, IReadOnlyCollection<Guid> runIds) =>
+        db.Set<RunCombatTimeline>().AsNoTracking().AsSplitQuery()
+            .Where(timeline => runIds.Contains(timeline.RunId))
+            .Include(timeline => timeline.Series)
+            .Include(timeline => timeline.HitTallies);
 
     /// <summary>One query per collection: in one join the six collections multiply into each other (ET-287), and the
     /// tab read hands back a whole window rather than a delta. The panel's run pane reads through it too.</summary>
