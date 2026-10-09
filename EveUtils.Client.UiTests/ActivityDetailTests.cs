@@ -612,7 +612,7 @@ public sealed class ActivityDetailTests
         Assert.Same(docked, window.Content);
     }
 
-    public enum CombatArrival { Saved, FleetMateShared, FleetMateWithheld, OwnPulledBackWithout }
+    public enum CombatArrival { Saved, FleetMateShared, FleetMateWithheld, MateBesideOwnNotSynced, MateBesideOwnWithheld, OwnPulledBackWithout }
 
     private static readonly string[] RealRunTiles =
     [
@@ -630,6 +630,9 @@ public sealed class ActivityDetailTests
         { RunCombatTelemetryTests.RealRunEvents(), CombatArrival.FleetMateShared, RealRunTiles, [CombatDetailSectionViewModel.NotRecordedText] },
         // ET-472: a fleet mate who withholds combat shows none of it.
         { RunCombatTelemetryTests.RealRunEvents(), CombatArrival.FleetMateWithheld, [CombatDetailSectionViewModel.NotRecordedText], ["65,732 hp"] },
+        // A mate beside this pilot: withholding reads "not shared", a build that never sent combat reads "not synced yet".
+        { RunCombatTelemetryTests.RealRunEvents(), CombatArrival.MateBesideOwnNotSynced, [.. RealRunTiles, "character 90000002 · not synced yet"], [] },
+        { RunCombatTelemetryTests.RealRunEvents(), CombatArrival.MateBesideOwnWithheld, [.. RealRunTiles, "character 90000002 · not shared"], [] },
         // ET-472: this pilot's own run pulled back without combat keeps the stored one.
         { RunCombatTelemetryTests.RealRunEvents(), CombatArrival.OwnPulledBackWithout, RealRunTiles, [CombatDetailSectionViewModel.NotRecordedText] }
     };
@@ -688,7 +691,18 @@ public sealed class ActivityDetailTests
         }
         else
         {
-            await db.Set<Run>().Where(saved => saved.Id == runId).ExecuteDeleteAsync(cancellationToken);
+            if (arrival is CombatArrival.MateBesideOwnNotSynced or CombatArrival.MateBesideOwnWithheld)
+            {
+                await instance.Services.GetRequiredService<ICharacterRegistry>().AddOrUpdateAsync(new Character("Pilot", 90000001));
+                await db.Set<Run>().Where(saved => saved.Id == runId)
+                    .ExecuteUpdateAsync(saved => saved.SetProperty(row => row.GroupCode, "HF-472A"), cancellationToken);
+                run.Id = Guid.CreateVersion7();
+            }
+            else
+            {
+                await db.Set<Run>().Where(saved => saved.Id == runId).ExecuteDeleteAsync(cancellationToken);
+            }
+
             run.CharacterId = 90000002;
             run.GroupCode = "HF-472A";
         }
@@ -696,7 +710,7 @@ public sealed class ActivityDetailTests
         RunCombatTimeline? sent = arrival == CombatArrival.FleetMateShared ? timeline : null;
         RunWirePayload payload = new()
         {
-            Run = RunWireData.FromEntity(run, sent, combatWithheld: arrival == CombatArrival.FleetMateWithheld),
+            Run = RunWireData.FromEntity(run, sent, combatWithheld: arrival is CombatArrival.FleetMateWithheld or CombatArrival.MateBesideOwnWithheld),
             SentAtUnixMilliseconds = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
         };
         await instance.Services.GetRequiredService<RunSynchronizationApplier>()
@@ -1001,8 +1015,11 @@ public sealed class ActivityDetailTests
             await dispatcher.Query(new GetActivityOverviewQuery(), cancellationToken);
         ActivityOverviewRowDto row = Assert.Single(_Value(overview));
 
+        // Own characters are known only to a test that registered some; the others read every run as this pilot's.
+        HashSet<long> own = [.. (await instance.Services.GetRequiredService<ICharacterRegistry>().GetAllAsync(cancellationToken))
+            .Select(character => (long)(character.EsiCharacterId ?? 0))];
         var viewModel = new ActivityDetailViewModel(dispatcher, row.ActivitySummaryId,
-            instance.Services.GetRequiredService<IAppraisalProvider>());
+            instance.Services.GetRequiredService<IAppraisalProvider>(), ownCharacterIds: own.Count == 0 ? null : own);
         await viewModel.LoadAsync(cancellationToken);
         return new ActivityDetailWindow(viewModel) { Width = width, Height = 1400 };
     }

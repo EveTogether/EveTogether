@@ -50,7 +50,9 @@ public sealed record ActivityRunDetailDto(
     // Which HomefrontPayoutTable entry this run's own expected figure was computed against (ET-231) — null until
     // there is one to compute. Read as-is, never recomputed on this screen: two clients on two app versions must
     // never silently disagree about the same site.
-    string? HomefrontPayoutTableVersion = null);
+    string? HomefrontPayoutTableVersion = null,
+    // The pilot withheld this run's combat when publishing it (ET-472): its absence is a choice, not a gap.
+    bool CombatWithheld = false);
 
 /// <summary>One activity, fully expanded. The totals (<see cref="LootIskGained"/> etc.) are
 /// <c>ActivitySummary</c>'s own — already computed excluding excluded loot captures — rather than recomputed here,

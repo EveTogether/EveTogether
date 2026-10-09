@@ -82,7 +82,7 @@ public sealed class RunWireData
     public static RunWireData FromEntity(Run run, RunCombatTimeline? combatTimeline = null, bool combatWithheld = false) => new()
     {
         CombatTimeline = combatWithheld || combatTimeline is null ? null : RunCombatTimelineWireData.FromEntity(combatTimeline),
-        CombatWithheld = combatWithheld,
+        CombatWithheld = combatWithheld || run.CombatWithheld,
         Id = run.Id,
         CharacterId = run.CharacterId,
         GroupCode = run.GroupCode,
@@ -234,6 +234,7 @@ public sealed class RunWireData
             AttendanceSource = AttendanceSource,
             AttendanceSetByCharacterId = AttendanceSetByCharacterId,
             AttendanceSetAtUtc = AttendanceSetAtUtc,
+            CombatWithheld = CombatWithheld,
             FleetSizeAtStop = FleetSizeAtStop,
             HomefrontOutcome = HomefrontOutcome,
             HomefrontOutcomeFromGameLog = HomefrontOutcomeFromGameLog,

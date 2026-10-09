@@ -806,6 +806,9 @@ namespace EveUtils.Migrations.Server.MySql.Migrations
                         .HasMaxLength(255)
                         .HasColumnType("varchar(255)");
 
+                    b.Property<bool>("CombatWithheld")
+                        .HasColumnType("tinyint(1)");
+
                     b.Property<DateTime?>("DeletedAtUtc")
                         .HasColumnType("datetime(6)");
 

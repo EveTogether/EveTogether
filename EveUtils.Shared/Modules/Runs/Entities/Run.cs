@@ -96,6 +96,9 @@ public sealed class Run
     /// earlier one, and never the other way round.</summary>
     public DateTime? AttendanceSetAtUtc { get; set; }
 
+    /// <summary>The pilot withheld this run's combat when it was last published (ET-472), so its absence is a choice.</summary>
+    public bool CombatWithheld { get; set; }
+
     /// <summary>How many characters were on the fleet's roster when the run was stopped, externals included — a
     /// snapshot beside N, never N itself (ET-230): the hauler outside the site is in the fleet and not counted. Null
     /// on a solo run and on every run before this column.</summary>

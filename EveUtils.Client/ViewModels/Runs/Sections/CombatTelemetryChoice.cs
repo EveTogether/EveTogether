@@ -25,6 +25,7 @@ public sealed partial class CombatTelemetryChoice(CqrsDispatcher dispatcher, IRe
 
     internal const string StoredHitsLabel = "from stored hits";
     public const string LiveOnlyText = "kept only live at the time";
+    public const string NotSyncedTooltip = "Your fleet mate needs a newer build of EVE Together to share this run's combat.";
 
     public ObservableCollection<CombatPilotChipViewModel> Pilots { get; } = [];
 
@@ -63,10 +64,12 @@ public sealed partial class CombatTelemetryChoice(CqrsDispatcher dispatcher, IRe
         foreach (ActivityRunDetailDto run in input.Detail.Runs)
         {
             bool isAvailable = _timelines.ContainsKey(run.RunId);
-            // A fleet mate's run carries its combat only when that pilot shares it (ET-472).
-            string why = ownCharacterIds is { } own && !own.Contains(run.CharacterId) ? "not shared" : "not recorded";
+            // A fleet mate's run carries its combat only when that pilot shares it (ET-472); without it and not withheld, their build is older.
+            bool isMate = ownCharacterIds is { } own && !own.Contains(run.CharacterId);
+            string why = !isMate ? "not recorded" : run.CombatWithheld ? "not shared" : "not synced yet";
             Pilots.Add(new CombatPilotChipViewModel(run.RunId,
-                isAvailable ? _names[run.RunId] : $"{_names[run.RunId]} · {why}", isAvailable, _Show));
+                isAvailable ? _names[run.RunId] : $"{_names[run.RunId]} · {why}", isAvailable, _Show,
+                !isAvailable && why == "not synced yet" ? NotSyncedTooltip : null));
         }
 
         Guid? first = Pilots.FirstOrDefault(pilot => pilot.IsAvailable)?.RunId;

@@ -332,6 +332,14 @@ sealed class Program
             if (filledSystems.IsSuccess && filledSystems.Value > 0)
                 Console.Error.WriteLine($"[startup] filled the missing system of {filledSystems.Value} run(s)");
 
+            // ET-472: once, runs published before combat travelled are queued again so the next publish carries it.
+            int requeuedForCombat = scope.ServiceProvider.GetRequiredService<EveUtils.Client.Runs.RunCombatRequeue>()
+                .RunOnceAsync().GetAwaiter().GetResult();
+            if (requeuedForCombat > 0)
+            {
+                Console.Error.WriteLine($"[startup] queued {requeuedForCombat} published run(s) again to send their combat");
+            }
+
             // Names copied while the SDE did not know them yet (ET-460) that it knows now.
             Result<int> repricedLoot = dispatcher
                 .Send(new RepriceUnrecognisedLootCommand()).GetAwaiter().GetResult();
