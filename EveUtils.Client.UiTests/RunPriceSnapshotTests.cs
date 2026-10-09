@@ -9,7 +9,9 @@ using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Data;
 using EveUtils.Shared.Identity;
 using EveUtils.Shared.Messaging;
+using EveUtils.Shared.Modules.Killmails.Commands;
 using EveUtils.Shared.Modules.Killmails.Entities;
+using EveUtils.Shared.Modules.Killmails.Enums;
 using EveUtils.Shared.Modules.Market.Entities;
 using EveUtils.Shared.Modules.Market.Repositories;
 using EveUtils.Shared.Modules.Market.Services;
@@ -31,7 +33,8 @@ namespace EveUtils.Client.UiTests;
 /// <summary>
 /// ET-463: a run is worth what its loot, ore and filament were worth when they came in. The price is fixed on each line
 /// as it is stored, a line without one takes the first price there is once, and only "Re-value at current prices"
-/// moves it after that. Headless, against a temp store.
+/// moves it after that. A loss linked to the run follows the same rule from the moment it is linked (ET-464). Headless,
+/// against a temp store.
 /// </summary>
 public sealed class RunPriceSnapshotTests
 {
@@ -39,6 +42,8 @@ public sealed class RunPriceSnapshotTests
     private const int Pyerite = 35;
     private const int Veldspar = 1230;
     private const int Filament = 60000;
+    private const int Rifter = 587;
+    private const int Hobgoblin = 2488;
     private const long Pilot = 90000001;
     private const long Fleetmate = 90000002;
     private const string ServerAddress = "https://fleet.example";
@@ -428,6 +433,160 @@ public sealed class RunPriceSnapshotTests
         Assert.Equal(expected, (await dispatcher.Query(new GetActivityDetailQuery(summary.Id), Token)).Value!.Isk.Total);
     }
 
+    /// <summary>ET-464 criteria 1 and 5. Red if the loss is still valued at the live price, by the summary or the detail,
+    /// or if an activity whose loss is fully priced is still added up again on opening.</summary>
+    [AvaloniaFact]
+    public async Task LinkedLoss_KeepsTheValueItHadWhenItWasLinked_AndTheDetailNoLongerAddsUpAgain()
+    {
+        using TestClientInstance instance = _Instance();
+        await _PriceAsync(instance, (Tritanium, 5), (Rifter, 1_000), (Hobgoblin, 10));
+        Guid runId = await _SaveRunAsync(instance, Pilot);
+        await _AddLossAsync(instance, 1);
+
+        await _Dispatcher(instance).Send(new SetKillmailRunLinkCommand((int)Pilot, 1, runId), Token);
+        await _PriceAsync(instance, (Tritanium, 50), (Rifter, 9_000), (Hobgoblin, 90));
+        Result<int> reopened = await _Dispatcher(instance).Send(
+            new RebuildActivitySummariesCommand(runId, OnlyWhenPricesChanged: true), Token);
+        await _RebuildAsync(instance);
+
+        Assert.Equal(0, reopened.Value);
+        decimal expected = 100 * 5m - (1_000m + 3 * 10m);
+        ActivitySummary summary = await _SummaryAsync(instance);
+        Assert.Equal(expected, summary.TotalIsk);
+        Assert.Equal(expected, (await _Dispatcher(instance).Query(new GetActivityDetailQuery(summary.Id), Token)).Value?.Isk.Total);
+        Assert.All(await _LossPricesAsync(instance), price => Assert.Equal(PriceSnapshotSource.Capture, price.PriceSource));
+    }
+
+    /// <summary>ET-464 criterion 1, the automatic link. Red if only a manual link fixes the prices.</summary>
+    [AvaloniaFact]
+    public async Task AutoLinkedLoss_FixesItsPricesAsItIsLinked()
+    {
+        using TestClientInstance instance = _Instance();
+        await _PriceAsync(instance, (Tritanium, 5), (Rifter, 1_000), (Hobgoblin, 10));
+        Guid runId = await _SaveRunAsync(instance, Pilot);
+        await _AddLossAsync(instance, 1);
+
+        await _Dispatcher(instance).Send(new LinkKillmailsToRunsCommand((int)Pilot), Token);
+
+        Assert.Equal([(runId, Rifter, 1_000m), (runId, Hobgoblin, 10m)],
+            (await _LossPricesAsync(instance)).Select(price => (price.RunId, price.TypeId, price.UnitPriceIsk.GetValueOrDefault())));
+    }
+
+    /// <summary>ET-464 criterion 2 and the republish pitfall. Red if an unpriced item is never filled, if a fixed one moves,
+    /// or if pricing a loss marks a published run as changed since it was published.</summary>
+    [AvaloniaFact]
+    public async Task Fill_GivesAnUnpricedLossItemTheFirstPriceOnce_WithoutMarkingThePublishedRunChanged()
+    {
+        using TestClientInstance instance = _Instance();
+        await _AddLocalCharacterAsync(instance, Pilot);
+        await _PriceAsync(instance, (Tritanium, 5), (Rifter, 1_000));
+        Guid runId = await _SaveRunAsync(instance, Pilot);
+        await _AddLossAsync(instance, 1);
+        await _Dispatcher(instance).Send(new SetKillmailRunLinkCommand((int)Pilot, 1, runId), Token);
+        await _MarkPublishedAsync(instance, runId);
+        int revision = (await _RunAsync(instance, runId)).Revision;
+        await _PriceAsync(instance, (Tritanium, 5), (Rifter, 9_000), (Hobgoblin, 10));
+
+        Result<int> filled = await _Dispatcher(instance).Send(new FillRunPriceSnapshotsCommand(), Token);
+        await _PriceAsync(instance, (Tritanium, 5), (Rifter, 9_000), (Hobgoblin, 90));
+        Result<int> again = await _Dispatcher(instance).Send(new FillRunPriceSnapshotsCommand(), Token);
+
+        Assert.Equal((1, 0), (filled.Value, again.Value));
+        Assert.Equal([(Rifter, 1_000m, PriceSnapshotSource.Capture), (Hobgoblin, 10m, PriceSnapshotSource.Backfill)],
+            (await _LossPricesAsync(instance)).Select(price => (price.TypeId, price.UnitPriceIsk.GetValueOrDefault(), price.PriceSource)));
+        Assert.Equal(100 * 5m - (1_000m + 3 * 10m), (await _SummaryAsync(instance)).TotalIsk);
+        Run run = await _RunAsync(instance, runId);
+        Assert.Equal((RunSyncState.Synced, revision), (run.SyncState, run.Revision));
+    }
+
+    /// <summary>ET-464 criterion 3. Red if "Re-value at current prices" leaves the loss at its old price, or if a run whose
+    /// loss alone moved is marked as changed since it was published.</summary>
+    [AvaloniaFact]
+    public async Task Revalue_SetsTheLossToTheCurrentPrices_WithoutMarkingThePublishedRunChanged()
+    {
+        using TestClientInstance instance = _Instance();
+        await _AddLocalCharacterAsync(instance, Pilot);
+        await _PriceAsync(instance, (Tritanium, 5), (Rifter, 1_000), (Hobgoblin, 10));
+        Guid runId = await _SaveRunAsync(instance, Pilot);
+        await _AddLossAsync(instance, 1);
+        await _Dispatcher(instance).Send(new SetKillmailRunLinkCommand((int)Pilot, 1, runId), Token);
+        await _MarkPublishedAsync(instance, runId);
+        int revision = (await _RunAsync(instance, runId)).Revision;
+        await _PriceAsync(instance, (Tritanium, 5), (Rifter, 2_000), (Hobgoblin, 20));
+
+        Result<int> revalued = await _Dispatcher(instance).Send(new RevalueRunsCommand([runId]), Token);
+
+        Assert.Equal(1, revalued.Value);
+        Assert.All(await _LossPricesAsync(instance), price => Assert.Equal(PriceSnapshotSource.Revalued, price.PriceSource));
+        Assert.Equal(100 * 5m - (2_000m + 3 * 20m), (await _SummaryAsync(instance)).TotalIsk);
+        Run run = await _RunAsync(instance, runId);
+        Assert.Equal((RunSyncState.Synced, revision), (run.SyncState, run.Revision));
+    }
+
+    /// <summary>ET-464 criterion 4. Red if the run a loss leaves keeps its prices, or if the run it joins takes them over
+    /// rather than pricing the loss afresh.</summary>
+    [AvaloniaFact]
+    public async Task MovingALoss_DropsItsPricesFromTheOldRun_AndPricesItAfreshOnTheNewOne()
+    {
+        using TestClientInstance instance = _Instance();
+        await _PriceAsync(instance, (Tritanium, 5), (Rifter, 1_000), (Hobgoblin, 10));
+        Guid first = await _SaveRunAsync(instance, Pilot);
+        Guid second = await _SaveRunAsync(instance, Pilot);
+        await _AddLossAsync(instance, 1);
+        await _Dispatcher(instance).Send(new SetKillmailRunLinkCommand((int)Pilot, 1, first), Token);
+        await _PriceAsync(instance, (Tritanium, 5), (Rifter, 2_000), (Hobgoblin, 20));
+
+        await _Dispatcher(instance).Send(new SetKillmailRunLinkCommand((int)Pilot, 1, second), Token);
+
+        Assert.Equal([(second, Rifter, 2_000m), (second, Hobgoblin, 20m)],
+            (await _LossPricesAsync(instance)).Select(price => (price.RunId, price.TypeId, price.UnitPriceIsk.GetValueOrDefault())));
+
+        await _Dispatcher(instance).Send(new SetKillmailRunLinkCommand((int)Pilot, 1, null), Token);
+
+        Assert.Empty(await _LossPricesAsync(instance));
+    }
+
+    /// <summary>ET-464. Red if fixing a loss's prices stays silent, or if a pass that changes nothing still signals.</summary>
+    [AvaloniaFact]
+    public async Task SnapshotLossPrices_SignalsTheRunWhosePricesChanged_AndNothingWhenNoneDid()
+    {
+        using TestClientInstance instance = _Instance();
+        Guid runId = await _SaveRunAsync(instance, Pilot);
+        await _AddLossAsync(instance, 1, runId);
+        List<Guid?> runsChanged = [];
+        using IDisposable listening = instance.Services.GetRequiredService<IEventBus>()
+            .Subscribe<RunsChangedEvent>(changed => runsChanged.Add(changed.Data.RunId));
+
+        Result<int> first = await _Dispatcher(instance).Send(new SnapshotRunLossPricesCommand([runId]), Token);
+        Result<int> second = await _Dispatcher(instance).Send(new SnapshotRunLossPricesCommand([runId]), Token);
+
+        Assert.Equal((1, 0), (first.Value, second.Value));
+        Assert.Equal([runId], runsChanged);
+    }
+
+    /// <summary>ET-464 criterion 6. Red if a loss linked before the update keeps being valued live, or if fixing its prices
+    /// sends the published run to the server again.</summary>
+    [AvaloniaFact]
+    public async Task Fill_FixesALossLinkedBeforeTheUpdate_AsMigrated_WithoutMarkingThePublishedRunChanged()
+    {
+        using TestClientInstance instance = _Instance();
+        await _PriceAsync(instance, (Tritanium, 5), (Rifter, 1_000), (Hobgoblin, 10));
+        Guid runId = await _SaveRunAsync(instance, Pilot);
+        await _AddLossAsync(instance, 1, runId);
+        await _MarkPublishedAsync(instance, runId);
+        int revision = (await _RunAsync(instance, runId)).Revision;
+
+        Result<int> filled = await _Dispatcher(instance).Send(new FillRunPriceSnapshotsCommand(), Token);
+        await _PriceAsync(instance, (Tritanium, 5), (Rifter, 9_000), (Hobgoblin, 90));
+        await _RebuildAsync(instance);
+
+        Assert.Equal(1, filled.Value);
+        Assert.All(await _LossPricesAsync(instance), price => Assert.Equal(PriceSnapshotSource.Migrated, price.PriceSource));
+        Assert.Equal(100 * 5m - (1_000m + 3 * 10m), (await _SummaryAsync(instance)).TotalIsk);
+        Run run = await _RunAsync(instance, runId);
+        Assert.Equal((RunSyncState.Synced, revision), (run.SyncState, run.Revision));
+    }
+
     private static TestClientInstance _Instance() =>
         TestClientInstance.Create(services => services.AddSingleton<ISdeAccessor>(new FakeSdeAccessor()
             .Add(Tritanium, "Tritanium", 18, 4)
@@ -508,6 +667,30 @@ public sealed class RunPriceSnapshotTests
             .SetProperty(run => run.SyncState, RunSyncState.Synced)
             .SetProperty(run => run.SyncServerAddress, ServerAddress)
             .SetProperty(run => run.LastPushedAtUtc, DateTime.UtcNow), Token);
+    }
+
+    /// <summary>A Rifter lost with three Hobgoblins aboard (two destroyed, one dropped), linked to a run straight in the
+    /// store when one is named, as a link made before ET-464 stands.</summary>
+    private static async Task _AddLossAsync(TestClientInstance instance, int killmailId, Guid? linkedRunId = null)
+    {
+        await using ClientDbContext db = await _DbAsync(instance);
+        db.Set<LocalKillmail>().Add(new LocalKillmail
+        {
+            CharacterId = (int)Pilot, KillmailId = killmailId, Hash = $"hash{killmailId}", KillmailTimeUtc = StartedAtUtc.AddMinutes(5),
+            SolarSystemId = 30000142, IsLoss = true, VictimShipTypeId = Rifter, VictimCharacterId = (int)Pilot,
+            RunId = linkedRunId, LinkSource = linkedRunId is null ? KillmailLinkSource.None : KillmailLinkSource.Auto,
+            ImportedAtUtc = DateTime.UtcNow,
+            Items = [new LocalKillmailItem { Flag = 87, TypeId = Hobgoblin, QuantityDestroyed = 2, QuantityDropped = 1 }]
+        });
+        await db.SaveChangesAsync(Token);
+    }
+
+    private static async Task<List<RunLossPrice>> _LossPricesAsync(TestClientInstance instance)
+    {
+        await using ClientDbContext db = await _DbAsync(instance);
+        return await db.Set<RunLossPrice>().AsNoTracking()
+            .OrderBy(price => price.RunId).ThenBy(price => price.TypeId != Rifter)
+            .ToListAsync(Token);
     }
 
     private static Task<ClientDbContext> _DbAsync(TestClientInstance instance) =>

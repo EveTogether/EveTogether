@@ -15,9 +15,9 @@ namespace EveUtils.Shared.Modules.Runs.Isk;
 internal static class RunIskFactsReader
 {
     public static RunIskFacts From(Run run, IEnumerable<RunParameter> parameters, IReadOnlyDictionary<int, double> prices,
-        MiningOreTypes ores, IEnumerable<LocalKillmail> losses, Func<int, bool> isCharge)
+        MiningOreTypes ores, IEnumerable<LinkedLoss> losses, Func<int, bool> isCharge)
     {
-        IReadOnlyList<LootTallyLine> lostInLosses = LossLines(losses);
+        LinkedLoss[] linked = [.. losses];
         RunParameter[] all = [.. parameters];
         RunPrices runPrices = RunPrices.Of(run, all, prices);
         LootTallyCount counted = LootTally.Count(Tally(run), isCharge, SpentFilament(all));
@@ -43,8 +43,8 @@ internal static class RunIskFactsReader
             HasLoot = loot.Count > 0,
             ConsumableIskCost = consumableCost,
             HasConsumables = filamentCount is > 0 || spent.Count > 0,
-            ShipLossIskCost = KnownLootValue(lostInLosses, LootKind.Lost, prices),
-            HasShipLoss = lostInLosses.Count > 0,
+            ShipLossIskCost = LossValue(linked, prices),
+            HasShipLoss = linked.Length > 0,
             MiningIskValue = MiningValue(run.MiningEntries, ores, prices),
             HasMining = run.MiningEntries.Count > 0,
             Parameters = [.. all.Select(parameter => new RunIskParameter(
@@ -59,7 +59,7 @@ internal static class RunIskFactsReader
     /// all, and the stored summary and the detail screen's per-character figures price the same way. Linked losses add
     /// their hulls and items (ET-331).</summary>
     public static IReadOnlyList<int> PricedTypeIds(IEnumerable<Run> runs, IEnumerable<RunParameter> parameters, MiningOreTypes ores,
-        IEnumerable<LocalKillmail> losses)
+        IEnumerable<LinkedLoss> losses)
     {
         IEnumerable<int> loot = runs
             .SelectMany(run => run.LootCaptures)
@@ -71,19 +71,32 @@ internal static class RunIskFactsReader
             .Select(FilamentTypeId)
             .OfType<int>();
         return [.. loot.Concat(filaments).Concat(ores.TypeIds)
-            .Concat(LossLines(losses).Select(line => line.ItemTypeId)).Distinct()];
+            .Concat(LossLines(losses.Select(loss => loss.Killmail)).Select(line => line.ItemTypeId)).Distinct()];
     }
 
-    /// <summary>The own losses linked to these runs (ET-331), items included, by run. Only a client store has them; a
-    /// run read back from a server never carries one.</summary>
-    public static async Task<ILookup<Guid, LocalKillmail>> LinkedLossesAsync(ClientDbContext db, IReadOnlyCollection<Guid> runIds,
+    /// <summary>The own losses linked to these runs (ET-331), items included, with the prices fixed when each was linked
+    /// (ET-464), by run. Only a client store has them; a run read back from a server never carries one.</summary>
+    public static async Task<ILookup<Guid, LinkedLoss>> LinkedLossesAsync(ClientDbContext db, IReadOnlyCollection<Guid> runIds,
+        CancellationToken cancellationToken)
+    {
+        List<LocalKillmail> losses = await LinkedKillmailsAsync(db, runIds, cancellationToken);
+        ILookup<Guid, RunLossPrice> pricesByRun = (await db.Set<RunLossPrice>()
+                .AsNoTracking()
+                .Where(price => runIds.Contains(price.RunId))
+                .ToListAsync(cancellationToken))
+            .ToLookup(price => price.RunId);
+        return losses
+            .Select(killmail => (RunId: killmail.RunId.GetValueOrDefault(), Killmail: killmail))
+            .ToLookup(loss => loss.RunId, loss => LinkedLoss.Of(loss.Killmail, pricesByRun[loss.RunId]));
+    }
+
+    public static Task<List<LocalKillmail>> LinkedKillmailsAsync(ClientDbContext db, IReadOnlyCollection<Guid> runIds,
         CancellationToken cancellationToken) =>
-        (await db.Set<LocalKillmail>()
+        db.Set<LocalKillmail>()
             .AsNoTracking()
             .Include(killmail => killmail.Items)
             .Where(killmail => killmail.IsLoss && killmail.RunId != null && runIds.Contains(killmail.RunId.Value))
-            .ToListAsync(cancellationToken))
-        .ToLookup(killmail => killmail.RunId.GetValueOrDefault());
+            .ToListAsync(cancellationToken);
 
     /// <summary>Everything a loss cost, as lost lines priced like loot: the hull once, and every item whether it was
     /// destroyed or dropped, since a drop in the abyss is gone as well.</summary>
@@ -161,6 +174,15 @@ internal static class RunIskFactsReader
                 [.. capture.Entries.Select(entry =>
                     new LootTallyLine(entry.ItemTypeId, entry.Quantity, entry.Volume, entry.LootKind))]))];
 
+    /// <summary>What the linked losses cost, each line at the price fixed when its loss was linked (ET-464), else at
+    /// the live one; null when nothing could be priced.</summary>
+    public static decimal? LossValue(IEnumerable<LinkedLoss> losses, IReadOnlyDictionary<int, double> live)
+    {
+        decimal?[] values = [.. losses.Select(loss =>
+            KnownLootValue(LossLines([loss.Killmail]), LootKind.Lost, typeId => loss.UnitPrice(typeId, live)))];
+        return values.Any(value => value is not null) ? values.Sum() : null;
+    }
+
     // Valuation goes through ET's own type-id lookup, never the clipboard's own ISK column, and a missing price counts
     // as nothing rather than as a wrong figure. GetValueOrDefault(), not ?? 1: a missing quantity counts as zero
     // pieces in a summary's item count, so it must value as zero here too.
@@ -177,12 +199,12 @@ internal static class RunIskFactsReader
         return values.Length == 0 ? null : values.Sum();
     }
 
-    /// <summary>Whether any part of the run is still valued at the live cache price (ET-463): a loot, ore or filament
-    /// line with no fixed price yet, or a linked loss, whose value is never fixed (ET-464). Only such a run can come
-    /// out differently when it is added up again after a price refresh.</summary>
-    public static bool HasLiveValue(Run run, IEnumerable<RunParameter> parameters, IEnumerable<LocalKillmail> losses) =>
+    /// <summary>Whether any part of the run is still valued at the live cache price (ET-463): a loot, ore, filament or
+    /// linked-loss line with no fixed price yet (ET-464). Only such a run can come out differently when it is added up
+    /// again after a price refresh.</summary>
+    public static bool HasLiveValue(Run run, IEnumerable<RunParameter> parameters, IEnumerable<LinkedLoss> losses) =>
         run.LootCaptures.Where(capture => !capture.IsExcluded).SelectMany(capture => capture.Entries).Any(entry => entry.UnitPriceIsk is null)
         || run.MiningEntries.Any(entry => entry.UnitPriceIsk is null)
         || RunPrices.FilamentRow(parameters) is { UnitPriceIsk: null }
-        || losses.Any();
+        || losses.Any(loss => loss.HasLivePrice);
 }

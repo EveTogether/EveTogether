@@ -3,7 +3,6 @@ using EveUtils.Shared.Data;
 using EveUtils.Shared.DependencyInjection;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Gamelog.Aggregation;
-using EveUtils.Shared.Modules.Killmails.Entities;
 using EveUtils.Shared.Modules.Market.Repositories;
 using EveUtils.Shared.Modules.Runs.Commands;
 using EveUtils.Shared.Modules.Runs.Dtos;
@@ -53,7 +52,7 @@ internal sealed class GetServerActivityOverviewQueryHandler(
         ILookup<Guid, RunParameter> parametersByRun = runs.SelectMany(run => run.Parameters).ToLookup(parameter => parameter.RunId);
         MiningOreTypes ores = RunIskFactsReader.OresOf(runs, sde);
         // A loss never travels with a run (ET-331), so a server's copy is added up without one.
-        ILookup<Guid, LocalKillmail> noLosses = Array.Empty<LocalKillmail>().ToLookup(loss => loss.RunId.GetValueOrDefault());
+        ILookup<Guid, LinkedLoss> noLosses = Array.Empty<LinkedLoss>().ToLookup(loss => loss.Killmail.RunId.GetValueOrDefault());
         IReadOnlyDictionary<int, double> prices = await marketPrices.GetAveragePricesAsync(
             [.. RunIskFactsReader.PricedTypeIds(runs, parametersByRun.SelectMany(group => group), ores, [])], cancellationToken);
         HashSet<long>? ownCharacterIds = query.OwnCharacterIds is { } own ? [.. own] : null;

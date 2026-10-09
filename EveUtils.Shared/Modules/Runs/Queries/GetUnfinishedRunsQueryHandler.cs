@@ -2,7 +2,6 @@ using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Data;
 using EveUtils.Shared.DependencyInjection;
 using EveUtils.Shared.Messaging;
-using EveUtils.Shared.Modules.Killmails.Entities;
 using EveUtils.Shared.Modules.Market.Repositories;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Entities;
@@ -57,10 +56,10 @@ internal sealed class GetUnfinishedRunsQueryHandler(
         // NPC price never needs it (MiningValuation).
         MiningOreTypes ores = RunIskFactsReader.OresOf(runs, sde);
         // SHIP LOSS prices a linked loss's hull and items through the same cache (ET-331).
-        ILookup<Guid, LocalKillmail> lossesByRun = await RunIskFactsReader.LinkedLossesAsync(db,
+        ILookup<Guid, LinkedLoss> lossesByRun = await RunIskFactsReader.LinkedLossesAsync(db,
             [.. runs.Select(run => run.Id)], cancellationToken);
         List<int> priceTypeIds = [.. lootTypeIds.Concat(filamentTypeIds).Concat(ores.TypeIds)
-            .Concat(RunIskFactsReader.LossLines(lossesByRun.SelectMany(group => group)).Select(line => line.ItemTypeId))
+            .Concat(RunIskFactsReader.LossLines(lossesByRun.SelectMany(group => group).Select(loss => loss.Killmail)).Select(line => line.ItemTypeId))
             .Distinct()];
         IReadOnlyDictionary<int, double> prices = priceTypeIds.Count == 0
             ? new Dictionary<int, double>()
@@ -83,7 +82,7 @@ internal sealed class GetUnfinishedRunsQueryHandler(
     // Unknown only when loot is the sole reason nothing can be said: bounty and rewards are read straight off storage,
     // never priced, so either one being there already makes the total a real (if possibly loot-incomplete) figure.
     private static (decimal Total, bool Unknown) _TotalIsk(Run run, IReadOnlyDictionary<int, double> prices, MiningOreTypes ores,
-        IEnumerable<LocalKillmail> losses, Func<int, bool> isCharge)
+        IEnumerable<LinkedLoss> losses, Func<int, bool> isCharge)
     {
         IskBreakdown isk = IskContributors.Breakdown([RunIskFactsReader.From(run, run.Parameters, prices, ores, losses, isCharge)], DateTime.UtcNow);
         return (isk.Total, isk.IsUnvalued);
