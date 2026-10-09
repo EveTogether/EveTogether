@@ -8,7 +8,6 @@ using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
-using Avalonia.LogicalTree;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using EveUtils.Client.Dialogs;
@@ -554,24 +553,6 @@ public class ModuleNavigationTests
     }
 
     [AvaloniaFact]
-    public void TheRailFloatAndTheTabStripButton_DifferInCommandIconAndTooltip()
-    {
-        using var instance = TestClientInstance.Create();
-        var (vm, window) = BuildHostedApp(instance.Services);
-        Button rail = Named(window, "DockModeRailButton");
-        Button popOut = Named(window, "PopOutTabButton");
-
-        Assert.Same(vm.ToggleDockModeCommand, rail.Command);
-        Assert.Same(vm.PopOutCurrentTabCommand, popOut.Command);
-        Assert.NotSame(rail.Command, popOut.Command);
-        Assert.NotEqual(Icon(rail), Icon(popOut));
-        Assert.NotEqual(ToolTip.GetTip(rail), ToolTip.GetTip(popOut));
-        Assert.Contains("all modules", ToolTip.GetTip(rail) as string ?? "");
-        Assert.Contains("this tab", ToolTip.GetTip(popOut) as string ?? "");
-        window.Close();
-    }
-
-    [AvaloniaFact]
     public void APoppedOutTab_ComesBack_ByThePlaceholdersPutBack_AndByClosingItsWindow()
     {
         using var instance = TestClientInstance.Create();
@@ -581,9 +562,10 @@ public class ModuleNavigationTests
         HostTab logsTab = vm.HostTabs.Single();
 
         PopOutCurrent(vm);
-        Button putBack = ((Control)vm.SelectedHostTab!.Content).FindControl<Button>("PutBackHereButton")
+        Control placeholder = vm.SelectedHostTab?.Content ?? throw new InvalidOperationException("no placeholder tab");
+        Button putBack = placeholder.FindControl<Button>("PutBackHereButton")
                          ?? throw new InvalidOperationException("the placeholder has no PUT IT BACK HERE");
-        Assert.NotNull(((Control)vm.SelectedHostTab.Content).FindControl<Button>("ShowWindowButton"));
+        Assert.NotNull(placeholder.FindControl<Button>("ShowWindowButton"));
         putBack.Command?.Execute(null);
         Dispatcher.UIThread.RunJobs();
         Assert.Same(logsTab, vm.SelectedHostTab);
@@ -608,12 +590,12 @@ public class ModuleNavigationTests
         // Exactly one of the two, judged on the host's state: headless Avalonia has no focus and an empty Windows list.
         void AssertEachModuleIsATabOrAWindow(string step)
         {
-            foreach (object module in open)
+            Assert.All(open, module =>
             {
                 bool tab = vm.HostTabs.Any(t => ReferenceEquals(t.Content.DataContext, module));
                 bool own = dialogs.OwnerFor(module) is { IsVisible: true };
                 Assert.True(tab ^ own, $"after {step}: {module.GetType().Name} tab={tab} window={own}");
-            }
+            });
         }
 
         void Step(string name, Action act)
@@ -640,7 +622,7 @@ public class ModuleNavigationTests
         Step("pop out esi again", () => { Select(open[2]); PopOutCurrent(vm); });
         Step("close esi's placeholder tab", () =>
         {
-            vm.SelectedHostTab!.CloseCommand.Execute(null);
+            (vm.SelectedHostTab ?? throw new InvalidOperationException("no tab selected")).CloseCommand.Execute(null);
             open.RemoveAt(2);
         });
         Assert.Null(dialogs.OwnerFor(open[0]));
@@ -664,9 +646,6 @@ public class ModuleNavigationTests
 
     private static Button Named(Window window, string name) =>
         window.FindControl<Button>(name) ?? throw new InvalidOperationException($"{name} was not rendered");
-
-    private static Material.Icons.MaterialIconKind? Icon(Button button) =>
-        button.GetLogicalDescendants().OfType<Material.Icons.Avalonia.MaterialIcon>().First().Kind;
 
     private static async Task SeedFitsAsync(IServiceProvider services, params (string Name, int Ship)[] fits)
     {

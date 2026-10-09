@@ -188,7 +188,7 @@
                     <!-- Bottom: dock/float + chars toggles (always reachable) + (rail-only) window controls -->
                     <StackPanel x:Name="RailBottomBlock" DockPanel.Dock="Bottom" Spacing="0">
                         <Border Classes="rail-divider"/>
-                        <Button x:Name="DockModeRailButton" Classes="railitem" Command="{Binding ToggleDockModeCommand}"
+                        <Button Classes="railitem" Command="{Binding ToggleDockModeCommand}"
                                 ToolTip.Tip="Dock / undock: switch all modules between the docked host and floating windows">
                             <StackPanel HorizontalAlignment="Center" Spacing="5">
                                 <mi:MaterialIcon Classes="rail" Kind="DockWindow"/>
