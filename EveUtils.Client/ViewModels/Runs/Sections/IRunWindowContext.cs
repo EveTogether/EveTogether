@@ -40,6 +40,9 @@ public interface IRunWindowContext : INotifyPropertyChanged
     /// shared fact (a pocket's tier and weather, ET-241) is announced to the rest of the group.</summary>
     bool IsFleetCommander { get; }
 
+    /// <summary>Who commands <see cref="FleetId"/> now, or null when the roster cannot say (ET-494).</summary>
+    int? FleetCommanderCharacterId { get; }
+
     /// <summary>Whether the acting pilot may steer this run: solo, or the commander of the shared one (ET-105).</summary>
     bool CanControl { get; }
 

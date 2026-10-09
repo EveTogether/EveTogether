@@ -13,6 +13,7 @@ using EveUtils.Shared.Modules.Fleet.Dtos;
 using EveUtils.Shared.Modules.Fleet.Entities;
 using EveUtils.Shared.Modules.Fleet.Events;
 using EveUtils.Shared.Modules.Fleet.Repositories;
+using EveUtils.Shared.Modules.Gamelog.Aggregation;
 using EveUtils.Shared.Modules.Messaging;
 using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.ServerAuth.Repositories.Implementations;
@@ -37,6 +38,9 @@ public sealed class FleetCommanderEventRelayTests
     [Theory]
     [InlineData("abyssal", 0, true)]
     [InlineData("abyssal", Commander, false)]
+    [InlineData("rooms", 0, true)]
+    [InlineData("rooms", Commander, false)]
+    [InlineData("room-proposed", 0, true)]
     public async Task MembersCommanderOnlyEvent_ReachesTheFleetOnlyUnderTheirOwnId(string kind, int claimed, bool relayed)
     {
         CancellationToken cancellationToken = TestContext.Current.CancellationToken;
@@ -82,6 +86,9 @@ public sealed class FleetCommanderEventRelayTests
 
     private static IIntegrationEvent _Event(string kind, long fleetId) => kind switch
     {
+        "rooms" => new FleetRunGroupRoomsEvent(new RunGroupRooms(fleetId, "AB-ROOMS", [new RunGroupRoom(DateTime.UtcNow, null)])),
+        "room-proposed" => new FleetRunGroupRoomProposedEvent(
+            new RunGroupRoomProposal(fleetId, "AB-ROOMS", DateTime.UtcNow, RoomCertainty.Sure)),
         _ => new FleetRunGroupAbyssalUpdatedEvent(
             new RunGroupAbyssalUpdate(fleetId, ActivityKind.Abyssal, "AB-ROOMS", 3, "Dark"))
     };

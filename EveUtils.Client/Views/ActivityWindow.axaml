@@ -643,6 +643,9 @@
                 <TextBlock x:Name="RoomDetectionHint" Classes="hint" Margin="0" TextWrapping="Wrap"
                            IsVisible="{Binding IsRoomDetectionHintShown}"
                            Text="ET splits abyssal rooms from the game log. NEW ROOM still works and always wins"/>
+                <!-- A member in a fleet abyssal (ET-494): the commander's rooms are the fleet's, and this log still helps. -->
+                <TextBlock x:Name="CommanderRoomsHint" Classes="hint" Margin="0" TextWrapping="Wrap"
+                           IsVisible="{Binding IsCommanderRoomsHintShown}" Text="{Binding CommanderRoomsHintText}"/>
                 <!-- A save is not always instant (ET-210 review finding: a five-member group took five to six
                      seconds) — shown in the window itself and not only on the button, so it is still noticed once
                      the window has scrolled past the controls (ET-225). Every button above is disabled for the same

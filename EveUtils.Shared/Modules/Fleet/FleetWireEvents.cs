@@ -100,6 +100,21 @@ public sealed class FleetWireEvents : IWireEventCatalog
             return new FleetRunGroupAbyssalUpdatedEvent(payload, characterId);
         });
 
+        // The commander's room boundaries for a shared abyssal (ET-494), and a member's own find offered to him.
+        registry.Register("fleet.run-group.rooms", (payloadJson, characterId) =>
+        {
+            var payload = JsonSerializer.Deserialize<RunGroupRooms>(payloadJson)
+                          ?? throw new InvalidOperationException("Invalid fleet.run-group.rooms payload.");
+            return new FleetRunGroupRoomsEvent(payload, characterId);
+        });
+
+        registry.Register("fleet.run-group.room-proposed", (payloadJson, characterId) =>
+        {
+            var payload = JsonSerializer.Deserialize<RunGroupRoomProposal>(payloadJson)
+                          ?? throw new InvalidOperationException("Invalid fleet.run-group.room-proposed payload.");
+            return new FleetRunGroupRoomProposedEvent(payload, characterId);
+        });
+
         // The commander's list of who was in a homefront's site at completion (ET-230); each member applies it to its
         // own runs under the group code.
         registry.Register("fleet.run-attendance", (payloadJson, characterId) =>

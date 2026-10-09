@@ -237,6 +237,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     int? IRunWindowContext.ActingCharacterId => _ActingCharacterId();
 
     bool IRunWindowContext.IsFleetCommander => Authority.IsFleetCommander;
+    int? IRunWindowContext.FleetCommanderCharacterId => Authority.FleetCommanderCharacterId;
 
     public bool CanControl => Authority.CanControl;
 
@@ -713,6 +714,15 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
     /// <summary>Said under the buttons only while the detector runs for this pilot, so NEW ROOM is never a guess.</summary>
     public bool IsRoomDetectionHintShown => IsNewRoomButtonVisible && _Enemies()?.IsDetecting == true;
+
+    /// <summary>A member's line in a fleet abyssal (ET-494): the rooms are the commander's, and this log still counts.</summary>
+    public bool IsCommanderRoomsHintShown => IsStopButtonVisible && GroupCode is not null
+        && Authority.Level is RunControlAuthorityLevel.Denied && RunType.Space is RunSpace.AbyssalPocket
+        && _Enemies() is { } enemies && Sections.Contains(enemies);
+
+    public string CommanderRoomsHintText =>
+        $"Rooms follow {(Authority.FleetCommanderName is { Length: > 0 } commander ? commander : "the fleet commander")}. "
+        + "Your game log helps find them.";
 
     RunWindowSection? IRunWindowContext.SectionOf(RunSectionId id) => _sections.GetValueOrDefault(id);
 
@@ -1835,6 +1845,8 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         OnPropertyChanged(nameof(CurrentRoomSource));
         OnPropertyChanged(nameof(IsNewRoomButtonVisible));
         OnPropertyChanged(nameof(IsRoomDetectionHintShown));
+        OnPropertyChanged(nameof(IsCommanderRoomsHintShown));
+        OnPropertyChanged(nameof(CommanderRoomsHintText));
         _RefreshGroupTotalIsk(nowUtc);
         _RefreshSummaries();
         _RefreshCompact(nowUtc);

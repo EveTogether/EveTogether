@@ -4,6 +4,9 @@ using System.Linq;
 using EveUtils.Client.Gamelog;
 using EveUtils.Client.ViewModels.Activity;
 using CommunityToolkit.Mvvm.Input;
+using EveUtils.Shared.Messaging;
+using EveUtils.Shared.Modules.Fleet.Dtos;
+using EveUtils.Shared.Modules.Fleet.Events;
 using EveUtils.Shared.Modules.Gamelog.Aggregation;
 using EveUtils.Shared.Modules.Gamelog.Models;
 using EveUtils.Shared.Modules.Runs;
@@ -33,6 +36,10 @@ public sealed partial class EnemiesWindowSectionViewModel : RunWindowSection
     private readonly GamelogClientService? _gamelog;
     private readonly Dictionary<int, RunEnemyObservationCollector> _collectors = [];
     private readonly Dictionary<int, List<GameLogEvent>> _combatEvents = [];
+    private readonly IEventBus? _bus;
+    private readonly IDisposable? _roomsSubscription;
+    private readonly IDisposable? _proposalSubscription;
+    private bool _wasCommander;
 
     public EnemiesWindowSectionViewModel(IRunWindowContext context) : base(context, RunSectionId.Enemies, "ENEMIES")
     {
@@ -42,6 +49,11 @@ public sealed partial class EnemiesWindowSectionViewModel : RunWindowSection
             _gamelog.CombatObserved += _OnCombatObserved;
             _gamelog.TelemetryObserved += _OnTelemetryObserved;
         }
+
+        // In a fleet abyssal every log helps find the rooms and the commander's list is the fleet's (ET-494).
+        _bus = context.Services.GetService<IEventBus>();
+        _roomsSubscription = _bus?.Subscribe<FleetRunGroupRoomsEvent>(_OnCommanderRooms);
+        _proposalSubscription = _bus?.Subscribe<FleetRunGroupRoomProposedEvent>(_OnRoomProposed);
     }
 
     /// <summary>The on-screen character's own sightings — whichever run the column is currently showing. Every other
@@ -94,9 +106,14 @@ public sealed partial class EnemiesWindowSectionViewModel : RunWindowSection
     /// <summary>Names the SDE has no type for, shown as plain rows while the run has no rooms (ET-369).</summary>
     public IReadOnlyList<string> UnresolvedNames => _UnresolvedIn(null);
 
-    /// <summary>The AUTO badge for the room going on now, when the detector opened it (ET-368).</summary>
-    public RoomSourceViewModel? CurrentRoomSource =>
-        _OnScreenCollector() is { DetectedCertainties: { Count: > 0 } certainties } ? RoomSourceViewModel.Of(certainties[^1]) : null;
+    /// <summary>The AUTO badge for the room going on now, when the detector opened it (ET-368), or FC when it is the
+    /// commander's (ET-494).</summary>
+    public RoomSourceViewModel? CurrentRoomSource => _OnScreenCollector() is { DetectedCertainties: { Count: > 0 } certainties } collector
+        ? RoomSourceViewModel.Of(certainties[^1], collector.IsFollowingCommander)
+        : null;
+
+    /// <summary>The on-screen pilot's room boundaries, oldest first.</summary>
+    internal IReadOnlyList<DateTime> RoomBoundaries => _OnScreenCollector()?.RoomBoundaries ?? [];
 
     /// <summary>Whether the on-screen pilot's rooms are still found by the detector (ET-368).</summary>
     public bool IsDetecting => _OnScreenCollector()?.IsDetecting == true;
@@ -167,6 +184,13 @@ public sealed partial class EnemiesWindowSectionViewModel : RunWindowSection
     {
         if (propertyName is nameof(IRunWindowContext.CanControl))
         {
+            // A pilot who just took command tells the fleet the rooms they hold, so the list never waits on a change.
+            if (Context.IsFleetCommander && !_wasCommander)
+            {
+                _AnnounceRooms();
+            }
+
+            _wasCommander = Context.IsFleetCommander;
             _ShowRooms();
         }
     }
@@ -236,6 +260,8 @@ public sealed partial class EnemiesWindowSectionViewModel : RunWindowSection
             _gamelog.CombatObserved -= _OnCombatObserved;
             _gamelog.TelemetryObserved -= _OnTelemetryObserved;
         }
+        _roomsSubscription?.Dispose();
+        _proposalSubscription?.Dispose();
         base.Dispose();
     }
 
@@ -257,7 +283,82 @@ public sealed partial class EnemiesWindowSectionViewModel : RunWindowSection
         collector.Changed += RefreshSummary;
         collector.Regrouped += _ShowRooms;
         collector.UnresolvedSeen += _ShowRooms;
+        collector.RoomsChanged += () => _OnOwnRoomsChanged(characterId);
+        collector.Detected += detection => _OnOwnRoomDetected(characterId, detection);
         _collectors[characterId] = collector;
+    }
+
+    private void _OnOwnRoomsChanged(int characterId)
+    {
+        if (characterId == Context.RunCharacterId && Context.IsFleetCommander)
+        {
+            _AnnounceRooms();
+        }
+    }
+
+    /// <summary>A member's own find goes to the commander, who decides; it still shows here until his list arrives.</summary>
+    private void _OnOwnRoomDetected(int characterId, RoomDetection detection)
+    {
+        if (characterId != Context.RunCharacterId || Context.IsFleetCommander || Context.FleetId is not { } fleetId
+            || Context.GroupCode is not { } groupCode || _bus is null)
+        {
+            return;
+        }
+
+        _ = _bus.PublishAsync(new FleetRunGroupRoomProposedEvent(
+            new RunGroupRoomProposal(fleetId, groupCode, detection.AtUtc, detection.Certainty), characterId), EventTarget.Both);
+    }
+
+    private void _AnnounceRooms()
+    {
+        if (Context.FleetId is not { } fleetId || Context.GroupCode is not { } groupCode || _bus is null
+            || _OnScreenCollector() is not { } collector)
+        {
+            return;
+        }
+
+        RunGroupRoom[] rooms = [.. collector.RoomBoundaries.Select((atUtc, index) => new RunGroupRoom(atUtc, collector.DetectedCertainties[index]))];
+        _ = _bus.PublishAsync(new FleetRunGroupRoomsEvent(new RunGroupRooms(fleetId, groupCode, rooms), Context.RunCharacterId),
+            EventTarget.Both);
+    }
+
+    /// <summary>The commander's list replaces this pilot's own rooms — only from whoever commands the fleet now, by the
+    /// sender the server attached (ET-494, the ET-230 rule). The commander never follows a list.</summary>
+    private void _OnCommanderRooms(FleetRunGroupRoomsEvent integrationEvent)
+    {
+        RunGroupRooms list = integrationEvent.Data;
+        if (!string.Equals(list.GroupCode, Context.GroupCode, StringComparison.Ordinal) || Context.IsFleetCommander
+            || integrationEvent.CharacterId is not { } sender || sender != Context.FleetCommanderCharacterId)
+        {
+            return;
+        }
+
+        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            foreach (RunEnemyObservationCollector collector in _RoomScope())
+            {
+                collector.Follow([.. list.Rooms.Select(room => (room.AtUtc, room.Certainty))]);
+            }
+        });
+    }
+
+    /// <summary>The commander answers every proposal with his list, so a member's own guess never outlives a no.</summary>
+    private void _OnRoomProposed(FleetRunGroupRoomProposedEvent integrationEvent)
+    {
+        RunGroupRoomProposal proposal = integrationEvent.Data;
+        if (!string.Equals(proposal.GroupCode, Context.GroupCode, StringComparison.Ordinal) || !Context.IsFleetCommander
+            || integrationEvent.CharacterId is not { } sender || sender == Context.RunCharacterId)
+        {
+            return;
+        }
+
+        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            if (_OnScreenCollector()?.Adopt(proposal.AtUtc, proposal.Certainty) != true)
+            {
+                _AnnounceRooms();
+            }
+        });
     }
 
     private RunEnemyObservationCollector? _OnScreenCollector() =>
@@ -287,7 +388,9 @@ public sealed partial class EnemiesWindowSectionViewModel : RunWindowSection
             .. Enumerable.Range(1, roomCount).Reverse().Select(room => new RunEnemyRoomViewModel(room,
                 _RoomWindowText(boundaries, room), isUndoShown: room == roomCount && Context.CanControl,
                 [.. EnemyObservations.Where(observation => observation.RoomNumber == room)],
-                RoomSourceViewModel.Of(room > 1 ? _OnScreenCollector()?.DetectedCertainties[room - 2] : null),
+                room > 1 && _OnScreenCollector() is { } collector
+                    ? RoomSourceViewModel.Of(collector.DetectedCertainties[room - 2], collector.IsFollowingCommander)
+                    : null,
                 _FactionText(room), _UnresolvedIn(room)))
         ];
         OnPropertyChanged(nameof(EnemyRooms));

@@ -26,6 +26,9 @@ public sealed class RunEnemyObservationCollector(int characterId, Func<string, i
     /// <summary>This pilot's own detector opened a room — what a fleet member offers the commander (ET-494).</summary>
     public event Action<RoomDetection>? Detected;
 
+    /// <summary>This pilot's own list of boundaries changed — what a fleet commander tells the fleet (ET-494).</summary>
+    public event Action? RoomsChanged;
+
     /// <summary>Whether the boundaries are the fleet commander's list, not this pilot's own (ET-494).</summary>
     public bool IsFollowingCommander { get; private set; }
 
@@ -154,6 +157,7 @@ public sealed class RunEnemyObservationCollector(int characterId, Func<string, i
             _detectedCertainties[index] = detection.Certainty;
             // The room headers carry the certainty, so they are laid out again even when no row moved.
             Regrouped?.Invoke();
+            RoomsChanged?.Invoke();
             Changed?.Invoke();
             return;
         }
@@ -234,6 +238,7 @@ public sealed class RunEnemyObservationCollector(int characterId, Func<string, i
         _roomBoundaries.Add(atUtc);
         _detectedCertainties.Add(certainty);
         Regrouped?.Invoke();
+        RoomsChanged?.Invoke();
         Changed?.Invoke();
     }
 
@@ -277,6 +282,7 @@ public sealed class RunEnemyObservationCollector(int characterId, Func<string, i
         }
 
         Regrouped?.Invoke();
+        RoomsChanged?.Invoke();
         Changed?.Invoke();
         return true;
     }
