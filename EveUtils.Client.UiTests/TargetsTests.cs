@@ -1,6 +1,7 @@
 using System.Linq;
 using EveUtils.Client.ViewModels.Runs;
 using EveUtils.Client.ViewModels.Runs.Sections;
+using EveUtils.Shared.Modules.Gamelog.Models;
 using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Sde.Storage;
 using Xunit;
@@ -55,6 +56,29 @@ public sealed class TargetsTests
         Assert.Equal(["A", "B"], rooms[1].Rows.Select(row => row.Name).Order());
         Assert.Single(flat);
         Assert.Null(flat[0].Title);
+    }
+
+    /// <summary>A rat the SDE has no EHP for shows the damage the pilot's log saw instead of "?": "observed" once the room's
+    /// fight moved on without it, nothing from an incoming line, and not another room's hits.</summary>
+    [Theory]
+    [InlineData("1/Karybdis Tyrannos/0/500/O;1/Karybdis Tyrannos/5/700/O;1/Other/30/10/O", "1.2k observed", "dealt 1.2k · peak 120 dps")]
+    [InlineData("1/Karybdis Tyrannos/0/500/O;1/Karybdis Tyrannos/5/700/O;1/Other/8/10/O", "1.2k", "dealt 1.2k · peak 120 dps")]
+    [InlineData("1/Karybdis Tyrannos/0/500/O;1/Karybdis Tyrannos/5/9999/I;2/Other/90/10/O", "500", "dealt 500 · peak 50 dps")]
+    [InlineData("1/Other/0/500/O", "?", "")]
+    public void Damage_ReplacesTheQuestionMarkOfAnEnemyTheSdeLacks(string hits, string ehpText, string damageText)
+    {
+        System.DateTime start = new(2026, 10, 9, 20, 0, 0, System.DateTimeKind.Utc);
+        var damage = TargetsWindowSectionViewModel.DamageByTarget(hits.Split(';').Select(spec => spec.Split('/')).Select(part =>
+            ((int?)int.Parse(part[0]), new CombatEvent(start.AddSeconds(int.Parse(part[2])),
+                part[4] == "O" ? DamageDirection.Outgoing : DamageDirection.Incoming, int.Parse(part[3]), part[1], null, HitQuality.Hits))));
+
+        TargetRow row = TargetsWindowSectionViewModel.RowFor(new TargetSighting(1, "Karybdis Tyrannos", null), null)! with
+        {
+            Damage = damage.GetValueOrDefault((1, "Karybdis Tyrannos"))
+        };
+
+        Assert.Equal(ehpText, row.EhpText);
+        Assert.Equal(damageText, row.DamageText);
     }
 
     /// <summary>ET-369 AC4: only an abyssal run has the TARGETS section; no other run type claims it.</summary>

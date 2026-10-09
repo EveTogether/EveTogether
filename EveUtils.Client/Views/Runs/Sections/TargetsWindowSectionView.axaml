@@ -58,6 +58,7 @@
                                     <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" HorizontalAlignment="Left" VerticalAlignment="Center">
                                         <TextBlock Text="{Binding Name}" Foreground="{StaticResource TextBrightBrush}"/>
                                         <TextBlock Classes="hint" Margin="0" Text="{Binding SignatureText}"/>
+                                        <TextBlock Classes="hint" Margin="0" Text="{Binding DamageText}"/>
                                     </StackPanel>
                                     <ItemsControl Grid.Column="2" ItemsSource="{Binding Ewar}" VerticalAlignment="Center">
                                         <ItemsControl.ItemsPanel>

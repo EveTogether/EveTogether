@@ -33,21 +33,32 @@ public sealed record TargetEwar(NpcEwarKind Kind, double? RangeMetres, bool IsFr
 /// <summary>One enemy name seen in a room; the type id is null for a name the SDE has no type for.</summary>
 public sealed record TargetSighting(int? Room, string Name, int? TypeId);
 
+/// <summary>What this pilot's combat log shows of one enemy name in one room: the damage dealt, its best 10-second
+/// average, and whether the fight moved on without it (a kill, as far as the log can say).</summary>
+public sealed record TargetDamage(long Dealt, double PeakDps, bool Gone);
+
 /// <summary>One TARGETS row. <see cref="IsKnown"/> is false for a name neither the SDE nor the table knows.</summary>
 public sealed record TargetRow(string Name, IReadOnlyList<TargetEwar> Ewar, double? Ehp, double? Signature, bool IsKnown)
 {
     public int Number { get; init; }
 
+    public TargetDamage? Damage { get; init; }
+
     public bool IsFirst => Number == 1;
 
     public string SignatureText => Signature is { } signature ? $"sig {signature:0}" : string.Empty;
 
-    public string EhpText => Ehp switch
+    // The SDE's EHP leads; without it the damage seen is shown, "observed" once the enemy is gone.
+    public string EhpText => Ehp is { } ehp ? _Short(ehp)
+        : Damage is { } damage ? $"{_Short(damage.Dealt)}{(damage.Gone ? " observed" : string.Empty)}" : "?";
+
+    public string DamageText => Damage is { } damage ? $"dealt {_Short(damage.Dealt)} · peak {damage.PeakDps:0} dps" : string.Empty;
+
+    private static string _Short(double value) => value switch
     {
-        null => "?",
-        >= 10000 => $"{Ehp / 1000:0}k",
-        >= 1000 => $"{Ehp / 1000:0.0}k",
-        _ => $"{Ehp:0}"
+        >= 10000 => $"{value / 1000:0}k",
+        >= 1000 => $"{value / 1000:0.0}k",
+        _ => $"{value:0}"
     };
 }
 

@@ -71,6 +71,12 @@ public sealed partial class EnemiesWindowSectionViewModel : RunWindowSection
                 RunRooms.RoomOf(collector.RoomBoundaries, seen.FirstObservedAtUtc), seen.Name, null))
         ];
 
+    /// <summary>The on-screen pilot's combat lines of the run, each with its room, for TARGETS' damage. Read only.</summary>
+    public IReadOnlyList<(int? Room, CombatEvent Hit)> TargetHits() =>
+        _OnScreenCollector() is not { } collector || !_combatEvents.TryGetValue(Context.RunCharacterId!.Value, out List<GameLogEvent>? events)
+            ? []
+            : [.. events.OfType<CombatEvent>().Select(hit => (RunRooms.RoomOf(collector.RoomBoundaries, hit.Timestamp), hit))];
+
     /// <summary>The window's line under the clock while the run has rooms: which room, since when, for how long.</summary>
     public string? CurrentRoomText(DateTime nowUtc)
     {
