@@ -45,6 +45,71 @@ public sealed class LocalApiRuns(IServiceProvider rootServices, LocalApiPrivacy 
                              + "overview show. period: session (since the app started, or its last reset) | today | week | "
                              + "month, default today. kind: all | abyssal | combat | mission | mining, default all. "
                              + "kind=abyssal adds a breakdown per tier and weather. All combinations are pushed as runs.summary.");
+        app.MapGet("/api/v1/runs/days", _DaysAsync)
+            .WithSummary("Run totals per day")
+            .WithDescription("Per day from..to (YYYY-MM-DD, both included, at most 366 days; to defaults to the current day): "
+                             + "runs, flown time, the own characters' ISK, ISK per source and ISK/hour — counted like "
+                             + "runs/summary. A day runs from dayStart (HH:mm, default 00:00, the client's local time) to the "
+                             + "next, so with 06:00 a run at 01:30 belongs to the day before. breakdown=kind adds a split per "
+                             + "activity kind. The response names the time zone. Polled; not pushed.");
+    }
+
+    /// <summary>The range as a request names it, or the message that says what is wrong with it.</summary>
+    internal static string? TryReadDaysRange(string? from, string? to, string? dayStart, DateTime nowLocal,
+        out DateOnly fromDay, out DateOnly toDay, out TimeOnly start)
+    {
+        fromDay = toDay = default;
+        start = TimeOnly.MinValue;
+        if (!string.IsNullOrEmpty(dayStart) && !TimeOnly.TryParseExact(dayStart, "HH:mm", out start))
+            return "dayStart must be a time as HH:mm, for example 06:00.";
+        if (!DateOnly.TryParseExact(from, "yyyy-MM-dd", out fromDay))
+            return "from is required, as YYYY-MM-DD.";
+        if (string.IsNullOrEmpty(to))
+            toDay = RunsDays.DayOf(nowLocal, start);
+        else if (!DateOnly.TryParseExact(to, "yyyy-MM-dd", out toDay))
+            return "to must be a date as YYYY-MM-DD.";
+        if (toDay < fromDay)
+            return "to must not be before from.";
+        return toDay.DayNumber - fromDay.DayNumber + 1 > RunsDays.MaxDays
+            ? $"The range holds at most {RunsDays.MaxDays} days."
+            : null;
+    }
+
+    /// <summary>Null when the runs could not be read.</summary>
+    public async Task<RunsDaysDto?> GetDaysAsync(DateOnly from, DateOnly to, TimeOnly dayStart, bool byKind,
+        CancellationToken cancellationToken = default)
+    {
+        long[] ownIds = _OwnIds(await _OwnCharactersAsync(cancellationToken));
+        if (await _ActivitiesSinceAsync(from.ToDateTime(dayStart).ToUniversalTime(), ownIds, cancellationToken) is not { } activities)
+            return null;
+
+        return Days(activities, from, to, dayStart, byKind, DateTime.Now, TimeZoneInfo.Local);
+    }
+
+    /// <summary>The days off the activities read: counted by <see cref="RunsDays"/> over <see cref="RunTotals"/>, the
+    /// counting <see cref="Summarise"/> goes through as well.</summary>
+    internal static RunsDaysDto Days(IReadOnlyCollection<RunsActivityFacts> activities, DateOnly from, DateOnly to,
+        TimeOnly dayStart, bool byKind, DateTime nowLocal, TimeZoneInfo zone)
+    {
+        TimeSpan offset = zone.GetUtcOffset(nowLocal);
+        return new RunsDaysDto(
+            zone.Id,
+            $"{(offset < TimeSpan.Zero ? "-" : "+")}{offset:hh\\:mm}",
+            dayStart.ToString("HH:mm"),
+            from,
+            to,
+            [.. RunsDays.Of(activities, from, to, dayStart, nowLocal).Select(day => new RunsDayDto(
+                day.Day,
+                day.StartsAtLocal.ToUniversalTime(),
+                day.Totals.Runs,
+                (long)day.Totals.Flown.TotalSeconds,
+                day.Totals.Net,
+                day.Totals.PerHour,
+                [.. day.Totals.Sources.Contributions.Select(part => new RunsSourceDto(NameOf(part.Source), part.Amount))],
+                byKind
+                    ? [.. day.Kinds.Select(split => new RunsDayKindDto(NameOf(split.Kind), split.Totals.Runs,
+                        (long)split.Totals.Flown.TotalSeconds, split.Totals.Net, split.Totals.PerHour))]
+                    : null))]);
     }
 
     /// <summary>Null when the runs could not be read.</summary>
@@ -132,6 +197,19 @@ public sealed class LocalApiRuns(IServiceProvider rootServices, LocalApiPrivacy 
             : TypedResults.Problem("The runs could not be read.", statusCode: StatusCodes.Status503ServiceUnavailable);
     }
 
+    private static async Task<Results<Ok<RunsDaysDto>, ProblemHttpResult>> _DaysAsync(
+        string? from, string? to, string? dayStart, string? breakdown, LocalApiRuns runs, CancellationToken cancellationToken)
+    {
+        if (TryReadDaysRange(from, to, dayStart, DateTime.Now, out DateOnly fromDay, out DateOnly toDay, out TimeOnly start) is { } problem)
+            return TypedResults.Problem(problem, statusCode: StatusCodes.Status400BadRequest);
+        if (!string.IsNullOrEmpty(breakdown) && !string.Equals(breakdown, "kind", StringComparison.OrdinalIgnoreCase))
+            return TypedResults.Problem("breakdown must be kind, or left out.", statusCode: StatusCodes.Status400BadRequest);
+
+        return await runs.GetDaysAsync(fromDay, toDay, start, !string.IsNullOrEmpty(breakdown), cancellationToken) is { } days
+            ? TypedResults.Ok(days)
+            : TypedResults.Problem("The runs could not be read.", statusCode: StatusCodes.Status503ServiceUnavailable);
+    }
+
     private async Task<IReadOnlyList<RunsSummaryDto>?> _SummariesAsync(IReadOnlyList<RunsPeriod> periods,
         IReadOnlyList<RunsKind> kinds, CancellationToken cancellationToken)
     {
@@ -143,14 +221,10 @@ public sealed class LocalApiRuns(IServiceProvider rootServices, LocalApiPrivacy 
             period => RunsPeriods.StartOf(period, nowLocal, firstDay, sessionStartLocal));
 
         IReadOnlyList<Character> characters = await _OwnCharactersAsync(cancellationToken);
-        long[] ownIds = [.. characters.Select(character => character.EsiCharacterId).OfType<int>().Where(id => id > 0).Select(id => (long)id)];
-        DateTime fromUtc = starts.Values.Min().ToUniversalTime();
-        Result<IReadOnlyList<ActivityOverviewRowDto>> overview =
-            await dispatcher.Query(new GetActivityOverviewQuery(fromUtc, OwnCharacterIds: ownIds), cancellationToken);
-        if (!overview.IsSuccess)
+        long[] ownIds = _OwnIds(characters);
+        if (await _ActivitiesSinceAsync(starts.Values.Min().ToUniversalTime(), ownIds, cancellationToken) is not { } activities)
             return null;
 
-        RunsActivityFacts[] activities = [.. (overview.Value ?? []).Select(row => RunsActivityFacts.From(row, _facts))];
         IReadOnlyDictionary<long, string> names = _Names(characters);
         List<RunsSummaryDto> summaries = [];
         foreach ((RunsPeriod period, DateTime startLocal) in starts)
@@ -164,6 +238,17 @@ public sealed class LocalApiRuns(IServiceProvider rootServices, LocalApiPrivacy 
 
         return summaries;
     }
+
+    private async Task<RunsActivityFacts[]?> _ActivitiesSinceAsync(DateTime fromUtc, long[] ownIds, CancellationToken cancellationToken)
+    {
+        CqrsDispatcher dispatcher = rootServices.GetRequiredService<CqrsDispatcher>();
+        Result<IReadOnlyList<ActivityOverviewRowDto>> overview =
+            await dispatcher.Query(new GetActivityOverviewQuery(fromUtc, OwnCharacterIds: ownIds), cancellationToken);
+        return overview.IsSuccess ? [.. (overview.Value ?? []).Select(row => RunsActivityFacts.From(row, _facts))] : null;
+    }
+
+    private static long[] _OwnIds(IReadOnlyList<Character> characters) =>
+        [.. characters.Select(character => character.EsiCharacterId).OfType<int>().Where(id => id > 0).Select(id => (long)id)];
 
     private CurrentRunDto _Current(IReadOnlyList<RunningRunDto> runs, RunningActivityDto? earned,
         IReadOnlyDictionary<long, string> names, RunningAbyssalPockets pockets, bool exposesLocation)
