@@ -595,8 +595,8 @@
                                    VerticalAlignment="Center" Margin="0,0,8,0"/>
                         <Button Grid.Column="3" x:Name="PopOutTabButton" Classes="winbtn" Width="30"
                                 Command="{Binding PopOutCurrentTabCommand}"
-                                ToolTip.Tip="Dock / undock: switch all modules between the docked host and floating windows">
-                            <mi:MaterialIcon Kind="DockWindow"/>
+                                ToolTip.Tip="Pop out this tab into its own window. The other tabs stay docked.">
+                            <mi:MaterialIcon Kind="OpenInNew"/>
                         </Button>
                     </Grid>
                 </Border>
