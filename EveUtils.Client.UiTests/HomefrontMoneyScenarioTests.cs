@@ -966,6 +966,9 @@ public sealed class HomefrontMoneyScenarioTests
                 return;
             // The window follows a change made elsewhere once its own reads of the store come back, a tick or more later.
             await TickUntilAsync(() => Window.GroupTotalIskText == total && Window.Fleet().TotalText == total);
+            await SettleAsync(ticks: 1);
+            Assert.Equal(total, Window.GroupTotalIskText);
+            Assert.Equal(total, Window.Fleet().TotalText);
         }
 
         public void Dispose()

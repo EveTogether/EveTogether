@@ -255,9 +255,9 @@ public sealed partial class HomefrontWindowSectionViewModel : RunWindowSection
         await _WriteIfDueAsync(_nowUtc, isForced: true);
     }
 
-    /// <summary>_WriteUnderGateAsync drops any write, forced included, until _own/_stored are loaded (ET-287, ET-375).
-    /// Read directly here rather than through _LoadOwnAsync/_ReadStoredIfDueAsync's own "already running, skip"
-    /// guards, which a tick's unawaited attempt may still be holding — SAVE went on without its list (ET-487).</summary>
+    // _WriteUnderGateAsync drops any write, forced included, until _own/_stored are loaded (ET-287, ET-375).
+    // Read directly here rather than through _LoadOwnAsync/_ReadStoredIfDueAsync's own "already running, skip"
+    // guards, which a tick's unawaited attempt may still be holding — SAVE went on without its list (ET-487).
     private async Task _LoadOwnAndStoredNowAsync()
     {
         if (!_isOwnLoaded)
