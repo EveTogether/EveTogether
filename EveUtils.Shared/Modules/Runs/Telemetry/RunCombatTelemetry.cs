@@ -75,6 +75,21 @@ public static class RunCombatTelemetry
         return timeline;
     }
 
+    /// <summary>The stored timeline as the detail reads it: every series decoded to one sum per second.</summary>
+    public static RunCombatTimelineDto ToDto(RunCombatTimeline timeline) => new(
+        timeline.Seconds,
+        timeline.Series.ToDictionary(series => series.Kind, series => Decode(series.Samples, timeline.Seconds)),
+        timeline.MaxHitOut,
+        timeline.MaxHitOutTarget,
+        timeline.MaxHitIn,
+        timeline.MaxHitInSource,
+        timeline.HitsOut,
+        timeline.MissesOut,
+        timeline.HitsIn,
+        timeline.MissesIn,
+        [.. timeline.HitTallies.Select(tally => new RunHitTallyDto(
+            tally.Direction, tally.Counterparty, tally.Weapon, tally.Quality, tally.Count, tally.Sum, tally.Min, tally.Max))]);
+
     /// <summary>
     /// int32 per second, deflated. Little-endian as written: every platform the app ships for is.
     /// </summary>

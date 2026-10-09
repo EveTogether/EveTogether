@@ -27,19 +27,6 @@ internal sealed class GetRunCombatTimelineQueryHandler(IDbContextFactory<ClientD
             return Result<RunCombatTimelineDto?>.Success(null);
         }
 
-        return Result<RunCombatTimelineDto?>.Success(new RunCombatTimelineDto(
-            timeline.Seconds,
-            timeline.Series.ToDictionary(series => series.Kind,
-                series => RunCombatTelemetry.Decode(series.Samples, timeline.Seconds)),
-            timeline.MaxHitOut,
-            timeline.MaxHitOutTarget,
-            timeline.MaxHitIn,
-            timeline.MaxHitInSource,
-            timeline.HitsOut,
-            timeline.MissesOut,
-            timeline.HitsIn,
-            timeline.MissesIn,
-            [.. timeline.HitTallies.Select(tally => new RunHitTallyDto(
-                tally.Direction, tally.Counterparty, tally.Weapon, tally.Quality, tally.Count, tally.Sum, tally.Min, tally.Max))]));
+        return Result<RunCombatTimelineDto?>.Success(RunCombatTelemetry.ToDto(timeline));
     }
 }

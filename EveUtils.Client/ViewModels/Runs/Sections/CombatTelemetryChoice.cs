@@ -21,11 +21,16 @@ public sealed partial class CombatTelemetryChoice(CqrsDispatcher dispatcher, IRe
 {
     private readonly Dictionary<Guid, RunCombatTimelineDto> _timelines = [];
     private readonly Dictionary<Guid, string> _names = [];
+    private readonly HashSet<Guid> _storedRuns = [];
+
+    internal const string StoredHitsLabel = "from stored hits";
+    public const string LiveOnlyText = "kept only live at the time";
 
     public ObservableCollection<CombatPilotChipViewModel> Pilots { get; } = [];
 
     [ObservableProperty] private RunCombatTimelineDto? _shown;
     [ObservableProperty] private string _shownName = string.Empty;
+    [ObservableProperty] private bool _fromStoredHits;
     [ObservableProperty] private string? _idleText;
 
     public bool HasAny => _timelines.Count > 0;
@@ -33,6 +38,7 @@ public sealed partial class CombatTelemetryChoice(CqrsDispatcher dispatcher, IRe
     public async Task LoadAsync(RunDetailSectionInput input, CancellationToken cancellationToken)
     {
         _timelines.Clear();
+        _storedRuns.Clear();
         _names.Clear();
         foreach (ActivityRunDetailDto run in input.Detail.Runs)
         {
@@ -41,6 +47,15 @@ public sealed partial class CombatTelemetryChoice(CqrsDispatcher dispatcher, IRe
             if (read.IsSuccess && read.Value is { } timeline)
             {
                 _timelines[run.RunId] = timeline;
+                continue;
+            }
+
+            // No stored timeline (saved before ET-467): the pilot's stored hits still give damage.
+            read = await dispatcher.Query(new GetRunStoredHitsCombatQuery(run.RunId), cancellationToken);
+            if (read.IsSuccess && read.Value is { } derived)
+            {
+                _timelines[run.RunId] = derived;
+                _storedRuns.Add(run.RunId);
             }
         }
 
@@ -74,6 +89,7 @@ public sealed partial class CombatTelemetryChoice(CqrsDispatcher dispatcher, IRe
         }
 
         ShownName = _names[runId];
+        FromStoredHits = _storedRuns.Contains(runId);
         Shown = _timelines[runId];
         int idle = CombatChartModel.IdleSeconds(Shown).Count(second => second);
         IdleText = $"idle {TimeSpan.FromSeconds(idle):mm\\:ss}";

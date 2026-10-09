@@ -13,6 +13,7 @@ using EveUtils.Client.Views;
 using EveUtils.Shared.Data;
 using EveUtils.Shared.Identity;
 using EveUtils.Shared.Messaging;
+using EveUtils.Shared.Modules.Gamelog.Entities;
 using EveUtils.Shared.Modules.Gamelog.Models;
 using EveUtils.Shared.Modules.Market.Entities;
 using EveUtils.Shared.Modules.Market.Repositories;
@@ -700,6 +701,47 @@ public sealed class ActivityDetailTests
         };
         await instance.Services.GetRequiredService<RunSynchronizationApplier>()
             .ApplyAsync("https://server.example", [payload], new HashSet<Guid>(), cancellationToken);
+    }
+
+    /// <summary>ET-470: a run without a stored timeline derives its combat from the pilot's stored hits; one with a timeline never does.</summary>
+    [AvaloniaTheory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task OlderAbyssalRun_DerivesItsCombatFromStoredHits_OnlyWithoutATimeline(bool hasTimeline)
+    {
+        using var instance = TestClientInstance.Create();
+        ICqrsDispatcher dispatcher = instance.Services.GetRequiredService<ICqrsDispatcher>();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        DateTime start = RunCombatTelemetryTests.RunStart;
+        Result<Guid> started = await dispatcher.Send(new StartRunCommand(90000001, ActivityKind.Abyssal, start, 0, null,
+            30004079), cancellationToken);
+        await dispatcher.Send(new SaveRunCommand(started.Value, RunCombatTelemetryTests.RunStop,
+            RunCombatTelemetryTests.RunStop.AddMinutes(1), [], [], [], [],
+            CombatEvents: hasTimeline ? RunCombatTelemetryTests.RealRunEvents() : null), cancellationToken);
+        // Stored as the client writes them: the EVE clock value under a +02:00 label.
+        CombatSample Hit(int characterId, DamageDirection direction, int amount, int second) => new()
+        {
+            OwnerId = "local", CharacterId = characterId, Direction = direction, Amount = amount, Target = "Rat",
+            Timestamp = new DateTimeOffset(start.AddSeconds(second), TimeSpan.FromHours(2))
+        };
+        await using (ClientDbContext db = await instance.Services.GetRequiredService<IDbContextFactory<ClientDbContext>>()
+                         .CreateDbContextAsync(cancellationToken))
+        {
+            db.Set<CombatSample>().AddRange(Hit(90000001, DamageDirection.Outgoing, 500, 10),
+                Hit(90000001, DamageDirection.Outgoing, 998, 20), Hit(90000001, DamageDirection.Incoming, 74, 30),
+                Hit(90000001, DamageDirection.Incoming, 38, 31), Hit(90000001, DamageDirection.Outgoing, 7777, -1),
+                Hit(90000002, DamageDirection.Outgoing, 5555, 40), Hit(90000001, DamageDirection.Outgoing, 3333, -86400));
+            await db.SaveChangesAsync(cancellationToken);
+        }
+
+        List<string> texts = await _RenderAsync(instance, cancellationToken);
+
+        Assert.Equal(!hasTimeline, texts.Any(text => text.EndsWith("from stored hits", StringComparison.Ordinal)));
+        Assert.Equal(hasTimeline, texts.Contains("65,732 hp"));
+        Assert.Equal(hasTimeline ? 0 : 1, texts.Count(text => text == "1,498 hp"));
+        Assert.Equal(hasTimeline ? 0 : 1, texts.Count(text => text == "112 hp"));
+        Assert.Equal(hasTimeline ? 0 : 4, texts.Count(text => text == "not recorded"));
+        Assert.Equal(hasTimeline, texts.Any(text => text is "0 GJ" or "0 hp" or "0"));
     }
 
     private static async Task<List<string>> _RenderAsync(TestClientInstance instance, CancellationToken cancellationToken)
