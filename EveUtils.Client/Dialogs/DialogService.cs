@@ -441,7 +441,11 @@ public sealed class DialogService : IDialogService, ISingletonService
 
     public async Task ShowEveWorkbenchUploadAsync(ViewModels.Runs.EveWorkbenchUploadViewModel viewModel)
     {
-        if (_owner is null) return;
+        if (_owner is null)
+        {
+            return;
+        }
+
         var dialog = new EveWorkbenchUploadWindow(viewModel);
         await _Over(dialog).ShowDialog(_owner);
     }

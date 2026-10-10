@@ -17,8 +17,7 @@ public sealed class EveWorkbenchKeyRingTests
     private const long Main = 90000001;
     private const long Alt = 90000002;
 
-    /// <summary>A run nobody chose to upload never leaves. A key is stored once for its EVE Workbench account: an alt on it uploads with the main's key
-    /// without entering anything, and its saved run goes out with that key.</summary>
+    /// <summary>A run nobody chose to upload never leaves; an alt uploads with the main's key.</summary>
     [AvaloniaFact]
     public async Task Save_RunIsOnlyUploadedWhenChosen_AndAnAltUsesTheMainsKey()
     {
@@ -45,8 +44,7 @@ public sealed class EveWorkbenchKeyRingTests
         Assert.Contains(runId.ToString(), handler.ImportBody);
     }
 
-    /// <summary>The separate opt-in: with auto-upload on, a run saved afterwards goes out by itself (its pilot has a
-    /// key); off, nothing does.</summary>
+    /// <summary>Auto-upload on sends a run saved afterwards by itself; off sends nothing.</summary>
     [AvaloniaTheory]
     [InlineData(true)]
     [InlineData(false)]

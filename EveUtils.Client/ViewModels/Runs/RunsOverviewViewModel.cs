@@ -1159,7 +1159,9 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
     private async Task _UploadToEveWorkbenchAsync(ActivityOverviewRowViewModel row)
     {
         if (_services.GetService<EveWorkbenchRunAutoPublisher>() is not { } publisher)
+        {
             return;
+        }
 
         IReadOnlyList<UploadableRun> runs = await publisher.FindUploadableRunsAsync(row.GroupCode, row.RunId, _namesById.Keys.ToHashSet());
         if (runs.Count == 0)
@@ -1178,7 +1180,9 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
     private async Task<string?> _UploadStatusAsync(ActivityOverviewRowViewModel row)
     {
         if (_services.GetService<EveWorkbenchRunAutoPublisher>() is not { } publisher)
+        {
             return null;
+        }
 
         IReadOnlyList<UploadableRun> runs = await publisher.FindUploadableRunsAsync(row.GroupCode, row.RunId, _namesById.Keys.ToHashSet());
         return await publisher.StatusLabelAsync([.. runs.Select(run => run.RunId)]);

@@ -1582,7 +1582,9 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
             // A run window that is up and compact changes with the preference at once.
             _activityWindow?.UseCompactStyle(result.CompactRunStyle);
             if (_services.GetService<EveUtils.Client.Runs.EveWorkbenchRunAutoPublisher>() is { } uploader)
+            {
                 await uploader.SetAutoUploadAsync(result.AutoUploadRuns);
+            }
             await dispatcher.Send(new SetSettingCommand(
                 EveUtils.Client.Runs.FleetRunAutoPublisher.EnabledSettingKey, result.AutoPublishFleetRuns ? "true" : "false"));
             await dispatcher.Send(new SetSettingCommand(

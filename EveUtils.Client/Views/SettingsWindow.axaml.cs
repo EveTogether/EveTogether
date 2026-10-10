@@ -250,7 +250,9 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
         }
         _autoUploadRunsBox = this.FindControl<CheckBox>("AutoUploadRunsBox");
         if (_autoUploadRunsBox is not null)
+        {
             _autoUploadRunsBox.IsChecked = autoUploadRuns;
+        }
         _openRunsCompactBox = this.FindControl<CheckBox>("OpenRunsCompactBox");
         if (_openRunsCompactBox is not null)
             _openRunsCompactBox.IsChecked = openRunsCompact;
