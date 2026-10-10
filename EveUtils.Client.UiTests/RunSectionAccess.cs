@@ -26,6 +26,7 @@ internal static class RunSectionAccess
     public static ActivityDetailSectionViewModel Activity(this ActivityDetailViewModel detail) => detail._Section<ActivityDetailSectionViewModel>();
     public static MissionDetailSectionViewModel Mission(this ActivityDetailViewModel detail) => detail._Section<MissionDetailSectionViewModel>();
     public static EnemiesDetailSectionViewModel Enemies(this ActivityDetailViewModel detail) => detail._Section<EnemiesDetailSectionViewModel>();
+    public static RoomsDetailSectionViewModel Rooms(this ActivityDetailViewModel detail) => detail._Section<RoomsDetailSectionViewModel>();
     public static FleetDetailSectionViewModel Fleet(this ActivityDetailViewModel detail) => detail._Section<FleetDetailSectionViewModel>();
     public static BountyDetailSectionViewModel Bounty(this ActivityDetailViewModel detail) => detail._Section<BountyDetailSectionViewModel>();
     public static MiningDetailSectionViewModel Mining(this ActivityDetailViewModel detail) => detail._Section<MiningDetailSectionViewModel>();
