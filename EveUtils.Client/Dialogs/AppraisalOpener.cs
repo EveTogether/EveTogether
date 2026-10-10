@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using EveUtils.Client.Imaging;
 using EveUtils.Client.ViewModels;
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.DependencyInjection;
@@ -23,7 +24,7 @@ public sealed class AppraisalOpener(IServiceProvider services) : ISingletonServi
 
         ISdeAccessor sde = services.GetRequiredService<ISdeAccessor>();
         BlueprintAppraisalViewModel? blueprints = services.GetService<IBlueprintAppraisalService>() is { } appraisals
-            ? new BlueprintAppraisalViewModel(appraisals, sde, dialogs)
+            ? new BlueprintAppraisalViewModel(appraisals, sde, dialogs, services.GetService<ITypeImageProvider>())
             : null;
         dialogs.ShowAppraisal(new AppraisalViewModel(
             services.GetRequiredService<IEnumerable<IAppraisalProvider>>(),

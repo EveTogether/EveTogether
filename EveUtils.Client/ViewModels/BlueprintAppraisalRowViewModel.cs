@@ -2,8 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using EveUtils.Client.Formatting;
+using EveUtils.Client.Imaging;
 using EveUtils.Shared.Modules.Market.Services;
 using EveUtils.Shared.Modules.Sde.Dtos;
 
@@ -16,21 +18,34 @@ namespace EveUtils.Client.ViewModels;
 public sealed partial class BlueprintAppraisalRowViewModel : ObservableObject
 {
     private readonly Func<int, string> _nameOf;
+    private readonly ITypeImageProvider? _images;
 
-    public BlueprintAppraisalRowViewModel(SdeBlueprintManufacturing blueprint, string name, Func<int, string> nameOf)
+    public BlueprintAppraisalRowViewModel(SdeBlueprintManufacturing blueprint, string name, Func<int, string> nameOf,
+        ITypeImageProvider? images = null)
     {
         _nameOf = nameOf;
+        _images = images;
         TypeId = blueprint.BlueprintTypeId;
         Name = name;
         MaxRuns = Math.Max(1, blueprint.MaxProductionLimit);
         BaseTimeSeconds = blueprint.TimeSeconds;
         ProductName = nameOf(blueprint.ProductTypeId);
+        Icon = new TypeIconViewModel(TypeId);
+        ProductIcon = new TypeIconViewModel(blueprint.ProductTypeId);
+        IconsPending = Task.WhenAll(Icon.LoadAsync(images), ProductIcon.LoadAsync(images));
     }
 
     /// <summary>Raised when runs or ME change, so the owner values the build again.</summary>
     public event Action<BlueprintAppraisalRowViewModel>? RebuildRequested;
 
     public int TypeId { get; }
+
+    public TypeIconViewModel Icon { get; }
+
+    public TypeIconViewModel ProductIcon { get; }
+
+    /// <summary>The icon loads started so far (blueprint, product, materials), for a caller (a test) that waits for them.</summary>
+    public Task IconsPending { get; private set; }
 
     public string Name { get; }
 
@@ -86,6 +101,7 @@ public sealed partial class BlueprintAppraisalRowViewModel : ObservableObject
     {
         Appraisal = appraisal;
         Materials = [.. appraisal.Materials.Select(material => new BlueprintMaterialRowViewModel(_nameOf(material.TypeId), material))];
+        IconsPending = Task.WhenAll(IconsPending, Task.WhenAll(Materials.Select(material => material.Icon.LoadAsync(_images))));
         OnPropertyChanged(string.Empty);
     }
 
