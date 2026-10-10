@@ -43,7 +43,7 @@ public sealed class LogsGroupTests
         var railItems = window.FindControl<ScrollViewer>("RailLauncherScroller")!
             .GetVisualDescendants().OfType<Button>().Where(b => b.Classes.Contains("railitem")).ToArray();
 
-        Assert.Equal(11, railItems.Length);
+        Assert.Equal(12, railItems.Length);
         Assert.Equal(1, railItems.Count(b => b.Name == "LogsRailItem"));
         Assert.Equal(["ESI metrics", "Inbox", "Game logs", "Client logs"],
             _OpenGroup(window).Select(i => i.Header as string ?? "Inbox").ToArray());
