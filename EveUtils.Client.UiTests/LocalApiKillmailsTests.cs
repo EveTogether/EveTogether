@@ -67,6 +67,8 @@ public sealed class LocalApiKillmailsTests : IDisposable
             await server.ApplyAsync(true, port, TestContext.Current.CancellationToken);
             using var socket = new ClientWebSocket();
             await socket.ConnectAsync(new Uri($"ws://127.0.0.1:{port}/ws"), TestContext.Current.CancellationToken);
+            // The server registers the socket only after sending the snapshot; a push before that has nobody to reach.
+            Assert.Equal("snapshot", (await _ReadMessageAsync(socket, TestContext.Current.CancellationToken)).GetProperty("type").GetString());
 
             await _StoreAsync(_Killmail(1, isLoss: false, DateTime.UtcNow.AddDays(-30)));
             await _StoreAsync(_Killmail(2, isLoss: true, DateTime.UtcNow.AddMinutes(-3)));
@@ -83,22 +85,12 @@ public sealed class LocalApiKillmailsTests : IDisposable
     private static async Task<List<JsonElement>> _AnnouncedWithinAsync(WebSocket socket, TimeSpan window)
     {
         var announced = new List<JsonElement>();
-        var buffer = new byte[16384];
         using var cts = new CancellationTokenSource(window);
         try
         {
             while (true)
             {
-                var builder = new StringBuilder();
-                WebSocketReceiveResult result;
-                do
-                {
-                    result = await socket.ReceiveAsync(buffer, cts.Token);
-                    builder.Append(Encoding.UTF8.GetString(buffer, 0, result.Count));
-                }
-                while (!result.EndOfMessage);
-
-                var root = JsonDocument.Parse(builder.ToString()).RootElement;
+                var root = await _ReadMessageAsync(socket, cts.Token);
                 if (root.GetProperty("type").GetString() == "killmail.added")
                     announced.Add(root.GetProperty("data"));
             }
@@ -107,6 +99,21 @@ public sealed class LocalApiKillmailsTests : IDisposable
         {
             return announced;
         }
+    }
+
+    private static async Task<JsonElement> _ReadMessageAsync(WebSocket socket, CancellationToken cancellationToken)
+    {
+        var buffer = new byte[16384];
+        var builder = new StringBuilder();
+        WebSocketReceiveResult result;
+        do
+        {
+            result = await socket.ReceiveAsync(buffer, cancellationToken);
+            builder.Append(Encoding.UTF8.GetString(buffer, 0, result.Count));
+        }
+        while (!result.EndOfMessage);
+
+        return JsonDocument.Parse(builder.ToString()).RootElement;
     }
 
     private LocalApiQueries _Queries(bool includeLocation) =>

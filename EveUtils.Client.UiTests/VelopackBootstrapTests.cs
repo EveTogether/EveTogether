@@ -10,7 +10,10 @@ namespace EveUtils.Client.UiTests;
 /// </summary>
 public class VelopackBootstrapTests
 {
-    private const string TheHook = "VelopackApp.Build().Run();";
+    private const string TheHook = "VelopackApp.Build().OnRestarted(_ => restartedByUpdate = true).Run();";
+
+    // The only statement allowed above the hook: it declares the flag the hook's OnRestarted callback sets.
+    private const string TheRestartFlag = "bool restartedByUpdate = false;";
 
     /// <summary>
     /// Installing, updating and uninstalling re-run this executable with arguments Velopack handles and then exits
@@ -75,7 +78,7 @@ public class VelopackBootstrapTests
 
         return lines.Skip(opening + 1)
             .Select(line => line.Trim())
-            .FirstOrDefault(line => line.Length > 0 && !line.StartsWith("//", StringComparison.Ordinal));
+            .FirstOrDefault(line => line.Length > 0 && line != TheRestartFlag && !line.StartsWith("//", StringComparison.Ordinal));
     }
 
     private static string _ProgramPath()
