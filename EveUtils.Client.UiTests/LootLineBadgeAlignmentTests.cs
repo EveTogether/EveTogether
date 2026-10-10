@@ -5,6 +5,7 @@ using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.LogicalTree;
 using Avalonia.Threading;
+using CommunityToolkit.Mvvm.Input;
 using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Client.ViewModels.Runs;
 using EveUtils.Client.Views.Runs;
@@ -15,7 +16,8 @@ namespace EveUtils.Client.UiTests;
 
 /// <summary>
 /// ET-503: where a loot line's price came from (BP APPRAISAL, LIVE) is a badge beside the name, so that line's quantity
-/// and ISK stay in the columns every other line lines up in. Headless, measured on the rendered rows.
+/// and ISK stay in the columns every other line lines up in — and so does ET-502's "Open in appraisal" link. Headless,
+/// measured on the rendered rows.
 /// </summary>
 public sealed class LootLineBadgeAlignmentTests
 {
@@ -24,7 +26,7 @@ public sealed class LootLineBadgeAlignmentTests
     {
         var normal = new ActivityLootLineViewModel(34, "Overseer Sabik Vial", 4, 1_000_000m, LootKind.Gained);
         var blueprint = new ActivityLootLineViewModel(85957, "Reactive Armor Hardener Blueprint", 1, 1_149_230m, LootKind.Gained,
-            isBlueprintAppraisal: true);
+            isBlueprintAppraisal: true) { OpenInAppraisalCommand = new RelayCommand(() => { }) };
         var live = new ActivityLootLineViewModel(35, "Augmentation Decryptor", 1, 673_279m, LootKind.Gained, isLivePrice: true);
         (Window window, List<ActivityLootLineView> rows) = _Show(normal, blueprint, live);
 
@@ -32,6 +34,7 @@ public sealed class LootLineBadgeAlignmentTests
         Assert.Equal(expected, _RightEdges(rows[1], window));
         Assert.Equal(expected, _RightEdges(rows[2], window));
         Assert.True(_Badge(rows[1], "AppraisalBadge").IsVisible);
+        Assert.True(rows[1].GetLogicalDescendants().OfType<Button>().Single(button => button.Name == "OpenInAppraisalLink").IsVisible);
         Assert.True(_Badge(rows[2], "LiveBadge").IsVisible);
         Assert.False(_Badge(rows[0], "AppraisalBadge").IsVisible || _Badge(rows[0], "LiveBadge").IsVisible);
         window.Close();
