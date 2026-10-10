@@ -95,8 +95,7 @@ public partial class CharacterDialogViewModel : ObservableObject, IDisposable
         await ReloadEveWorkbenchKeyAsync(refresh: true);
     }
 
-    // ── EVE Workbench (optional, ET-325) ── the API key an upload uses: the pilot's own, or the one of the EVE Workbench
-    // account it is an alt on (a key is stored once for the whole account). Nothing here is required.
+    // ── EVE Workbench (optional, ET-325) ── the API key an upload uses: the pilot's own, or its EVE Workbench account's.
     private global::EveUtils.Client.Runs.ResolvedEveWorkbenchKey? _key;
 
     [ObservableProperty]
