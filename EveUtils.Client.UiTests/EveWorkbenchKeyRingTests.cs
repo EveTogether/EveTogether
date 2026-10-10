@@ -67,6 +67,40 @@ public sealed class EveWorkbenchKeyRingTests
         Assert.Equal(autoOn, handler.ImportBody?.Contains(runId.ToString()) ?? false);
     }
 
+    /// <summary>A finished upload tells the runs screens, so the chip moves to uploaded without a reselect.</summary>
+    [AvaloniaFact]
+    public async Task Upload_WhenPublishCompletes_AnnouncesTheRunWithStatusUploaded()
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        using TestClientInstance instance = TestClientInstance.Create(services =>
+            services.AddSingleton<IHttpClientFactory>(new HandlerFactory(new RecordingHandler())));
+        var publisher = instance.Services.GetRequiredService<EveWorkbenchRunAutoPublisher>();
+        var dispatcher = instance.Services.GetRequiredService<IDispatcher>();
+        await instance.Services.GetRequiredService<EveWorkbenchKeyRing>().AddAsync("main-key", cancellationToken);
+        DateTime started = DateTime.UtcNow.AddMinutes(-20);
+        Guid runId = (await dispatcher.Send(new StartRunCommand(Main, ActivityKind.Site, started, 1234, "Blood Refuge", 30000142), cancellationToken)).Value;
+        await dispatcher.Send(new SaveRunCommand(runId, started.AddMinutes(15), started.AddMinutes(16), [], [], [], []), cancellationToken);
+        await publisher.WhenIdleAsync();
+
+        string? lastStatus = null;
+        using IDisposable subscription = instance.Services.GetRequiredService<RunChangeFeed>().Subscribe(async batch =>
+        {
+            if (batch.RunIds.Contains(runId))
+            {
+                lastStatus = await publisher.StatusLabelAsync([runId], cancellationToken);
+            }
+        });
+        await publisher.UploadAsync([runId], cancellationToken);
+        await publisher.WhenIdleAsync();
+        for (int i = 0; i < 20 && lastStatus != "EWB ✓ uploaded"; i++)
+        {
+            await Task.Delay(50, cancellationToken);
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        }
+
+        Assert.Equal("EWB ✓ uploaded", lastStatus);
+    }
+
     private sealed class HandlerFactory(RecordingHandler handler) : IHttpClientFactory
     {
         public HttpClient CreateClient(string name) => new(handler, disposeHandler: false);

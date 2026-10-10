@@ -107,7 +107,6 @@ public sealed partial class RunsActivityPaneViewModel : ViewModelBase
         if (Row is { } row && _uploadToEveWorkbench is not null)
         {
             await _uploadToEveWorkbench(row);
-            RereadDetail();
         }
     }
 

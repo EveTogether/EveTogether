@@ -45,6 +45,7 @@ public sealed class EveWorkbenchRunAutoPublisher : ISingletonService, IDisposabl
     private readonly EveWorkbenchKeyRing _keyRing;
     private readonly EveWorkbenchKeyStore _legacyKeyStore;
     private readonly IHttpClientFactory _httpClientFactory;
+    private readonly RunChangeFeed _feed;
     private readonly ILogger<EveWorkbenchRunAutoPublisher> _logger;
     private readonly IDisposable _runsChanged;
     private readonly Lock _gate = new();
@@ -55,13 +56,14 @@ public sealed class EveWorkbenchRunAutoPublisher : ISingletonService, IDisposabl
 
     public EveWorkbenchRunAutoPublisher(IEventBus eventBus, IServiceScopeFactory scopeFactory,
         IDbContextFactory<ClientDbContext> contextFactory, EveWorkbenchKeyRing keyRing, EveWorkbenchKeyStore legacyKeyStore,
-        IHttpClientFactory httpClientFactory, ILogger<EveWorkbenchRunAutoPublisher> logger)
+        IHttpClientFactory httpClientFactory, RunChangeFeed feed, ILogger<EveWorkbenchRunAutoPublisher> logger)
     {
         _scopeFactory = scopeFactory;
         _contextFactory = contextFactory;
         _keyRing = keyRing;
         _legacyKeyStore = legacyKeyStore;
         _httpClientFactory = httpClientFactory;
+        _feed = feed;
         _logger = logger;
         _runsChanged = eventBus.Subscribe<RunsChangedEvent>(_OnRunsChangedAsync);
         _ = _Enqueue(_StartAsync);
@@ -109,6 +111,7 @@ public sealed class EveWorkbenchRunAutoPublisher : ISingletonService, IDisposabl
         await using (AsyncServiceScope scope = _scopeFactory.CreateAsyncScope())
         {
             await _SaveStateAsync(scope.ServiceProvider, state, cancellationToken);
+            _Announce(runs);
         }
 
         _ = _Enqueue(token => _PublishAsync([.. runIds], token));
@@ -304,6 +307,7 @@ public sealed class EveWorkbenchRunAutoPublisher : ISingletonService, IDisposabl
 
         await _SaveStateAsync(scope.ServiceProvider, state, cancellationToken);
         _ScheduleRetryIfNeeded(anyFailed);
+        _Announce(runs);
     }
 
     public async Task<bool> IsAutoUploadAsync(CancellationToken cancellationToken = default)
@@ -389,6 +393,15 @@ public sealed class EveWorkbenchRunAutoPublisher : ISingletonService, IDisposabl
     }
 
     public Task ClearKeyAsync(long mainId, CancellationToken cancellationToken = default) => _keyRing.RemoveAsync(mainId, cancellationToken);
+
+    /// <summary>Tells the runs screens where an upload stands now, after every attempt: not on the bus, so it never wakes this publisher.</summary>
+    private void _Announce(IEnumerable<Run> runs)
+    {
+        foreach (Run run in runs)
+        {
+            _feed.Announce(run.Id, run.GroupCode);
+        }
+    }
 
     private static void _Record(Dictionary<Guid, PublishEntry> state, IEnumerable<Run> runs, string status, string? reason)
     {
