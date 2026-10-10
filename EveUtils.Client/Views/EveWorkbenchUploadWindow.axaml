@@ -42,8 +42,9 @@
                 <Border Classes="panel" Padding="10,8" BorderBrush="{StaticResource WarnBrush}" IsVisible="{Binding NeedsKey}">
                     <StackPanel Spacing="6">
                         <TextBlock Text="{Binding Notice}" TextWrapping="Wrap" FontWeight="SemiBold" Foreground="{StaticResource WarnBrush}"/>
+                        <TextBlock Text="{Binding HowTo}" FontSize="11" TextWrapping="Wrap" Foreground="{StaticResource TextBrush}"/>
                         <StackPanel Orientation="Horizontal" Spacing="6">
-                            <Button Classes="rowaction" Content="Open on AbyssTracker" Command="{Binding OpenAbyssTrackerTokensCommand}"/>
+                            <Button Classes="rowaction" Content="Open on Abyss Tracker" Command="{Binding OpenAbyssTrackerTokensCommand}"/>
                             <Button Classes="rowaction" Content="Open on EVE Journal" Command="{Binding OpenEveJournalTokensCommand}"/>
                         </StackPanel>
                         <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">

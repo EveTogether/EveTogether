@@ -109,6 +109,17 @@ public partial class CharacterDialogViewModel : ObservableObject, IDisposable
     /// <summary>The EVE Workbench account's characters, or why a key was not accepted.</summary>
     [ObservableProperty] private string _eveWorkbenchKeyStatus = "";
 
+    /// <summary>The how-to and the links, only while the pilot has no usable key.</summary>
+    [ObservableProperty] private bool _showEveWorkbenchKeyHelp;
+
+    public string EveWorkbenchHowTo => global::EveUtils.Client.Runs.EveWorkbenchLinks.HowTo;
+
+    [RelayCommand]
+    private static void OpenAbyssTrackerTokens() => global::EveUtils.Client.Runs.EveWorkbenchLinks.Open(global::EveUtils.Client.Runs.EveWorkbenchLinks.AbyssTrackerTokens);
+
+    [RelayCommand]
+    private static void OpenEveJournalTokens() => global::EveUtils.Client.Runs.EveWorkbenchLinks.Open(global::EveUtils.Client.Runs.EveWorkbenchLinks.EveJournalTokens);
+
     /// <summary>Set while a key was saved that does not cover this pilot: EVE Workbench would refuse its runs.</summary>
     [ObservableProperty] private string _eveWorkbenchPilotWarning = "";
 
@@ -126,6 +137,7 @@ public partial class CharacterDialogViewModel : ObservableObject, IDisposable
 
         _key = await publisher.KeyForPilotAsync(CharacterId, refresh);
         HasOwnEveWorkbenchKey = _key is { IsOwn: true };
+        ShowEveWorkbenchKeyHelp = _key is null or { Invalid: true };
         EveWorkbenchKeyState = _key switch
         {
             null => "No key. Runs are only uploaded when you choose to, and then a key is needed.",

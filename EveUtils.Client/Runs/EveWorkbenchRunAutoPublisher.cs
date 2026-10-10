@@ -32,6 +32,11 @@ public sealed class EveWorkbenchRunAutoPublisher : ISingletonService, IDisposabl
     /// <summary>Optional override of the EVE Workbench address; the live API without it.</summary>
     public const string UrlSettingKey = "runs.ewb-publish.url";
 
+    /// <summary>"true" lets every run saved after <see cref="AutoUploadSinceKey"/> go by itself; off without a row.</summary>
+    public const string AutoUploadKey = "runs.ewb-publish.auto";
+
+    public const string AutoUploadSinceKey = "runs.ewb-publish.auto-since";
+
     private static readonly TimeSpan MaxBackoff = TimeSpan.FromHours(1);
     private static readonly TimeSpan FirstBackoff = TimeSpan.FromSeconds(30);
 
@@ -220,8 +225,12 @@ public sealed class EveWorkbenchRunAutoPublisher : ISingletonService, IDisposabl
         await using AsyncServiceScope scope = _scopeFactory.CreateAsyncScope();
         IReadOnlyList<ClientSetting> settings = await scope.ServiceProvider.GetRequiredService<ISettingRepository>().ListAsync(cancellationToken);
         Dictionary<Guid, PublishEntry> state = await _LoadStateAsync(cancellationToken);
-        // Only what was deliberately uploaded is ever kept in step.
-        runIds = [.. runIds.Where(state.ContainsKey)];
+        runIds = await _EligibleAsync(runIds, state, settings, cancellationToken);
+        if (runIds.Length == 0)
+        {
+            return;
+        }
+
         RunSynchronizationService synchronization = scope.ServiceProvider.GetRequiredService<RunSynchronizationService>();
         List<Run> runs;
         await using (ClientDbContext db = await _contextFactory.CreateDbContextAsync(cancellationToken))
@@ -295,6 +304,65 @@ public sealed class EveWorkbenchRunAutoPublisher : ISingletonService, IDisposabl
 
         await _SaveStateAsync(scope.ServiceProvider, state, cancellationToken);
         _ScheduleRetryIfNeeded(anyFailed);
+    }
+
+    public async Task<bool> IsAutoUploadAsync(CancellationToken cancellationToken = default)
+    {
+        await using AsyncServiceScope scope = _scopeFactory.CreateAsyncScope();
+        IReadOnlyList<ClientSetting> settings = await scope.ServiceProvider.GetRequiredService<ISettingRepository>().ListAsync(cancellationToken);
+        return settings.FirstOrDefault(setting => setting.Key == AutoUploadKey)?.Value == "true";
+    }
+
+    /// <summary>Switching it on starts the clock: only runs saved from then on go by themselves, never the old ones.</summary>
+    public async Task SetAutoUploadAsync(bool enabled, CancellationToken cancellationToken = default)
+    {
+        if (enabled == await IsAutoUploadAsync(cancellationToken))
+        {
+            return;
+        }
+
+        await using AsyncServiceScope scope = _scopeFactory.CreateAsyncScope();
+        ISettingRepository settings = scope.ServiceProvider.GetRequiredService<ISettingRepository>();
+        if (enabled)
+        {
+            await settings.UpsertAsync(AutoUploadSinceKey, DateTime.UtcNow.ToString("O"), cancellationToken);
+        }
+
+        await settings.UpsertAsync(AutoUploadKey, enabled ? "true" : "false", cancellationToken);
+    }
+
+    /// <summary>What is kept in step: runs that were uploaded, plus — with auto-upload on — runs saved since it was
+    /// switched on by a pilot with a usable key. A pilot without one is skipped silently, with no chip.</summary>
+    private async Task<Guid[]> _EligibleAsync(Guid[] runIds, Dictionary<Guid, PublishEntry> state,
+        IReadOnlyList<ClientSetting> settings, CancellationToken cancellationToken)
+    {
+        List<Guid> eligible = [.. runIds.Where(state.ContainsKey)];
+        if (settings.FirstOrDefault(setting => setting.Key == AutoUploadKey)?.Value != "true"
+            || !DateTime.TryParse(settings.FirstOrDefault(setting => setting.Key == AutoUploadSinceKey)?.Value, null,
+                System.Globalization.DateTimeStyles.RoundtripKind, out DateTime since))
+        {
+            return [.. eligible];
+        }
+
+        Guid[] fresh = [.. runIds.Where(id => !state.ContainsKey(id))];
+        List<(Guid Id, long CharacterId)> candidates;
+        await using (ClientDbContext db = await _contextFactory.CreateDbContextAsync(cancellationToken))
+        {
+            candidates = [.. (await db.Set<Run>().AsNoTracking()
+                    .Where(run => fresh.Contains(run.Id) && run.State == RunState.Saved && run.DeletedAtUtc == null && run.SavedAtUtc >= since)
+                    .Select(run => new { run.Id, run.CharacterId })
+                    .ToListAsync(cancellationToken)).Select(run => (run.Id, run.CharacterId))];
+        }
+
+        foreach ((Guid id, long characterId) in candidates)
+        {
+            if (await _keyRing.ForPilotAsync(characterId, cancellationToken) is { Invalid: false })
+            {
+                eligible.Add(id);
+            }
+        }
+
+        return [.. eligible];
     }
 
     /// <summary>Stores a key entered in a pilot's dialog; the runs waiting for a key go out at once.</summary>

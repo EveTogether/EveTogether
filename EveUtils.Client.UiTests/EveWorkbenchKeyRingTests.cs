@@ -45,6 +45,30 @@ public sealed class EveWorkbenchKeyRingTests
         Assert.Contains(runId.ToString(), handler.ImportBody);
     }
 
+    /// <summary>The separate opt-in: with auto-upload on, a run saved afterwards goes out by itself (its pilot has a
+    /// key); off, nothing does.</summary>
+    [AvaloniaTheory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Save_WithAutoUpload_IsSentOnlyWhenSwitchedOn(bool autoOn)
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        var handler = new RecordingHandler();
+        using TestClientInstance instance = TestClientInstance.Create(services =>
+            services.AddSingleton<IHttpClientFactory>(new HandlerFactory(handler)));
+        var publisher = instance.Services.GetRequiredService<EveWorkbenchRunAutoPublisher>();
+        var dispatcher = instance.Services.GetRequiredService<IDispatcher>();
+        await instance.Services.GetRequiredService<EveWorkbenchKeyRing>().AddAsync("main-key", cancellationToken);
+        await publisher.SetAutoUploadAsync(autoOn, cancellationToken);
+
+        DateTime started = DateTime.UtcNow.AddMinutes(-20);
+        Guid runId = (await dispatcher.Send(new StartRunCommand(Main, ActivityKind.Site, started, 1234, "Blood Refuge", 30000142), cancellationToken)).Value;
+        await dispatcher.Send(new SaveRunCommand(runId, DateTime.UtcNow.AddMinutes(-1), DateTime.UtcNow, [], [], [], []), cancellationToken);
+        await publisher.WhenIdleAsync();
+
+        Assert.Equal(autoOn, handler.ImportBody?.Contains(runId.ToString()) ?? false);
+    }
+
     private sealed class HandlerFactory(RecordingHandler handler) : IHttpClientFactory
     {
         public HttpClient CreateClient(string name) => new(handler, disposeHandler: false);

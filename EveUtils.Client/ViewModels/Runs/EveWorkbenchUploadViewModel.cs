@@ -32,6 +32,8 @@ public sealed partial class EveWorkbenchUploadViewModel : ViewModelBase
 
     public string SharedText { get; }
 
+    public string HowTo => EveWorkbenchLinks.HowTo;
+
     public event Action? CloseRequested;
 
     [ObservableProperty] private string _notice = "";
@@ -66,8 +68,8 @@ public sealed partial class EveWorkbenchUploadViewModel : ViewModelBase
         bool anyMissing = _keys.Values.Any(key => key is null);
         bool anyInvalid = _keys.Values.Any(key => key is { Invalid: true });
         NeedsKey = anyMissing || anyInvalid;
-        Notice = anyInvalid ? "Your EVE Workbench API key is invalid or was revoked. Create a new one and enter it here."
-            : anyMissing ? "An EVE Workbench API key is required to upload. Create one on EVE Workbench under My Account → Personal Access Tokens and enter it here."
+        Notice = anyInvalid ? "Your EVE Workbench API key is invalid or was revoked."
+            : anyMissing ? "An EVE Workbench API key is required to upload."
             : "";
         CanUpload = _keys.Values.Any(key => key is { Invalid: false });
     }
