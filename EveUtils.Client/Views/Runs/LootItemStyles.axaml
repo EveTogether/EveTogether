@@ -98,6 +98,14 @@
     <Style Selector="Border.badge.repeat > TextBlock">
         <Setter Property="Foreground" Value="{StaticResource MagentaBrush}"/>
     </Style>
+    <!-- A price source (ET-503): blue, so it stays apart from the faction-tinted top row and the gold of its figure. -->
+    <Style Selector="Border.badge.appraisal">
+        <Setter Property="Background" Value="#1438BDF8"/>
+        <Setter Property="BorderBrush" Value="#6638BDF8"/>
+    </Style>
+    <Style Selector="Border.badge.appraisal > TextBlock">
+        <Setter Property="Foreground" Value="{StaticResource BlueBrush}"/>
+    </Style>
 
     <!-- ── Killmail badges (ET-333) ── DESTROYED/DROPPED on a FIT item line, TOP DAMAGE/YOU on an ATTACKERS row
          (FINAL BLOW reuses Border.badge.role above). -->

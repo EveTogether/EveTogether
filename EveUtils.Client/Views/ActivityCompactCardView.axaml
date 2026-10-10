@@ -57,9 +57,12 @@
                             <ItemsControl ItemsSource="{Binding CompactTopLoot}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate x:DataType="va:CompactLootLineViewModel">
-                                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="14">
+                                        <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
                                             <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis"/>
-                                            <TextBlock Grid.Column="1" Classes="cfig" Text="{Binding ValueText}"/>
+                                            <Border Grid.Column="1" Classes="cbadge" IsVisible="{Binding IsBlueprintAppraisal}">
+                                                <TextBlock Text="BP"/>
+                                            </Border>
+                                            <TextBlock Grid.Column="2" Classes="cfig" Margin="6,0,0,0" Text="{Binding ValueText}"/>
                                         </Grid>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
