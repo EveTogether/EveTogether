@@ -120,6 +120,7 @@
                             </StackPanel>
                         </StackPanel>
                     </Border>
+                    <TextBlock Text="{Binding EveWorkbenchKeyState}" FontSize="12" FontWeight="SemiBold" TextWrapping="Wrap" Foreground="{StaticResource TextBrightBrush}"/>
                     <TextBlock Text="{Binding EveWorkbenchKeyStatus}" FontSize="11" TextWrapping="Wrap" Foreground="{StaticResource TextBrush}"/>
                     <TextBlock Text="{Binding EveWorkbenchPilotWarning}" FontSize="11" TextWrapping="Wrap" Foreground="{StaticResource WarnBrush}"
                                IsVisible="{Binding EveWorkbenchPilotWarning, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>

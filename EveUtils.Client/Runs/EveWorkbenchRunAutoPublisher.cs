@@ -3,7 +3,7 @@ using EveUtils.Shared.Data;
 using EveUtils.Shared.DependencyInjection;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Fittings.Services.Implementations;
-using EveUtils.Shared.Modules.Market.Services;
+using EveUtils.Shared.Modules.Market.Services.Implementations;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Entities;
 using EveUtils.Shared.Modules.Runs.Enums;
@@ -40,7 +40,8 @@ public sealed class EveWorkbenchRunAutoPublisher : ISingletonService, IDisposabl
 
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly IDbContextFactory<ClientDbContext> _contextFactory;
-    private readonly IEveWorkbenchKeyStore _keyStore;
+    private readonly EveWorkbenchKeyRing _keyRing;
+    private readonly EveWorkbenchKeyStore _legacyKeyStore;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILogger<EveWorkbenchRunAutoPublisher> _logger;
     private readonly IDisposable _runsChanged;
@@ -51,16 +52,17 @@ public sealed class EveWorkbenchRunAutoPublisher : ISingletonService, IDisposabl
     private bool _retryScheduled;
 
     public EveWorkbenchRunAutoPublisher(IEventBus eventBus, IServiceScopeFactory scopeFactory,
-        IDbContextFactory<ClientDbContext> contextFactory, IEveWorkbenchKeyStore keyStore,
+        IDbContextFactory<ClientDbContext> contextFactory, EveWorkbenchKeyRing keyRing, EveWorkbenchKeyStore legacyKeyStore,
         IHttpClientFactory httpClientFactory, ILogger<EveWorkbenchRunAutoPublisher> logger)
     {
         _scopeFactory = scopeFactory;
         _contextFactory = contextFactory;
-        _keyStore = keyStore;
+        _keyRing = keyRing;
+        _legacyKeyStore = legacyKeyStore;
         _httpClientFactory = httpClientFactory;
         _logger = logger;
         _runsChanged = eventBus.Subscribe<RunsChangedEvent>(_OnRunsChangedAsync);
-        _ = _Enqueue(_RetryAsync);
+        _ = _Enqueue(_StartAsync);
     }
 
     public static string EnabledSettingKeyFor(long characterId) => EnabledSettingKeyPrefix + characterId;
@@ -170,6 +172,12 @@ public sealed class EveWorkbenchRunAutoPublisher : ISingletonService, IDisposabl
         return _PublishAsync(runIds, cancellationToken);
     }
 
+    private async Task _StartAsync(CancellationToken cancellationToken)
+    {
+        await _keyRing.MigrateLegacyAsync(await _legacyKeyStore.GetTokenAsync(cancellationToken), cancellationToken);
+        await _RetryAsync(cancellationToken);
+    }
+
     private async Task _RetryAsync(CancellationToken cancellationToken)
     {
         lock (_gate)
@@ -216,74 +224,89 @@ public sealed class EveWorkbenchRunAutoPublisher : ISingletonService, IDisposabl
             return;
         }
 
-        string? token = await _keyStore.GetTokenAsync(cancellationToken);
-        if (string.IsNullOrWhiteSpace(token))
-        {
-            _Record(state, runs, "NoKey", "no API key");
-            await _SaveStateAsync(scope.ServiceProvider, state, cancellationToken);
-            return;
-        }
-
-        _Record(state, runs, "Pending", null);
-        await _SaveStateAsync(scope.ServiceProvider, state, cancellationToken);
-
         string baseUrl = settings.FirstOrDefault(setting => setting.Key == UrlSettingKey)?.Value ?? EveWorkbenchFitClient.BaseUrl;
-        IReadOnlyList<RunWirePayload> payloads = await synchronization.BuildPayloadsAsync(runs, cancellationToken);
         var publisher = new EveWorkbenchRunPublisher(_httpClientFactory.CreateClient(EveWorkbenchRunPublisher.HttpClientName),
             new LogAdapter(_logger));
-        EveWorkbenchRunPublishOutcome outcome = await publisher.PublishAsync(true, baseUrl, token, payloads, cancellationToken);
-
-        foreach (EveWorkbenchRunImportResult result in outcome.Results)
+        bool anyFailed = false;
+        // One request series per key: pilots of one EVE Workbench account share a key, and a refused key hits only them.
+        List<(ResolvedEveWorkbenchKey? Key, List<Run> Runs)> groups = [];
+        foreach (Run run in runs)
         {
-            if (runs.FirstOrDefault(run => run.Id == result.ExternalId) is { } run)
+            ResolvedEveWorkbenchKey? key = await _keyRing.ForPilotAsync(run.CharacterId, cancellationToken);
+            int index = groups.FindIndex(group => group.Key?.MainId == key?.MainId);
+            if (index < 0)
             {
-                state[run.Id] = new PublishEntry(run.CharacterId, run.Revision, result.Status.ToString(), result.Reason, DateTime.UtcNow);
-                if (result.Status == EveWorkbenchRunImportStatus.Rejected)
-                {
-                    _logger.LogWarning("EVE Workbench rejected run {RunId}: {Reason}", run.Id, result.Reason);
-                }
+                groups.Add((key, [run]));
+            }
+            else
+            {
+                groups[index].Runs.Add(run);
             }
         }
 
-        _Record(state, [.. runs.Where(run => outcome.Pending.Any(payload => payload.Run.Id == run.Id))],
-            outcome.Unauthorized ? "KeyInvalid" : "Failed", outcome.Unauthorized ? "API key refused" : "EVE Workbench did not answer");
+        foreach ((ResolvedEveWorkbenchKey? key, List<Run> keyRuns) in groups)
+        {
+            if (key is null || key.Invalid)
+            {
+                _Record(state, keyRuns, key is null ? "NoKey" : "KeyInvalid", key is null ? "no API key" : "API key refused");
+                continue;
+            }
+
+            _Record(state, keyRuns, "Pending", null);
+            await _SaveStateAsync(scope.ServiceProvider, state, cancellationToken);
+            IReadOnlyList<RunWirePayload> payloads = await synchronization.BuildPayloadsAsync(keyRuns, cancellationToken);
+            EveWorkbenchRunPublishOutcome outcome = await publisher.PublishAsync(true, baseUrl, key.Token, payloads, cancellationToken);
+            foreach (EveWorkbenchRunImportResult result in outcome.Results)
+            {
+                if (keyRuns.FirstOrDefault(run => run.Id == result.ExternalId) is { } run)
+                {
+                    state[run.Id] = new PublishEntry(run.CharacterId, run.Revision, result.Status.ToString(), result.Reason, DateTime.UtcNow);
+                    if (result.Status == EveWorkbenchRunImportStatus.Rejected)
+                    {
+                        _logger.LogWarning("EVE Workbench rejected run {RunId}: {Reason}", run.Id, result.Reason);
+                    }
+                }
+            }
+
+            _Record(state, [.. keyRuns.Where(run => outcome.Pending.Any(payload => payload.Run.Id == run.Id))],
+                outcome.Unauthorized ? "KeyInvalid" : "Failed", outcome.Unauthorized ? "API key refused" : "EVE Workbench did not answer");
+            if (outcome.Unauthorized)
+            {
+                await _keyRing.MarkInvalidAsync(key.MainId, cancellationToken);
+            }
+
+            // A refused key is not retried on a timer: it waits for a new key.
+            anyFailed |= outcome.Pending.Count > 0 && !outcome.Unauthorized;
+        }
+
         await _SaveStateAsync(scope.ServiceProvider, state, cancellationToken);
-        // A refused key is not retried on a timer: it waits for a new key (see SaveKeyAsync).
-        _ScheduleRetryIfNeeded(outcome.Pending.Count > 0 && !outcome.Unauthorized);
+        _ScheduleRetryIfNeeded(anyFailed);
     }
 
-    public async Task<bool> HasKeyAsync(CancellationToken cancellationToken = default) =>
-        !string.IsNullOrWhiteSpace(await _keyStore.GetTokenAsync(cancellationToken));
-
-    /// <summary>Asks EVE Workbench which characters the stored key covers; null without a key.</summary>
-    public async Task<EveWorkbenchKeyCheck?> CheckStoredKeyAsync(CancellationToken cancellationToken = default) =>
-        await _keyStore.GetTokenAsync(cancellationToken) is { Length: > 0 } token ? await _CheckAsync(token, cancellationToken) : null;
-
-    /// <summary>Checks <paramref name="key"/> first and stores it unless EVE Workbench refuses it; a stored key sets
-    /// the waiting runs going again at once. One key for appraisal and upload alike.</summary>
+    /// <summary>Stores a key entered in a pilot's dialog; the runs waiting for a key go out at once.</summary>
     public async Task<EveWorkbenchKeyCheck> SaveKeyAsync(string key, CancellationToken cancellationToken = default)
     {
-        string trimmed = key.Trim();
-        EveWorkbenchKeyCheck check = await _CheckAsync(trimmed, cancellationToken);
-        if (check.Verdict != EveWorkbenchKeyVerdict.Invalid)
+        EveWorkbenchKeyCheck check = await _keyRing.AddAsync(key, cancellationToken);
+        if (check.Verdict == EveWorkbenchKeyVerdict.Valid)
         {
-            await _keyStore.SetTokenAsync(trimmed, cancellationToken);
             _ = _Enqueue(_RetryAsync);
         }
 
         return check;
     }
 
-    public Task ClearKeyAsync(CancellationToken cancellationToken = default) => _keyStore.SetTokenAsync(null, cancellationToken);
-
-    private async Task<EveWorkbenchKeyCheck> _CheckAsync(string token, CancellationToken cancellationToken)
+    /// <summary>The key a pilot publishes with, after asking EVE Workbench who each stored key still covers.</summary>
+    public async Task<ResolvedEveWorkbenchKey?> KeyForPilotAsync(long characterId, bool refresh, CancellationToken cancellationToken = default)
     {
-        await using AsyncServiceScope scope = _scopeFactory.CreateAsyncScope();
-        IReadOnlyList<ClientSetting> settings = await scope.ServiceProvider.GetRequiredService<ISettingRepository>().ListAsync(cancellationToken);
-        string baseUrl = settings.FirstOrDefault(setting => setting.Key == UrlSettingKey)?.Value ?? EveWorkbenchFitClient.BaseUrl;
-        var publisher = new EveWorkbenchRunPublisher(_httpClientFactory.CreateClient(EveWorkbenchRunPublisher.HttpClientName));
-        return await publisher.CheckKeyAsync(baseUrl, token, cancellationToken);
+        if (refresh)
+        {
+            await _keyRing.RefreshAsync(cancellationToken);
+        }
+
+        return await _keyRing.ForPilotAsync(characterId, cancellationToken);
     }
+
+    public Task ClearKeyAsync(long mainId, CancellationToken cancellationToken = default) => _keyRing.RemoveAsync(mainId, cancellationToken);
 
     private static void _Record(Dictionary<Guid, PublishEntry> state, IEnumerable<Run> runs, string status, string? reason)
     {

@@ -83,7 +83,8 @@ public static class ClientServices
         // AddSharedServices so its MarketPriceAppraisalProvider registers after this and stays the plain
         // GetService<IAppraisalProvider>() default; IAppraisalProviderSelector honors the user's actual choice.
         services.AddSingleton<ITokenProtector>(_ => new AesGcmTokenProtector(DataDirectory()));
-        services.AddSingleton<IEveWorkbenchKeyStore, EveWorkbenchKeyStore>();
+        services.AddSingleton<EveWorkbenchKeyStore>();
+        services.AddSingleton<IEveWorkbenchKeyStore, EveUtils.Client.Runs.EveWorkbenchKeyStoreWithRing>();
         services.AddSingleton<IAppraisalProvider, EveWorkbenchAppraisalProvider>();
         services.AddSharedServices(ExecutionHost.Client);    // central marker-scan over the shared assembly
         services.AddAutoServices(typeof(ClientServices).Assembly, ExecutionHost.Client); // host-only marker-tagged services
