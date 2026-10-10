@@ -177,7 +177,7 @@ public sealed class FleetAbyssalLifecycleTests
             Assert.Equal(GroupCode, window.GroupCode);
             Assert.Equal(Fierce, window.TierIndex);
             Assert.True(window.IsArmedShown);
-            Assert.True(window.IsStartButtonVisible);
+            Assert.False(window.IsStartButtonVisible);
         }
     }
 
@@ -381,7 +381,7 @@ public sealed class FleetAbyssalLifecycleTests
     private static async Task<ActivityWindowViewModel> _JoinedAndInAsync(TestClientInstance instance)
     {
         ActivityWindowViewModel window = await _ArmedAsync(instance);
-        await window.StartRunCommand.ExecuteAsync(null);
+        await window.StartOnAbyssalEntryAsync(DateTime.UtcNow);
         await _SettleAsync(() => window.RunId is not null);
         Assert.Equal(ActivityRunState.Running, window.RunState);
         Assert.Equal(GroupCode, window.GroupCode);

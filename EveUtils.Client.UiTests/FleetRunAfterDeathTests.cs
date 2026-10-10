@@ -147,7 +147,7 @@ public sealed class FleetRunAfterDeathTests
         {
             pilot.Window.JoinFleetRun(start);
             await FleetOfTwo.RunJobsAsync();
-            await pilot.Window.StartRunCommand.ExecuteAsync(null);
+            await pilot.Window.StartOnAbyssalEntryAsync(DateTime.UtcNow);
             pilot.Refresh();
         }
 

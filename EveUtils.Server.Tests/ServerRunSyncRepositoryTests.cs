@@ -120,6 +120,27 @@ public sealed class ServerRunSyncRepositoryTests
         Assert.DoesNotContain(typeof(ActivitySummary), typeof(RunWireData).GetProperties().Select(property => property.PropertyType));
     }
 
+    [Fact]
+    public async Task Sync_TyrannosAgentRow_KeepsItsNegativeIdAndCount()
+    {
+        var repository = new ServerRunSyncRepository((IDbContextFactory<ServerDbContext>)_factory);
+        Run run = _Run("HF-7QK2");
+        run.EnemyObservations.Add(new RunEnemyObservation
+        {
+            Id = Guid.CreateVersion7(), RunId = run.Id, EnemyTypeId = -3019610, EnemyName = "Scylla Tyrannos", Count = 4,
+            FirstObservedAtUtc = run.StartedAtUtc, LastObservedAtUtc = run.StartedAtUtc, RoomNumber = 2
+        });
+        string json = JsonSerializer.Serialize(RunWireData.FromEntity(run));
+
+        await repository.UpsertAsync(JsonSerializer.Deserialize<RunWireData>(json)!.ToEntity(),
+            cancellationToken: TestContext.Current.CancellationToken);
+        IReadOnlyList<Run> pulled = await repository.ListChangedAsync(run.CharacterId, ["HF-7QK2"], DateTime.UnixEpoch,
+            TestContext.Current.CancellationToken);
+
+        RunEnemyObservation stored = Assert.Single(Assert.Single(pulled).EnemyObservations);
+        Assert.Equal((-3019610, "Scylla Tyrannos", 4, (int?)2), (stored.EnemyTypeId, stored.EnemyName, stored.Count, stored.RoomNumber));
+    }
+
     private static Run _Run(string? groupCode, long characterId = 90000001, bool deleted = false, int startedDaysFromNow = 0) => new()
     {
         Id = Guid.CreateVersion7(),
