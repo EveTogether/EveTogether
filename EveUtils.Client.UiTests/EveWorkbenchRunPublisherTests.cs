@@ -25,7 +25,7 @@ public sealed class EveWorkbenchRunPublisherTests
     public async Task PublishAsync_EnabledSavedRun_SendsUnchangedPayload()
     {
         CancellationToken cancellationToken = TestContext.Current.CancellationToken;
-        var handler = new Handler(_ => _Response("[]"));
+        var handler = new Handler(_ => _Response("{\"Error\":false,\"Results\":[]}"));
         RunWirePayload payload = _Payload();
         var publisher = new EveWorkbenchRunPublisher(new HttpClient(handler));
         await publisher.PublishAsync(true, "https://workbench.example/", "token", [payload], cancellationToken);
@@ -50,7 +50,7 @@ public sealed class EveWorkbenchRunPublisherTests
         CancellationToken cancellationToken = TestContext.Current.CancellationToken;
         RunWirePayload payload = _Payload();
         var logger = new Logger();
-        var publisher = new EveWorkbenchRunPublisher(new HttpClient(new Handler(_ => _Response($"[{{\"ExternalId\":\"{payload.Run.Id}\",\"Status\":\"Rejected\",\"Reason\":\"invalid\"}}]"))), logger);
+        var publisher = new EveWorkbenchRunPublisher(new HttpClient(new Handler(_ => _Response($"{{\"Error\":false,\"Results\":[{{\"ExternalId\":\"{payload.Run.Id}\",\"Status\":3,\"Reason\":\"invalid\"}}]}}"))), logger);
         EveWorkbenchRunPublishOutcome outcome = await publisher.PublishAsync(true, "https://workbench.example/", "token", [payload], cancellationToken);
         Assert.Empty(outcome.Pending);
         Assert.Contains("Rejected", logger.Message);

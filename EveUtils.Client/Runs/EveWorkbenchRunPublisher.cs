@@ -15,6 +15,9 @@ public sealed class EveWorkbenchRunPublisher(HttpClient client, IEveWorkbenchRun
 {
     public const string HttpClientName = "EveWorkbenchRunPublisher";
 
+    /// <summary>EVE Workbench refuses a request with more runs than this.</summary>
+    public const int MaxRunsPerRequest = 50;
+
     // PascalCase on purpose: the import contract names its fields that way, and the payload must not be reshaped.
     private static readonly JsonSerializerOptions RequestOptions = new();
     private static readonly JsonSerializerOptions ResponseOptions = new() { PropertyNameCaseInsensitive = true };
@@ -34,34 +37,65 @@ public sealed class EveWorkbenchRunPublisher(HttpClient client, IEveWorkbenchRun
             return new EveWorkbenchRunPublishOutcome(payloads, []);
         }
 
+        List<RunWirePayload> pending = [];
+        List<EveWorkbenchRunImportResult> results = [];
+        foreach (RunWirePayload[] batch in payloads.Chunk(MaxRunsPerRequest))
+        {
+            IReadOnlyList<EveWorkbenchRunImportResult>? answered = await _SendAsync(baseUrl, token, batch, cancellationToken);
+            if (answered is null)
+            {
+                pending.AddRange(batch);
+                continue;
+            }
+
+            results.AddRange(answered);
+            pending.AddRange(batch.Where(payload => answered.All(result => result.ExternalId != payload.Run.Id)));
+        }
+
+        return new EveWorkbenchRunPublishOutcome(pending, results);
+    }
+
+    /// <summary>Null when the batch got no usable answer at all, so every run in it stays pending.</summary>
+    private async Task<IReadOnlyList<EveWorkbenchRunImportResult>?> _SendAsync(string baseUrl, string token,
+        RunWirePayload[] batch, CancellationToken cancellationToken)
+    {
         try
         {
             using var request = new HttpRequestMessage(HttpMethod.Post, new Uri(new Uri(baseUrl), "v1/runs/import"))
             {
-                Content = JsonContent.Create(new EveWorkbenchRunImportRequest { Runs = payloads }, options: RequestOptions)
+                Content = JsonContent.Create(new EveWorkbenchRunImportRequest { Runs = batch }, options: RequestOptions)
             };
             request.Headers.Add("Character-Access-Token", token);
             using HttpResponseMessage response = await client.SendAsync(request, cancellationToken);
             if (!response.IsSuccessStatusCode)
             {
                 logger?.Log($"EVE Workbench run import failed with HTTP {(int)response.StatusCode}.");
-                return new EveWorkbenchRunPublishOutcome(payloads, []);
+                return null;
             }
 
-            IReadOnlyList<EveWorkbenchRunImportResult> results =
-                await response.Content.ReadFromJsonAsync<IReadOnlyList<EveWorkbenchRunImportResult>>(ResponseOptions, cancellationToken) ?? [];
-            foreach (EveWorkbenchRunImportResult result in results)
+            EveWorkbenchRunImportResponse? body = await response.Content.ReadFromJsonAsync<EveWorkbenchRunImportResponse>(ResponseOptions, cancellationToken);
+            if (body is null || body.Error)
+            {
+                logger?.Log($"EVE Workbench run import was refused: {body?.Message}");
+                return null;
+            }
+
+            foreach (EveWorkbenchRunImportResult result in body.Results)
             {
                 logger?.Log($"EVE Workbench run {result.ExternalId} import result: {result.Status}{(result.Reason is null ? string.Empty : $" ({result.Reason})")}.");
             }
 
-            Guid[] answered = [.. results.Where(result => result.Status is "Created" or "Updated" or "Ignored" or "Rejected").Select(result => result.ExternalId)];
-            return new EveWorkbenchRunPublishOutcome(payloads.Where(payload => !answered.Contains(payload.Run.Id)).ToArray(), results);
+            return body.Results;
+        }
+        catch (JsonException)
+        {
+            logger?.Log("EVE Workbench run import returned an answer that could not be read.");
+            return null;
         }
         catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException && !cancellationToken.IsCancellationRequested)
         {
             logger?.Log("EVE Workbench run import could not reach the configured endpoint.");
-            return new EveWorkbenchRunPublishOutcome(payloads, []);
+            return null;
         }
     }
 }
@@ -71,10 +105,26 @@ public sealed class EveWorkbenchRunImportRequest
     public required IReadOnlyList<RunWirePayload> Runs { get; init; }
 }
 
+public sealed class EveWorkbenchRunImportResponse
+{
+    public bool Error { get; init; }
+    public string? Message { get; init; }
+    public IReadOnlyList<EveWorkbenchRunImportResult> Results { get; init; } = [];
+}
+
+/// <summary>Numeric on the wire, in this order.</summary>
+public enum EveWorkbenchRunImportStatus
+{
+    Created,
+    Updated,
+    Ignored,
+    Rejected
+}
+
 public sealed class EveWorkbenchRunImportResult
 {
     public required Guid ExternalId { get; init; }
-    public required string Status { get; init; }
+    public required EveWorkbenchRunImportStatus Status { get; init; }
     public string? Reason { get; init; }
     public Guid? RunId { get; init; }
     public Guid? RunGroupId { get; init; }

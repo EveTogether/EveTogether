@@ -236,8 +236,8 @@ public sealed class EveWorkbenchRunAutoPublisher : ISingletonService, IDisposabl
         {
             if (runs.FirstOrDefault(run => run.Id == result.ExternalId) is { } run)
             {
-                state[run.Id] = new PublishEntry(run.CharacterId, run.Revision, result.Status, result.Reason, DateTime.UtcNow);
-                if (result.Status == "Rejected")
+                state[run.Id] = new PublishEntry(run.CharacterId, run.Revision, result.Status.ToString(), result.Reason, DateTime.UtcNow);
+                if (result.Status == EveWorkbenchRunImportStatus.Rejected)
                 {
                     _logger.LogWarning("EVE Workbench rejected run {RunId}: {Reason}", run.Id, result.Reason);
                 }
