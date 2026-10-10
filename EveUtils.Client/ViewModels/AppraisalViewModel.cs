@@ -45,10 +45,12 @@ public partial class AppraisalViewModel : ViewModelBase
     /// screen. Null hides that field, like every other optional dependency here.</param>
     /// <param name="dispatcher">Lets <see cref="MakeSelectionDefaultCommand"/> persist a pick as the default for
     /// every other consumer; null hides that command, leaving the picker session-only as it always was.</param>
+    /// <param name="blueprints">The BLUEPRINTS mode (ET-502); null hides the ITEMS | BLUEPRINTS switch.</param>
     public AppraisalViewModel(IEnumerable<IAppraisalProvider> providers, ISdeAccessor sde, IDialogService? dialogs = null,
         IAppraisalProviderSelector? selector = null, IEveWorkbenchKeyStore? eveWorkbenchKeyStore = null,
-        IDispatcher? dispatcher = null)
+        IDispatcher? dispatcher = null, BlueprintAppraisalViewModel? blueprints = null)
     {
+        Blueprints = blueprints;
         _sde = sde;
         _dialogs = dialogs;
         _eveWorkbenchKeyStore = eveWorkbenchKeyStore;
@@ -73,6 +75,45 @@ public partial class AppraisalViewModel : ViewModelBase
         {
             await _RefreshEveWorkbenchTokenStatusAsync(_eveWorkbenchKeyStore);
         }
+    }
+
+    /// <summary>The BLUEPRINTS mode, or null where the tool was built without one.</summary>
+    public BlueprintAppraisalViewModel? Blueprints { get; }
+
+    public bool HasBlueprintMode => Blueprints is not null;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsItemsMode), nameof(IsBlueprintsMode))]
+    private AppraisalMode _mode;
+
+    // Bound two-way to the switch's two toggles: clicking the toggle that is already on asks for "off", which is no
+    // mode at all, so it is answered by saying the standing mode again rather than by changing anything.
+    public bool IsItemsMode
+    {
+        get => Mode is AppraisalMode.Items;
+        set => _SwitchTo(value ? AppraisalMode.Items : Mode);
+    }
+
+    public bool IsBlueprintsMode
+    {
+        get => Mode is AppraisalMode.Blueprints;
+        set => _SwitchTo(value && Blueprints is not null ? AppraisalMode.Blueprints : Mode);
+    }
+
+    private void _SwitchTo(AppraisalMode mode)
+    {
+        Mode = mode;
+        OnPropertyChanged(nameof(IsItemsMode));
+        OnPropertyChanged(nameof(IsBlueprintsMode));
+    }
+
+    /// <summary>Switches to BLUEPRINTS and adds the blueprint — "Open in appraisal" from a loot line (ET-502).</summary>
+    public Task ShowBlueprintAsync(int blueprintTypeId)
+    {
+        if (Blueprints is null)
+            return Task.CompletedTask;
+        Mode = AppraisalMode.Blueprints;
+        return Blueprints.ShowBlueprintAsync(blueprintTypeId);
     }
 
     // Set once construction's own SelectedProvider assignment (above) has run, so OnSelectedProviderChanged below

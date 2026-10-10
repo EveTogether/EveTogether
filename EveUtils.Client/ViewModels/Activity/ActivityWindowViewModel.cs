@@ -194,7 +194,8 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         LootOverview = services.GetService<CqrsDispatcher>() is { } overviewDispatcher
             ? new ActivityLootViewModel(() => new RunLootViewModel(overviewDispatcher,
                     sde: services.GetService<ISdeAccessor>(), images: services.GetService<ITypeImageProvider>(),
-                    appraisalSelector: services.GetService<IAppraisalProviderSelector>()),
+                    appraisalSelector: services.GetService<IAppraisalProviderSelector>(),
+                    appraisalOpener: services.GetService<AppraisalOpener>()),
                 services.GetService<ICharacterPortraitProvider>())
             : null;
         if (LootOverview is not null)

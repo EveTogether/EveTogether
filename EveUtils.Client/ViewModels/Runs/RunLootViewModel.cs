@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using EveUtils.Client.Dialogs;
 using EveUtils.Client.Clipboard;
 using EveUtils.Client.Esi;
 using EveUtils.Client.Formatting;
@@ -32,6 +33,7 @@ public sealed partial class RunLootViewModel : ViewModelBase
     private readonly IAppraisalProviderSelector? _appraisalSelector;
     private readonly ISdeAccessor? _sde;
     private readonly ITypeImageProvider? _images;
+    private readonly AppraisalOpener? _appraisalOpener;
     private readonly Dictionary<int, decimal> _unitPrices = [];
     private readonly HashSet<int> _liveTypeIds = [];
     private HashSet<int> _appraisedTypeIds = [];
@@ -46,9 +48,12 @@ public sealed partial class RunLootViewModel : ViewModelBase
     /// <param name="appraisal">A fixed price source — kept for tests that hand this a stub directly.
     /// <paramref name="appraisalSelector"/> takes priority when both are given (ET-364): production wiring passes
     /// the selector, so the user's chosen provider is asked, not whichever one happened to be built here.</param>
+    /// <param name="appraisalOpener">Offers "Open in appraisal" on a blueprint line (ET-502); null offers nothing.</param>
     public RunLootViewModel(CqrsDispatcher dispatcher, IAppraisalProvider? appraisal = null, ISdeAccessor? sde = null,
-        ITypeImageProvider? images = null, IAppraisalProviderSelector? appraisalSelector = null)
+        ITypeImageProvider? images = null, IAppraisalProviderSelector? appraisalSelector = null,
+        AppraisalOpener? appraisalOpener = null)
     {
+        _appraisalOpener = appraisalOpener;
         _dispatcher = dispatcher;
         _appraisal = appraisal;
         _appraisalSelector = appraisalSelector;
@@ -961,7 +966,12 @@ public sealed partial class RunLootViewModel : ViewModelBase
 
     private ActivityLootLineViewModel _Row(int itemTypeId, LootKind lootKind, long quantity, bool isExcluded, int captureCount) =>
         new(itemTypeId, _names.GetValueOrDefault(itemTypeId, $"type {itemTypeId}"), quantity, _UnitPrice(itemTypeId),
-            lootKind, isExcluded, captureCount, _liveTypeIds.Contains(itemTypeId), _appraisedTypeIds.Contains(itemTypeId));
+            lootKind, isExcluded, captureCount, _liveTypeIds.Contains(itemTypeId), _appraisedTypeIds.Contains(itemTypeId))
+        {
+            OpenInAppraisalCommand = _appraisalOpener is { } opener && _sde?.GetBlueprintManufacturing(itemTypeId) is not null
+                ? new RelayCommand(() => opener.Open(itemTypeId))
+                : null
+        };
 
     private int _CapturesHolding(int itemTypeId, LootKind lootKind, bool isExcluded) =>
         Captures.Count(capture => capture.IsExcluded == isExcluded

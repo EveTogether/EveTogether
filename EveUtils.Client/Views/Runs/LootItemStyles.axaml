@@ -63,6 +63,27 @@
         <Setter Property="VerticalAlignment" Value="Center"/>
     </Style>
 
+    <!-- "Open in appraisal" on a blueprint line (ET-502): a quiet underlined link after the name, never a plate that would
+         read as a control of the row itself. -->
+    <Style Selector="Button.lootlink">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Padding" Value="0"/>
+        <Setter Property="MinHeight" Value="0"/>
+        <Setter Property="FontSize" Value="10"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+        <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+        <Setter Property="Cursor" Value="Hand"/>
+    </Style>
+    <Style Selector="Button.lootlink /template/ ContentPresenter">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="TextBlock.TextDecorations" Value="Underline"/>
+    </Style>
+    <Style Selector="Button.lootlink:pointerover /template/ ContentPresenter">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
+    </Style>
+
     <!-- ── Badges ── small bordered pills in the mockup's four inks. -->
     <Style Selector="Border.badge">
         <Setter Property="CornerRadius" Value="3"/>
