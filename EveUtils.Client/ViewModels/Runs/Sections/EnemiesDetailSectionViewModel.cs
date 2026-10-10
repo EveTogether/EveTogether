@@ -73,50 +73,29 @@ public sealed partial class EnemiesDetailSectionViewModel() : RunDetailSection(R
         EnemyTotalCountText = countedEnemyCount == 1 ? "1 enemy" : $"{countedEnemyCount} enemies";
     }
 
-    // One set of rooms for the whole group, so every client of the fleet draws the same ones (ET-494): the commander's
-    // run decides when it has rooms, else the fullest list, the earliest run on a tie.
     private void _ShowRooms(ActivityDetailDto detail)
     {
         EnemyRooms.Clear();
-        List<(ActivityRunDetailDto Run, IReadOnlyList<DateTime> Boundaries)> withRooms = [.. detail.Runs
-            .OrderBy(run => run.StartedAtUtc).ThenBy(run => run.RunId)
-            .Select(run => (Run: run, Boundaries: RunRooms.Boundaries(detail.Parameters, run.RunId)))
-            .Where(entry => entry.Boundaries.Count > 0)];
-        HasRooms = withRooms.Count > 0;
-        if (!HasRooms)
+        RunRoomSet? rooms = RunRoomSet.Of(detail);
+        HasRooms = rooms is not null;
+        if (rooms is null)
         {
             return;
         }
 
-        (ActivityRunDetailDto Run, IReadOnlyList<DateTime> Boundaries) rooms =
-            withRooms.FirstOrDefault(entry => entry.Run.Role is RunRole.FleetCommander) is { Run: not null } commanders
-                ? commanders
-                : withRooms.MaxBy(entry => entry.Boundaries.Count);
-
-        // Every pilot's row lands in a room by its first sighting, and one type is one row per room across the pilots.
-        foreach (IGrouping<int, RunEnemyObservationDto> room in detail.EnemyObservations
-                     .GroupBy(observation => RunRooms.RoomOf(rooms.Boundaries, observation.FirstObservedAtUtc) ?? 1)
-                     .OrderBy(room => room.Key))
+        foreach ((int room, List<RunEnemyObservationDto> merged) in rooms.EnemiesByRoom(detail))
         {
             List<ActivityEnemyRowViewModel> rows = [];
-            int counted = 0;
-            foreach (IGrouping<int, RunEnemyObservationDto> type in room.GroupBy(observation => observation.EnemyTypeId))
+            foreach (RunEnemyObservationDto observation in merged)
             {
-                // The pilots saw the same spawn, so the count is the largest anyone typed, not a sum.
-                RunEnemyObservationDto merged = type.First() with
-                {
-                    Count = type.Max(observation => observation.Count),
-                    FirstObservedAtUtc = type.Min(observation => observation.FirstObservedAtUtc),
-                    LastObservedAtUtc = type.Max(observation => observation.LastObservedAtUtc)
-                };
-                counted += merged.Count;
-                rows.Add(new ActivityEnemyRowViewModel(merged) { IsAlternate = rows.Count % 2 == 1 });
+                rows.Add(new ActivityEnemyRowViewModel(observation) { IsAlternate = rows.Count % 2 == 1 });
             }
 
-            EnemyRooms.Add(new ActivityEnemyRoomViewModel($"ROOM {room.Key}",
-                _WindowText(RunRooms.StartOf(rooms.Boundaries, room.Key, rooms.Run.StartedAtUtc),
-                    RunRooms.EndOf(rooms.Boundaries, room.Key, rooms.Run.StoppedAtUtc)),
-                counted, rows, RoomSourceViewModel.Of(_CertaintyOf(detail, rooms.Run.RunId, room.Key))));
+            EnemyRooms.Add(new ActivityEnemyRoomViewModel($"ROOM {room}",
+                _WindowText(RunRooms.StartOf(rooms.Boundaries, room, rooms.Run.StartedAtUtc),
+                    RunRooms.EndOf(rooms.Boundaries, room, rooms.Run.StoppedAtUtc)),
+                merged.Sum(observation => observation.Count), rows,
+                RoomSourceViewModel.Of(_CertaintyOf(detail, rooms.Run.RunId, room))));
         }
     }
 

@@ -1,0 +1,82 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vs="using:EveUtils.Client.ViewModels.Runs.Sections"
+             x:Class="EveUtils.Client.Views.Runs.Sections.HitQualityDetailSectionView"
+             x:DataType="vs:HitQualityDetailSectionViewModel">
+    <UserControl.Resources>
+        <!-- One row: target over weapon, shots, the seven hit words, min / avg / max / total, application. -->
+        <DataTemplate x:Key="HitQualityRowTemplate" DataType="vs:HitQualityRowViewModel">
+            <Grid Classes="detailrow" Classes.alt="{Binding IsAlternate}" Margin="0,3"
+                  ColumnDefinitions="*,42,30,30,30,30,30,30,30,34,34,34,52,158" ColumnSpacing="6">
+                <StackPanel VerticalAlignment="Center">
+                    <TextBlock Classes="charname" TextTrimming="CharacterEllipsis" Text="{Binding Target}"/>
+                    <TextBlock Classes="hint" Margin="0" TextTrimming="CharacterEllipsis" Text="{Binding Weapon}"
+                               ToolTip.Tip="{Binding Weapon}" IsVisible="{Binding HasWeapon}"/>
+                    <TextBlock Margin="0" Text="{Binding Weapon}" IsVisible="{Binding !HasWeapon}"
+                               ToolTip.Tip="The game log line names no weapon."/>
+                </StackPanel>
+                <TextBlock Grid.Column="1" Classes="money" VerticalAlignment="Center" Text="{Binding Shots}"/>
+                <TextBlock Grid.Column="2" Classes="money" VerticalAlignment="Center" Text="{Binding Counts[0]}"/>
+                <TextBlock Grid.Column="3" Classes="money" VerticalAlignment="Center" Text="{Binding Counts[1]}"/>
+                <TextBlock Grid.Column="4" Classes="money" VerticalAlignment="Center" Text="{Binding Counts[2]}"/>
+                <TextBlock Grid.Column="5" Classes="money" VerticalAlignment="Center" Text="{Binding Counts[3]}"/>
+                <TextBlock Grid.Column="6" Classes="money" VerticalAlignment="Center" Text="{Binding Counts[4]}"/>
+                <TextBlock Grid.Column="7" Classes="money" VerticalAlignment="Center" Text="{Binding Counts[5]}"/>
+                <TextBlock Grid.Column="8" Classes="money" VerticalAlignment="Center" Text="{Binding Counts[6]}"/>
+                <TextBlock Grid.Column="9" Classes="money" VerticalAlignment="Center" Text="{Binding Min}"/>
+                <TextBlock Grid.Column="10" Classes="money" VerticalAlignment="Center" Text="{Binding Average}"/>
+                <TextBlock Grid.Column="11" Classes="money" VerticalAlignment="Center" Text="{Binding Max}"/>
+                <TextBlock Grid.Column="12" Classes="money" VerticalAlignment="Center" Text="{Binding Total}"/>
+                <Border Grid.Column="13" Classes="verdict" HorizontalAlignment="Right"
+                        Classes.sweet="{Binding IsSweet}" Classes.adjust="{Binding IsAdjust}"
+                        Classes.unjudged="{Binding IsUnjudged}"
+                        IsVisible="{Binding HasApplication}" ToolTip.Tip="{Binding ApplicationTip}">
+                    <TextBlock Text="{Binding Application}"/>
+                </Border>
+            </Grid>
+        </DataTemplate>
+        <!-- The column heads, the same grid as a row. -->
+        <DataTemplate x:Key="HitQualityHeadTemplate" DataType="x:String">
+            <Border BorderThickness="0,0,0,1" BorderBrush="{DynamicResource BorderBrush}" Padding="0,0,0,3">
+                <Grid ColumnDefinitions="*,42,30,30,30,30,30,30,30,34,34,34,52,158" ColumnSpacing="6">
+                    <TextBlock Classes="label" FontSize="8.5" Text="{Binding}"/>
+                    <TextBlock Grid.Column="1" Classes="label" FontSize="8.5" TextAlignment="Right" Text="SHOTS"/>
+                    <TextBlock Grid.Column="2" Classes="label" FontSize="8.5" TextAlignment="Right" Text="WRK" ToolTip.Tip="Wrecks"/>
+                    <TextBlock Grid.Column="3" Classes="label" FontSize="8.5" TextAlignment="Right" Text="SMA" ToolTip.Tip="Smashes"/>
+                    <TextBlock Grid.Column="4" Classes="label" FontSize="8.5" TextAlignment="Right" Text="PEN" ToolTip.Tip="Penetrates"/>
+                    <TextBlock Grid.Column="5" Classes="label" FontSize="8.5" TextAlignment="Right" Text="HIT" ToolTip.Tip="Hits"/>
+                    <TextBlock Grid.Column="6" Classes="label" FontSize="8.5" TextAlignment="Right" Text="GLA" ToolTip.Tip="Glances"/>
+                    <TextBlock Grid.Column="7" Classes="label" FontSize="8.5" TextAlignment="Right" Text="GRA" ToolTip.Tip="Grazes"/>
+                    <TextBlock Grid.Column="8" Classes="label" FontSize="8.5" TextAlignment="Right" Text="MIS" ToolTip.Tip="Misses"/>
+                    <TextBlock Grid.Column="9" Classes="label" FontSize="8.5" TextAlignment="Right" Text="MIN"/>
+                    <TextBlock Grid.Column="10" Classes="label" FontSize="8.5" TextAlignment="Right" Text="AVG"/>
+                    <TextBlock Grid.Column="11" Classes="label" FontSize="8.5" TextAlignment="Right" Text="MAX"/>
+                    <TextBlock Grid.Column="12" Classes="label" FontSize="8.5" TextAlignment="Right" Text="TOTAL"/>
+                </Grid>
+            </Border>
+        </DataTemplate>
+    </UserControl.Resources>
+    <StackPanel>
+        <StackPanel x:Name="HitQualityOut" Margin="0,4,0,0" IsVisible="{Binding HasOut}">
+            <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,3">
+                <TextBlock Classes="label" Text="OUT · WHAT YOU DID"/>
+                <TextBlock Grid.Column="1" Classes="money" Text="{Binding OutSummary}"/>
+            </Grid>
+            <ContentControl Content="TARGET · YOUR WEAPON" ContentTemplate="{StaticResource HitQualityHeadTemplate}"/>
+            <ItemsControl ItemsSource="{Binding OutRows}" ItemTemplate="{StaticResource HitQualityRowTemplate}"/>
+        </StackPanel>
+        <StackPanel x:Name="HitQualityIn" Margin="0,10,0,0" IsVisible="{Binding HasIn}">
+            <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,3">
+                <TextBlock Classes="label" Text="IN · WHAT THEY DID TO YOU"/>
+                <TextBlock Grid.Column="1" Classes="money" Text="{Binding InSummary}"/>
+            </Grid>
+            <ContentControl Content="SOURCE · WEAPON" ContentTemplate="{StaticResource HitQualityHeadTemplate}"/>
+            <ItemsControl ItemsSource="{Binding InRows}" ItemTemplate="{StaticResource HitQualityRowTemplate}"/>
+        </StackPanel>
+        <TextBlock x:Name="HitQualityLegend" Classes="hint" TextWrapping="Wrap" IsVisible="{Binding HasContent}"
+                   Text="Wrecks · Smashes · Penetrates · Hits · Glances · Grazes · Misses (WRK SMA PEN HIT GLA GRA MIS). AVG is the total over the shots that landed. Application is for what you deal, turrets and drones only: the same measure as the live meter, over the whole run. A missile always logs &quot;Hits&quot;, so its words say nothing about its application. Incoming shows only what the enemy did to you; a &quot;—&quot; weapon means the log line names none."/>
+        <TextBlock x:Name="HitQualityEmpty" Classes="hint" TextWrapping="Wrap"
+                   IsVisible="{Binding EmptyText, Converter={x:Static ObjectConverters.IsNotNull}}"
+                   Text="{Binding EmptyText}"/>
+    </StackPanel>
+</UserControl>

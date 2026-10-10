@@ -48,9 +48,13 @@ public static class RunSectionModules
             context => new MissionWindowSectionViewModel(context),
             services => new MissionDetailSectionViewModel(services.Sde),
             IskSource.Rewards),
+        // B2 (ET-466): before ENEMIES; detail only, it reads the stored combat.
+        new(RunSectionId.Rooms, null, services => new RoomsDetailSectionViewModel(services)),
         new(RunSectionId.Enemies,
             context => new EnemiesWindowSectionViewModel(context),
             _ => new EnemiesDetailSectionViewModel()),
+        // Detail only, straight under ENEMIES: the stored hit tallies exist from SAVE on (ET-474).
+        new(RunSectionId.HitQuality, null, services => new HitQualityDetailSectionViewModel(services)),
         // Window only: TARGETS helps while flying, a saved run shows ENEMIES (ET-369).
         new(RunSectionId.Targets, context => new TargetsWindowSectionViewModel(context), null),
         new(RunSectionId.Fit, context => new FitWindowSectionViewModel(context), null),

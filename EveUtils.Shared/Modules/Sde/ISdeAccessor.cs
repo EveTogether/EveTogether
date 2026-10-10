@@ -97,6 +97,10 @@ public interface ISdeAccessor
     /// or one outside category 11.</summary>
     NpcEwarProfile? GetNpcEwarProfile(int typeId);
 
+    /// <summary>An NPC's raw hit points — shield + armor + hull (attr 263/265/9), no resists — which is what logged damage
+    /// is measured against (ET-469). Null for an absent type or one outside category 11.</summary>
+    int? GetNpcRawHp(int typeId);
+
     /// <summary>The site/dungeon catalogue, ordered by name. Every argument is an optional narrowing: a null or blank
     /// <paramref name="nameQuery"/> matches every name (case-insensitive substring), a null
     /// <paramref name="archetypeId"/> or <paramref name="factionId"/> does not filter on that axis. Empty when the

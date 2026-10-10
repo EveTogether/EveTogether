@@ -341,7 +341,10 @@ public sealed class RunIskTotalTests
             + "stored TOTAL ISK — no source of its own"),
         (nameof(FleetKillsDetailSectionViewModel),
             "what the fleet destroyed (ET-373): information only, no income or cost of the run, so no source and "
-            + "never part of TOTAL ISK")
+            + "never part of TOTAL ISK"),
+        (nameof(RoomsDetailSectionViewModel),
+            "the LOOT each room's captures were worth (ET-469): a slice of LOOT's own share at the same fixed prices, "
+            + "never added to TOTAL ISK")
     ];
 
     // What puts an ISK figure on screen: the ISK formatter, a view model's ISK readout, or a view binding one.
