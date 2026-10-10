@@ -92,24 +92,124 @@ public partial class CharacterDialogViewModel : ObservableObject, IDisposable
     {
         ApplyCharacterSnapshot();
         await ReloadServerLinksAsync();
-        (bool enabled, string status) = await _owner.LoadEveWorkbenchPublishAsync(CharacterId);
-        _loadingPublish = true;
-        PublishToEveWorkbench = enabled;
-        _loadingPublish = false;
-        EveWorkbenchPublishStatus = status;
+        await LoadEveWorkbenchPublishAsync();
     }
 
-    // ── Publish to EVE Workbench (ET-325) ── off by default; uses the token set on the Appraisal tab.
+    // ── Publish to EVE Workbench (ET-325) ── off by default, and only possible with the user's own EVE Workbench API key.
+    private const string PersonalAccessTokensUrl = "https://evejournal.com/my-account/personal-access-tokens";
+
     private bool _loadingPublish;
 
     [ObservableProperty] private bool _publishToEveWorkbench;
     [ObservableProperty] private string _eveWorkbenchPublishStatus = "";
 
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(NeedsEveWorkbenchKey))]
+    private bool _hasEveWorkbenchKey;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(SaveEveWorkbenchKeyCommand))]
+    private string _eveWorkbenchKeyInput = "";
+
+    /// <summary>Which EVE Workbench account the key belongs to, or why it was not accepted.</summary>
+    [ObservableProperty] private string _eveWorkbenchKeyStatus = "";
+
+    /// <summary>Set while this pilot is not covered by the key: EVE Workbench would refuse the pilot's runs.</summary>
+    [ObservableProperty] private string _eveWorkbenchPilotWarning = "";
+
+    public bool NeedsEveWorkbenchKey => !HasEveWorkbenchKey;
+
+    private async Task LoadEveWorkbenchPublishAsync()
+    {
+        (bool enabled, string status) = await _owner.LoadEveWorkbenchPublishAsync(CharacterId);
+        _loadingPublish = true;
+        PublishToEveWorkbench = enabled;
+        _loadingPublish = false;
+        EveWorkbenchPublishStatus = status;
+        if (_owner.EveWorkbenchPublisher is { } publisher)
+        {
+            HasEveWorkbenchKey = await publisher.HasKeyAsync();
+            if (HasEveWorkbenchKey)
+            {
+                ApplyKeyCheck(await publisher.CheckStoredKeyAsync());
+            }
+        }
+    }
+
+    private void ApplyKeyCheck(global::EveUtils.Client.Runs.EveWorkbenchKeyCheck? check)
+    {
+        EveWorkbenchPilotWarning = "";
+        switch (check?.Verdict)
+        {
+            case global::EveUtils.Client.Runs.EveWorkbenchKeyVerdict.Valid:
+                EveWorkbenchKeyStatus = "Key accepted. Account characters: " + string.Join(", ", check.Characters.Select(c => c.Name)) + ".";
+                if (check.Characters.All(c => c.Id != CharacterId))
+                {
+                    EveWorkbenchPilotWarning = $"{Name} is not on this EVE Workbench account: EVE Workbench will refuse this pilot's runs (\"Character does not belong to the authenticated account\").";
+                }
+
+                break;
+            case global::EveUtils.Client.Runs.EveWorkbenchKeyVerdict.Invalid:
+                EveWorkbenchKeyStatus = "API-key ongeldig — stel opnieuw in.";
+                break;
+            default:
+                EveWorkbenchKeyStatus = "EVE Workbench could not be reached to check the key; it is kept and tried on the next upload.";
+                break;
+        }
+    }
+
+    private bool CanSaveEveWorkbenchKey => !string.IsNullOrWhiteSpace(EveWorkbenchKeyInput);
+
+    [RelayCommand(CanExecute = nameof(CanSaveEveWorkbenchKey))]
+    private async Task SaveEveWorkbenchKey()
+    {
+        if (_owner.EveWorkbenchPublisher is not { } publisher)
+        {
+            return;
+        }
+
+        global::EveUtils.Client.Runs.EveWorkbenchKeyCheck check = await publisher.SaveKeyAsync(EveWorkbenchKeyInput);
+        ApplyKeyCheck(check);
+        if (check.Verdict != global::EveUtils.Client.Runs.EveWorkbenchKeyVerdict.Invalid)
+        {
+            EveWorkbenchKeyInput = "";
+            HasEveWorkbenchKey = true;
+        }
+    }
+
+    [RelayCommand]
+    private async Task ClearEveWorkbenchKey()
+    {
+        if (_owner.EveWorkbenchPublisher is not { } publisher)
+        {
+            return;
+        }
+
+        await publisher.ClearKeyAsync();
+        HasEveWorkbenchKey = false;
+        EveWorkbenchKeyStatus = "";
+        EveWorkbenchPilotWarning = "";
+        PublishToEveWorkbench = false;
+    }
+
+    [RelayCommand]
+    private static void OpenPersonalAccessTokens()
+    {
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(PersonalAccessTokensUrl) { UseShellExecute = true });
+        }
+        catch (Exception)
+        {
+            // No browser to open: the address stays readable in the notice.
+        }
+    }
+
     partial void OnPublishToEveWorkbenchChanged(bool value)
     {
         if (!_loadingPublish)
         {
-            _ = _owner.SetEveWorkbenchPublishAsync(CharacterId, value);
+            _ = _owner.SetEveWorkbenchPublishAsync(CharacterId, value && HasEveWorkbenchKey);
         }
     }
 

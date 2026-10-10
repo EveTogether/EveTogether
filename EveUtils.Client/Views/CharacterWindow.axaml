@@ -103,8 +103,27 @@
 
                 <Separator IsVisible="{Binding CanRemove}"/>
                 <StackPanel Spacing="4" IsVisible="{Binding CanRemove}">
+                    <TextBlock Classes="label" Text="EVE WORKBENCH API KEY"/>
+                    <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
+                        <TextBox Grid.Column="0" FontSize="11" PasswordChar="•" PlaceholderText="Paste your EVE Workbench API key"
+                                 Text="{Binding EveWorkbenchKeyInput}"/>
+                        <Button Grid.Column="1" Content="SAVE" FontSize="10" Command="{Binding SaveEveWorkbenchKeyCommand}"/>
+                        <Button Grid.Column="2" Content="CLEAR" FontSize="10" Command="{Binding ClearEveWorkbenchKeyCommand}"/>
+                    </Grid>
+                    <Border Classes="panel" Padding="10,8" BorderBrush="{StaticResource WarnBrush}" IsVisible="{Binding NeedsEveWorkbenchKey}">
+                        <StackPanel Spacing="4">
+                            <TextBlock TextWrapping="Wrap" FontWeight="SemiBold" Foreground="{StaticResource WarnBrush}"
+                                       Text="Vereist: een EVE Workbench API-key. Maak er een aan op EVE Workbench onder My Account → Personal Access Tokens en vul hem hier in."/>
+                            <Button Classes="rowaction" HorizontalAlignment="Left" Content="Open My Account → Personal Access Tokens"
+                                    Command="{Binding OpenPersonalAccessTokensCommand}"/>
+                        </StackPanel>
+                    </Border>
+                    <TextBlock Text="{Binding EveWorkbenchKeyStatus}" FontSize="11" TextWrapping="Wrap" Foreground="{StaticResource TextBrush}"/>
+                    <TextBlock Text="{Binding EveWorkbenchPilotWarning}" FontSize="11" TextWrapping="Wrap" Foreground="{StaticResource WarnBrush}"
+                               IsVisible="{Binding EveWorkbenchPilotWarning, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
                     <CheckBox Content="Publish this pilot's finished runs to EVE Workbench" IsChecked="{Binding PublishToEveWorkbench}"
-                              ToolTip.Tip="Off by default. Uses the EVE Workbench token from the Appraisal tab; each save, correction and delete is sent."/>
+                              IsEnabled="{Binding HasEveWorkbenchKey}"
+                              ToolTip.Tip="Off by default; needs your EVE Workbench API key. Each save, correction and delete is sent."/>
                     <TextBlock Text="{Binding EveWorkbenchPublishStatus}" FontSize="11" TextWrapping="Wrap"
                                Foreground="{StaticResource TextBrush}"/>
                 </StackPanel>

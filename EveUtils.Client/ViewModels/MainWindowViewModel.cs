@@ -1930,8 +1930,8 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         await RefreshFittingsTabsAsync();
     }
 
-    /// <summary>What stands in the way of removing a character: an active fleet it commands, or a run still on the
-    /// clock (ET-345).</summary>
+    public EveUtils.Client.Runs.EveWorkbenchRunAutoPublisher? EveWorkbenchPublisher => _services?.GetService<EveUtils.Client.Runs.EveWorkbenchRunAutoPublisher>();
+
     /// <summary>The pilot's "Publish to EVE Workbench" choice and what came of it so far (ET-325).</summary>
     public async Task<(bool Enabled, string Status)> LoadEveWorkbenchPublishAsync(int characterId)
     {
@@ -1957,6 +1957,8 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         await settings.UpsertAsync(EveUtils.Client.Runs.EveWorkbenchRunAutoPublisher.EnabledSettingKeyFor(characterId), enabled ? "true" : "false");
     }
 
+    /// <summary>What stands in the way of removing a character: an active fleet it commands, or a run still on the
+    /// clock (ET-345).</summary>
     public async Task<CharacterRemovalCheck?> CheckCharacterRemovalAsync(int characterId) =>
         _removal is null ? null : await _removal.CheckAsync(characterId);
 

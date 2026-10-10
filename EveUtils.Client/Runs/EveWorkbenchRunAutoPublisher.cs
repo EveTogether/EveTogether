@@ -90,17 +90,18 @@ public sealed class EveWorkbenchRunAutoPublisher : ISingletonService, IDisposabl
             return "Nothing sent yet.";
         }
 
-        int done = mine.Count(entry => entry.Status is "Created" or "Updated" or "Ignored");
-        PublishEntry[] problems = [.. mine.Where(entry => entry.Status is not ("Created" or "Updated" or "Ignored"))
-            .OrderByDescending(entry => entry.AtUtc)];
-        string line = $"{done} run(s) sent";
-        if (problems.Length > 0)
+        int sent = mine.Count(entry => entry.Status is "Created" or "Updated" or "Ignored");
+        int waiting = mine.Count(entry => !entry.IsAnswered);
+        PublishEntry latest = mine.OrderByDescending(entry => entry.AtUtc).First();
+        string headline = latest.Status switch
         {
-            PublishEntry latest = problems[0];
-            line += $", {problems.Length} not accepted or waiting for a retry (latest: {latest.Status}{(latest.Reason is null ? "" : $", {latest.Reason}")})";
-        }
-
-        return line + $". Last answer {mine.Max(entry => entry.AtUtc).ToLocalTime():g}.";
+            "NoKey" => $"Waiting for an API key: {waiting} run(s) not sent yet.",
+            "KeyInvalid" => $"API-key ongeldig — stel opnieuw in. {waiting} run(s) wachten.",
+            "Pending" or "Failed" => $"Last upload failed ({latest.Reason ?? "no answer"}); retrying. {waiting} run(s) waiting.",
+            "Rejected" => $"Last upload was rejected: {latest.Reason}.",
+            _ => "Last upload succeeded."
+        };
+        return $"{headline} {sent} run(s) sent in total, last answer {latest.AtUtc.ToLocalTime():g}.";
     }
 
     public void Dispose() => _runsChanged.Dispose();
@@ -218,7 +219,7 @@ public sealed class EveWorkbenchRunAutoPublisher : ISingletonService, IDisposabl
         string? token = await _keyStore.GetTokenAsync(cancellationToken);
         if (string.IsNullOrWhiteSpace(token))
         {
-            _Record(state, runs, "Failed", "No EVE Workbench token is set (Appraisal tab).");
+            _Record(state, runs, "NoKey", "no API key");
             await _SaveStateAsync(scope.ServiceProvider, state, cancellationToken);
             return;
         }
@@ -244,10 +245,44 @@ public sealed class EveWorkbenchRunAutoPublisher : ISingletonService, IDisposabl
             }
         }
 
-        _Record(state, [.. runs.Where(run => outcome.Pending.Any(payload => payload.Run.Id == run.Id))], "Failed",
-            "EVE Workbench did not answer; retrying.");
+        _Record(state, [.. runs.Where(run => outcome.Pending.Any(payload => payload.Run.Id == run.Id))],
+            outcome.Unauthorized ? "KeyInvalid" : "Failed", outcome.Unauthorized ? "API key refused" : "EVE Workbench did not answer");
         await _SaveStateAsync(scope.ServiceProvider, state, cancellationToken);
-        _ScheduleRetryIfNeeded(outcome.Pending.Count > 0);
+        // A refused key is not retried on a timer: it waits for a new key (see SaveKeyAsync).
+        _ScheduleRetryIfNeeded(outcome.Pending.Count > 0 && !outcome.Unauthorized);
+    }
+
+    public async Task<bool> HasKeyAsync(CancellationToken cancellationToken = default) =>
+        !string.IsNullOrWhiteSpace(await _keyStore.GetTokenAsync(cancellationToken));
+
+    /// <summary>Asks EVE Workbench which characters the stored key covers; null without a key.</summary>
+    public async Task<EveWorkbenchKeyCheck?> CheckStoredKeyAsync(CancellationToken cancellationToken = default) =>
+        await _keyStore.GetTokenAsync(cancellationToken) is { Length: > 0 } token ? await _CheckAsync(token, cancellationToken) : null;
+
+    /// <summary>Checks <paramref name="key"/> first and stores it unless EVE Workbench refuses it; a stored key sets
+    /// the waiting runs going again at once. One key for appraisal and upload alike.</summary>
+    public async Task<EveWorkbenchKeyCheck> SaveKeyAsync(string key, CancellationToken cancellationToken = default)
+    {
+        string trimmed = key.Trim();
+        EveWorkbenchKeyCheck check = await _CheckAsync(trimmed, cancellationToken);
+        if (check.Verdict != EveWorkbenchKeyVerdict.Invalid)
+        {
+            await _keyStore.SetTokenAsync(trimmed, cancellationToken);
+            _ = _Enqueue(_RetryAsync);
+        }
+
+        return check;
+    }
+
+    public Task ClearKeyAsync(CancellationToken cancellationToken = default) => _keyStore.SetTokenAsync(null, cancellationToken);
+
+    private async Task<EveWorkbenchKeyCheck> _CheckAsync(string token, CancellationToken cancellationToken)
+    {
+        await using AsyncServiceScope scope = _scopeFactory.CreateAsyncScope();
+        IReadOnlyList<ClientSetting> settings = await scope.ServiceProvider.GetRequiredService<ISettingRepository>().ListAsync(cancellationToken);
+        string baseUrl = settings.FirstOrDefault(setting => setting.Key == UrlSettingKey)?.Value ?? EveWorkbenchFitClient.BaseUrl;
+        var publisher = new EveWorkbenchRunPublisher(_httpClientFactory.CreateClient(EveWorkbenchRunPublisher.HttpClientName));
+        return await publisher.CheckKeyAsync(baseUrl, token, cancellationToken);
     }
 
     private static void _Record(Dictionary<Guid, PublishEntry> state, IEnumerable<Run> runs, string status, string? reason)
@@ -293,10 +328,10 @@ public sealed class EveWorkbenchRunAutoPublisher : ISingletonService, IDisposabl
     private static Task _SaveStateAsync(IServiceProvider services, Dictionary<Guid, PublishEntry> state, CancellationToken cancellationToken) =>
         services.GetRequiredService<ISettingRepository>().UpsertAsync(StateSettingKey, JsonSerializer.Serialize(state), cancellationToken);
 
-    /// <summary>The last answer for a run at a revision; "Pending" and "Failed" are still to be sent.</summary>
+    /// <summary>The last answer for a run at a revision; Pending, Failed, NoKey and KeyInvalid are still to be sent.</summary>
     private sealed record PublishEntry(long CharacterId, int Revision, string Status, string? Reason, DateTime AtUtc)
     {
-        public bool IsAnswered => Status is not ("Pending" or "Failed");
+        public bool IsAnswered => Status is not ("Pending" or "Failed" or "NoKey" or "KeyInvalid");
     }
 
     private sealed class LogAdapter(ILogger logger) : IEveWorkbenchRunPublishLogger

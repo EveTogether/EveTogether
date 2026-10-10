@@ -56,6 +56,17 @@ public sealed class EveWorkbenchRunPublisherTests
         Assert.Contains("Rejected", logger.Message);
     }
 
+    [Fact]
+    public async Task PublishAsync_RefusedKey_ReportsUnauthorizedAndKeepsPayloadPending()
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        RunWirePayload payload = _Payload();
+        var publisher = new EveWorkbenchRunPublisher(new HttpClient(new Handler(_ => new HttpResponseMessage(HttpStatusCode.Unauthorized))));
+        EveWorkbenchRunPublishOutcome outcome = await publisher.PublishAsync(true, "https://workbench.example/", "token", [payload], cancellationToken);
+        Assert.True(outcome.Unauthorized);
+        Assert.Equal([payload], outcome.Pending);
+    }
+
     private static RunWirePayload _Payload() => new() { SentAtUnixMilliseconds = 123, Run = RunWireData.FromEntity(new Run { Id = Guid.Parse("11111111-1111-1111-1111-111111111111") }) };
     private static HttpResponseMessage _Response(string body) => new(HttpStatusCode.OK) { Content = new StringContent(body, Encoding.UTF8, "application/json") };
     private sealed class Handler(Func<HttpRequestMessage, HttpResponseMessage> response) : HttpMessageHandler { public HttpRequestMessage? Request { get; private set; } public string? Body { get; private set; } protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) { Request = request; Body = request.Content is null ? null : await request.Content.ReadAsStringAsync(cancellationToken); return response(request); } }
