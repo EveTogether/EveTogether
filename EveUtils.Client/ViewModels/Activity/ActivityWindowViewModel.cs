@@ -3495,7 +3495,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             || _pendingCopy is not null)
             return;
 
-        LastAbyssalEntry = _StartOnAbyssalEntryAsync(nowUtc);
+        LastAbyssalEntry = StartOnAbyssalEntryAsync(nowUtc);
     }
 
     /// <summary>The pending automatic start, so a test can await what a location reading set going.</summary>
