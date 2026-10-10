@@ -43,6 +43,8 @@ internal sealed partial class TableWriters
     private readonly SqliteCommand _faction;
     private readonly SqliteCommand _mutaplasmidRange;
     private readonly SqliteCommand _mutaplasmidResultingType;
+    private readonly SqliteCommand _blueprintManufacturing;
+    private readonly SqliteCommand _blueprintManufacturingMaterial;
 
     private readonly Dictionary<long, string> _archetypeNames = [];
     private readonly Dictionary<long, string> _factionNames = [];
@@ -147,6 +149,14 @@ internal sealed partial class TableWriters
             "INSERT INTO MutaplasmidResultingType (mutaplasmidTypeId, applicableTypeId, resultingTypeId) " +
             "VALUES ($mutaplasmidTypeId, $applicableTypeId, $resultingTypeId);",
             "$mutaplasmidTypeId", "$applicableTypeId", "$resultingTypeId");
+        _blueprintManufacturing = Prepare(connection, transaction,
+            "INSERT INTO BlueprintManufacturing (blueprintTypeId, productTypeId, productQuantity, timeSeconds, maxProductionLimit) " +
+            "VALUES ($blueprintTypeId, $productTypeId, $productQuantity, $timeSeconds, $maxProductionLimit);",
+            "$blueprintTypeId", "$productTypeId", "$productQuantity", "$timeSeconds", "$maxProductionLimit");
+        _blueprintManufacturingMaterial = Prepare(connection, transaction,
+            "INSERT INTO BlueprintManufacturingMaterial (blueprintTypeId, materialTypeId, quantity) " +
+            "VALUES ($blueprintTypeId, $materialTypeId, $quantity);",
+            "$blueprintTypeId", "$materialTypeId", "$quantity");
     }
 
     public void Insert(string dataset, JsonElement element)
@@ -179,6 +189,7 @@ internal sealed partial class TableWriters
             case "missions.jsonl": InsertMission(element); break;
             case "epicArcs.jsonl": InsertEpicArcMissions(element); break;
             case "dynamicItemAttributes.jsonl": InsertMutaplasmid(element); break;
+            case "blueprints.jsonl": InsertBlueprintManufacturing(element); break;
         }
     }
 
@@ -656,6 +667,36 @@ internal sealed partial class TableWriters
                 _mutaplasmidResultingType.Parameters["$resultingTypeId"].Value = resultingType.GetInt64();
                 _mutaplasmidResultingType.ExecuteNonQuery();
             }
+        }
+    }
+
+    // ET-501: only the manufacturing activity, and only a blueprint that makes something — a reaction formula has no
+    // manufacturing, and a blueprint without products is not one that can be built.
+    private void InsertBlueprintManufacturing(JsonElement e)
+    {
+        if (!e.TryGetProperty("activities", out var activities) || activities.ValueKind != JsonValueKind.Object
+            || !activities.TryGetProperty("manufacturing", out var manufacturing) || manufacturing.ValueKind != JsonValueKind.Object
+            || !manufacturing.TryGetProperty("products", out var products) || products.ValueKind != JsonValueKind.Array
+            || products.GetArrayLength() == 0)
+            return;
+
+        var blueprintTypeId = Key(e);
+        var product = products[0];
+        _blueprintManufacturing.Parameters["$blueprintTypeId"].Value = blueprintTypeId;
+        _blueprintManufacturing.Parameters["$productTypeId"].Value = Int(product, "typeID");
+        _blueprintManufacturing.Parameters["$productQuantity"].Value = Int(product, "quantity");
+        _blueprintManufacturing.Parameters["$timeSeconds"].Value = Int(manufacturing, "time");
+        _blueprintManufacturing.Parameters["$maxProductionLimit"].Value = Int(e, "maxProductionLimit");
+        _blueprintManufacturing.ExecuteNonQuery();
+
+        if (!manufacturing.TryGetProperty("materials", out var materials) || materials.ValueKind != JsonValueKind.Array)
+            return;
+        foreach (var material in materials.EnumerateArray())
+        {
+            _blueprintManufacturingMaterial.Parameters["$blueprintTypeId"].Value = blueprintTypeId;
+            _blueprintManufacturingMaterial.Parameters["$materialTypeId"].Value = Int(material, "typeID");
+            _blueprintManufacturingMaterial.Parameters["$quantity"].Value = Int(material, "quantity");
+            _blueprintManufacturingMaterial.ExecuteNonQuery();
         }
     }
 

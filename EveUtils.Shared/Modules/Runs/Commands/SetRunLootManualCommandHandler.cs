@@ -3,6 +3,7 @@ using EveUtils.Shared.Data;
 using EveUtils.Shared.DependencyInjection;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Market.Repositories;
+using EveUtils.Shared.Modules.Market.Services;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Entities;
 using EveUtils.Shared.Modules.Runs.Enums;
@@ -14,7 +15,7 @@ namespace EveUtils.Shared.Modules.Runs.Commands;
 
 [ClientOnly]
 internal sealed class SetRunLootManualCommandHandler(
-    IDbContextFactory<ClientDbContext> contextFactory, IEventBus eventBus, IDispatcher dispatcher, IMarketPriceRepository marketPrices,
+    IDbContextFactory<ClientDbContext> contextFactory, IEventBus eventBus, IDispatcher dispatcher, IMarketPriceRepository marketPrices, IBlueprintAppraisalService blueprints,
     ISdeAccessor sde)
     : ICommandHandler<SetRunLootManualCommand, Result<Guid>>
 {
@@ -79,7 +80,7 @@ internal sealed class SetRunLootManualCommandHandler(
 
         await db.SaveChangesAsync(cancellationToken);
         // A type the run already fixed keeps that price: writing the list out corrects what was looted, not its worth.
-        await RunPriceSnapshots.FixOnCaptureAsync(db, marketPrices, sde, command.RunId, cancellationToken);
+        await RunPriceSnapshots.FixOnCaptureAsync(db, marketPrices, blueprints, sde, command.RunId, cancellationToken);
         if (isSaved)
             await dispatcher.Send(new RebuildActivitySummariesCommand(command.RunId), cancellationToken);
         await eventBus.PublishAsync(new RunLootCapturedEvent(command.RunId), EventTarget.Local, cancellationToken);

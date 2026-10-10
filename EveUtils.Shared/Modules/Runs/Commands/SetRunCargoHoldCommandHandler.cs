@@ -3,6 +3,7 @@ using EveUtils.Shared.Data;
 using EveUtils.Shared.DependencyInjection;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Market.Repositories;
+using EveUtils.Shared.Modules.Market.Services;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Entities;
 using EveUtils.Shared.Modules.Runs.Enums;
@@ -14,7 +15,7 @@ namespace EveUtils.Shared.Modules.Runs.Commands;
 
 [ClientOnly]
 internal sealed class SetRunCargoHoldCommandHandler(
-    IDbContextFactory<ClientDbContext> contextFactory, IEventBus eventBus, IDispatcher dispatcher, IMarketPriceRepository marketPrices,
+    IDbContextFactory<ClientDbContext> contextFactory, IEventBus eventBus, IDispatcher dispatcher, IMarketPriceRepository marketPrices, IBlueprintAppraisalService blueprints,
     ISdeAccessor sde)
     : ICommandHandler<SetRunCargoHoldCommand, Result<Guid>>
 {
@@ -69,7 +70,7 @@ internal sealed class SetRunCargoHoldCommandHandler(
             command.CapturedAtUtc, cancellationToken);
         await RunLootCaptureRoles.AssignAsync(db, capture, command.Role, cancellationToken);
         await db.SaveChangesAsync(cancellationToken);
-        await RunPriceSnapshots.FixOnCaptureAsync(db, marketPrices, sde, run.Id, cancellationToken);
+        await RunPriceSnapshots.FixOnCaptureAsync(db, marketPrices, blueprints, sde, run.Id, cancellationToken);
         if (isSaved)
             await dispatcher.Send(new RebuildActivitySummariesCommand(run.Id), cancellationToken);
         await eventBus.PublishAsync(new RunLootCapturedEvent(run.Id), EventTarget.Local, cancellationToken);

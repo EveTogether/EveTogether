@@ -317,7 +317,7 @@ public sealed class RunPriceSnapshotTests
         ActivityLootLineViewModel tritanium = Assert.Single(loot.ItemRows, row => row.ItemTypeId == Tritanium);
         ActivityLootLineViewModel pyerite = Assert.Single(loot.ItemRows, row => row.ItemTypeId == Pyerite);
         Assert.Equal(("500", false), (tritanium.AmountText, tritanium.IsLivePrice));
-        Assert.Equal(("70 · live", true), (pyerite.AmountText, pyerite.IsLivePrice));
+        Assert.Equal(("70", true), (pyerite.AmountText, pyerite.IsLivePrice));
         Assert.Equal(570m, loot.LootIsk);
     }
 

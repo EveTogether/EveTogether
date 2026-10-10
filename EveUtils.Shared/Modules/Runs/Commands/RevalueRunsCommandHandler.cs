@@ -4,6 +4,7 @@ using EveUtils.Shared.DependencyInjection;
 using EveUtils.Shared.Identity;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Market.Repositories;
+using EveUtils.Shared.Modules.Market.Services;
 using EveUtils.Shared.Modules.Runs.Entities;
 using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Runs.Events;
@@ -14,7 +15,7 @@ namespace EveUtils.Shared.Modules.Runs.Commands;
 
 [ClientOnly]
 internal sealed class RevalueRunsCommandHandler(
-    IDbContextFactory<ClientDbContext> contextFactory, IMarketPriceRepository marketPrices, ISdeAccessor sde,
+    IDbContextFactory<ClientDbContext> contextFactory, IMarketPriceRepository marketPrices, IBlueprintAppraisalService blueprints, ISdeAccessor sde,
     IEventBus eventBus, IDispatcher dispatcher)
     : ICommandHandler<RevalueRunsCommand, Result<int>>
 {
@@ -40,7 +41,7 @@ internal sealed class RevalueRunsCommandHandler(
             return Result<int>.Failure(new ResultMessage(MessageSeverity.Error, MessageCodes.ValidationFailed,
                 "Only your own runs can be re-valued; a fleetmate's run is theirs to correct.", "Runs"));
 
-        IReadOnlySet<Guid> revalued = await RunPriceSnapshots.FixAsync(db, marketPrices, sde, runIds,
+        IReadOnlySet<Guid> revalued = await RunPriceSnapshots.FixAsync(db, marketPrices, blueprints, sde, runIds,
             PriceSnapshotSource.Revalued, cancellationToken);
         // Losses are re-valued too (ET-464), but never published, so a run whose losses alone moved is no correction.
         IReadOnlySet<Guid> lossesRevalued = await RunLossPriceSnapshots.FixAsync(db, marketPrices, runIds,

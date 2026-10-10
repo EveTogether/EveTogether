@@ -45,6 +45,21 @@
         <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
     </Style>
 
+    <!-- The BP APPRAISAL badge of a top item (ET-503), in the loot table's blue so it reads as the same mark. -->
+    <Style Selector="Border.cbadge">
+        <Setter Property="CornerRadius" Value="3"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Background" Value="#1438BDF8"/>
+        <Setter Property="BorderBrush" Value="#6638BDF8"/>
+        <Setter Property="Padding" Value="4,0,4,1"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+    <Style Selector="Border.cbadge > TextBlock">
+        <Setter Property="FontFamily" Value="{DynamicResource MonoFont}"/>
+        <Setter Property="FontSize" Value="9"/>
+        <Setter Property="Foreground" Value="{StaticResource BlueBrush}"/>
+    </Style>
+
     <Style Selector="TextBlock.chint">
         <Setter Property="Foreground" Value="{DynamicResource TextDimBrush}"/>
         <Setter Property="FontSize" Value="11"/>

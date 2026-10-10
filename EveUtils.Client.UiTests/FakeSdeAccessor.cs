@@ -28,6 +28,7 @@ public sealed class FakeSdeAccessor : ISdeAccessor
     private readonly Dictionary<int, SdeAgent> _agents = new();
     private readonly Dictionary<string, SdeAgent> _agentsByName = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, SdeSolarSystem> _solarSystemsByName = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<int, SdeBlueprintManufacturing> _blueprints = new();
 
     public bool IsAvailable { get; private set; } = true;
     public SdeVersion? Version => new(_buildNumber, DateTimeOffset.UnixEpoch);
@@ -68,6 +69,12 @@ public sealed class FakeSdeAccessor : ISdeAccessor
         if (!_attrs.TryGetValue(typeId, out var list))
             _attrs[typeId] = list = [];
         list.Add(new SdeDogmaAttribute(attributeId, value));
+        return this;
+    }
+
+    public FakeSdeAccessor AddBlueprint(SdeBlueprintManufacturing blueprint)
+    {
+        _blueprints[blueprint.BlueprintTypeId] = blueprint;
         return this;
     }
 
@@ -138,6 +145,8 @@ public sealed class FakeSdeAccessor : ISdeAccessor
 
     // No mutaplasmid fixtures here — nothing under test today reads them through this fake.
     public IReadOnlyList<SdeMutaplasmidAttributeRange> GetMutaplasmidAttributeRanges(int mutaplasmidTypeId) => [];
+
+    public SdeBlueprintManufacturing? GetBlueprintManufacturing(int blueprintTypeId) => _blueprints.GetValueOrDefault(blueprintTypeId);
 
     public IReadOnlyList<SdeDogmaAttribute> GetDogmaAttributes(int typeId) =>
         _attrs.TryGetValue(typeId, out var list) ? list : [];

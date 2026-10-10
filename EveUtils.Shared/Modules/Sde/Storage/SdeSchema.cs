@@ -5,8 +5,8 @@ namespace EveUtils.Shared.Modules.Sde.Storage;
 /// (CREATE INDEX after the inserts is far cheaper than maintaining indexes per row). The store holds only the
 /// minimal subset we use (data-minimalisation): types/groups/categories, dogma attributes/effects and
 /// per-type dogma, a pre-computed slot/hardpoint table for the fit parsers, the site catalogue and the universe map
-/// (regions, constellations, systems with 2D position, stargate connections, and each system's celestials). Heavy datasets (typeMaterials,
-/// blueprints) are skipped entirely.
+/// (regions, constellations, systems with 2D position, stargate connections, and each system's celestials) and the
+/// manufacturing activity of each blueprint. Heavy datasets (typeMaterials, the other blueprint activities) are skipped.
 /// </summary>
 public static class SdeSchema
 {
@@ -30,9 +30,11 @@ public static class SdeSchema
     /// v10 added <c>Type.description</c> for the skill catalogue (ET-351);
     /// v11 added the <c>Constellation</c> and <c>Jump</c> tables, <c>SolarSystem.constellationId/x2d/y2d</c> and
     /// <c>Region.factionId</c> for the world map (ET-391);
-    /// v12 added the <c>Celestial</c> and <c>StationOperation</c> tables for a killmail's system map (ET-473).
+    /// v12 added the <c>Celestial</c> and <c>StationOperation</c> tables for a killmail's system map (ET-473);
+    /// v13 added <c>BlueprintManufacturing</c> and <c>BlueprintManufacturingMaterial</c> for the blueprint build
+    /// appraisal (ET-501).
     /// </summary>
-    public const int SchemaVersion = 12;
+    public const int SchemaVersion = 13;
 
     /// <summary>Schema-creating statements, run before the bulk load.</summary>
     public static readonly string[] CreateTables =
@@ -242,7 +244,20 @@ public static class SdeSchema
         // (e.g. 47408), so resultingTypeId -> mutaplasmidTypeId here is the step before
         // GetMutaplasmidAttributeRanges(mutaplasmidTypeId) can report a range for that module instead of only
         // "unknown".
-        "CREATE TABLE MutaplasmidResultingType (mutaplasmidTypeId INTEGER NOT NULL, applicableTypeId INTEGER NOT NULL, resultingTypeId INTEGER NOT NULL);"
+        "CREATE TABLE MutaplasmidResultingType (mutaplasmidTypeId INTEGER NOT NULL, applicableTypeId INTEGER NOT NULL, resultingTypeId INTEGER NOT NULL);",
+        // blueprints.jsonl, the manufacturing activity only (ET-501): what one run makes and what it takes, at base
+        // quantities before ME, and its base job time in seconds before TE. Copying, research, invention and reactions are not imported. Every manufacturing blueprint
+        // has exactly one product (measured: 4867 of 5100 blueprints, build 3586130), and no material twice.
+        """
+        CREATE TABLE BlueprintManufacturing (
+            blueprintTypeId    INTEGER PRIMARY KEY,
+            productTypeId      INTEGER NOT NULL,
+            productQuantity    INTEGER NOT NULL,
+            timeSeconds        INTEGER NOT NULL,
+            maxProductionLimit INTEGER NOT NULL
+        ) WITHOUT ROWID;
+        """,
+        "CREATE TABLE BlueprintManufacturingMaterial (blueprintTypeId INTEGER NOT NULL, materialTypeId INTEGER NOT NULL, quantity INTEGER NOT NULL, PRIMARY KEY (blueprintTypeId, materialTypeId)) WITHOUT ROWID;"
     ];
 
     /// <summary>Index-creating statements, run after the bulk load.</summary>

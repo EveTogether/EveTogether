@@ -283,6 +283,33 @@ public sealed class SqliteSdeAccessor : ISdeAccessor
         return result;
     }
 
+    public SdeBlueprintManufacturing? GetBlueprintManufacturing(int blueprintTypeId)
+    {
+        using var connection = Open();
+        if (connection is null)
+            return null;
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT productTypeId, productQuantity, timeSeconds, maxProductionLimit FROM BlueprintManufacturing WHERE blueprintTypeId = $id;";
+        command.Parameters.AddWithValue("$id", blueprintTypeId);
+        int productTypeId, productQuantity, timeSeconds, maxProductionLimit;
+        using (var reader = command.ExecuteReader())
+        {
+            if (!reader.Read())
+                return null;
+            (productTypeId, productQuantity, timeSeconds, maxProductionLimit) =
+                (reader.GetInt32(0), reader.GetInt32(1), reader.GetInt32(2), reader.GetInt32(3));
+        }
+
+        command.CommandText = "SELECT materialTypeId, quantity FROM BlueprintManufacturingMaterial WHERE blueprintTypeId = $id;";
+        var materials = new List<SdeBlueprintMaterial>();
+        using (var reader = command.ExecuteReader())
+        {
+            while (reader.Read())
+                materials.Add(new SdeBlueprintMaterial(reader.GetInt32(0), reader.GetInt32(1)));
+        }
+        return new SdeBlueprintManufacturing(blueprintTypeId, productTypeId, productQuantity, timeSeconds, maxProductionLimit, materials);
+    }
+
     public IReadOnlyList<SdeDogmaAttribute> GetDogmaAttributes(int typeId)
     {
         using var connection = Open();

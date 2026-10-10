@@ -39,6 +39,10 @@ public interface ISdeAccessor
     /// (including when it is not a mutaplasmid at all).</summary>
     IReadOnlyList<SdeMutaplasmidAttributeRange> GetMutaplasmidAttributeRanges(int mutaplasmidTypeId);
 
+    /// <summary>A blueprint's manufacturing activity (ET-501), or null when the type is not a blueprint that builds
+    /// something, or the SDE is unavailable.</summary>
+    SdeBlueprintManufacturing? GetBlueprintManufacturing(int blueprintTypeId);
+
     IReadOnlyList<SdeDogmaAttribute> GetDogmaAttributes(int typeId);
 
     /// <summary>Pre-computed slot/hardpoint metadata, or null when the type is not a fittable module.</summary>
