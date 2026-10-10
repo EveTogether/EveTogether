@@ -101,6 +101,14 @@
                     </Button>
                 </StackPanel>
 
+                <Separator IsVisible="{Binding CanRemove}"/>
+                <StackPanel Spacing="4" IsVisible="{Binding CanRemove}">
+                    <CheckBox Content="Publish this pilot's finished runs to EVE Workbench" IsChecked="{Binding PublishToEveWorkbench}"
+                              ToolTip.Tip="Off by default. Uses the EVE Workbench token from the Appraisal tab; each save, correction and delete is sent."/>
+                    <TextBlock Text="{Binding EveWorkbenchPublishStatus}" FontSize="11" TextWrapping="Wrap"
+                               Foreground="{StaticResource TextBrush}"/>
+                </StackPanel>
+
                 <!-- Remove character (ET-345): destructive, so last. The confirmation opens in place; an active fleet this
                      character commands answers the click with the way out instead. -->
                 <Separator IsVisible="{Binding CanRemove}"/>

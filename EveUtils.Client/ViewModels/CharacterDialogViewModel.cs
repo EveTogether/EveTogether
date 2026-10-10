@@ -92,6 +92,25 @@ public partial class CharacterDialogViewModel : ObservableObject, IDisposable
     {
         ApplyCharacterSnapshot();
         await ReloadServerLinksAsync();
+        (bool enabled, string status) = await _owner.LoadEveWorkbenchPublishAsync(CharacterId);
+        _loadingPublish = true;
+        PublishToEveWorkbench = enabled;
+        _loadingPublish = false;
+        EveWorkbenchPublishStatus = status;
+    }
+
+    // ── Publish to EVE Workbench (ET-325) ── off by default; uses the token set on the Appraisal tab.
+    private bool _loadingPublish;
+
+    [ObservableProperty] private bool _publishToEveWorkbench;
+    [ObservableProperty] private string _eveWorkbenchPublishStatus = "";
+
+    partial void OnPublishToEveWorkbenchChanged(bool value)
+    {
+        if (!_loadingPublish)
+        {
+            _ = _owner.SetEveWorkbenchPublishAsync(CharacterId, value);
+        }
     }
 
     private void ApplyCharacterSnapshot()

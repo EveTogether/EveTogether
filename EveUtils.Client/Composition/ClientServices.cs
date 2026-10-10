@@ -99,6 +99,11 @@ public static class ClientServices
             // Nice CCP citizen: identify the app on the image server too, though it is not ESI itself.
             client.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", AppInfo.UserAgent(ExecutionHost.Client));
         });
+        services.AddHttpClient(EveUtils.Client.Runs.EveWorkbenchRunPublisher.HttpClientName, client =>
+        {
+            client.Timeout = TimeSpan.FromSeconds(60);
+            client.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", AppInfo.UserAgent(ExecutionHost.Client));
+        });
         services.AddSingleton<ITypeImageProvider>(sp => new TypeImageProvider(
             sp.GetRequiredService<IHttpClientFactory>(),
             sp.GetRequiredService<ISettingRepository>(),
