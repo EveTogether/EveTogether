@@ -1,4 +1,10 @@
 using Avalonia.Headless.XUnit;
+using Avalonia.Threading;
+using EveUtils.Client.Esi;
+using EveUtils.Shared.Messaging;
+using EveUtils.Shared.Modules.Esi.Http;
+using EveUtils.Shared.Modules.Fleet.Dtos;
+using EveUtils.Shared.Modules.Fleet.Events;
 using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Client.ViewModels.Runs.Sections;
 using EveUtils.Shared.Modules.Runs.Enums;
@@ -128,14 +134,20 @@ public sealed class AbyssalRoomDetectionTests
         Assert.Equal(["RoomDetected(sure)@12:00:35"], draft.Parameters.Select(row => $"{row.ParameterKey}({row.TypedValue})@{row.ObservedAtUtc:HH:mm:ss}"));
         Assert.Equal("sure", model.Enemies().EnemyRooms[0].Source?.Word);
 
-        // A name the SDE has no type for shows in its room as a plain row, and the room still names its faction.
+        // A Tyrannos agent has no SDE type, so it is counted under its reserved negative id and still names the room's faction.
         model.Enemies().RecordCatchUpSighting(ActivityWindowHarness.CharacterId, "Karybdis Tyrannos",
             new DateTime(2030, 1, 1, 12, 0, 50, DateTimeKind.Utc));
-        Assert.Equal(["Karybdis Tyrannos"], model.Enemies().EnemyRooms[0].Unresolved);
+        Assert.Equal(-3019609, Assert.Single(model.Enemies().EnemyRooms[0].Observations,
+            observation => observation.EnemyName == "Karybdis Tyrannos").EnemyTypeId);
         Assert.Equal("mixed", model.Enemies().EnemyRooms[0].FactionText);
         Assert.EndsWith("mixed", model.Enemies().CurrentRoomText(DateTime.UtcNow));
         Assert.Equal("Vigilant Tyrannos", TargetsWindowSectionViewModel.FactionText(
             AbyssalNpcKnowledge.Faction(["Ephialtes Entangler", "Karybdis Tyrannos"])));
+
+        // The catch-up read keeps an e-war line for TARGETS too, like the live feed.
+        model.Enemies().RecordCatchUpTelemetry(ActivityWindowHarness.CharacterId,
+            new EwarEvent(new DateTime(2030, 1, 1, 12, 0, 51, DateTimeKind.Utc), NpcEwarKind.Scram, "Karybdis Tyrannos"));
+        Assert.Contains(model.Enemies().TargetEvents(), pair => pair.Event is EwarEvent);
     }
 
     /// <summary>NEW ROOM sets limits the whole fleet shares, so in a fleet run only the commander gets the button and
@@ -144,11 +156,18 @@ public sealed class AbyssalRoomDetectionTests
     [InlineData(false, 1, 1, true)]
     [InlineData(true, 1, 1, true)]
     [InlineData(true, 1, 2, false)]
-    public async Task NewRoom_InAFleetRun_IsTheCommandersAlone(bool inFleet, int commander, int actingCharacter, bool allowed)
+    [InlineData(true, 1, 2, false, "waits")]
+    [InlineData(true, 1, 2, false, "stuck")]
+    public async Task NewRoom_InAFleetRun_IsTheCommandersAlone(
+        bool inFleet, int commander, int actingCharacter, bool allowed, string sight = "seen")
     {
-        using var harness = await ActivityWindowHarness.CreateAsync();
+        // A member who cannot see their own entry waits for the commander's start ("waits"), or, when none can reach
+        // them, keeps START ("stuck") so they are never stuck.
+        Action<IServiceCollection> watch = services => services.AddSingleton<IEsiLocationMonitor>(new StubWatch(sight != "seen"));
+        using var harness = await ActivityWindowHarness.CreateAsync(configure: watch);
         ActivityWindowViewModel model = await harness.OpenAsync(ActivityKind.Abyssal);
-        await model.StartRunCommand.ExecuteAsync(null);
+        // Without a pilot picked the window sees nobody's entry, so every row would read as blind.
+        model.UseCharacter(ActivityWindowHarness.CharacterId, ActivityWindowHarness.CharacterName);
         // Every refresh re-asks a roster this harness has no fleet for, so the commander is told again before each step.
         void TellTheCommander()
         {
@@ -158,12 +177,50 @@ public sealed class AbyssalRoomDetectionTests
             }
         }
 
-        if (inFleet)
+        IEventBus bus = harness.Services.GetRequiredService<IEventBus>();
+        RunGroupCodeStart commandersStart = new(7, ActivityKind.Abyssal, "HF-7Q2", DateTime.UtcNow, IsFleetCommander: true);
+        if (sight == "waits")
+        {
+            await bus.PublishAsync(new FleetRunGroupPreparedEvent(commandersStart, commander));
+            Dispatcher.UIThread.RunJobs();
+        }
+        else if (inFleet)
         {
             model.GroupCode = "HF-7Q2";
             await model.RefreshFleetCommandAsync(DateTime.UtcNow);
         }
 
+        model.Refresh(DateTime.UtcNow);
+        TellTheCommander();
+        model.Refresh(DateTime.UtcNow);
+        Assert.Equal(sight == "waits", model.ArmedText.StartsWith("Starts when", StringComparison.Ordinal));
+        TellTheCommander();
+
+        // START is the commander's too; a member's own clock starts on their entry, which is not the command.
+        bool startOffered = model.IsStartButtonVisible;
+        bool memberKeepsStart = sight == "stuck";
+        // A started run in a fleet announces to a fleet this harness lacks, so there only the refused member presses it.
+        if (!inFleet || (!allowed && !memberKeepsStart))
+        {
+            await model.StartRunCommand.ExecuteAsync(null);
+            Assert.Equal(!inFleet, model.RunState == ActivityRunState.Running);
+        }
+
+        if (sight == "waits")
+        {
+            // The commander's start reaches the waiting member and starts their own clock, once.
+            await bus.PublishAsync(new FleetRunGroupCodeEvent(commandersStart, commander));
+            Dispatcher.UIThread.RunJobs();
+            await model.LastAbyssalEntry;
+            Assert.Equal(ActivityRunState.Running, model.RunState);
+        }
+
+        if (model.RunState != ActivityRunState.Running)
+        {
+            model.StartManualRun(DateTime.UtcNow);
+        }
+
+        Assert.Equal(allowed || memberKeepsStart, startOffered);
         TellTheCommander();
 
         var pocket = model.Sections.OfType<ActivityWindowSectionViewModel>().Single();
@@ -206,6 +263,19 @@ public sealed class AbyssalRoomDetectionTests
         {
             presses.GetValueOrDefault(name, at => collector.Record(1, name, at))(atUtc);
         }
+    }
+
+    /// <summary>A location watch that either places every character in a system or refuses, so the window can or cannot see their entry.</summary>
+    private sealed class StubWatch(bool blind) : IEsiLocationMonitor
+    {
+        public void Watch(int characterId, string characterName, Action<EsiLocationReading> onReading) =>
+            onReading(blind ? new EsiLocationReading(null, DateTime.UtcNow, EsiErrorKind.AuthRequired) : new EsiLocationReading(30002718, DateTime.UtcNow));
+
+        public void UiReady() { }
+
+        public void Stop(int characterId) { }
+
+        public bool IsWatching(int characterId) => true;
     }
 
     private static string _Fixture(string name)

@@ -3,6 +3,7 @@ using EveUtils.Shared.Data;
 using EveUtils.Shared.DependencyInjection;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Market.Repositories;
+using EveUtils.Shared.Modules.Market.Services;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Entities;
 using EveUtils.Shared.Modules.Runs.Enums;
@@ -15,7 +16,7 @@ namespace EveUtils.Shared.Modules.Runs.Commands;
 
 [ClientOnly]
 internal sealed class SaveRunCommandHandler(IDbContextFactory<ClientDbContext> contextFactory, IEventBus eventBus, IDispatcher dispatcher,
-    IMarketPriceRepository marketPrices, ISdeAccessor sde)
+    IMarketPriceRepository marketPrices, IBlueprintAppraisalService blueprints, ISdeAccessor sde)
     : ICommandHandler<SaveRunCommand, Result>
 {
     public async Task<Result> Handle(SaveRunCommand command, CancellationToken cancellationToken = default)
@@ -127,7 +128,7 @@ internal sealed class SaveRunCommandHandler(IDbContextFactory<ClientDbContext> c
             return Result.Failure(new ResultMessage(MessageSeverity.Error, MessageCodes.ValidationFailed,
                 "A saved run cannot be saved again.", "Runs"));
         // What the run window held until now — its loot, its filament — is fixed at the price of the moment it is saved.
-        await RunPriceSnapshots.FixOnCaptureAsync(db, marketPrices, sde, run.Id, cancellationToken);
+        await RunPriceSnapshots.FixOnCaptureAsync(db, marketPrices, blueprints, sde, run.Id, cancellationToken);
         // Local-first: a run must show up in the summary the moment it is saved, not only after the next server
         // sync — RunSynchronizationApplier triggers the same rebuild for the pulled-run path. Rebuilt before the
         // event fires, not after: PublishAsync awaits every subscriber, so a screen reacting to RunSavedEvent by

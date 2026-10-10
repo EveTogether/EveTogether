@@ -15,9 +15,10 @@ public sealed class TargetsTests
     {
         if (spec.StartsWith('@'))
         {
-            bool neuted = spec.EndsWith('!');
-            return TargetsWindowSectionViewModel.WithLoggedNeut(
-                TargetsWindowSectionViewModel.RowFor(new TargetSighting(null, spec[1..].TrimEnd('!'), null), null)!, neuted);
+            string[] logged = spec[1..].Split('!');
+            return TargetsWindowSectionViewModel.WithLoggedEwar(
+                TargetsWindowSectionViewModel.RowFor(new TargetSighting(null, logged[0], null), null)!,
+                logged.Length < 2 ? [] : logged[1].Length == 0 ? [NpcEwarKind.Neut] : logged[1].Split(',').Select(System.Enum.Parse<NpcEwarKind>));
         }
 
         string[] part = spec.Split('/');
@@ -33,6 +34,8 @@ public sealed class TargetsTests
     [InlineData("Big/Scram/9000;Small/Neut/2000;Rep/RemoteRepair/1000;Web/Web/9000", "Small,Big,Web,Rep")]
     [InlineData("@Mystery;Dmg//3000;@Scylla Tyrannos;Neut/Neut/4000", "Neut,Scylla Tyrannos,Dmg,Mystery")]
     [InlineData("@Mystery;@Scylla Tyrannos!;@Karybdis Tyrannos!", "Scylla Tyrannos,Karybdis Tyrannos,Mystery")]
+    [InlineData("@Mystery!Jam;Dmg//3000;Scram/Scram/9000", "Scram,Dmg,Mystery")]
+    [InlineData("Jam/Jam/9000;Dmg//3000;Scram/Scram/9000", "Scram,Jam,Dmg")]
     public void Order_PutsWhatStopsYouFirst_ThenEhp_AndUnknownLast(string specs, string expected)
     {
         var ordered = TargetOrdering.Order(specs.Split(';').Select(_Row));
@@ -42,6 +45,9 @@ public sealed class TargetsTests
         Assert.All(ordered.Where(row => row.Name == "Scylla Tyrannos"),
             row => Assert.Contains("SCRAM log", row.Ewar.Select(ewar => ewar.Text)));
         Assert.All(ordered.Where(row => row.Name == "Mystery"), row => Assert.Equal("?", row.EhpText));
+        Assert.All(ordered.Where(row => row.Name == "Mystery" && row.Ewar.Count > 0), row => Assert.Equal(["JAM log"], row.Ewar.Select(ewar => ewar.Text)));
+        Assert.All(ordered.SelectMany(row => row.Ewar), ewar => Assert.Contains(ewar.FromLog ? "seen in your game log: " : "from the NPC data: ", ewar.Tooltip));
+        Assert.All(ordered.Where(row => row.Name == "Mystery" && row.Ewar.Count > 0), row => Assert.StartsWith("ECM jammer, seen in your game log: ", row.Ewar[0].Tooltip));
     }
 
     /// <summary>ET-369 AC2: a type seen in two rooms stands in both, a type seen in room 2 only is not in room 1,

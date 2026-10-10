@@ -53,6 +53,9 @@ public class FitBrowserTests
             Task.FromResult<IReadOnlyDictionary<int, double>>(
                 typeIds.Where(_prices.ContainsKey).ToDictionary(id => id, id => _prices[id]));
 
+        public Task<IReadOnlyDictionary<int, double>> GetAdjustedPricesAsync(IReadOnlyCollection<int> typeIds, CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyDictionary<int, double>>(new Dictionary<int, double>());
+
         public Task<int> CountAsync(CancellationToken cancellationToken = default) => Task.FromResult(_prices.Count);
 
         public Task<DateTimeOffset?> GetSnapshotTimeAsync(CancellationToken cancellationToken = default) =>
@@ -397,6 +400,9 @@ public class FitBrowserTests
             await gate.Task;
             return typeIds.Where(prices.ContainsKey).ToDictionary(id => id, id => prices[id]);
         }
+
+        public Task<IReadOnlyDictionary<int, double>> GetAdjustedPricesAsync(IReadOnlyCollection<int> typeIds, CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyDictionary<int, double>>(new Dictionary<int, double>());
 
         public Task<int> CountAsync(CancellationToken cancellationToken = default) => Task.FromResult(prices.Count);
 

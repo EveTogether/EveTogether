@@ -11,6 +11,10 @@ public interface IMarketPriceRepository
     /// <summary>The average price per requested type id (missing ids are absent), for estimating a fit's value.</summary>
     Task<IReadOnlyDictionary<int, double>> GetAveragePricesAsync(IReadOnlyCollection<int> typeIds, CancellationToken cancellationToken = default);
 
+    /// <summary>CCP's adjusted price per requested type id (missing ids are absent) — what a manufacturing job's
+    /// estimated item value is costed at (ET-501).</summary>
+    Task<IReadOnlyDictionary<int, double>> GetAdjustedPricesAsync(IReadOnlyCollection<int> typeIds, CancellationToken cancellationToken = default);
+
     /// <summary>How many prices are cached (0 = not refreshed yet).</summary>
     Task<int> CountAsync(CancellationToken cancellationToken = default);
 

@@ -41,6 +41,7 @@ using EveUtils.Client.Imaging;
 using EveUtils.Client.Messaging;
 using EveUtils.Shared.Modules.Market.Repositories;
 using EveUtils.Shared.Modules.Market.Services;
+using EveUtils.Shared.Modules.Market.Services.Implementations;
 using EveUtils.Client.Pairing;
 using EveUtils.Client.Theming;
 using EveUtils.Client.Characters;
@@ -1452,6 +1453,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         EveUtils.Client.ViewModels.Activity.CompactRunStyle compactRunStyle;
         bool openRunsCompact;
         bool autoUploadRuns = await (_services.GetService<EveUtils.Client.Runs.EveWorkbenchRunAutoPublisher>()?.IsAutoUploadAsync() ?? Task.FromResult(false));
+        bool valueBlueprintsInLoot;
         using (var scope = _services.CreateScope())
         {
             var settings = await scope.ServiceProvider.GetRequiredService<IDispatcher>().Query(new GetSettingsQuery());
@@ -1479,6 +1481,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
             includeLocationInLocalApi = settings.FirstOrDefault(s => s.Key == LocalApi.LocalApiServer.IncludeLocationSettingKey)?.Value == "true"; // default off
             compactRunStyle = EveUtils.Client.Runs.CompactRunSettings.ReadStyle(settings);
             openRunsCompact = EveUtils.Client.Runs.CompactRunSettings.ReadOpenCompact(settings);
+            valueBlueprintsInLoot = settings.FirstOrDefault(s => s.Key == BlueprintAppraisalService.LootValuationSettingKey)?.Value != "false"; // default on
         }
 
         var localApi = _services.GetService<LocalApi.ILocalApiServer>();
@@ -1489,7 +1492,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
             loadImages, _theme?.Current ?? FactionTheme.Gallente, SdeVersionLabel(), ApplySettingsAsync, openDetailAfterImport, toastPosition,
             localApiEnabled, localApiPort, localApiStatusLabel, localApi, checkUpdatesOnStartup, _clipboardWatch, initialCategory, openFleetRunWindow,
             autoPublishFleetRuns, shares.IsShared(MetricKind.Loot), shares.IsShared(MetricKind.MiningYield), autoStartMissions, autoStartSites,
-            _weekStart?.FirstDay ?? Calendar.WeekStartService.SystemDefault(), includeNightlyBuilds, _services.GetService<IUpdateService>(), offerHomefrontRuns, RunSetupAgainAsync, includeLocationInLocalApi, OpenWidgetManager, shares.IsKillmailShared(), followFleetCommanderEnd, compactRunStyle, openRunsCompact, autoUploadRuns);
+            _weekStart?.FirstDay ?? Calendar.WeekStartService.SystemDefault(), includeNightlyBuilds, _services.GetService<IUpdateService>(), offerHomefrontRuns, RunSetupAgainAsync, includeLocationInLocalApi, OpenWidgetManager, shares.IsKillmailShared(), followFleetCommanderEnd, compactRunStyle, openRunsCompact, valueBlueprintsInLoot, autoUploadRuns);
     }
 
     /// <summary>Opens the About dialog: app identity + version, creator credits with portraits,
@@ -1593,6 +1596,12 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
                 EveUtils.Client.Clipboard.ClipboardSignatureOffer.AutoStartSettingKey, result.AutoStartSites ? "true" : "false"));
             await dispatcher.Send(new SetSettingCommand(
                 EveUtils.Client.Runs.HomefrontDetector.OfferSettingKey, result.OfferHomefrontRuns ? "true" : "false"));
+            bool blueprintsWereValued = storedSettings.FirstOrDefault(s => s.Key == BlueprintAppraisalService.LootValuationSettingKey)?.Value != "false";
+            await dispatcher.Send(new SetSettingCommand(
+                BlueprintAppraisalService.LootValuationSettingKey, result.ValueBlueprintsInLoot ? "true" : "false"));
+            // Turned on: the blueprint lines that stayed unpriced meanwhile are filled now, not at the next price refresh.
+            if (result.ValueBlueprintsInLoot && !blueprintsWereValued)
+                await dispatcher.Send(new FillRunPriceSnapshotsCommand());
         }
 
         await _services.GetRequiredService<FleetKillmailSharePublisher>().PublishCurrentAsync();

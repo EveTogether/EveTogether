@@ -181,6 +181,15 @@ public static partial class LogLineParser
             return new NeutEvent(timestamp, outgoing, neutAmount, neut.Match.Groups["rest"].Value.Trim());
         }
 
+        foreach (EwarPattern ewar in grammar.EwarAttempts)
+        {
+            Match match = ewar.Regex.Match(body);
+            if (match.Success)
+            {
+                return new EwarEvent(timestamp, ewar.Kind, match.Groups["source"].Value.Trim());
+            }
+        }
+
         return _ParseDamage(grammar, timestamp, body, rawBody);
     }
 

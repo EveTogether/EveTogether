@@ -1179,6 +1179,9 @@ namespace EveUtils.Migrations.Server.PostgreSql.Migrations
                         .HasMaxLength(255)
                         .HasColumnType("character varying(255)");
 
+                    b.Property<int>("PriceBasis")
+                        .HasColumnType("integer");
+
                     b.Property<int?>("PriceSource")
                         .HasColumnType("integer");
 

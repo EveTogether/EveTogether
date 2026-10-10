@@ -249,7 +249,7 @@ public sealed partial class ActivityWindowViewModel
         CompactLootCaption = items == 1 ? "TOP ITEMS · 1 ITEM" : $"TOP ITEMS · {items} ITEMS";
 
         List<CompactLootLineViewModel> top = [.. overview.TopItems(CompactTopItemCount)
-            .Select(item => new CompactLootLineViewModel(item.Name, item.Quantity, item.Value))];
+            .Select(item => new CompactLootLineViewModel(item.Name, item.Quantity, item.Value, item.IsBlueprintAppraisal))];
         CompactLootMoreText = items > top.Count ? $"+ {items - top.Count} more" : null;
         if (top.Select(line => (line.Name, line.ValueText)).SequenceEqual(CompactTopLoot.Select(line => (line.Name, line.ValueText))))
             return;

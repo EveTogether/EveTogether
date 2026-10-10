@@ -3,6 +3,7 @@ using EveUtils.Shared.Data;
 using EveUtils.Shared.DependencyInjection;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Market.Repositories;
+using EveUtils.Shared.Modules.Market.Services;
 using EveUtils.Shared.Modules.Runs.Entities;
 using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Runs.Events;
@@ -13,7 +14,7 @@ namespace EveUtils.Shared.Modules.Runs.Commands;
 
 [ClientOnly]
 internal sealed class RepriceUnrecognisedLootCommandHandler(
-    IDbContextFactory<ClientDbContext> contextFactory, ISdeAccessor sde, IMarketPriceRepository marketPrices,
+    IDbContextFactory<ClientDbContext> contextFactory, ISdeAccessor sde, IMarketPriceRepository marketPrices, IBlueprintAppraisalService blueprints,
     IEventBus eventBus, IDispatcher dispatcher)
     : ICommandHandler<RepriceUnrecognisedLootCommand, Result<int>>
 {
@@ -128,7 +129,7 @@ internal sealed class RepriceUnrecognisedLootCommandHandler(
 
         await db.SaveChangesAsync(cancellationToken);
         // A name recognised now is loot that came in without a price, so it takes the first one there is, once (ET-463).
-        if ((await RunPriceSnapshots.FixAsync(db, marketPrices, sde, runIds, PriceSnapshotSource.Backfill, cancellationToken)).Count > 0)
+        if ((await RunPriceSnapshots.FixAsync(db, marketPrices, blueprints, sde, runIds, PriceSnapshotSource.Backfill, cancellationToken)).Count > 0)
             await db.SaveChangesAsync(cancellationToken);
 
         foreach (Run run in runs)

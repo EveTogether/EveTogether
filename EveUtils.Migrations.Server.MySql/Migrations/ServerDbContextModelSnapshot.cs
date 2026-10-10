@@ -1179,6 +1179,9 @@ namespace EveUtils.Migrations.Server.MySql.Migrations
                         .HasMaxLength(255)
                         .HasColumnType("varchar(255)");
 
+                    b.Property<int>("PriceBasis")
+                        .HasColumnType("int");
+
                     b.Property<int?>("PriceSource")
                         .HasColumnType("int");
 

@@ -20,5 +20,6 @@ public sealed class RunLootEntry
 
     public DateTime? PricedAtUtc { get; set; }
     public PriceSnapshotSource? PriceSource { get; set; }
+    public LootPriceBasis PriceBasis { get; set; }
     public RunLootCapture? RunLootCapture { get; set; }
 }
