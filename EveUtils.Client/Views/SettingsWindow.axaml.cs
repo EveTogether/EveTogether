@@ -65,6 +65,7 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
     private RadioButton? _compactStyleCardRadio;
     private RadioButton? _compactStyleHudRadio;
     private CheckBox? _openRunsCompactBox;
+    private CheckBox? _autoUploadRunsBox;
     private CheckBox? _autoPublishFleetRunsBox;
     private CheckBox _checkUpdatesOnStartupBox = null!, _watchClipboardBox = null!;
     private ToggleButton? _channelStableButton, _channelNightlyButton;
@@ -131,7 +132,7 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
     }
 
     public SettingsWindow(string currentDirectory, string detectedDefault, bool shareLocation, bool shareBounty, bool shareCombat, bool loadTypeImages, Theming.FactionTheme currentFaction, string sdeVersionLabel, bool openFitDetailAfterImport = true, Notifications.ToastPosition toastPosition = Notifications.ToastPosition.TopRight, bool enableLocalApi = false, int localApiPort = LocalApi.LocalApiServer.DefaultPort, string localApiStatusLabel = "", ILocalApiServer? localApiServer = null, bool checkUpdatesOnStartup = true, ClipboardWatchService? clipboardWatch = null, Func<SettingsResult, Task>? onApply = null,
-        int initialCategory = 0, bool openFleetRunWindowImmediately = false, bool autoPublishFleetRuns = true, bool shareLoot = false, bool shareMining = false, bool autoStartMissions = true, bool autoStartSites = true, DayOfWeek weekStartsOn = DayOfWeek.Monday, bool includeNightlyBuilds = false, IUpdateService? updates = null, bool offerHomefrontRuns = true, Func<Task>? runSetupAgain = null, bool includeLocationInLocalApi = false, Action? openWidgetManager = null, bool shareKillmails = true, bool followFleetCommanderEnd = false, ViewModels.Activity.CompactRunStyle compactRunStyle = ViewModels.Activity.CompactRunStyle.Card, bool openRunsCompact = false) : this()
+        int initialCategory = 0, bool openFleetRunWindowImmediately = false, bool autoPublishFleetRuns = true, bool shareLoot = false, bool shareMining = false, bool autoStartMissions = true, bool autoStartSites = true, DayOfWeek weekStartsOn = DayOfWeek.Monday, bool includeNightlyBuilds = false, IUpdateService? updates = null, bool offerHomefrontRuns = true, Func<Task>? runSetupAgain = null, bool includeLocationInLocalApi = false, Action? openWidgetManager = null, bool shareKillmails = true, bool followFleetCommanderEnd = false, ViewModels.Activity.CompactRunStyle compactRunStyle = ViewModels.Activity.CompactRunStyle.Card, bool openRunsCompact = false, bool autoUploadRuns = false) : this()
     {
         _runSetupAgain = runSetupAgain;
         _openWidgetManager = openWidgetManager;
@@ -246,6 +247,11 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
         {
             _compactStyleHudRadio.IsChecked = compactRunStyle is ViewModels.Activity.CompactRunStyle.Hud;
             _compactStyleCardRadio.IsChecked = compactRunStyle is not ViewModels.Activity.CompactRunStyle.Hud;
+        }
+        _autoUploadRunsBox = this.FindControl<CheckBox>("AutoUploadRunsBox");
+        if (_autoUploadRunsBox is not null)
+        {
+            _autoUploadRunsBox.IsChecked = autoUploadRuns;
         }
         _openRunsCompactBox = this.FindControl<CheckBox>("OpenRunsCompactBox");
         if (_openRunsCompactBox is not null)
@@ -846,6 +852,6 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
         var autoStartSites = _autoStartSitesBox.IsChecked ?? true;
         var weekStartsOn = _weekStartsOnBox.SelectedIndex == 1 ? DayOfWeek.Sunday : DayOfWeek.Monday;
         var includeNightlyBuilds = _channelNightlyButton?.IsChecked ?? false;
-        return new SettingsResult(dir, shareLocation, shareBounty, shareCombat, loadTypeImages, SelectedFaction(), reimportSde, openFitDetailAfterImport, toastPosition, enableLocalApi, localApiPort, checkUpdatesOnStartup, openFleetRunWindowImmediately, autoPublishFleetRuns, shareLoot, shareMining, autoStartMissions, autoStartSites, weekStartsOn, includeNightlyBuilds, _channelTouched, OfferHomefrontRunsBox.IsChecked ?? true, IncludeLocationInLocalApiBox.IsChecked ?? false, shareKillmails, followFleetCommanderEnd, compactRunStyle, openRunsCompact);
+        return new SettingsResult(dir, shareLocation, shareBounty, shareCombat, loadTypeImages, SelectedFaction(), reimportSde, openFitDetailAfterImport, toastPosition, enableLocalApi, localApiPort, checkUpdatesOnStartup, openFleetRunWindowImmediately, autoPublishFleetRuns, shareLoot, shareMining, autoStartMissions, autoStartSites, weekStartsOn, includeNightlyBuilds, _channelTouched, OfferHomefrontRunsBox.IsChecked ?? true, IncludeLocationInLocalApiBox.IsChecked ?? false, shareKillmails, followFleetCommanderEnd, compactRunStyle, openRunsCompact, _autoUploadRunsBox?.IsChecked ?? false);
     }
 }

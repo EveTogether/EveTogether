@@ -168,6 +168,19 @@
                                 IsVisible="{Binding Row.HasPublishFailure}"
                                 Command="{Binding Row.RetryPublishCommand}"
                                 ToolTip.Tip="{Binding Row.RetryTooltip}"/>
+                        <!-- UPLOAD ▾ (ET-325): optional and generic; a menu so a second target is one more item. -->
+                        <Button x:Name="PaneUpload" Classes="rowaction" Content="UPLOAD ▾"
+                                IsVisible="{Binding CanUploadToEveWorkbench}"
+                                ToolTip.Tip="Optional: send this finished run somewhere else">
+                            <Button.Flyout>
+                                <MenuFlyout>
+                                    <MenuItem Header="EVE Workbench…" Command="{Binding UploadToEveWorkbenchCommand}"/>
+                                </MenuFlyout>
+                            </Button.Flyout>
+                        </Button>
+                        <Border Classes="chip dim" VerticalAlignment="Center" IsVisible="{Binding HasUploadStatus}">
+                            <TextBlock Text="{Binding UploadStatusText}"/>
+                        </Border>
                     </StackPanel>
                     <Button x:Name="PaneOpenDetail" Grid.Column="1" Classes="rowaction"
                             Command="{Binding Row.OpenDetailCommand}"

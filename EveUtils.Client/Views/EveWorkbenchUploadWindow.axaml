@@ -1,0 +1,61 @@
+<v:ChromedWindow xmlns="https://github.com/avaloniaui" xmlns:v="using:EveUtils.Client.Views"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:EveUtils.Client.ViewModels.Runs"
+        x:Class="EveUtils.Client.Views.EveWorkbenchUploadWindow"
+        x:DataType="vm:EveWorkbenchUploadViewModel"
+        Width="500" Height="520"
+        WindowStartupLocation="CenterOwner"
+        Title="Upload to EVE Workbench">
+
+    <DockPanel Margin="16">
+        <Grid DockPanel.Dock="Bottom" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8" Margin="0,12,0,0">
+            <TextBlock Grid.Column="0" Text="{Binding ResultText}" FontSize="10" VerticalAlignment="Center" TextWrapping="Wrap"
+                       Foreground="{DynamicResource TextAccentBrush}"/>
+            <Button Grid.Column="1" Content="Cancel" Click="OnClose"/>
+            <Button Grid.Column="2" Content="Upload" Classes="accent" Command="{Binding UploadCommand}" IsEnabled="{Binding CanUpload}"/>
+        </Grid>
+
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+            <StackPanel Spacing="12">
+                <TextBlock Text="Upload to EVE Workbench" FontWeight="Bold" FontSize="16" Foreground="{StaticResource TextBrightBrush}"/>
+                <TextBlock Text="Optional. EVE Together and EVE Workbench work on their own; this sends the finished run to your EVE Workbench account, and keeps it up to date there when you correct or delete it."
+                           FontSize="11" TextWrapping="Wrap" Foreground="{StaticResource TextBrush}"/>
+
+                <StackPanel Spacing="4">
+                    <TextBlock Classes="label" Text="ACCOUNT PER PILOT"/>
+                    <ItemsControl ItemsSource="{Binding Pilots}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:UploadPilotLine">
+                                <TextBlock FontSize="12" Foreground="{StaticResource TextBrightBrush}">
+                                    <Run Text="{Binding Name}" FontWeight="SemiBold"/><Run Text=" — "/><Run Text="{Binding KeyText}"/>
+                                </TextBlock>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+
+                <StackPanel Spacing="4">
+                    <TextBlock Classes="label" Text="WHAT IS SHARED"/>
+                    <TextBlock Text="{Binding SharedText}" FontSize="11" TextWrapping="Wrap" Foreground="{StaticResource TextBrush}"/>
+                </StackPanel>
+
+                <Border Classes="panel" Padding="10,8" BorderBrush="{StaticResource WarnBrush}" IsVisible="{Binding NeedsKey}">
+                    <StackPanel Spacing="6">
+                        <TextBlock Text="{Binding Notice}" TextWrapping="Wrap" FontWeight="SemiBold" Foreground="{StaticResource WarnBrush}"/>
+                        <TextBlock Text="{Binding HowTo}" FontSize="11" TextWrapping="Wrap" Foreground="{StaticResource TextBrush}"/>
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <Button Classes="rowaction" Content="Open on Abyss Tracker" Command="{Binding OpenAbyssTrackerTokensCommand}"/>
+                            <Button Classes="rowaction" Content="Open on EVE Journal" Command="{Binding OpenEveJournalTokensCommand}"/>
+                        </StackPanel>
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+                            <TextBox Grid.Column="0" FontSize="11" PasswordChar="•" PlaceholderText="Paste your EVE Workbench API key"
+                                     Text="{Binding KeyInput}"/>
+                            <Button Grid.Column="1" Content="SAVE" FontSize="10" Command="{Binding SaveKeyCommand}"/>
+                        </Grid>
+                        <TextBlock Text="{Binding KeyStatus}" FontSize="11" TextWrapping="Wrap" Foreground="{StaticResource TextBrush}"/>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </ScrollViewer>
+    </DockPanel>
+</v:ChromedWindow>
