@@ -107,7 +107,8 @@ public sealed partial class ActivityWindowViewModel
     /// <summary>Whether any chip or line of the notices view has something to say: the escalation, the loot that is
     /// missing a price, the tier and weather, why a save failed or why there are no run buttons.</summary>
     public bool HasCompactNoticeContent =>
-        HasCompactAlert || HasCompactPricingNotice || NeedsWeatherAndTier || HasRunNotice || IsCommandStatusShown;
+        HasCompactAlert || HasCompactPricingNotice || NeedsWeatherAndTier || HasRunNotice || IsCommandStatusShown
+        || IsFleetCarryingOn || IsLateJoinShown;
 
     /// <summary>The HUD's second line: the notices, or the countdown that follows the commander's save.</summary>
     public bool HasCompactNotice => HasCompactNoticeContent || IsFollowShown;

@@ -6,6 +6,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EveUtils.Client.Fleet;
 using EveUtils.Client.ViewModels.Runs;
+using EveUtils.Client.ViewModels.Runs.Sections;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Fleet.Dtos;
 using EveUtils.Shared.Modules.Fleet.Events;
@@ -30,6 +31,9 @@ namespace EveUtils.Client.ViewModels.Activity;
 ///
 /// Only a fleet on a server: a client-only fleet's figures never leave this machine, so there is nothing to offer and
 /// no toggle to show.
+///
+/// The run's rooms and enemies ride along (ET-498) whatever the toggles say: they are no figure of the pilot's own, and
+/// a mate who is out of the pocket reads them to keep following the run.
 /// </summary>
 public sealed partial class RunFleetSharingViewModel(IServiceProvider services) : ObservableObject
 {
@@ -114,13 +118,14 @@ public sealed partial class RunFleetSharingViewModel(IServiceProvider services) 
     /// the window knows them — its own and every participant — of which only this client's own characters in the
     /// fleet count; a group mate's run published to this client is theirs to share. <paramref name="participants"/> is
     /// where each own character's mined units and residue (ET-234) are read from, the run window's own
-    /// <c>RunMiningEntry</c> rows.
+    /// <c>RunMiningEntry</c> rows. <paramref name="enemies"/> is where each own character's rooms and enemies are read
+    /// from (ET-498).
     /// </summary>
     public Task SyncAsync(DateTime nowUtc, long? fleetId, string? groupCode, bool isRunOpen,
         IReadOnlyCollection<int> runCharacters, ActivityLootViewModel? loot,
-        IReadOnlyCollection<RunParticipantViewModel>? participants = null)
+        IReadOnlyCollection<RunParticipantViewModel>? participants = null, EnemiesWindowSectionViewModel? enemies = null)
     {
-        _facts = new SyncFacts(nowUtc, fleetId, groupCode, isRunOpen, runCharacters, loot, participants ?? []);
+        _facts = new SyncFacts(nowUtc, fleetId, groupCode, isRunOpen, runCharacters, loot, participants ?? [], enemies);
         return _SyncOrOweAsync(readSettings: false);
     }
 
@@ -229,12 +234,14 @@ public sealed partial class RunFleetSharingViewModel(IServiceProvider services) 
         IsSharingMining = characters.Any(character => share.IsShared(fleetId, character, MetricKind.MiningYield));
 
         foreach (int character in characters)
-            await _OfferAsync(nowUtc, fleetId, groupCode, character, share, facts.Loot, facts.Participants);
+            await _OfferAsync(nowUtc, fleetId, groupCode, character, share, facts);
     }
 
     private async Task _OfferAsync(DateTime nowUtc, long fleetId, string groupCode, int character,
-        MetricShareSnapshot share, ActivityLootViewModel? loot, IReadOnlyCollection<RunParticipantViewModel> participants)
+        MetricShareSnapshot share, SyncFacts facts)
     {
+        ActivityLootViewModel? loot = facts.Loot;
+        IReadOnlyCollection<RunParticipantViewModel> participants = facts.Participants;
         bool sharesLoot = share.IsShared(fleetId, character, MetricKind.Loot);
         bool sharesBounty = share.IsShared(fleetId, character, MetricKind.Bounty);
         bool sharesMining = share.IsShared(fleetId, character, MetricKind.MiningYield);
@@ -274,13 +281,15 @@ public sealed partial class RunFleetSharingViewModel(IServiceProvider services) 
                 .OrderBy(line => line.OreType, StringComparer.Ordinal)];
         }
 
-        SentShare current = new(sharesLoot, sharesBounty, captures, lines, sharesMining, minedUnits, residueUnits, miningLines, nowUtc);
+        (IReadOnlyList<long> roomStarts, IReadOnlyList<RunShareEnemyLine> enemies) = facts.Enemies?.ShareOf(character) ?? ([], []);
+        SentShare current = new(sharesLoot, sharesBounty, captures, lines, sharesMining, minedUnits, residueUnits, miningLines,
+            [.. roomStarts], [.. enemies], nowUtc);
 
         SentShare? sent = _sent.GetValueOrDefault(character);
         // Taking something back is never held for a burst: from this moment the others see nothing more of it.
         bool isWithdrawn = sent is not null
             && (sent.SharesLoot && !sharesLoot || sent.SharesBounty && !sharesBounty || sent.SharesMining && !sharesMining);
-        bool isChanged = sent is null ? sharesLoot || sharesBounty || sharesMining : !sent.SaysTheSameAs(current);
+        bool isChanged = sent is null ? current.HasAnythingToSay : !sent.SaysTheSameAs(current);
         if (!isChanged)
             _changedSince.Remove(character);
 
@@ -295,7 +304,7 @@ public sealed partial class RunFleetSharingViewModel(IServiceProvider services) 
         _lastUnixMs = Math.Max(new DateTimeOffset(nowUtc, TimeSpan.Zero).ToUnixTimeMilliseconds(), _lastUnixMs + 1);
         await eventBus.PublishAsync(new FleetRunShareEvent(new RunShareUpdate(
                 fleetId, groupCode, _lastUnixMs, sharesLoot, sharesBounty, captures, lines,
-                sharesMining, minedUnits, residueUnits, miningLines), character),
+                sharesMining, minedUnits, residueUnits, miningLines, current.RoomStarts, current.Enemies), character),
             EventTarget.Remote);
     }
 
@@ -309,7 +318,7 @@ public sealed partial class RunFleetSharingViewModel(IServiceProvider services) 
     }
 
     private static bool _IsResendDue(SentShare? sent, SentShare current, DateTime nowUtc) =>
-        sent is not null && (current.SharesLoot || current.SharesBounty || current.SharesMining)
+        sent is not null && current.HasAnythingToSay
                          && (nowUtc - sent.SentAtUtc >= ResendInterval || nowUtc < sent.SentAtUtc);
 
     /// <summary>Puts exactly these characters on the run in <see cref="SharedFleetRuns"/>, and takes off whoever this
@@ -353,15 +362,21 @@ public sealed partial class RunFleetSharingViewModel(IServiceProvider services) 
 
     private sealed record SyncFacts(
         DateTime NowUtc, long? FleetId, string? GroupCode, bool IsRunOpen, IReadOnlyCollection<int> RunCharacters,
-        ActivityLootViewModel? Loot, IReadOnlyCollection<RunParticipantViewModel> Participants);
+        ActivityLootViewModel? Loot, IReadOnlyCollection<RunParticipantViewModel> Participants,
+        EnemiesWindowSectionViewModel? Enemies);
 
     private sealed record SentShare(bool SharesLoot, bool SharesBounty, int CaptureCount, RunShareLootLine[] Lines,
-        bool SharesMining, int MinedUnits, int ResidueUnits, RunShareMiningLine[] MiningLines, DateTime SentAtUtc)
+        bool SharesMining, int MinedUnits, int ResidueUnits, RunShareMiningLine[] MiningLines, long[] RoomStarts,
+        RunShareEnemyLine[] Enemies, DateTime SentAtUtc)
     {
+        public bool HasAnythingToSay =>
+            SharesLoot || SharesBounty || SharesMining || RoomStarts.Length > 0 || Enemies.Length > 0;
+
         public bool SaysTheSameAs(SentShare other) =>
             SharesLoot == other.SharesLoot && SharesBounty == other.SharesBounty && CaptureCount == other.CaptureCount
             && Lines.SequenceEqual(other.Lines) && SharesMining == other.SharesMining
             && MinedUnits == other.MinedUnits && ResidueUnits == other.ResidueUnits
-            && MiningLines.SequenceEqual(other.MiningLines);
+            && MiningLines.SequenceEqual(other.MiningLines)
+            && RoomStarts.SequenceEqual(other.RoomStarts) && Enemies.SequenceEqual(other.Enemies);
     }
 }

@@ -178,7 +178,7 @@ public sealed class GamelogWatcherService : ISingletonService, IGameLogLineSourc
                 // that would silently freeze the entire live DPS feed after a single hit. Log and keep going.
                 try
                 {
-                    if (item.Event is CombatEvent or RemoteRepEvent or NeutEvent or CapTransferEvent)
+                    if (item.Event is CombatEvent or RemoteRepEvent or NeutEvent or CapTransferEvent or EwarEvent)
                     {
                         _gamelog.ObserveTelemetry(item.Character, item.Event);
                     }

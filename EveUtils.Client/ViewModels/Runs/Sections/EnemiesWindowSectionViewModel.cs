@@ -30,6 +30,9 @@ namespace EveUtils.Client.ViewModels.Runs.Sections;
 ///
 /// The same per-character watch keeps each character's combat lines for the run's timeline (ET-467), so both ride
 /// one lifecycle: started with the run, fed live and by catch-up, handed to SAVE, let go at close.
+///
+/// A pilot out of a fleet run while a mate is still inside sees that mate's rooms and enemies here instead (ET-498),
+/// read off the mate's <see cref="RunShareUpdate"/>. Shown only: SAVE and LOOT keep reading the pilot's own collectors.
 /// </summary>
 public sealed partial class EnemiesWindowSectionViewModel : RunWindowSection
 {
@@ -40,6 +43,7 @@ public sealed partial class EnemiesWindowSectionViewModel : RunWindowSection
     private readonly IDisposable? _roomsSubscription;
     private readonly IDisposable? _proposalSubscription;
     private bool _wasCommander;
+    private FleetMateRooms? _mate;
 
     public EnemiesWindowSectionViewModel(IRunWindowContext context) : base(context, RunSectionId.Enemies, "ENEMIES")
     {
@@ -59,9 +63,13 @@ public sealed partial class EnemiesWindowSectionViewModel : RunWindowSection
     /// <summary>The on-screen character's own sightings — whichever run the column is currently showing. Every other
     /// group member's own collector keeps counting in the background regardless (ET-210 round 4).</summary>
     public IReadOnlyList<RunEnemyObservationViewModel> EnemyObservations =>
-        Context.RunCharacterId is { } id && _collectors.TryGetValue(id, out RunEnemyObservationCollector? collector)
+        _mate?.Rows
+        ?? (Context.RunCharacterId is { } id && _collectors.TryGetValue(id, out RunEnemyObservationCollector? collector)
             ? collector.Observations
-            : [];
+            : []);
+
+    /// <summary>The fleet mate whose rooms and enemies this section shows (ET-498), or null for the pilot's own.</summary>
+    public string? FleetMateName => _mate?.Name;
 
     /// <summary>The on-screen character's rows per room, newest room first (ET-240) — empty while the run has no
     /// rooms, and then the flat list above is the whole of it, exactly as before NEW ROOM existed.</summary>
@@ -78,10 +86,14 @@ public sealed partial class EnemiesWindowSectionViewModel : RunWindowSection
         ? []
         :
         [
-            .. collector.Observations.Select(observation => new TargetSighting(observation.RoomNumber, observation.EnemyName, observation.EnemyTypeId)),
+            .. collector.Observations.Select(SightingOf),
             .. collector.UnresolvedSightings.Select(seen => new TargetSighting(
                 RunRooms.RoomOf(collector.RoomBoundaries, seen.FirstObservedAtUtc), seen.Name, null))
         ];
+
+    /// <summary>A row as TARGETS reads it: a Tyrannos agent's negative id is no SDE type, so it goes by name.</summary>
+    internal static TargetSighting SightingOf(RunEnemyObservationViewModel observation) => new(observation.RoomNumber,
+        observation.EnemyName, observation.EnemyTypeId > 0 ? observation.EnemyTypeId : null);
 
     /// <summary>The on-screen pilot's combat, neut and rep lines of the run, each with its room, for TARGETS. Read only.</summary>
     public IReadOnlyList<(int? Room, GameLogEvent Event)> TargetEvents() =>
@@ -89,28 +101,34 @@ public sealed partial class EnemiesWindowSectionViewModel : RunWindowSection
             ? []
             : [.. events.Select(logEvent => (RunRooms.RoomOf(collector.RoomBoundaries, logEvent.Timestamp), logEvent))];
 
-    /// <summary>The window's line under the clock while the run has rooms: which room, since when, for how long.</summary>
+    /// <summary>The window's line under the clock while the run has rooms: which room, since when, for how long. A
+    /// mate's room is still going, so its time runs on the clock rather than stopping with this pilot's own leg.</summary>
     public string? CurrentRoomText(DateTime nowUtc)
     {
-        if (_OnScreenCollector() is not { RoomBoundaries: { Count: > 0 } boundaries })
+        IReadOnlyList<DateTime> boundaries = _Boundaries();
+        if (boundaries.Count == 0)
         {
             return null;
         }
 
         DateTime since = boundaries[^1];
-        TimeSpan inRoom = TimeSpan.FromTicks(Math.Max(0, ((Context.EffectiveStopUtc ?? nowUtc) - since).Ticks));
+        DateTime until = _mate is null ? Context.EffectiveStopUtc ?? nowUtc : nowUtc;
+        TimeSpan inRoom = TimeSpan.FromTicks(Math.Max(0, (until - since).Ticks));
         string? faction = _FactionText(boundaries.Count + 1);
-        return $"ROOM {boundaries.Count + 1}  since {since.ToLocalTime():HH:mm:ss} · {(int)inRoom.TotalMinutes:00}:{inRoom.Seconds:00}{(faction is null ? string.Empty : $" · {faction}")}";
+        return $"ROOM {boundaries.Count + 1}  since {since.ToLocalTime():HH:mm:ss} · {(int)inRoom.TotalMinutes:00}:{inRoom.Seconds:00}"
+               + (faction is null ? string.Empty : $" · {faction}")
+               + (_mate is null ? string.Empty : $" · {_mate.Name}");
     }
 
     /// <summary>Names the SDE has no type for, shown as plain rows while the run has no rooms (ET-369).</summary>
     public IReadOnlyList<string> UnresolvedNames => _UnresolvedIn(null);
 
     /// <summary>The AUTO badge for the room going on now, when the detector opened it (ET-368), or FC when it is the
-    /// commander's (ET-494).</summary>
-    public RoomSourceViewModel? CurrentRoomSource => _OnScreenCollector() is { DetectedCertainties: { Count: > 0 } certainties } collector
-        ? RoomSourceViewModel.Of(certainties[^1], collector.IsFollowingCommander)
-        : null;
+    /// commander's (ET-494). None while a fleet mate's rooms are shown (ET-498).</summary>
+    public RoomSourceViewModel? CurrentRoomSource =>
+        _mate is null && _OnScreenCollector() is { DetectedCertainties: { Count: > 0 } certainties } collector
+            ? RoomSourceViewModel.Of(certainties[^1], collector.IsFollowingCommander)
+            : null;
 
     /// <summary>The on-screen pilot's room boundaries, oldest first.</summary>
     internal IReadOnlyList<DateTime> RoomBoundaries => _OnScreenCollector()?.RoomBoundaries ?? [];
@@ -165,8 +183,57 @@ public sealed partial class EnemiesWindowSectionViewModel : RunWindowSection
         }
 
         int counted = EnemyObservations.Count(observation => observation.IsCounted);
-        string rooms = _OnScreenCollector() is { RoomBoundaries.Count: > 0 and var boundaries } ? $"{boundaries + 1} rooms · " : string.Empty;
-        HeaderSummary = $"{rooms}{types} {(types == 1 ? "type" : "types")} · {(counted == 0 ? "none counted" : $"{counted} counted")}";
+        int boundaries = _Boundaries().Count;
+        string rooms = boundaries > 0 ? $"{boundaries + 1} rooms · " : string.Empty;
+        string mate = _mate is null ? string.Empty : $"{_mate.Name} · ";
+        HeaderSummary = $"{mate}{rooms}{types} {(types == 1 ? "type" : "types")} · {(counted == 0 ? "none counted" : $"{counted} counted")}";
+    }
+
+    /// <summary>What <paramref name="characterId"/>'s own tally says of the run's rooms and enemies, for the fleet
+    /// (ET-498). Never a mate's: what this section shows of one is not this pilot's to pass on.</summary>
+    public (IReadOnlyList<long> RoomStartsUnixMs, IReadOnlyList<RunShareEnemyLine> Enemies) ShareOf(int characterId)
+    {
+        if (!_collectors.TryGetValue(characterId, out RunEnemyObservationCollector? collector))
+        {
+            return ([], []);
+        }
+
+        return (
+            [.. collector.RoomBoundaries.Select(boundary => new DateTimeOffset(DateTime.SpecifyKind(boundary, DateTimeKind.Utc)).ToUnixTimeMilliseconds())],
+            [
+                .. collector.Observations.Select(observation =>
+                    new RunShareEnemyLine(observation.EnemyName, observation.EnemyTypeId, observation.RoomNumber, observation.Count)),
+                .. collector.UnresolvedSightings.Select(seen =>
+                    new RunShareEnemyLine(seen.Name, null, RunRooms.RoomOf(collector.RoomBoundaries, seen.FirstObservedAtUtc), 0))
+            ]);
+    }
+
+    /// <summary>Show this mate's rooms and enemies in place of the pilot's own (ET-498), or the pilot's own again for
+    /// null. The rows are rebuilt only when the mate sent something new, so the list does not flicker every tick.</summary>
+    public void ShowFleetMate(string? name, RunShareUpdate? share)
+    {
+        if (name is null || share is null)
+        {
+            if (_mate is null)
+            {
+                return;
+            }
+
+            _mate = null;
+        }
+        else
+        {
+            if (_mate is { } shown && shown.Name == name && shown.UnixMs == share.UnixMs)
+            {
+                return;
+            }
+
+            _mate = FleetMateRooms.From(name, share);
+        }
+
+        OnPropertyChanged(nameof(EnemyObservations));
+        OnPropertyChanged(nameof(FleetMateName));
+        _ShowRooms();
     }
 
     /// <summary>Give the on-screen character its own tally, if it does not have one yet.</summary>
@@ -210,10 +277,10 @@ public sealed partial class EnemiesWindowSectionViewModel : RunWindowSection
         _collectors.GetValueOrDefault(characterId)?.Record(characterId, target, observedAtUtc);
 
     /// <summary>One line from the same catch-up read, for the run's timeline: what <see cref="_OnTelemetryObserved"/>
-    /// does live. Lines that are not combat, repair, neut or capacitor are ignored here.</summary>
+    /// does live. Lines that are not combat, repair, neut, capacitor or e-war are ignored here.</summary>
     internal void RecordCatchUpTelemetry(int characterId, GameLogEvent logEvent)
     {
-        if (logEvent is CombatEvent or RemoteRepEvent or NeutEvent or CapTransferEvent)
+        if (logEvent is CombatEvent or RemoteRepEvent or NeutEvent or CapTransferEvent or EwarEvent)
         {
             _combatEvents.GetValueOrDefault(characterId)?.Add(logEvent);
         }
@@ -232,6 +299,7 @@ public sealed partial class EnemiesWindowSectionViewModel : RunWindowSection
 
         _collectors.Clear();
         _combatEvents.Clear();
+        _mate = null;
         OnPropertyChanged(nameof(EnemyObservations));
         _ShowRooms();
     }
@@ -273,7 +341,7 @@ public sealed partial class EnemiesWindowSectionViewModel : RunWindowSection
 
         // Rooms find themselves only in an abyssal pocket (ET-368): elsewhere waves and reinforcements look like rooms.
         var collector = new RunEnemyObservationCollector(characterId,
-            name => sde.TryGetTypeId(name, out int typeId) ? typeId : null,
+            name => sde.TryGetTypeId(name, out int typeId) ? typeId : AbyssalNpcKnowledge.EnemyTypeIdOf(name),
             Context.RunType.Space is RunSpace.AbyssalPocket
                 ? typeId => sde.GetType(typeId) is { } type && AbyssalRoomDetector.IsAbyssalEnemyGroup(type.GroupId)
                 : null);
@@ -364,15 +432,25 @@ public sealed partial class EnemiesWindowSectionViewModel : RunWindowSection
     private RunEnemyObservationCollector? _OnScreenCollector() =>
         Context.RunCharacterId is { } id ? _collectors.GetValueOrDefault(id) : null;
 
+    private IReadOnlyList<DateTime> _Boundaries() => _mate?.Boundaries ?? _OnScreenCollector()?.RoomBoundaries ?? [];
+
     private IEnumerable<RunEnemyObservationCollector> _RoomScope() =>
         Context.RunType.ClockPerPilot
             ? _OnScreenCollector() is { } own ? [own] : []
             : _collectors.Values;
 
-    private IReadOnlyList<string> _UnresolvedIn(int? room) => _OnScreenCollector() is not { } collector
-        ? []
-        : [.. collector.UnresolvedSightings.Where(seen => RunRooms.RoomOf(collector.RoomBoundaries, seen.FirstObservedAtUtc) == room)
-            .Select(seen => seen.Name).Distinct()];
+    private IReadOnlyList<string> _UnresolvedIn(int? room)
+    {
+        if (_mate is { } mate)
+        {
+            return [.. mate.Unresolved.Where(seen => seen.Room == room).Select(seen => seen.Name).Distinct()];
+        }
+
+        return _OnScreenCollector() is not { } collector
+            ? []
+            : [.. collector.UnresolvedSightings.Where(seen => RunRooms.RoomOf(collector.RoomBoundaries, seen.FirstObservedAtUtc) == room)
+                .Select(seen => seen.Name).Distinct()];
+    }
 
     // The same faction text as TARGETS, read off the room's rows and its names without a type.
     private string? _FactionText(int room) => TargetsWindowSectionViewModel.FactionText(AbyssalNpcKnowledge.Faction(
@@ -381,14 +459,14 @@ public sealed partial class EnemiesWindowSectionViewModel : RunWindowSection
 
     private void _ShowRooms()
     {
-        IReadOnlyList<DateTime> boundaries = _OnScreenCollector()?.RoomBoundaries ?? [];
+        IReadOnlyList<DateTime> boundaries = _Boundaries();
         int roomCount = boundaries.Count == 0 ? 0 : boundaries.Count + 1;
         EnemyRooms =
         [
             .. Enumerable.Range(1, roomCount).Reverse().Select(room => new RunEnemyRoomViewModel(room,
-                _RoomWindowText(boundaries, room), isUndoShown: room == roomCount && Context.CanControl,
+                _RoomWindowText(boundaries, room), isUndoShown: room == roomCount && Context.CanControl && _mate is null,
                 [.. EnemyObservations.Where(observation => observation.RoomNumber == room)],
-                room > 1 && _OnScreenCollector() is { } collector
+                room > 1 && _mate is null && _OnScreenCollector() is { } collector
                     ? RoomSourceViewModel.Of(collector.DetectedCertainties[room - 2], collector.IsFollowingCommander)
                     : null,
                 _FactionText(room), _UnresolvedIn(room)))
@@ -404,7 +482,7 @@ public sealed partial class EnemiesWindowSectionViewModel : RunWindowSection
     private string _RoomWindowText(IReadOnlyList<DateTime> boundaries, int room)
     {
         DateTime? start = room == 1 ? Context.EffectiveStartUtc : RunRooms.StartOf(boundaries, room, default);
-        DateTime? end = RunRooms.EndOf(boundaries, room, Context.EffectiveStopUtc);
+        DateTime? end = RunRooms.EndOf(boundaries, room, _mate is null ? Context.EffectiveStopUtc : null);
         return $"{start?.ToLocalTime():HH:mm:ss} – {(end is { } ended ? ended.ToLocalTime().ToString("HH:mm:ss") : "now")}";
     }
 
@@ -444,5 +522,33 @@ public sealed partial class EnemiesWindowSectionViewModel : RunWindowSection
         }
 
         Avalonia.Threading.Dispatcher.UIThread.Post(() => _combatEvents.GetValueOrDefault(characterId)?.Add(logEvent));
+    }
+
+    /// <summary>A fleet mate's rooms and enemies as last shared (ET-498). The rows cannot be edited: the count is the
+    /// mate's, and nothing typed here would be saved anywhere.</summary>
+    private sealed record FleetMateRooms(string Name, long UnixMs, IReadOnlyList<DateTime> Boundaries,
+        IReadOnlyList<RunEnemyObservationViewModel> Rows, IReadOnlyList<(string Name, int? Room)> Unresolved)
+    {
+        public static FleetMateRooms From(string name, RunShareUpdate share)
+        {
+            DateTime sharedAtUtc = DateTimeOffset.FromUnixTimeMilliseconds(share.UnixMs).UtcDateTime;
+            List<RunEnemyObservationViewModel> rows = [];
+            List<(string Name, int? Room)> unresolved = [];
+            foreach (RunShareEnemyLine line in share.Enemies)
+            {
+                if (line.TypeId is { } typeId)
+                {
+                    rows.Add(new RunEnemyObservationViewModel(typeId, line.Name, sharedAtUtc, line.Room, isEditable: false) { Count = line.Count });
+                }
+                else
+                {
+                    unresolved.Add((line.Name, line.Room));
+                }
+            }
+
+            return new FleetMateRooms(name, share.UnixMs,
+                [.. share.RoomStartsUnixMs.Order().Select(unixMs => DateTimeOffset.FromUnixTimeMilliseconds(unixMs).UtcDateTime)],
+                rows, unresolved);
+        }
     }
 }

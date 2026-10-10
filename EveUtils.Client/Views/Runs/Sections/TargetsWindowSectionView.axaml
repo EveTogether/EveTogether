@@ -32,7 +32,7 @@
     </UserControl.Styles>
     <UserControl.DataTemplates>
         <DataTemplate DataType="vs:TargetEwar">
-            <Panel VerticalAlignment="Center">
+            <Panel VerticalAlignment="Center" ToolTip.Tip="{Binding Tooltip}">
                 <Rectangle Classes="chip" Classes.table="{Binding IsFromTable}" Classes.stops="{Binding IsStops}" Classes.slows="{Binding IsSlows}" Classes.repairs="{Binding IsRepairs}"/>
                 <TextBlock Classes="chip" Classes.stops="{Binding IsStops}" Classes.slows="{Binding IsSlows}" Classes.repairs="{Binding IsRepairs}" Text="{Binding Text}"/>
             </Panel>

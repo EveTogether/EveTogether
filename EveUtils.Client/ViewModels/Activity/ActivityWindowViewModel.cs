@@ -110,6 +110,9 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
     // What the location watch could see on the last tick: whether this pilot's own way into the pocket would be seen.
     private bool _canSeeCrossing;
+
+    // Armed on the commander's prepared run: a member who cannot see their own entry starts when the commander's start arrives.
+    private bool _awaitsCommanderStart;
     private bool _startedOnEntry;
 
     // The fleet's latest location sample per member, so the envelope is re-taken over the whole fleet on every
@@ -696,7 +699,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     /// <summary>Hidden while a copy is waiting: the answers there are SAVE, DISCARD and KEEP, and START would pick
     /// the run being waited on back up without answering any of them.</summary>
     public bool IsStartButtonVisible =>
-        _MayTimeOwnLeg && RunState != ActivityRunState.Running && _pendingCopy is null;
+        _MayTimeOwnLeg && !_IsOtherCommandersRun && RunState != ActivityRunState.Running && _pendingCopy is null;
 
     public bool IsStopButtonVisible => _MayTimeOwnLeg && RunState == ActivityRunState.Running;
 
@@ -734,6 +737,14 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     /// </summary>
     private bool _MayTimeOwnLeg => Authority.CanControl
         || RunType.ClockPerPilot && RunState is not (ActivityRunState.Discarded or ActivityRunState.Saved);
+
+    /// <summary>A known fleet commander who is somebody else: START is theirs, never a member's, per-pilot clock or not.</summary>
+    private bool _IsOtherCommandersRun =>
+        Authority.Level is RunControlAuthorityLevel.Denied && (_canSeeCrossing || _WaitsForCommanderStart);
+
+    /// <summary>A member who cannot see their own entry starts with the commander's start. Without that wait, or a
+    /// pilot to file the run under, START stays theirs so nobody is stuck.</summary>
+    private bool _WaitsForCommanderStart => _awaitsCommanderStart && !_canSeeCrossing && _runCharacterName is not null;
 
     /// <summary>The third way out of a copy waiting behind a run (Raymond, 2026-09-04): SAVE and DISCARD both end
     /// the run and let the copy take over, and this one throws the copy away instead. It takes START's slot, which
@@ -1376,7 +1387,19 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         if (RunType.ClockPerPilot && GroupCode is { } groupCode)
         {
             if (string.Equals(groupCode, start.GroupCode, StringComparison.Ordinal))
-                Avalonia.Threading.Dispatcher.UIThread.Post(() => _RefreshFleetClock(DateTime.UtcNow));
+            {
+                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                {
+                    if (start.IsFleetCommander && _awaitsCommanderStart && RunState is ActivityRunState.NotStarted)
+                    {
+                        _awaitsCommanderStart = false;
+                        LastAbyssalEntry = StartOnAbyssalEntryAsync(start.StartedAtUtc);
+                    }
+
+                    _RefreshFleetClock(DateTime.UtcNow);
+                });
+            }
+
             return;
         }
 
@@ -1397,7 +1420,11 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             || start.ActivityKind != Kind)
             return;
 
-        Avalonia.Threading.Dispatcher.UIThread.Post(() => JoinFleetRun(start));
+        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            _awaitsCommanderStart = true;
+            JoinFleetRun(start);
+        });
     }
 
     /// <summary>In a run whose clock is per pilot the commander's STOP ends his own leg, never this one (ET-243) — an
@@ -1828,6 +1855,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         _WriteHeartbeatIfDue(nowUtc);
         _RefreshLocation(nowUtc);
         _RefreshOwnPilotLegs(nowUtc);
+        _RefreshLateJoiners();
         _RefreshClock(nowUtc);
         _RefreshArmed();
         _RefreshFleetClock(nowUtc);
@@ -1839,6 +1867,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         // falling out of expiry, ET-237) — summarising first would describe last tick's answer instead of this one's.
         foreach (RunWindowSection section in _AllSections())
             section.Refresh(nowUtc);
+        _RefreshFleetCarriesOn();
         CurrentRoomText = _Enemies()?.CurrentRoomText(nowUtc);
         CurrentRoomSource = _Enemies()?.CurrentRoomSource;
         OnPropertyChanged(nameof(CurrentRoomText));
@@ -1859,7 +1888,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         _RefreshJoinableFleetRun(nowUtc);
         _ = FleetSharing.SyncAsync(nowUtc, FleetId, GroupCode,
             RunState is ActivityRunState.Running or ActivityRunState.Stopped, _RunCharacterIds(), LootOverview,
-            Participants);
+            Participants, _Enemies());
     }
 
     /// <summary>Every character with a run in this group as the window knows it: the participants, and its own pilot
@@ -1961,6 +1990,12 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     [RelayCommand]
     private async Task StartRunAsync()
     {
+        // In a fleet run START is the commander's; a member's own clock starts on their entry, which does not come here.
+        if (_IsOtherCommandersRun)
+        {
+            return;
+        }
+
         DateTime nowUtc = DateTime.UtcNow;
         // The row this window stopped is picked back up rather than a second one opened beside it. Adopt cannot do
         // it any more — a stopped run is exactly what it must not hand a fresh window — so the pause is resumed here,
@@ -3405,12 +3440,14 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         CharacterMetricsSnapshot snapshot = _gamelog.Snapshot(_runCharacterName);
         _canSeeCrossing = snapshot.LocationUnavailableReason is null;
         bool? wasInside = InsideAbyssal;
-        if (snapshot.AbyssalAnchor is not null)
+        // Seen inside without an anchor is a client that came up in the pocket (ET-500): in, only not since when.
+        if (snapshot.AbyssalAnchor is not null || snapshot.IsSeenInsideAbyssal)
             InsideAbyssal = true;
         else if (snapshot.Location is not null && snapshot.LocationUnavailableReason is null)
             InsideAbyssal = false;
 
         _StartOrStopOnAbyssalCrossing(wasInside, snapshot.AbyssalAnchor, nowUtc);
+        _StartArmedAlreadyInside(snapshot, nowUtc);
 
         // Same rule as DpsViewModel.LocationDisplay, and for the same reason (ET-71): a pilot known to be out of the
         // game reads as that, never as the system they undocked in hours ago.
@@ -3439,11 +3476,26 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         // no anchor and starts nothing — a start invented on a twenty-minute limit is worse than none.
         if (anchorUtc is { } lastSeenOutsideUtc && wasInside is not true && InsideAbyssal is true
             && RunState is ActivityRunState.NotStarted)
-            LastAbyssalEntry = _StartOnAbyssalEntryAsync(lastSeenOutsideUtc);
+            LastAbyssalEntry = StartOnAbyssalEntryAsync(lastSeenOutsideUtc);
         // On the crossing ESI observed, not on the state it reports: keyed on the state, the first outside reading
         // would stop a run that was started by hand and never taken in. Coming out stops it whoever started it.
         else if (wasInside is true && InsideAbyssal is false && RunState is ActivityRunState.Running)
             StopRun(nowUtc);
+    }
+
+    /// <summary>
+    /// A pilot who joined the fleet's run while already in its pocket (ET-500), on a client that came up inside: there
+    /// is no anchor, so <see cref="_StartOrStopOnAbyssalCrossing"/> rightly starts nothing on its own — but joining is
+    /// the pilot saying this pocket is the fleet's, so the leg starts at the join. A solo window still starts nothing.
+    /// </summary>
+    private void _StartArmedAlreadyInside(CharacterMetricsSnapshot snapshot, DateTime nowUtc)
+    {
+        if (!RunType.ClockPerPilot || RunState is not ActivityRunState.NotStarted || GroupCode is null
+            || FleetId is null || snapshot.AbyssalAnchor is not null || !snapshot.IsSeenInsideAbyssal
+            || _pendingCopy is not null)
+            return;
+
+        LastAbyssalEntry = StartOnAbyssalEntryAsync(nowUtc);
     }
 
     /// <summary>The pending automatic start, so a test can await what a location reading set going.</summary>
@@ -3455,7 +3507,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     /// never the moment the crossing was noticed. Entry is written nowhere and the watch only looks every
     /// <c>EsiLocationMonitor.PollInterval</c>, so this stays the floor <see cref="ClockHint"/> says it is.
     /// </summary>
-    private async Task _StartOnAbyssalEntryAsync(DateTime lastSeenOutsideUtc)
+    internal async Task StartOnAbyssalEntryAsync(DateTime lastSeenOutsideUtc)
     {
         try
         {
@@ -3509,7 +3561,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         {
             CharacterMetricsSnapshot snapshot = _gamelog.Snapshot(sibling.CharacterName);
             bool wasInside = _ownLegWasInside.GetValueOrDefault(sibling.CharacterId, true);
-            bool isInside = snapshot.AbyssalAnchor is not null;
+            bool isInside = snapshot.AbyssalAnchor is not null || snapshot.IsSeenInsideAbyssal;
             if (wasInside && !isInside && snapshot.Location is not null && snapshot.LocationUnavailableReason is null)
             {
                 _ownLegWasInside[sibling.CharacterId] = false;
@@ -3612,6 +3664,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         FleetSharing.Release(forget: true);
         _ownLegsPending.Clear();
         _ownLegWasInside.Clear();
+        _lateJoining.Clear();
         _RefreshSummaries();
     }
 
@@ -3667,11 +3720,15 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     {
         IsArmedShown = RunType.ClockPerPilot && RunState is ActivityRunState.NotStarted && _pendingCopy is null;
         IsArmed = IsArmedShown && _canSeeCrossing;
+        OnPropertyChanged(nameof(IsStartButtonVisible));
         string filament = HasWeatherAndTier ? $" — {AbyssalFilamentName.From(TierIndex, Weather?.Name)}" : string.Empty;
         ArmedText = !IsArmedShown
             ? string.Empty
             : !_canSeeCrossing
-                ? _runCharacterName is { } pilot
+                ? _WaitsForCommanderStart && Authority.Level is RunControlAuthorityLevel.Denied
+                    ? $"Starts when {(Authority.FleetCommanderName is { Length: > 0 } fc ? fc : "the commander")} "
+                      + "starts the run; your own entry can't be seen."
+                : _runCharacterName is { } pilot
                     ? $"This client cannot see where {pilot} is, so going in will not start the run. "
                       + "Press START when you jump in."
                     : "Nobody is picked for this run yet, so going in will not start it. Pick the pilot above, "
@@ -3682,7 +3739,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
                         ? $"Offered to the fleet{filament}. Your run starts by itself when you jump into the abyss, "
                           + "and each pilot's starts when they do. START starts yours now."
                         : $"Fleet run{filament}. Starts by itself when you jump into the abyss — not when the "
-                          + "commander does. START starts it now.";
+                          + "commander does.";
     }
 
     /// <summary>

@@ -19,8 +19,34 @@ public sealed record TargetEwar(NpcEwarKind Kind, double? RangeMetres, bool IsFr
         NpcEwarKind.GuidanceDisrupt => "GD",
         NpcEwarKind.Paint => "PAINT",
         NpcEwarKind.RemoteRepair => "RR",
+        NpcEwarKind.Jam => "JAM",
         _ => "VORTON"
     } + (RangeMetres is { } metres ? $" {(metres / 1000).ToString("0.#", CultureInfo.InvariantCulture)} km" : IsFromTable ? " log" : string.Empty);
+
+    /// <summary>True for a chip the pilot's own gamelog produced, as opposed to the SDE or the NPC table.</summary>
+    public bool FromLog { get; init; }
+
+    public string Tooltip
+    {
+        get
+        {
+            (string name, string effect) = Kind switch
+            {
+                NpcEwarKind.Scram => ("Warp scrambler", "stops your warp and microwarpdrive."),
+                NpcEwarKind.Neut => ("Energy neutralizer", "drains your capacitor."),
+                NpcEwarKind.Web => ("Stasis webifier", "slows your ship."),
+                NpcEwarKind.Damp => ("Sensor dampener", "lowers your lock range and scan resolution."),
+                NpcEwarKind.TrackingDisrupt => ("Tracking disruptor", "lowers your turret tracking and optimal range."),
+                NpcEwarKind.GuidanceDisrupt => ("Guidance disruptor", "lowers your missile explosion velocity and range."),
+                NpcEwarKind.Paint => ("Target painter", "enlarges your signature, so you take more damage."),
+                NpcEwarKind.RemoteRepair => ("Remote repair", "repairs other enemies; kill it first."),
+                NpcEwarKind.Jam => ("ECM jammer", "breaks your target locks."),
+                _ => ("Vorton projector", "fires chain lightning that hits you and the ships near you.")
+            };
+            string range = RangeMetres is { } metres ? $", {(metres / 1000).ToString("0.#", CultureInfo.InvariantCulture)} km" : string.Empty;
+            return $"{name}{range}{(FromLog ? ", seen in your game log" : ", from the NPC data")}: {effect}";
+        }
+    }
 
     // What the effect does to the pilot, for the chip's outline; damage is the default look.
     public bool IsStops => TargetOrdering.BucketOf(Kind) == 1;
@@ -69,7 +95,7 @@ public static class TargetOrdering
     public static int BucketOf(NpcEwarKind kind) => kind switch
     {
         NpcEwarKind.Scram or NpcEwarKind.Neut => 1,
-        NpcEwarKind.Web or NpcEwarKind.Damp or NpcEwarKind.TrackingDisrupt or NpcEwarKind.GuidanceDisrupt or NpcEwarKind.Paint => 2,
+        NpcEwarKind.Web or NpcEwarKind.Damp or NpcEwarKind.TrackingDisrupt or NpcEwarKind.GuidanceDisrupt or NpcEwarKind.Paint or NpcEwarKind.Jam => 2,
         NpcEwarKind.RemoteRepair => 3,
         _ => 4
     };
