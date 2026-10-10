@@ -1,0 +1,260 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:EveUtils.Client.ViewModels"
+             xmlns:mi="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+             x:Class="EveUtils.Client.Views.BlueprintAppraisalView"
+             x:DataType="vm:BlueprintAppraisalViewModel">
+
+    <!-- The BLUEPRINTS mode of the Appraisal tool (ET-502), as the approved mockup lays it out: paste and the blueprint
+         list on the left, the totals, the selected blueprint's breakdown and the shopping list on the right. -->
+    <UserControl.Styles>
+        <Style Selector="TextBlock.figure">
+            <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="TextAlignment" Value="Right"/>
+            <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+        </Style>
+        <Style Selector="TextBlock.profit">
+            <Setter Property="Foreground" Value="{StaticResource GreenBrush}"/>
+        </Style>
+        <Style Selector="TextBlock.loss">
+            <Setter Property="Foreground" Value="{StaticResource RedBrush}"/>
+        </Style>
+        <Style Selector="TextBlock.noprice">
+            <Setter Property="Foreground" Value="{StaticResource TextDimSmallBrush}"/>
+        </Style>
+        <Style Selector="TextBlock.sub">
+            <Setter Property="FontSize" Value="10"/>
+            <Setter Property="Foreground" Value="{StaticResource TextDimSmallBrush}"/>
+        </Style>
+        <Style Selector="Border.tile">
+            <Setter Property="Background" Value="#22000000"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="3"/>
+            <Setter Property="Padding" Value="9,6"/>
+        </Style>
+        <Style Selector="TextBlock.tilefigure">
+            <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+        </Style>
+        <Style Selector="NumericUpDown.small">
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="MinWidth" Value="96"/>
+        </Style>
+    </UserControl.Styles>
+
+    <Grid ColumnDefinitions="300,12,*">
+
+        <Border Grid.Column="0" Classes="panel" Padding="11,9">
+            <DockPanel>
+                <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,*" Margin="0,0,0,6">
+                    <TextBlock Grid.Column="0" Classes="diamond" Text="◆" Margin="0,0,6,0"/>
+                    <TextBlock Grid.Column="1" Classes="panel-title" Text="PASTE" VerticalAlignment="Center"/>
+                </Grid>
+                <TextBox DockPanel.Dock="Top" x:Name="BlueprintPasteBox" AcceptsReturn="True" AcceptsTab="True" FontSize="11"
+                         FontFamily="Consolas,monospace" TextWrapping="NoWrap" VerticalContentAlignment="Top" Height="96"
+                         PlaceholderText="Paste blueprints here." Text="{Binding PasteText}"
+                         ScrollViewer.HorizontalScrollBarVisibility="Auto" ScrollViewer.VerticalScrollBarVisibility="Auto"/>
+                <StackPanel DockPanel.Dock="Top" Spacing="6" Margin="0,8,0,0">
+                    <ProgressBar IsIndeterminate="True" Height="4" IsVisible="{Binding IsBusy}"/>
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+                        <Button Grid.Column="0" Classes="accent" Content="APPRAISE" FontSize="10"
+                                HorizontalAlignment="Stretch" Command="{Binding AppraiseCommand}"/>
+                        <Button Grid.Column="1" Content="CLEAR" FontSize="10" Command="{Binding ClearCommand}"/>
+                    </Grid>
+                    <TextBlock FontSize="10" Opacity="0.55" TextWrapping="Wrap"
+                               Text="Rows copied from an inventory window. A pasted copy does not say BPO or BPC, its runs or its research: each blueprint starts at 1 run, ME 0, TE 0."/>
+                </StackPanel>
+
+                <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,*" Margin="0,12,0,6">
+                    <TextBlock Grid.Column="0" Classes="diamond" Text="◆" Margin="0,0,6,0"/>
+                    <TextBlock Grid.Column="1" Classes="panel-title" Text="{Binding RowsHeader}" VerticalAlignment="Center"/>
+                </Grid>
+
+                <StackPanel DockPanel.Dock="Bottom" Spacing="3" Margin="0,8,0,0" IsVisible="{Binding HasUnresolved}">
+                    <TextBlock Classes="label" Text="NOT USED"/>
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" MaxHeight="72">
+                        <ItemsControl ItemsSource="{Binding Unresolved}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="x:String">
+                                    <TextBlock Classes="sub" Text="{Binding}" TextTrimming="CharacterEllipsis"/>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </StackPanel>
+
+                <ListBox x:Name="BlueprintList" ItemsSource="{Binding Rows}" SelectedItem="{Binding SelectedRow}"
+                         Background="Transparent">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate x:DataType="vm:BlueprintAppraisalRowViewModel">
+                            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="6">
+                                <CheckBox Grid.Column="0" IsChecked="{Binding IsChecked}" VerticalAlignment="Center"
+                                          ToolTip.Tip="Put this blueprint's materials on the shopping list"/>
+                                <StackPanel Grid.Column="1" Spacing="1" VerticalAlignment="Center">
+                                    <TextBlock FontSize="11" Text="{Binding Name}" TextTrimming="CharacterEllipsis"
+                                               Foreground="{StaticResource TextBrush}"/>
+                                    <TextBlock Classes="sub" Text="{Binding SettingsText}"/>
+                                </StackPanel>
+                                <TextBlock Grid.Column="2" Classes="figure" VerticalAlignment="Center" Text="{Binding ProfitText}"
+                                           Classes.profit="{Binding IsProfitable}" Classes.loss="{Binding IsLossMaking}"
+                                           Classes.noprice="{Binding !HasPrice}"/>
+                            </Grid>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </DockPanel>
+        </Border>
+
+        <Border Grid.Column="2" Classes="panel" Padding="11,9">
+            <DockPanel>
+                <UniformGrid DockPanel.Dock="Top" Columns="4" Margin="0,0,0,6">
+                    <Border Classes="tile" Margin="0,0,6,0">
+                        <StackPanel Spacing="2">
+                            <TextBlock Classes="label" Text="MAX PROFIT"/>
+                            <TextBlock x:Name="MaxProfitFigure" Classes="tilefigure" Text="{Binding MaxProfitText}"/>
+                            <TextBlock Classes="sub" Text="profitable ones only"/>
+                        </StackPanel>
+                    </Border>
+                    <Border Classes="tile" Margin="0,0,6,0">
+                        <StackPanel Spacing="2">
+                            <TextBlock Classes="label" Text="IF YOU BUILD EVERYTHING"/>
+                            <TextBlock Classes="tilefigure" Text="{Binding BuildEverythingText}"/>
+                            <TextBlock Classes="sub" Text="loss-making ones included"/>
+                        </StackPanel>
+                    </Border>
+                    <Border Classes="tile" Margin="0,0,6,0">
+                        <StackPanel Spacing="2">
+                            <TextBlock Classes="label" Text="LOSS-MAKING"/>
+                            <TextBlock Classes="tilefigure" Text="{Binding LossMakingText}"/>
+                            <TextBlock Classes="sub" Text="a blueprint without a price counts nowhere"/>
+                        </StackPanel>
+                    </Border>
+                    <Border Classes="tile">
+                        <StackPanel Spacing="2">
+                            <TextBlock Classes="label" Text="CHECKED"/>
+                            <TextBlock Classes="tilefigure" Text="{Binding CheckedText}"/>
+                            <TextBlock Classes="sub" Text="on the shopping list"/>
+                        </StackPanel>
+                    </Border>
+                </UniformGrid>
+                <TextBlock DockPanel.Dock="Top" FontSize="10" Opacity="0.6" TextWrapping="Wrap" Margin="0,0,0,6"
+                           Text="{x:Static vm:BlueprintAppraisalViewModel.PricingBasis}"/>
+
+                <TabControl x:Name="BlueprintTabs" Padding="0,6,0,0">
+                    <TabItem Header="BREAKDOWN" FontSize="11">
+                        <Panel>
+                            <TextBlock FontSize="11" Opacity="0.5" Margin="2,10" TextWrapping="Wrap" IsVisible="{Binding !HasSelection}"
+                                       Text="Nothing appraised yet. Paste blueprints on the left and press APPRAISE, or use Open in appraisal on a blueprint in your loot."/>
+                            <ScrollViewer IsVisible="{Binding HasSelection}" VerticalScrollBarVisibility="Auto">
+                                <StackPanel x:Name="Breakdown" Spacing="8" DataContext="{Binding SelectedRow}"
+                                            x:DataType="vm:BlueprintAppraisalRowViewModel">
+                                    <TextBlock FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource TextBrightBrush}"
+                                               Text="{Binding Name}" TextTrimming="CharacterEllipsis"/>
+                                    <StackPanel Orientation="Horizontal" Spacing="12">
+                                        <StackPanel Spacing="2">
+                                            <TextBlock Classes="label" Text="RUNS"/>
+                                            <NumericUpDown x:Name="RunsBox" Classes="small" Minimum="1" Maximum="{Binding MaxRuns}"
+                                                           Increment="1" FormatString="0" Value="{Binding Runs}"/>
+                                        </StackPanel>
+                                        <StackPanel Spacing="2">
+                                            <TextBlock Classes="label" Text="ME"/>
+                                            <NumericUpDown x:Name="MeBox" Classes="small" Minimum="0" Maximum="10" Increment="1"
+                                                           FormatString="0" Value="{Binding MaterialEfficiency}"/>
+                                        </StackPanel>
+                                        <StackPanel Spacing="2">
+                                            <TextBlock Classes="label" Text="TE"/>
+                                            <NumericUpDown x:Name="TeBox" Classes="small" Minimum="0" Maximum="20" Increment="2"
+                                                           FormatString="0" Value="{Binding TimeEfficiency}"/>
+                                        </StackPanel>
+                                    </StackPanel>
+
+                                    <Grid ColumnDefinitions="*,90,120,130" Margin="0,4,0,0">
+                                        <TextBlock Classes="label" Text="MATERIAL"/>
+                                        <TextBlock Grid.Column="1" Classes="label" Text="NEEDED" HorizontalAlignment="Right"/>
+                                        <TextBlock Grid.Column="2" Classes="label" Text="AVERAGE EACH" HorizontalAlignment="Right"/>
+                                        <TextBlock Grid.Column="3" Classes="label" Text="TOTAL" HorizontalAlignment="Right"/>
+                                    </Grid>
+                                    <ItemsControl ItemsSource="{Binding Materials}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:BlueprintMaterialRowViewModel">
+                                                <Grid ColumnDefinitions="*,90,120,130" Margin="0,1">
+                                                    <TextBlock FontSize="11" Text="{Binding Name}" TextTrimming="CharacterEllipsis"
+                                                               Foreground="{StaticResource TextBrush}"/>
+                                                    <TextBlock Grid.Column="1" Classes="figure" Text="{Binding NeededText}"/>
+                                                    <TextBlock Grid.Column="2" Classes="figure" Text="{Binding UnitPriceText}"
+                                                               Classes.noprice="{Binding !HasPrice}"/>
+                                                    <TextBlock Grid.Column="3" Classes="figure" Text="{Binding TotalText}"
+                                                               Classes.noprice="{Binding !HasPrice}"/>
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+
+                                    <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto,Auto,Auto" RowSpacing="3"
+                                          Margin="0,6,0,0">
+                                        <TextBlock Grid.Row="0" FontSize="11" Text="{Binding ProductText, StringFormat='Product: {0}'}"
+                                                   Foreground="{StaticResource TextBrush}"/>
+                                        <TextBlock Grid.Row="0" Grid.Column="1" Classes="figure" Text="{Binding ProductValueText}"/>
+                                        <TextBlock Grid.Row="1" FontSize="11" Text="Materials" Foreground="{StaticResource TextBrush}"/>
+                                        <TextBlock Grid.Row="1" Grid.Column="1" Classes="figure" Text="{Binding MaterialsCostText, StringFormat='− {0}'}"/>
+                                        <TextBlock Grid.Row="2" FontSize="11" Foreground="{StaticResource TextBrush}"
+                                                   Text="Job cost (9% of the estimated item value)"/>
+                                        <TextBlock Grid.Row="2" Grid.Column="1" Classes="figure" Text="{Binding JobCostText, StringFormat='− {0}'}"/>
+                                        <TextBlock Grid.Row="3" FontSize="12" FontWeight="SemiBold" Text="Profit"
+                                                   Foreground="{StaticResource TextBrightBrush}"/>
+                                        <TextBlock Grid.Row="3" Grid.Column="1" Classes="figure" FontSize="12" FontWeight="SemiBold"
+                                                   Text="{Binding ProfitText}" Classes.profit="{Binding IsProfitable}"
+                                                   Classes.loss="{Binding IsLossMaking}" Classes.noprice="{Binding !HasPrice}"/>
+                                        <TextBlock Grid.Row="4" Classes="sub" Text="Build time (TE applied, before skills and structure)"/>
+                                        <TextBlock Grid.Row="4" Grid.Column="1" Classes="figure" Text="{Binding BuildTimeText}"/>
+                                    </Grid>
+                                </StackPanel>
+                            </ScrollViewer>
+                        </Panel>
+                    </TabItem>
+
+                    <TabItem Header="SHOPPING LIST" FontSize="11">
+                        <DockPanel>
+                            <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,6">
+                                <TextBlock Classes="label" VerticalAlignment="Center" Text="{Binding ShoppingListHeader}"/>
+                                <Button Grid.Column="1" x:Name="CopyShoppingListButton" Classes="accent" FontSize="10"
+                                        Command="{Binding CopyShoppingListCommand}"
+                                        ToolTip.Tip="One &quot;name amount&quot; per line — paste it into EVE's multibuy">
+                                    <StackPanel Orientation="Horizontal" Spacing="5">
+                                        <mi:MaterialIcon Kind="ContentCopy" Width="12" Height="12"/>
+                                        <TextBlock Text="COPY SHOPPING LIST"/>
+                                    </StackPanel>
+                                </Button>
+                            </Grid>
+                            <TextBlock DockPanel.Dock="Bottom" FontSize="10" Opacity="0.55" TextWrapping="Wrap" Margin="0,6,0,0"
+                                       Text="The materials of the checked blueprints, summed at their runs and ME. A blueprint that turns a profit starts checked."/>
+                            <Panel>
+                                <TextBlock FontSize="11" Opacity="0.5" Margin="2,10" TextWrapping="Wrap"
+                                           IsVisible="{Binding !HasShoppingList}"
+                                           Text="Check a blueprint to put its materials on the list."/>
+                                <ScrollViewer IsVisible="{Binding HasShoppingList}" VerticalScrollBarVisibility="Auto">
+                                    <ItemsControl x:Name="ShoppingListItems" ItemsSource="{Binding ShoppingList}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:ShoppingListLineViewModel">
+                                                <Grid ColumnDefinitions="*,130" Margin="0,1">
+                                                    <TextBlock FontSize="11" Text="{Binding Name}" TextTrimming="CharacterEllipsis"
+                                                               Foreground="{StaticResource TextBrush}"/>
+                                                    <TextBlock Grid.Column="1" Classes="figure" Text="{Binding QuantityText}"/>
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </ScrollViewer>
+                            </Panel>
+                        </DockPanel>
+                    </TabItem>
+                </TabControl>
+            </DockPanel>
+        </Border>
+    </Grid>
+</UserControl>

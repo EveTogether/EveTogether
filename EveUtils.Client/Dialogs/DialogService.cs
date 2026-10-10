@@ -563,10 +563,12 @@ public sealed class DialogService : IDialogService, ISingletonService
     public void ShowSettingsBackups(SettingsBackupsViewModel viewModel) =>
         Route(new SettingsBackupsWindow(viewModel), "SETTINGS BACKUPS", "tools", "settings-backups", MaterialIconKind.BackupRestore);
 
-    public void ShowAppraisal(AppraisalViewModel viewModel)
+    public void ShowAppraisal(AppraisalViewModel viewModel, int? blueprintTypeId = null)
     {
         _Observe(viewModel.LoadAsync(), "the appraisal tool could not read its price source");
-        Route(new AppraisalWindow(viewModel), "APPRAISAL", "tools", "appraisal", MaterialIconKind.CurrencyUsd);
+        object? shown = Route(new AppraisalWindow(viewModel), "APPRAISAL", "tools", "appraisal", MaterialIconKind.CurrencyUsd);
+        if (blueprintTypeId is { } typeId && (shown ?? viewModel) is AppraisalViewModel standing)
+            _Observe(standing.ShowBlueprintAsync(typeId), "the appraisal tool could not value that blueprint");
     }
 
     public void ShowActivityDetail(ActivityDetailViewModel viewModel, Guid activitySummaryId)

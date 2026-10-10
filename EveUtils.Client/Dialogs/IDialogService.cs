@@ -265,8 +265,10 @@ public interface IDialogService
     void ShowSettingsBackups(SettingsBackupsViewModel viewModel);
 
     /// <summary>Opens the Appraisal tool as a hosted module — a docked tab or a floating window, like the other
-    /// tools. Non-modal: pasting a second list is the next thing the user does, not a reason to reopen it.</summary>
-    void ShowAppraisal(AppraisalViewModel viewModel);
+    /// tools. Non-modal: pasting a second list is the next thing the user does, not a reason to reopen it. With
+    /// <paramref name="blueprintTypeId"/> the tool shows that blueprint in its BLUEPRINTS mode (ET-502) — in the tool
+    /// already open, when there is one.</summary>
+    void ShowAppraisal(AppraisalViewModel viewModel, int? blueprintTypeId = null);
 
     /// <summary>Opens the manual run-start dialog (ET-163): modal, and gone again as soon as the run exists —
     /// from there the run is the activity window's, the same one the clipboard route lands in.</summary>

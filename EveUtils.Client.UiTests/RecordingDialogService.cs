@@ -352,7 +352,14 @@ public sealed class RecordingDialogService : IDialogService
     /// the module without standing up the real window.</summary>
     public AppraisalViewModel? LastAppraisal { get; private set; }
 
-    public void ShowAppraisal(AppraisalViewModel viewModel) => LastAppraisal = viewModel;
+    public void ShowAppraisal(AppraisalViewModel viewModel, int? blueprintTypeId = null)
+    {
+        LastAppraisal = viewModel;
+        LastAppraisalBlueprintTypeId = blueprintTypeId;
+    }
+
+    /// <summary>The blueprint the last <see cref="ShowAppraisal"/> was asked to show, if any.</summary>
+    public int? LastAppraisalBlueprintTypeId { get; private set; }
 
     /// <summary>The manual run-start dialog the shell was asked to open, or null — how a test asserts the Tools
     /// menu reaches it without standing up the real window.</summary>
