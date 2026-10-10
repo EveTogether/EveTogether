@@ -34,4 +34,4 @@ public sealed record SettingsResult(
     bool OfferHomefrontRuns = true,
     bool IncludeLocationInLocalApi = false,
     bool ShareKillmails = true, bool FollowFleetCommanderEnd = false,
-    CompactRunStyle CompactRunStyle = CompactRunStyle.Card, bool OpenRunsCompact = false);
+    CompactRunStyle CompactRunStyle = CompactRunStyle.Card, bool OpenRunsCompact = false, bool ValueBlueprintsInLoot = true);

@@ -149,7 +149,8 @@ public sealed class RunWireData
                 LootKind = entry.LootKind,
                 UnitPriceIsk = entry.UnitPriceIsk,
                 PricedAtUtc = entry.PricedAtUtc,
-                PriceSource = entry.PriceSource
+                PriceSource = entry.PriceSource,
+                PriceBasis = entry.PriceBasis
             }).ToList(),
             UnrecognisedLines = capture.UnrecognisedLines.Select(line => new UnrecognisedLootLineInput
             {
@@ -272,7 +273,8 @@ public sealed class RunWireData
                     LootKind = entry.LootKind,
                     UnitPriceIsk = entry.UnitPriceIsk,
                     PricedAtUtc = entry.PricedAtUtc,
-                    PriceSource = entry.PriceSource
+                    PriceSource = entry.PriceSource,
+                    PriceBasis = entry.PriceBasis
                 });
             foreach (UnrecognisedLootLineInput line in capture.UnrecognisedLines)
                 entity.UnrecognisedLines.Add(new UnrecognisedLootLine

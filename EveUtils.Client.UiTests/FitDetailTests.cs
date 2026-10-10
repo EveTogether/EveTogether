@@ -1003,6 +1003,9 @@ public class FitDetailTests
             Task.FromResult<IReadOnlyDictionary<int, double>>(
                 prices.Where(kv => typeIds.Contains(kv.Key)).ToDictionary(kv => kv.Key, kv => kv.Value));
 
+        public Task<IReadOnlyDictionary<int, double>> GetAdjustedPricesAsync(IReadOnlyCollection<int> typeIds, CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyDictionary<int, double>>(new Dictionary<int, double>());
+
         public Task<DateTimeOffset?> GetSnapshotTimeAsync(CancellationToken cancellationToken = default) =>
             Task.FromResult<DateTimeOffset?>(prices.Count == 0 ? null : DateTimeOffset.UnixEpoch);
     }

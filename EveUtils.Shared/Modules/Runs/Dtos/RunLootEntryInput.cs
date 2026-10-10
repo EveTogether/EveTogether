@@ -16,4 +16,7 @@ public sealed class RunLootEntryInput
     public decimal? UnitPriceIsk { get; init; }
     public DateTime? PricedAtUtc { get; init; }
     public PriceSnapshotSource? PriceSource { get; init; }
+
+    // ET-501. An older payload has none, and every price it fixed was a market price.
+    public LootPriceBasis PriceBasis { get; init; }
 }

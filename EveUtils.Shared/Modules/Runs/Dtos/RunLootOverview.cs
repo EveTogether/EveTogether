@@ -6,7 +6,7 @@ namespace EveUtils.Shared.Modules.Runs.Dtos;
 /// and kept as what that window happened to show, but nothing is valued from it (Raymond, 2026-09-02).</summary>
 /// <param name="UnitPriceIsk">The line's fixed unit price (ET-463); null while it is still valued at the live price.</param>
 public sealed record RunLootEntryDto(int ItemTypeId, string Name, long? Quantity, decimal? ClipboardPrice, LootKind LootKind,
-    decimal? UnitPriceIsk = null);
+    decimal? UnitPriceIsk = null, LootPriceBasis PriceBasis = LootPriceBasis.Market);
 
 /// <summary>A copied row no SDE type knew by name yet (ET-460): shown with its name and amount, worth nothing until the
 /// name is recognised.</summary>

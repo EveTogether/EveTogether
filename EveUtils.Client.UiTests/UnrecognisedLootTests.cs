@@ -319,6 +319,10 @@ public sealed class UnrecognisedLootTests
             return await inner.GetAveragePricesAsync(typeIds, cancellationToken);
         }
 
+        public Task<IReadOnlyDictionary<int, double>> GetAdjustedPricesAsync(
+            IReadOnlyCollection<int> typeIds, CancellationToken cancellationToken = default) =>
+            inner.GetAdjustedPricesAsync(typeIds, cancellationToken);
+
         public Task<int> CountAsync(CancellationToken cancellationToken = default) => inner.CountAsync(cancellationToken);
 
         public Task<DateTimeOffset?> GetSnapshotTimeAsync(CancellationToken cancellationToken = default) =>

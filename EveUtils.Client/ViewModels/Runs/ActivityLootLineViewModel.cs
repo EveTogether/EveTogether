@@ -17,7 +17,7 @@ namespace EveUtils.Client.ViewModels.Runs;
 public sealed partial class ActivityLootLineViewModel : ObservableObject
 {
     public ActivityLootLineViewModel(int itemTypeId, string name, long? quantity, decimal? unitPrice, LootKind lootKind,
-        bool isExcluded = false, int captureCount = 1, bool isLivePrice = false)
+        bool isExcluded = false, int captureCount = 1, bool isLivePrice = false, bool isBlueprintAppraisal = false)
     {
         ItemTypeId = itemTypeId;
         Name = name;
@@ -31,6 +31,7 @@ public sealed partial class ActivityLootLineViewModel : ObservableObject
         IsExcluded = isExcluded;
         CaptureCount = captureCount;
         IsLivePrice = isLivePrice && unitPrice is not null;
+        IsBlueprintAppraisal = isBlueprintAppraisal && unitPrice is not null;
     }
 
     public int ItemTypeId { get; }
@@ -58,12 +59,18 @@ public sealed partial class ActivityLootLineViewModel : ObservableObject
     /// figure, since it still moves with the market until the price is fixed.</summary>
     public bool IsLivePrice { get; }
 
+    /// <summary>Valued as what building the blueprint once earns at EVE average prices (ET-501), not at a market price —
+    /// said beside the figure, since a blueprint copy has no market price of its own.</summary>
+    public bool IsBlueprintAppraisal { get; }
+
     public string ValueText => _Marked(IskFormat.WholeOrNoPrice(Value));
 
     /// <summary>The value without its unit, for the columns under a figure that already says ISK.</summary>
     public string AmountText => _Marked(IskFormat.NumberOrNoPrice(Value));
 
-    private string _Marked(string figure) => IsLivePrice ? $"{figure} · live" : figure;
+    private string _Marked(string figure) => IsLivePrice ? $"{figure} · live"
+        : IsBlueprintAppraisal ? $"{figure} · BP appraisal"
+        : figure;
 
     /// <summary>Spent rather than picked up. Its own category and never loot with a minus in front of it, which is
     /// the reading <see cref="LootKind"/> has carried since it was written.</summary>

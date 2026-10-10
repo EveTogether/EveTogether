@@ -34,6 +34,7 @@ public sealed partial class RunLootViewModel : ViewModelBase
     private readonly ITypeImageProvider? _images;
     private readonly Dictionary<int, decimal> _unitPrices = [];
     private readonly HashSet<int> _liveTypeIds = [];
+    private HashSet<int> _appraisedTypeIds = [];
     private readonly Dictionary<int, string> _names = [];
     private IReadOnlyList<LootTallyLine> _counted = [];
     private IReadOnlyList<DateTime> _roomBoundaries = [];
@@ -393,6 +394,7 @@ public sealed partial class RunLootViewModel : ViewModelBase
         RunStatusMessage = null;
         // Read over every capture, spent ones too: the stored run fixes one price per type across all of them.
         Dictionary<int, decimal> fixedPrices = FixedLootPrices.Of(captures);
+        _appraisedTypeIds = FixedLootPrices.AppraisedTypeIds(captures);
         // What the pilot spent is CONSUMABLES' list (ET-334), stored beside the loot but never part of it.
         captures = [.. captures.Where(capture => capture.Role is not LootCaptureRole.Consumed)];
         await _LoadPricesAsync(captures.SelectMany(capture => capture.Entries), fixedPrices, cancellationToken);
@@ -863,7 +865,8 @@ public sealed partial class RunLootViewModel : ViewModelBase
             capture.SubtotalAmountText = IskFormat.NumberOrNoPrice(subtotal);
             capture.Lines = [.. capture.Entries.Select(entry => new ActivityLootLineViewModel(
                 entry.ItemTypeId, entry.Name, entry.Quantity, _UnitPrice(entry.ItemTypeId), entry.LootKind,
-                isLivePrice: _liveTypeIds.Contains(entry.ItemTypeId)))];
+                isLivePrice: _liveTypeIds.Contains(entry.ItemTypeId),
+                isBlueprintAppraisal: _appraisedTypeIds.Contains(entry.ItemTypeId)))];
         }
 
         OnPropertyChanged(nameof(SpentChargeLines));
@@ -958,7 +961,7 @@ public sealed partial class RunLootViewModel : ViewModelBase
 
     private ActivityLootLineViewModel _Row(int itemTypeId, LootKind lootKind, long quantity, bool isExcluded, int captureCount) =>
         new(itemTypeId, _names.GetValueOrDefault(itemTypeId, $"type {itemTypeId}"), quantity, _UnitPrice(itemTypeId),
-            lootKind, isExcluded, captureCount, _liveTypeIds.Contains(itemTypeId));
+            lootKind, isExcluded, captureCount, _liveTypeIds.Contains(itemTypeId), _appraisedTypeIds.Contains(itemTypeId));
 
     private int _CapturesHolding(int itemTypeId, LootKind lootKind, bool isExcluded) =>
         Captures.Count(capture => capture.IsExcluded == isExcluded
