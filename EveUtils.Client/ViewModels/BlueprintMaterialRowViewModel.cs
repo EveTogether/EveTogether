@@ -7,6 +7,8 @@ namespace EveUtils.Client.ViewModels;
 /// <summary>One material of the selected blueprint's breakdown.</summary>
 public sealed class BlueprintMaterialRowViewModel(string name, BlueprintMaterialCost material)
 {
+    public TypeIconViewModel Icon { get; } = new(material.TypeId);
+
     public string Name { get; } = name;
 
     public string NeededText { get; } = material.Needed.ToString("N0", CultureInfo.InvariantCulture);

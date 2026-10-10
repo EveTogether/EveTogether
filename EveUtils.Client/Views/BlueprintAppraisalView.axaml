@@ -8,6 +8,11 @@
     <!-- The BLUEPRINTS mode of the Appraisal tool (ET-502), as the approved mockup lays it out: paste and the blueprint
          list on the left, the totals, the selected blueprint's breakdown and the shopping list on the right. -->
     <UserControl.Styles>
+        <!-- The icon tile the loot lines use (ET-496), a fixed 20px wide so the figure columns line up row to row (ET-504). -->
+        <StyleInclude Source="avares://EveUtils.Client/Views/Runs/LootItemStyles.axaml"/>
+        <Style Selector="ListBoxItem:selected Border.icontile, ListBoxItem:pointerover Border.icontile">
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}"/>
+        </Style>
         <Style Selector="TextBlock.figure">
             <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
             <Setter Property="FontSize" Value="11"/>
@@ -92,15 +97,18 @@
                          Background="Transparent">
                     <ListBox.ItemTemplate>
                         <DataTemplate x:DataType="vm:BlueprintAppraisalRowViewModel">
-                            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="6">
+                            <Grid ColumnDefinitions="Auto,20,*,Auto" ColumnSpacing="6">
                                 <CheckBox Grid.Column="0" IsChecked="{Binding IsChecked}" VerticalAlignment="Center"
                                           ToolTip.Tip="Put this blueprint's materials on the shopping list"/>
-                                <StackPanel Grid.Column="1" Spacing="1" VerticalAlignment="Center">
+                                <Border Grid.Column="1" Classes="icontile">
+                                    <Image Source="{Binding Icon.Source}"/>
+                                </Border>
+                                <StackPanel Grid.Column="2" Spacing="1" VerticalAlignment="Center">
                                     <TextBlock FontSize="11" Text="{Binding Name}" TextTrimming="CharacterEllipsis"
                                                Foreground="{StaticResource TextBrush}"/>
                                     <TextBlock Classes="sub" Text="{Binding SettingsText}"/>
                                 </StackPanel>
-                                <TextBlock Grid.Column="2" Classes="figure" VerticalAlignment="Center" Text="{Binding ProfitText}"
+                                <TextBlock Grid.Column="3" Classes="figure" VerticalAlignment="Center" Text="{Binding ProfitText}"
                                            Classes.profit="{Binding IsProfitable}" Classes.loss="{Binding IsLossMaking}"
                                            Classes.noprice="{Binding !HasPrice}"/>
                             </Grid>
@@ -173,23 +181,28 @@
                                         </StackPanel>
                                     </StackPanel>
 
-                                    <Grid ColumnDefinitions="*,90,120,130" Margin="0,4,0,0">
-                                        <TextBlock Classes="label" Text="MATERIAL"/>
-                                        <TextBlock Grid.Column="1" Classes="label" Text="NEEDED" HorizontalAlignment="Right"/>
-                                        <TextBlock Grid.Column="2" Classes="label" Text="AVERAGE EACH" HorizontalAlignment="Right"/>
-                                        <TextBlock Grid.Column="3" Classes="label" Text="TOTAL" HorizontalAlignment="Right"/>
+                                    <Grid ColumnDefinitions="20,*,90,120,130" Margin="0,4,0,0">
+                                        <TextBlock Grid.Column="1" Classes="label" Text="MATERIAL" Margin="6,0,0,0"/>
+                                        <TextBlock Grid.Column="2" Classes="label" Text="NEEDED" HorizontalAlignment="Right"/>
+                                        <TextBlock Grid.Column="3" Classes="label" Text="AVERAGE EACH" HorizontalAlignment="Right"/>
+                                        <TextBlock Grid.Column="4" Classes="label" Text="TOTAL" HorizontalAlignment="Right"/>
                                     </Grid>
-                                    <ItemsControl ItemsSource="{Binding Materials}">
+                                    <ItemsControl x:Name="MaterialItems" ItemsSource="{Binding Materials}">
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate x:DataType="vm:BlueprintMaterialRowViewModel">
-                                                <Grid ColumnDefinitions="*,90,120,130" Margin="0,1">
-                                                    <TextBlock FontSize="11" Text="{Binding Name}" TextTrimming="CharacterEllipsis"
+                                                <Grid ColumnDefinitions="20,*,90,120,130" Margin="0,1">
+                                                    <Border Classes="icontile">
+                                                        <Image Source="{Binding Icon.Source}"/>
+                                                    </Border>
+                                                    <TextBlock Grid.Column="1" FontSize="11" Text="{Binding Name}" Margin="6,0,0,0"
+                                                               VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
                                                                Foreground="{StaticResource TextBrush}"/>
-                                                    <TextBlock Grid.Column="1" Classes="figure" Text="{Binding NeededText}"/>
-                                                    <TextBlock Grid.Column="2" Classes="figure" Text="{Binding UnitPriceText}"
-                                                               Classes.noprice="{Binding !HasPrice}"/>
-                                                    <TextBlock Grid.Column="3" Classes="figure" Text="{Binding TotalText}"
-                                                               Classes.noprice="{Binding !HasPrice}"/>
+                                                    <TextBlock Grid.Column="2" Classes="figure" Text="{Binding NeededText}"
+                                                               VerticalAlignment="Center"/>
+                                                    <TextBlock Grid.Column="3" Classes="figure" Text="{Binding UnitPriceText}"
+                                                               VerticalAlignment="Center" Classes.noprice="{Binding !HasPrice}"/>
+                                                    <TextBlock Grid.Column="4" Classes="figure" Text="{Binding TotalText}"
+                                                               VerticalAlignment="Center" Classes.noprice="{Binding !HasPrice}"/>
                                                 </Grid>
                                             </DataTemplate>
                                         </ItemsControl.ItemTemplate>
@@ -197,8 +210,14 @@
 
                                     <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto,Auto,Auto" RowSpacing="3"
                                           Margin="0,6,0,0">
-                                        <TextBlock Grid.Row="0" FontSize="11" Text="{Binding ProductText, StringFormat='Product: {0}'}"
-                                                   Foreground="{StaticResource TextBrush}"/>
+                                        <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="6">
+                                            <Border Classes="icontile">
+                                                <Image Source="{Binding ProductIcon.Source}"/>
+                                            </Border>
+                                            <TextBlock FontSize="11" VerticalAlignment="Center"
+                                                       Text="{Binding ProductText, StringFormat='Product: {0}'}"
+                                                       Foreground="{StaticResource TextBrush}"/>
+                                        </StackPanel>
                                         <TextBlock Grid.Row="0" Grid.Column="1" Classes="figure" Text="{Binding ProductValueText}"/>
                                         <TextBlock Grid.Row="1" FontSize="11" Text="Materials" Foreground="{StaticResource TextBrush}"/>
                                         <TextBlock Grid.Row="1" Grid.Column="1" Classes="figure" Text="{Binding MaterialsCostText, StringFormat='− {0}'}"/>
@@ -241,10 +260,15 @@
                                     <ItemsControl x:Name="ShoppingListItems" ItemsSource="{Binding ShoppingList}">
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate x:DataType="vm:ShoppingListLineViewModel">
-                                                <Grid ColumnDefinitions="*,130" Margin="0,1">
-                                                    <TextBlock FontSize="11" Text="{Binding Name}" TextTrimming="CharacterEllipsis"
+                                                <Grid ColumnDefinitions="20,*,130" Margin="0,1">
+                                                    <Border Classes="icontile">
+                                                        <Image Source="{Binding Icon.Source}"/>
+                                                    </Border>
+                                                    <TextBlock Grid.Column="1" FontSize="11" Text="{Binding Name}" Margin="6,0,0,0"
+                                                               VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
                                                                Foreground="{StaticResource TextBrush}"/>
-                                                    <TextBlock Grid.Column="1" Classes="figure" Text="{Binding QuantityText}"/>
+                                                    <TextBlock Grid.Column="2" Classes="figure" Text="{Binding QuantityText}"
+                                                               VerticalAlignment="Center"/>
                                                 </Grid>
                                             </DataTemplate>
                                         </ItemsControl.ItemTemplate>

@@ -9,6 +9,7 @@ using CommunityToolkit.Mvvm.Input;
 using EveUtils.Client.Clipboard;
 using EveUtils.Client.Dialogs;
 using EveUtils.Client.Formatting;
+using EveUtils.Client.Imaging;
 using EveUtils.Shared.Modules.Market.Services;
 using EveUtils.Shared.Modules.Sde;
 using EveUtils.Shared.Modules.Sde.Dtos;
@@ -31,12 +32,15 @@ public sealed partial class BlueprintAppraisalViewModel : ViewModelBase
     private readonly IBlueprintAppraisalService _appraisals;
     private readonly ISdeAccessor _sde;
     private readonly IDialogService? _dialogs;
+    private readonly ITypeImageProvider? _images;
 
-    public BlueprintAppraisalViewModel(IBlueprintAppraisalService appraisals, ISdeAccessor sde, IDialogService? dialogs = null)
+    public BlueprintAppraisalViewModel(IBlueprintAppraisalService appraisals, ISdeAccessor sde, IDialogService? dialogs = null,
+        ITypeImageProvider? images = null)
     {
         _appraisals = appraisals;
         _sde = sde;
         _dialogs = dialogs;
+        _images = images;
     }
 
     [ObservableProperty]
@@ -198,7 +202,7 @@ public sealed partial class BlueprintAppraisalViewModel : ViewModelBase
 
     private BlueprintAppraisalRowViewModel _Add(SdeBlueprintManufacturing blueprint)
     {
-        var row = new BlueprintAppraisalRowViewModel(blueprint, _NameOf(blueprint.BlueprintTypeId), _NameOf);
+        var row = new BlueprintAppraisalRowViewModel(blueprint, _NameOf(blueprint.BlueprintTypeId), _NameOf, _images);
         row.RebuildRequested += changed => Pending = _RebuildAsync(changed);
         row.PropertyChanged += (_, change) =>
         {
@@ -211,6 +215,9 @@ public sealed partial class BlueprintAppraisalViewModel : ViewModelBase
 
     /// <summary>The appraisal a runs or ME change started, for a caller (a test) that waits for it.</summary>
     public Task Pending { get; private set; } = Task.CompletedTask;
+
+    /// <summary>The icon loads of the shopping list's lines, for a caller (a test) that waits for them.</summary>
+    public Task ShoppingIconsPending { get; private set; } = Task.CompletedTask;
 
     private async Task _RebuildAsync(BlueprintAppraisalRowViewModel row)
     {
@@ -233,9 +240,12 @@ public sealed partial class BlueprintAppraisalViewModel : ViewModelBase
                      .OfType<BlueprintAppraisal>()
                      .SelectMany(appraisal => appraisal.Materials)
                      .GroupBy(material => material.TypeId)
-                     .Select(group => new ShoppingListLineViewModel(_NameOf(group.Key), group.Sum(material => material.Needed)))
+                     .Select(group => new ShoppingListLineViewModel(group.Key, _NameOf(group.Key), group.Sum(material => material.Needed)))
                      .OrderBy(line => line.Name, StringComparer.Ordinal))
+        {
             ShoppingList.Add(line);
+            ShoppingIconsPending = Task.WhenAll(ShoppingIconsPending, line.Icon.LoadAsync(_images));
+        }
 
         OnPropertyChanged(nameof(HasRows));
         OnPropertyChanged(nameof(HasUnresolved));
