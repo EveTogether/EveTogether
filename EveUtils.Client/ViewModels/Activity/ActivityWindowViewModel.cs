@@ -1855,6 +1855,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         _WriteHeartbeatIfDue(nowUtc);
         _RefreshLocation(nowUtc);
         _RefreshOwnPilotLegs(nowUtc);
+        _RefreshLateJoiners();
         _RefreshClock(nowUtc);
         _RefreshArmed();
         _RefreshFleetClock(nowUtc);
@@ -1866,6 +1867,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         // falling out of expiry, ET-237) — summarising first would describe last tick's answer instead of this one's.
         foreach (RunWindowSection section in _AllSections())
             section.Refresh(nowUtc);
+        _RefreshFleetCarriesOn();
         CurrentRoomText = _Enemies()?.CurrentRoomText(nowUtc);
         CurrentRoomSource = _Enemies()?.CurrentRoomSource;
         OnPropertyChanged(nameof(CurrentRoomText));
@@ -1886,7 +1888,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         _RefreshJoinableFleetRun(nowUtc);
         _ = FleetSharing.SyncAsync(nowUtc, FleetId, GroupCode,
             RunState is ActivityRunState.Running or ActivityRunState.Stopped, _RunCharacterIds(), LootOverview,
-            Participants);
+            Participants, _Enemies());
     }
 
     /// <summary>Every character with a run in this group as the window knows it: the participants, and its own pilot
@@ -3438,12 +3440,14 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         CharacterMetricsSnapshot snapshot = _gamelog.Snapshot(_runCharacterName);
         _canSeeCrossing = snapshot.LocationUnavailableReason is null;
         bool? wasInside = InsideAbyssal;
-        if (snapshot.AbyssalAnchor is not null)
+        // Seen inside without an anchor is a client that came up in the pocket (ET-500): in, only not since when.
+        if (snapshot.AbyssalAnchor is not null || snapshot.IsSeenInsideAbyssal)
             InsideAbyssal = true;
         else if (snapshot.Location is not null && snapshot.LocationUnavailableReason is null)
             InsideAbyssal = false;
 
         _StartOrStopOnAbyssalCrossing(wasInside, snapshot.AbyssalAnchor, nowUtc);
+        _StartArmedAlreadyInside(snapshot, nowUtc);
 
         // Same rule as DpsViewModel.LocationDisplay, and for the same reason (ET-71): a pilot known to be out of the
         // game reads as that, never as the system they undocked in hours ago.
@@ -3477,6 +3481,21 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         // would stop a run that was started by hand and never taken in. Coming out stops it whoever started it.
         else if (wasInside is true && InsideAbyssal is false && RunState is ActivityRunState.Running)
             StopRun(nowUtc);
+    }
+
+    /// <summary>
+    /// A pilot who joined the fleet's run while already in its pocket (ET-500), on a client that came up inside: there
+    /// is no anchor, so <see cref="_StartOrStopOnAbyssalCrossing"/> rightly starts nothing on its own — but joining is
+    /// the pilot saying this pocket is the fleet's, so the leg starts at the join. A solo window still starts nothing.
+    /// </summary>
+    private void _StartArmedAlreadyInside(CharacterMetricsSnapshot snapshot, DateTime nowUtc)
+    {
+        if (!RunType.ClockPerPilot || RunState is not ActivityRunState.NotStarted || GroupCode is null
+            || FleetId is null || snapshot.AbyssalAnchor is not null || !snapshot.IsSeenInsideAbyssal
+            || _pendingCopy is not null)
+            return;
+
+        LastAbyssalEntry = _StartOnAbyssalEntryAsync(nowUtc);
     }
 
     /// <summary>The pending automatic start, so a test can await what a location reading set going.</summary>
@@ -3542,7 +3561,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         {
             CharacterMetricsSnapshot snapshot = _gamelog.Snapshot(sibling.CharacterName);
             bool wasInside = _ownLegWasInside.GetValueOrDefault(sibling.CharacterId, true);
-            bool isInside = snapshot.AbyssalAnchor is not null;
+            bool isInside = snapshot.AbyssalAnchor is not null || snapshot.IsSeenInsideAbyssal;
             if (wasInside && !isInside && snapshot.Location is not null && snapshot.LocationUnavailableReason is null)
             {
                 _ownLegWasInside[sibling.CharacterId] = false;
@@ -3645,6 +3664,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         FleetSharing.Release(forget: true);
         _ownLegsPending.Clear();
         _ownLegWasInside.Clear();
+        _lateJoining.Clear();
         _RefreshSummaries();
     }
 

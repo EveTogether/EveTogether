@@ -565,6 +565,10 @@
                                Classes.waiting="{Binding IsWaitingForFleet}" Text="{Binding FleetClockText}"/>
                 </Grid>
 
+                <!-- Out of the pocket while the fleet is still in it (ET-498): ROOM and ENEMIES follow a mate inside. -->
+                <TextBlock x:Name="FleetCarriesOnText" Classes="hint" Margin="0" TextWrapping="Wrap"
+                           IsVisible="{Binding IsFleetCarryingOn}" Text="{Binding FleetCarriesOnText}"/>
+
                 <!-- What this pilot offers the fleet of this run (ET-242, mining added by ET-234): on a shared run
                      loot, bounty and mining go out unless switched off here, so it is said on the window's face, in
                      words, with the switch one click away — not in a section that may be folded shut. -->
@@ -695,6 +699,14 @@
                                Text="{Binding JoinFleetRunText}"/>
                     <Button x:Name="JoinFleetRunButton" Grid.Column="1" Classes="accent" VerticalAlignment="Center"
                             Content="JOIN FLEET RUN" Command="{Binding JoinRunningFleetRunCommand}"/>
+                </Grid>
+                <!-- Another own character is in the pocket without a leg in this run (ET-500). -->
+                <Grid x:Name="LateJoin" ColumnDefinitions="*,Auto" ColumnSpacing="10"
+                      IsVisible="{Binding IsLateJoinShown}">
+                    <TextBlock Classes="hint" Margin="0" TextWrapping="Wrap" VerticalAlignment="Center"
+                               Text="{Binding LateJoinText}"/>
+                    <Button x:Name="JoinRunningRunButton" Grid.Column="1" Classes="accent" VerticalAlignment="Center"
+                            Content="JOIN RUNNING RUN" Command="{Binding JoinRunningRunCommand}"/>
                 </Grid>
                 <TextBlock Classes="hint" Margin="0" Text="{Binding ClockHint}"/>
                 <!-- Why there are no run controls, when there are none. An unknown fleet boss is a state, not

@@ -13,7 +13,7 @@
                 <TextBlock Grid.Column="1" Classes="hint" Margin="0" VerticalAlignment="Center"
                            Text="{Binding CountStateText}"/>
                 <NumericUpDown Grid.Column="2" Classes="count" Width="72" Minimum="0" Maximum="999" Increment="1"
-                               FormatString="0" Value="{Binding Count, Mode=TwoWay}"/>
+                               FormatString="0" Value="{Binding Count, Mode=TwoWay}" IsEnabled="{Binding IsEditable}"/>
             </Grid>
         </DataTemplate>
         <DataTemplate DataType="x:String">

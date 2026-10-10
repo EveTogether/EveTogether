@@ -91,6 +91,13 @@
 
         <!-- Why the window is still here after SAVE, and why there are no run buttons when there are none: the
              full view says both, and a compact window that stayed silent about them would hide a failed save. -->
+        <Grid x:Name="CompactLateJoin" ColumnDefinitions="*,Auto" ColumnSpacing="10" IsVisible="{Binding IsLateJoinShown}">
+            <TextBlock Classes="chint" TextWrapping="Wrap" VerticalAlignment="Center" Text="{Binding LateJoinText}"/>
+            <Button x:Name="CompactJoinRunningRunButton" Grid.Column="1" Classes="cbtn acc" Content="JOIN"
+                    Command="{Binding JoinRunningRunCommand}"/>
+        </Grid>
+        <TextBlock x:Name="CompactFleetCarriesOn" Classes="chint" TextWrapping="Wrap"
+                   IsVisible="{Binding IsFleetCarryingOn}" Text="{Binding FleetCarriesOnText}"/>
         <TextBlock x:Name="CompactRunNotice" Classes="chint" TextWrapping="Wrap"
                    IsVisible="{Binding HasRunNotice}" Text="{Binding RunNoticeText}"/>
         <TextBlock x:Name="CompactCommandStatus" Classes="chint" TextWrapping="Wrap"

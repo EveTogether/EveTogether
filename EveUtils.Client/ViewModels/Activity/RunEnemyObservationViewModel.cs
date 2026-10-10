@@ -3,8 +3,11 @@ using CommunityToolkit.Mvvm.ComponentModel;
 namespace EveUtils.Client.ViewModels.Activity;
 
 public sealed partial class RunEnemyObservationViewModel(int enemyTypeId, string enemyName, DateTime observedAtUtc,
-    int? roomNumber = null) : ObservableObject
+    int? roomNumber = null, bool isEditable = true) : ObservableObject
 {
+    /// <summary>False for a fleet mate's row (ET-498): their count, shown, never typed into here.</summary>
+    public bool IsEditable { get; } = isEditable;
+
     public int EnemyTypeId { get; } = enemyTypeId;
     public string EnemyName { get; } = enemyName;
 
