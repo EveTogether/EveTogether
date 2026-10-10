@@ -113,9 +113,11 @@
                     <Border Classes="panel" Padding="10,8" BorderBrush="{StaticResource WarnBrush}" IsVisible="{Binding NeedsEveWorkbenchKey}">
                         <StackPanel Spacing="4">
                             <TextBlock TextWrapping="Wrap" FontWeight="SemiBold" Foreground="{StaticResource WarnBrush}"
-                                       Text="Vereist: een EVE Workbench API-key. Maak er een aan op EVE Workbench onder My Account → Personal Access Tokens en vul hem hier in."/>
-                            <Button Classes="rowaction" HorizontalAlignment="Left" Content="Open My Account → Personal Access Tokens"
-                                    Command="{Binding OpenPersonalAccessTokensCommand}"/>
+                                       Text="Required: an EVE Workbench API key. Create one on EVE Workbench under My Account → Personal Access Tokens and enter it here."/>
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <Button Classes="rowaction" Content="Open on AbyssTracker" Command="{Binding OpenAbyssTrackerTokensCommand}"/>
+                                <Button Classes="rowaction" Content="Open on EVE Journal" Command="{Binding OpenEveJournalTokensCommand}"/>
+                            </StackPanel>
                         </StackPanel>
                     </Border>
                     <TextBlock Text="{Binding EveWorkbenchKeyStatus}" FontSize="11" TextWrapping="Wrap" Foreground="{StaticResource TextBrush}"/>

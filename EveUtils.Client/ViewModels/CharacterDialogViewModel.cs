@@ -96,7 +96,8 @@ public partial class CharacterDialogViewModel : ObservableObject, IDisposable
     }
 
     // ── Publish to EVE Workbench (ET-325) ── off by default, and only possible with the user's own EVE Workbench API key.
-    private const string PersonalAccessTokensUrl = "https://evejournal.com/my-account/personal-access-tokens";
+    private const string AbyssTrackerTokensUrl = "https://abysstracker.com/my-account/settings/tokens";
+    private const string EveJournalTokensUrl = "https://evejournal.com/my-account/personal-access-tokens";
 
     private bool _loadingPublish;
 
@@ -150,7 +151,7 @@ public partial class CharacterDialogViewModel : ObservableObject, IDisposable
 
                 break;
             case global::EveUtils.Client.Runs.EveWorkbenchKeyVerdict.Invalid:
-                EveWorkbenchKeyStatus = "API-key ongeldig — stel opnieuw in.";
+                EveWorkbenchKeyStatus = "API key invalid — set it again.";
                 break;
             default:
                 EveWorkbenchKeyStatus = "EVE Workbench could not be reached to check the key; it is kept and tried on the next upload.";
@@ -193,15 +194,20 @@ public partial class CharacterDialogViewModel : ObservableObject, IDisposable
     }
 
     [RelayCommand]
-    private static void OpenPersonalAccessTokens()
+    private static void OpenAbyssTrackerTokens() => OpenUrl(AbyssTrackerTokensUrl);
+
+    [RelayCommand]
+    private static void OpenEveJournalTokens() => OpenUrl(EveJournalTokensUrl);
+
+    private static void OpenUrl(string url)
     {
         try
         {
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(PersonalAccessTokensUrl) { UseShellExecute = true });
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url) { UseShellExecute = true });
         }
         catch (Exception)
         {
-            // No browser to open: the address stays readable in the notice.
+            // No browser to open: the notice still names the page.
         }
     }
 

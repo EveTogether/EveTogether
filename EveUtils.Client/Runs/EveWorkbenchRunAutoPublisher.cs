@@ -96,7 +96,7 @@ public sealed class EveWorkbenchRunAutoPublisher : ISingletonService, IDisposabl
         string headline = latest.Status switch
         {
             "NoKey" => $"Waiting for an API key: {waiting} run(s) not sent yet.",
-            "KeyInvalid" => $"API-key ongeldig — stel opnieuw in. {waiting} run(s) wachten.",
+            "KeyInvalid" => $"API key invalid — set it again. {waiting} run(s) waiting.",
             "Pending" or "Failed" => $"Last upload failed ({latest.Reason ?? "no answer"}); retrying. {waiting} run(s) waiting.",
             "Rejected" => $"Last upload was rejected: {latest.Reason}.",
             _ => "Last upload succeeded."
