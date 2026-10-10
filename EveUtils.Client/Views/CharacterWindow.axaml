@@ -103,32 +103,18 @@
 
                 <Separator IsVisible="{Binding CanRemove}"/>
                 <StackPanel Spacing="4" IsVisible="{Binding CanRemove}">
-                    <TextBlock Classes="label" Text="EVE WORKBENCH API KEY"/>
+                    <TextBlock Classes="label" Text="EVE WORKBENCH (OPTIONAL)"/>
+                    <TextBlock Text="{Binding EveWorkbenchKeyState}" FontSize="12" TextWrapping="Wrap" Foreground="{StaticResource TextBrightBrush}"/>
+                    <TextBlock Text="{Binding EveWorkbenchKeyStatus}" FontSize="11" TextWrapping="Wrap" Foreground="{StaticResource TextBrush}"
+                               IsVisible="{Binding EveWorkbenchKeyStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
                     <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
-                        <TextBox Grid.Column="0" FontSize="11" PasswordChar="•" PlaceholderText="Paste your EVE Workbench API key"
+                        <TextBox Grid.Column="0" FontSize="11" PasswordChar="•" PlaceholderText="API key, to upload runs to EVE Workbench"
                                  Text="{Binding EveWorkbenchKeyInput}"/>
                         <Button Grid.Column="1" Content="SAVE" FontSize="10" Command="{Binding SaveEveWorkbenchKeyCommand}"/>
                         <Button Grid.Column="2" Content="CLEAR" FontSize="10" Command="{Binding ClearEveWorkbenchKeyCommand}"/>
                     </Grid>
-                    <Border Classes="panel" Padding="10,8" BorderBrush="{StaticResource WarnBrush}" IsVisible="{Binding NeedsEveWorkbenchKey}">
-                        <StackPanel Spacing="4">
-                            <TextBlock TextWrapping="Wrap" FontWeight="SemiBold" Foreground="{StaticResource WarnBrush}"
-                                       Text="Required: an EVE Workbench API key. Create one on EVE Workbench under My Account → Personal Access Tokens and enter it here."/>
-                            <StackPanel Orientation="Horizontal" Spacing="6">
-                                <Button Classes="rowaction" Content="Open on AbyssTracker" Command="{Binding OpenAbyssTrackerTokensCommand}"/>
-                                <Button Classes="rowaction" Content="Open on EVE Journal" Command="{Binding OpenEveJournalTokensCommand}"/>
-                            </StackPanel>
-                        </StackPanel>
-                    </Border>
-                    <TextBlock Text="{Binding EveWorkbenchKeyState}" FontSize="12" FontWeight="SemiBold" TextWrapping="Wrap" Foreground="{StaticResource TextBrightBrush}"/>
-                    <TextBlock Text="{Binding EveWorkbenchKeyStatus}" FontSize="11" TextWrapping="Wrap" Foreground="{StaticResource TextBrush}"/>
                     <TextBlock Text="{Binding EveWorkbenchPilotWarning}" FontSize="11" TextWrapping="Wrap" Foreground="{StaticResource WarnBrush}"
                                IsVisible="{Binding EveWorkbenchPilotWarning, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
-                    <CheckBox Content="Publish this pilot's finished runs to EVE Workbench" IsChecked="{Binding PublishToEveWorkbench}"
-                              IsEnabled="{Binding HasEveWorkbenchKey}"
-                              ToolTip.Tip="Off by default; needs your EVE Workbench API key. Each save, correction and delete is sent."/>
-                    <TextBlock Text="{Binding EveWorkbenchPublishStatus}" FontSize="11" TextWrapping="Wrap"
-                               Foreground="{StaticResource TextBrush}"/>
                 </StackPanel>
 
                 <!-- Remove character (ET-345): destructive, so last. The confirmation opens in place; an active fleet this

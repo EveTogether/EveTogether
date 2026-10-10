@@ -17,10 +17,10 @@ public sealed class EveWorkbenchKeyRingTests
     private const long Main = 90000001;
     private const long Alt = 90000002;
 
-    /// <summary>A key is stored once for its EVE Workbench account: an alt on that account publishes with the main's key
+    /// <summary>A run nobody chose to upload never leaves. A key is stored once for its EVE Workbench account: an alt on it uploads with the main's key
     /// without entering anything, and its saved run goes out with that key.</summary>
     [AvaloniaFact]
-    public async Task Save_RunOfAnAltOnAKeyedAccount_IsPublishedWithTheMainsKey()
+    public async Task Save_RunIsOnlyUploadedWhenChosen_AndAnAltUsesTheMainsKey()
     {
         CancellationToken cancellationToken = TestContext.Current.CancellationToken;
         var handler = new RecordingHandler();
@@ -32,10 +32,13 @@ public sealed class EveWorkbenchKeyRingTests
 
         await ring.AddAsync("main-key", cancellationToken);
         Assert.False((await ring.ForPilotAsync(Alt, cancellationToken))!.IsOwn);
-        await dispatcher.Send(new SetSettingCommand(EveWorkbenchRunAutoPublisher.EnabledSettingKeyFor(Alt), "true"), cancellationToken);
         var started = new DateTime(2026, 10, 10, 8, 0, 0, DateTimeKind.Utc);
         Guid runId = (await dispatcher.Send(new StartRunCommand(Alt, ActivityKind.Site, started, 1234, "Blood Refuge", 30000142), cancellationToken)).Value;
         await dispatcher.Send(new SaveRunCommand(runId, started.AddMinutes(15), started.AddMinutes(16), [], [], [], []), cancellationToken);
+        await publisher.WhenIdleAsync();
+        Assert.Null(handler.ImportBody);
+
+        await publisher.UploadAsync([runId], cancellationToken);
         await publisher.WhenIdleAsync();
 
         Assert.Equal("main-key", handler.ImportToken);

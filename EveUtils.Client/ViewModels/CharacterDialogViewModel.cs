@@ -92,23 +92,12 @@ public partial class CharacterDialogViewModel : ObservableObject, IDisposable
     {
         ApplyCharacterSnapshot();
         await ReloadServerLinksAsync();
-        await LoadEveWorkbenchPublishAsync();
+        await ReloadEveWorkbenchKeyAsync(refresh: true);
     }
 
-    // ── Publish to EVE Workbench (ET-325) ── off by default, and only possible with an EVE Workbench API key: the pilot's
-    // own, or the one of the EVE Workbench account it is an alt on (a key is stored once for the whole account).
-    private const string AbyssTrackerTokensUrl = "https://abysstracker.com/my-account/settings/tokens";
-    private const string EveJournalTokensUrl = "https://evejournal.com/my-account/personal-access-tokens";
-
-    private bool _loadingPublish;
+    // ── EVE Workbench (optional, ET-325) ── the API key an upload uses: the pilot's own, or the one of the EVE Workbench
+    // account it is an alt on (a key is stored once for the whole account). Nothing here is required.
     private global::EveUtils.Client.Runs.ResolvedEveWorkbenchKey? _key;
-
-    [ObservableProperty] private bool _publishToEveWorkbench;
-    [ObservableProperty] private string _eveWorkbenchPublishStatus = "";
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(NeedsEveWorkbenchKey))]
-    private bool _hasEveWorkbenchKey;
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(SaveEveWorkbenchKeyCommand))]
@@ -128,18 +117,6 @@ public partial class CharacterDialogViewModel : ObservableObject, IDisposable
     [NotifyCanExecuteChangedFor(nameof(ClearEveWorkbenchKeyCommand))]
     private bool _hasOwnEveWorkbenchKey;
 
-    public bool NeedsEveWorkbenchKey => _key is null;
-
-    private async Task LoadEveWorkbenchPublishAsync()
-    {
-        (bool enabled, string status) = await _owner.LoadEveWorkbenchPublishAsync(CharacterId);
-        _loadingPublish = true;
-        PublishToEveWorkbench = enabled;
-        _loadingPublish = false;
-        EveWorkbenchPublishStatus = status;
-        await ReloadEveWorkbenchKeyAsync(refresh: true);
-    }
-
     private async Task ReloadEveWorkbenchKeyAsync(bool refresh)
     {
         if (_owner.EveWorkbenchPublisher is not { } publisher)
@@ -148,12 +125,10 @@ public partial class CharacterDialogViewModel : ObservableObject, IDisposable
         }
 
         _key = await publisher.KeyForPilotAsync(CharacterId, refresh);
-        HasEveWorkbenchKey = _key is { Invalid: false };
         HasOwnEveWorkbenchKey = _key is { IsOwn: true };
-        OnPropertyChanged(nameof(NeedsEveWorkbenchKey));
         EveWorkbenchKeyState = _key switch
         {
-            null => "No key — required to upload.",
+            null => "No key. Runs are only uploaded when you choose to, and then a key is needed.",
             { Invalid: true } => "API key invalid — set it again.",
             { IsOwn: true } => $"Own key (main: {_key.MainName}).",
             _ => $"Uses the key of {_key.MainName} (alt). You can still enter an own key below."
@@ -203,36 +178,6 @@ public partial class CharacterDialogViewModel : ObservableObject, IDisposable
         await publisher.ClearKeyAsync(key.MainId);
         EveWorkbenchPilotWarning = "";
         await ReloadEveWorkbenchKeyAsync(refresh: false);
-        if (!HasEveWorkbenchKey)
-        {
-            PublishToEveWorkbench = false;
-        }
-    }
-
-    [RelayCommand]
-    private static void OpenAbyssTrackerTokens() => OpenUrl(AbyssTrackerTokensUrl);
-
-    [RelayCommand]
-    private static void OpenEveJournalTokens() => OpenUrl(EveJournalTokensUrl);
-
-    private static void OpenUrl(string url)
-    {
-        try
-        {
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url) { UseShellExecute = true });
-        }
-        catch (Exception)
-        {
-            // No browser to open: the notice still names the page.
-        }
-    }
-
-    partial void OnPublishToEveWorkbenchChanged(bool value)
-    {
-        if (!_loadingPublish)
-        {
-            _ = _owner.SetEveWorkbenchPublishAsync(CharacterId, value && HasEveWorkbenchKey);
-        }
     }
 
     private void ApplyCharacterSnapshot()

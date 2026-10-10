@@ -1932,31 +1932,6 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
 
     public EveUtils.Client.Runs.EveWorkbenchRunAutoPublisher? EveWorkbenchPublisher => _services?.GetService<EveUtils.Client.Runs.EveWorkbenchRunAutoPublisher>();
 
-    /// <summary>The pilot's "Publish to EVE Workbench" choice and what came of it so far (ET-325).</summary>
-    public async Task<(bool Enabled, string Status)> LoadEveWorkbenchPublishAsync(int characterId)
-    {
-        var settings = _services?.GetService<ISettingRepository>();
-        var publisher = _services?.GetService<EveUtils.Client.Runs.EveWorkbenchRunAutoPublisher>();
-        if (settings is null || publisher is null)
-        {
-            return (false, "");
-        }
-
-        var key = EveUtils.Client.Runs.EveWorkbenchRunAutoPublisher.EnabledSettingKeyFor(characterId);
-        var enabled = (await settings.ListAsync()).FirstOrDefault(s => s.Key == key)?.Value == "true";
-        return (enabled, await publisher.StatusLineAsync(characterId));
-    }
-
-    public async Task SetEveWorkbenchPublishAsync(int characterId, bool enabled)
-    {
-        if (_services?.GetService<ISettingRepository>() is not { } settings)
-        {
-            return;
-        }
-
-        await settings.UpsertAsync(EveUtils.Client.Runs.EveWorkbenchRunAutoPublisher.EnabledSettingKeyFor(characterId), enabled ? "true" : "false");
-    }
-
     /// <summary>What stands in the way of removing a character: an active fleet it commands, or a run still on the
     /// clock (ET-345).</summary>
     public async Task<CharacterRemovalCheck?> CheckCharacterRemovalAsync(int characterId) =>

@@ -130,6 +130,9 @@ public interface IDialogService
     /// <summary>Opens the per-character settings dialog: ESI scopes, coupled servers, couple/decouple.</summary>
     Task ShowCharacterAsync(CharacterDialogViewModel viewModel);
 
+    /// <summary>The upload dialog of one activity to EVE Workbench (ET-325).</summary>
+    Task ShowEveWorkbenchUploadAsync(ViewModels.Runs.EveWorkbenchUploadViewModel viewModel);
+
     /// <summary>
     /// Server info/trust dialog: address, live status and the pinned cert fingerprint.
     /// Returns true if the user pressed Decouple inside it.

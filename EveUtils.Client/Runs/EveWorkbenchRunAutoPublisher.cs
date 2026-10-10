@@ -27,9 +27,6 @@ namespace EveUtils.Client.Runs;
 /// </summary>
 public sealed class EveWorkbenchRunAutoPublisher : ISingletonService, IDisposable
 {
-    /// <summary>Per pilot: <see cref="EnabledSettingKeyFor"/> holds "true" once the pilot chose to share. Off without a row.</summary>
-    public const string EnabledSettingKeyPrefix = "runs.ewb-publish.";
-
     public const string StateSettingKey = "runs.ewb-publish.state";
 
     /// <summary>Optional override of the EVE Workbench address; the live API without it.</summary>
@@ -65,8 +62,6 @@ public sealed class EveWorkbenchRunAutoPublisher : ISingletonService, IDisposabl
         _ = _Enqueue(_StartAsync);
     }
 
-    public static string EnabledSettingKeyFor(long characterId) => EnabledSettingKeyPrefix + characterId;
-
     /// <summary>Completes once nothing is left to do — for a test to wait on.</summary>
     public async Task WhenIdleAsync()
     {
@@ -82,28 +77,54 @@ public sealed class EveWorkbenchRunAutoPublisher : ISingletonService, IDisposabl
         } while (!_IsLast(current));
     }
 
-    /// <summary>What the pilot sees next to the switch: how many runs went, and the newest failure.</summary>
-    public async Task<string> StatusLineAsync(long characterId, CancellationToken cancellationToken = default)
+    /// <summary>The runs of one activity that are the user's own and saved: what the upload dialog offers.</summary>
+    public async Task<IReadOnlyList<UploadableRun>> FindUploadableRunsAsync(string? groupCode, Guid? runId,
+        IReadOnlySet<long> ownCharacterIds, CancellationToken cancellationToken = default)
+    {
+        await using ClientDbContext db = await _contextFactory.CreateDbContextAsync(cancellationToken);
+        return await db.Set<Run>().AsNoTracking()
+            .Where(run => (groupCode != null ? run.GroupCode == groupCode : run.Id == runId)
+                && run.State == RunState.Saved && run.DeletedAtUtc == null && ownCharacterIds.Contains(run.CharacterId))
+            .Select(run => new UploadableRun(run.Id, run.CharacterId))
+            .ToListAsync(cancellationToken);
+    }
+
+    /// <summary>The deliberate act: these runs are uploaded now and stay in step from here on (new revision, delete,
+    /// discard). A run never passed here is never sent.</summary>
+    public async Task UploadAsync(IReadOnlyCollection<Guid> runIds, CancellationToken cancellationToken = default)
     {
         Dictionary<Guid, PublishEntry> state = await _LoadStateAsync(cancellationToken);
-        PublishEntry[] mine = [.. state.Values.Where(entry => entry.CharacterId == characterId)];
-        if (mine.Length == 0)
+        List<Run> runs;
+        await using (ClientDbContext db = await _contextFactory.CreateDbContextAsync(cancellationToken))
         {
-            return "Nothing sent yet.";
+            runs = await db.Set<Run>().AsNoTracking().Where(run => runIds.Contains(run.Id)).ToListAsync(cancellationToken);
         }
 
-        int sent = mine.Count(entry => entry.Status is "Created" or "Updated" or "Ignored");
-        int waiting = mine.Count(entry => !entry.IsAnswered);
-        PublishEntry latest = mine.OrderByDescending(entry => entry.AtUtc).First();
-        string headline = latest.Status switch
+        _Record(state, runs, "Pending", null);
+        await using (AsyncServiceScope scope = _scopeFactory.CreateAsyncScope())
         {
-            "NoKey" => $"Waiting for an API key: {waiting} run(s) not sent yet.",
-            "KeyInvalid" => $"API key invalid — set it again. {waiting} run(s) waiting.",
-            "Pending" or "Failed" => $"Last upload failed ({latest.Reason ?? "no answer"}); retrying. {waiting} run(s) waiting.",
-            "Rejected" => $"Last upload was rejected: {latest.Reason}.",
-            _ => "Last upload succeeded."
-        };
-        return $"{headline} {sent} run(s) sent in total, last answer {latest.AtUtc.ToLocalTime():g}.";
+            await _SaveStateAsync(scope.ServiceProvider, state, cancellationToken);
+        }
+
+        _ = _Enqueue(token => _PublishAsync([.. runIds], token));
+    }
+
+    /// <summary>The small label of an activity's runs: null when none was ever uploaded, else the worst thing standing.</summary>
+    public async Task<string?> StatusLabelAsync(IReadOnlyCollection<Guid> runIds, CancellationToken cancellationToken = default)
+    {
+        Dictionary<Guid, PublishEntry> state = await _LoadStateAsync(cancellationToken);
+        PublishEntry[] mine = [.. runIds.Select(id => state.GetValueOrDefault(id)).OfType<PublishEntry>()];
+        if (mine.Length == 0)
+        {
+            return null;
+        }
+
+        PublishEntry? rejected = mine.FirstOrDefault(entry => entry.Status == "Rejected");
+        return rejected is not null ? $"EWB ✗ rejected: {rejected.Reason}"
+            : mine.Any(entry => entry.Status == "KeyInvalid") ? "EWB ✗ API key invalid"
+            : mine.Any(entry => entry.Status == "NoKey") ? "EWB … needs an API key"
+            : mine.Any(entry => !entry.IsAnswered) ? "EWB … pending, retrying"
+            : "EWB ✓ uploaded";
     }
 
     public void Dispose() => _runsChanged.Dispose();
@@ -198,22 +219,15 @@ public sealed class EveWorkbenchRunAutoPublisher : ISingletonService, IDisposabl
 
         await using AsyncServiceScope scope = _scopeFactory.CreateAsyncScope();
         IReadOnlyList<ClientSetting> settings = await scope.ServiceProvider.GetRequiredService<ISettingRepository>().ListAsync(cancellationToken);
-        HashSet<long> enabledPilots = [.. settings
-            .Where(setting => setting.Key.StartsWith(EnabledSettingKeyPrefix, StringComparison.Ordinal) && setting.Value == "true"
-                && long.TryParse(setting.Key.AsSpan(EnabledSettingKeyPrefix.Length), out _))
-            .Select(setting => long.Parse(setting.Key[EnabledSettingKeyPrefix.Length..]))];
-        if (enabledPilots.Count == 0)
-        {
-            return;
-        }
-
         Dictionary<Guid, PublishEntry> state = await _LoadStateAsync(cancellationToken);
+        // Only what was deliberately uploaded is ever kept in step.
+        runIds = [.. runIds.Where(state.ContainsKey)];
         RunSynchronizationService synchronization = scope.ServiceProvider.GetRequiredService<RunSynchronizationService>();
         List<Run> runs;
         await using (ClientDbContext db = await _contextFactory.CreateDbContextAsync(cancellationToken))
         {
             runs = await RunSynchronizationService.IncludeGraph(db.Set<Run>().AsNoTracking()
-                    .Where(run => runIds.Contains(run.Id) && enabledPilots.Contains(run.CharacterId)
+                    .Where(run => runIds.Contains(run.Id)
                         && (run.State == RunState.Saved || run.DeletedAtUtc != null)))
                 .ToListAsync(cancellationToken);
         }
@@ -362,3 +376,5 @@ public sealed class EveWorkbenchRunAutoPublisher : ISingletonService, IDisposabl
         public void Log(string message) => logger.LogInformation("{Message}", message);
     }
 }
+
+public sealed record UploadableRun(Guid RunId, long CharacterId);

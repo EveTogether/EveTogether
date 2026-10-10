@@ -15,6 +15,7 @@ using EveUtils.Client.Calendar;
 using EveUtils.Client.Dialogs;
 using EveUtils.Client.Esi;
 using EveUtils.Client.Fleet;
+using EveUtils.Shared.Modules.Fleet.Metrics;
 using EveUtils.Client.Imaging;
 using EveUtils.Client.Messaging;
 using EveUtils.Client.Notifications;
@@ -219,7 +220,8 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
         if (_weekStart is not null)
             _weekStart.Changed += _OnWeekStartChanged;
         SelectedTab = LocalTab;
-        Pane = new RunsActivityPaneViewModel(_ReadPaneDetailAsync, _PublishTargetName, paneReadDelay);
+        Pane = new RunsActivityPaneViewModel(_ReadPaneDetailAsync, _PublishTargetName, paneReadDelay,
+            services.GetService<EveWorkbenchRunAutoPublisher>() is null ? null : _UploadToEveWorkbenchAsync, _UploadStatusAsync);
         Summary = new RunsSummaryViewModel(_FaceOf, day => _ = PickDayAsync(day), line => _ = OpenSummaryRunAsync(line));
         // HOURS and DAYS shade the way the strip does, so they follow its ISK | runs switch.
         Strip.PropertyChanged += (_, e) =>
@@ -1152,6 +1154,35 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
     /// back first and report second — a reload after the report would clear the status line that carries it.</summary>
     private async Task _PublishAsync(ActivityOverviewRowViewModel row) =>
         await _AfterPublishAsync(await _publisher.PublishOneAsync(row.ActivitySummaryId, row.SiteText));
+
+    /// <summary>UPLOAD ▾ → EVE Workbench (ET-325): optional, per activity, and only ever on the user's own saved runs.</summary>
+    private async Task _UploadToEveWorkbenchAsync(ActivityOverviewRowViewModel row)
+    {
+        if (_services.GetService<EveWorkbenchRunAutoPublisher>() is not { } publisher)
+            return;
+
+        IReadOnlyList<UploadableRun> runs = await publisher.FindUploadableRunsAsync(row.GroupCode, row.RunId, _namesById.Keys.ToHashSet());
+        if (runs.Count == 0)
+        {
+            StatusMessage = "None of your own saved runs in this activity can be uploaded.";
+            return;
+        }
+
+        bool combatShared = (await _services.GetRequiredService<IMetricShareSettings>().LoadAsync()).IsShared(MetricKind.Dps);
+        var upload = new EveWorkbenchUploadViewModel(publisher,
+            [.. runs.Select(run => new UploadablePilot(run.RunId, run.CharacterId, _NameOf(run.CharacterId)))], combatShared);
+        await upload.InitializeAsync();
+        await _dialogs.ShowEveWorkbenchUploadAsync(upload);
+    }
+
+    private async Task<string?> _UploadStatusAsync(ActivityOverviewRowViewModel row)
+    {
+        if (_services.GetService<EveWorkbenchRunAutoPublisher>() is not { } publisher)
+            return null;
+
+        IReadOnlyList<UploadableRun> runs = await publisher.FindUploadableRunsAsync(row.GroupCode, row.RunId, _namesById.Keys.ToHashSet());
+        return await publisher.StatusLabelAsync([.. runs.Select(run => run.RunId)]);
+    }
 
     /// <summary>Every local activity among <paramref name="rows"/> in one go (RO-6): the day header's "n local" and the
     /// range line's PUBLISH n LOCAL both funnel through here.</summary>

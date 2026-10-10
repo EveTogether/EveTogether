@@ -219,6 +219,8 @@ public sealed class RecordingDialogService : IDialogService
     }
 
     public Task ShowCharacterAsync(CharacterDialogViewModel viewModel) => throw NotUsed();
+
+    public Task ShowEveWorkbenchUploadAsync(EveUtils.Client.ViewModels.Runs.EveWorkbenchUploadViewModel viewModel) => throw NotUsed();
     public Task<bool> ShowServerTrustAsync(string displayName, string address, string fingerprint, string statusLabel) => throw NotUsed();
     /// <summary>Where a screen asked to navigate to (ET-171). These three used to throw, because until the fleet
     /// screens grew their exits nothing but the shell ever opened them. They record instead of throwing: a screen
