@@ -6,6 +6,8 @@ using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Modules.Runs.Commands;
 using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Settings.Commands;
+using EveUtils.Shared.Modules.Settings.Entities;
+using EveUtils.Shared.Modules.Settings.Repositories;
 using EveUtils.Shared.Transport;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -107,8 +109,16 @@ public sealed class EveWorkbenchKeyRingTests
     {
         CancellationToken cancellationToken = TestContext.Current.CancellationToken;
         var handler = new RecordingHandler();
+        var savedStates = new System.Collections.Concurrent.ConcurrentQueue<string>();
         using TestClientInstance instance = TestClientInstance.Create(services =>
-            services.AddSingleton<IHttpClientFactory>(new HandlerFactory(handler)));
+        {
+            services.AddSingleton<IHttpClientFactory>(new HandlerFactory(handler));
+            ServiceDescriptor original = services.Last(descriptor => descriptor.ServiceType == typeof(ISettingRepository));
+            services.Remove(original);
+            services.Add(new ServiceDescriptor(typeof(ISettingRepository),
+                provider => new StateRecordingSettings((ISettingRepository)ActivatorUtilities.CreateInstance(provider, original.ImplementationType!), savedStates),
+                original.Lifetime));
+        });
         var publisher = instance.Services.GetRequiredService<EveWorkbenchRunAutoPublisher>();
         var dispatcher = instance.Services.GetRequiredService<IDispatcher>();
         await instance.Services.GetRequiredService<EveWorkbenchKeyRing>().AddAsync("main-key", cancellationToken);
@@ -129,6 +139,40 @@ public sealed class EveWorkbenchKeyRingTests
         await publisher.WhenIdleAsync();
 
         Assert.Contains(handler.Bodies, body => body.Contains(runIds[1].ToString()));
+
+        // Second step, one run: revision N of run A is out on HTTP while the user changes it again to N+1 and uploads it.
+        // The answer for N must not overwrite the pending N+1 — at no moment may the saved revision of A go down.
+        handler.Hold = new TaskCompletionSource();
+        handler.Entered = new TaskCompletionSource();
+        await dispatcher.Send(new DeleteRunCommand(runIds[0], DateTime.UtcNow), cancellationToken);
+        await handler.Entered.Task.WaitAsync(TimeSpan.FromSeconds(10), cancellationToken);
+        await dispatcher.Send(new RestoreRunCommand(runIds[0]), cancellationToken);
+        await publisher.UploadAsync([runIds[0]], cancellationToken);
+        handler.Hold.SetResult();
+        await publisher.WhenIdleAsync();
+
+        int[] revisions = [.. savedStates.Select(json =>
+            System.Text.Json.JsonDocument.Parse(json).RootElement.TryGetProperty(runIds[0].ToString(), out var entry)
+                ? entry.GetProperty("Revision").GetInt32() : 0)];
+        Assert.Equal(revisions.Order(), revisions);
+    }
+
+    /// <summary>The real settings, plus a record of every value the publisher's state was saved with.</summary>
+    private sealed class StateRecordingSettings(ISettingRepository inner, System.Collections.Concurrent.ConcurrentQueue<string> saved) : ISettingRepository
+    {
+        public Task<IReadOnlyList<ClientSetting>> ListAsync(CancellationToken cancellationToken = default) => inner.ListAsync(cancellationToken);
+
+        public Task UpsertAsync(string key, string value, CancellationToken cancellationToken = default)
+        {
+            if (key == EveWorkbenchRunAutoPublisher.StateSettingKey)
+            {
+                saved.Enqueue(value);
+            }
+
+            return inner.UpsertAsync(key, value, cancellationToken);
+        }
+
+        public Task DeleteAsync(string key, CancellationToken cancellationToken = default) => inner.DeleteAsync(key, cancellationToken);
     }
 
     private sealed class HandlerFactory(RecordingHandler handler) : IHttpClientFactory
@@ -142,7 +186,7 @@ public sealed class EveWorkbenchKeyRingTests
         public string? ImportBody { get; private set; }
         public System.Collections.Concurrent.ConcurrentQueue<string> Bodies { get; } = new();
         public TaskCompletionSource? Hold { get; set; }
-        public TaskCompletionSource Entered { get; } = new();
+        public TaskCompletionSource Entered { get; set; } = new();
 
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {

@@ -306,6 +306,12 @@ public sealed class EveWorkbenchRunAutoPublisher : ISingletonService, IDisposabl
         {
             foreach ((Guid id, PublishEntry entry) in changes)
             {
+                // A newer revision was marked pending meanwhile: this answer is for the old one.
+                if (current.TryGetValue(id, out PublishEntry? existing) && existing.Revision > entry.Revision)
+                {
+                    continue;
+                }
+
                 current[id] = entry;
             }
         }, cancellationToken);
