@@ -40,6 +40,7 @@ public sealed class EveWorkbenchKeyRing(ISettingRepository settings, ITokenProte
         EveWorkbenchKeyCheck check = await CheckAsync(trimmed, cancellationToken);
         if (check.Verdict == EveWorkbenchKeyVerdict.Valid && check.Characters.Count > 0)
         {
+            // Implicit contract: v1/characters lists the key's own (main) character first, then its toons.
             await _UpdateAsync(keys =>
             {
                 keys.RemoveAll(key => key.MainId == check.Characters[0].Id);
