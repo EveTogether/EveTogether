@@ -1140,6 +1140,9 @@ namespace EveUtils.Migrations.Server.Sqlite.Migrations
                         .HasMaxLength(255)
                         .HasColumnType("TEXT");
 
+                    b.Property<int>("PriceBasis")
+                        .HasColumnType("INTEGER");
+
                     b.Property<int?>("PriceSource")
                         .HasColumnType("INTEGER");
 

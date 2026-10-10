@@ -32,7 +32,7 @@ public sealed class SdeSqliteBuilder
         "mapRegions.jsonl", "mapConstellations.jsonl", "mapSolarSystems.jsonl", "mapStargates.jsonl",
         "mapStars.jsonl", "mapPlanets.jsonl", "mapMoons.jsonl", "mapAsteroidBelts.jsonl", "stationOperations.jsonl",
         "npcStations.jsonl", "agentTypes.jsonl", "npcCorporations.jsonl",
-        "npcCharacters.jsonl", "missions.jsonl", "epicArcs.jsonl", "dynamicItemAttributes.jsonl"
+        "npcCharacters.jsonl", "missions.jsonl", "epicArcs.jsonl", "dynamicItemAttributes.jsonl", "blueprints.jsonl"
     ];
 
     /// <summary>

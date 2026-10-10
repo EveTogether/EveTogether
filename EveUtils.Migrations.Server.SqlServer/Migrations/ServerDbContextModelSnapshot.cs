@@ -1179,6 +1179,9 @@ namespace EveUtils.Migrations.Server.SqlServer.Migrations
                         .HasMaxLength(255)
                         .HasColumnType("nvarchar(255)");
 
+                    b.Property<int>("PriceBasis")
+                        .HasColumnType("int");
+
                     b.Property<int?>("PriceSource")
                         .HasColumnType("int");
 

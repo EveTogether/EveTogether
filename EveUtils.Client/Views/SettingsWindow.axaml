@@ -190,6 +190,13 @@
                     </StackPanel>
 
                     <StackPanel Spacing="3">
+                        <TextBlock Text="LOOT VALUE" Classes="label" FontSize="9"/>
+                        <CheckBox x:Name="ValueBlueprintsInLootBox" Content="Value blueprints in loot (build appraisal on EVE average prices)"/>
+                        <TextBlock Text="On by default. A blueprint has no market price of its own, so it is valued at what building it once earns: the product minus its materials and a job cost of 9% of the materials' estimated value, all at EVE average prices, and never below zero. A copy's runs and research are unknown, so one run at ME 0 is assumed. Off: blueprints show no price."
+                                   FontSize="10" Opacity="0.6" TextWrapping="Wrap"/>
+                    </StackPanel>
+
+                    <StackPanel Spacing="3">
                         <TextBlock Text="FITTINGS" Classes="label" FontSize="9"/>
                         <CheckBox x:Name="OpenFitDetailAfterImportBox" Content="Open the fit detail right after importing a fit"/>
                         <TextBlock Text="On by default. After importing from EFT/DNA text or an eveship.fit link, the full radial detail opens so you can check the import. Uncheck if you'd rather stay in the browser."

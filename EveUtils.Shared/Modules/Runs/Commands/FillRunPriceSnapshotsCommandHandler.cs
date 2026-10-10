@@ -5,6 +5,7 @@ using EveUtils.Shared.Identity;
 using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Killmails.Entities;
 using EveUtils.Shared.Modules.Market.Repositories;
+using EveUtils.Shared.Modules.Market.Services;
 using EveUtils.Shared.Modules.Runs.Entities;
 using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Runs.Events;
@@ -15,7 +16,7 @@ namespace EveUtils.Shared.Modules.Runs.Commands;
 
 [ClientOnly]
 internal sealed class FillRunPriceSnapshotsCommandHandler(
-    IDbContextFactory<ClientDbContext> contextFactory, IMarketPriceRepository marketPrices, ISdeAccessor sde,
+    IDbContextFactory<ClientDbContext> contextFactory, IMarketPriceRepository marketPrices, IBlueprintAppraisalService blueprints, ISdeAccessor sde,
     IEventBus eventBus, IDispatcher dispatcher)
     : ICommandHandler<FillRunPriceSnapshotsCommand, Result<int>>
 {
@@ -85,7 +86,7 @@ internal sealed class FillRunPriceSnapshotsCommandHandler(
         if (runs.Count == 0)
             return new HashSet<Guid>();
 
-        IReadOnlySet<Guid> priced = await RunPriceSnapshots.FixAsync(db, marketPrices, sde, [.. runs.Select(run => run.Id)],
+        IReadOnlySet<Guid> priced = await RunPriceSnapshots.FixAsync(db, marketPrices, blueprints, sde, [.. runs.Select(run => run.Id)],
             PriceSnapshotSource.Backfill, cancellationToken);
         if (priced.Count == 0)
             return priced;
@@ -138,7 +139,7 @@ internal sealed class FillRunPriceSnapshotsCommandHandler(
         if (runIds.Length == 0 || !sde.IsAvailable)
             return;
 
-        IReadOnlySet<Guid> priced = await RunPriceSnapshots.FixAsync(db, marketPrices, sde, runIds, PriceSnapshotSource.Migrated,
+        IReadOnlySet<Guid> priced = await RunPriceSnapshots.FixAsync(db, marketPrices, blueprints, sde, runIds, PriceSnapshotSource.Migrated,
             cancellationToken);
         if (priced.Count == 0)
             return;
