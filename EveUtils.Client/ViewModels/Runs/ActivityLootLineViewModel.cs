@@ -55,22 +55,25 @@ public sealed partial class ActivityLootLineViewModel : ObservableObject
 
     public decimal? Value { get; }
 
-    /// <summary>Valued at today's cache price because the line has no fixed price yet (ET-463) — said beside the
-    /// figure, since it still moves with the market until the price is fixed.</summary>
+    /// <summary>Valued at today's cache price because the line has no fixed price yet (ET-463) — said in a badge beside
+    /// the name, since it still moves with the market until the price is fixed.</summary>
     public bool IsLivePrice { get; }
 
     /// <summary>Valued as what building the blueprint once earns at EVE average prices (ET-501), not at a market price —
-    /// said beside the figure, since a blueprint copy has no market price of its own.</summary>
+    /// said in a badge beside the name, since a blueprint copy has no market price of its own.</summary>
     public bool IsBlueprintAppraisal { get; }
 
-    public string ValueText => _Marked(IskFormat.WholeOrNoPrice(Value));
+    public const string LivePriceTip = "Valued at today's EVE average price: this line has no fixed price yet.";
+
+    public const string BlueprintAppraisalTip =
+        "Build value on EVE average prices: the product minus its materials and a 9% job cost, for 1 run at ME 0. Never below zero.";
+
+    // The figures carry no marker of their own (ET-503): one appended to the amount pushed that row's quantity and ISK
+    // out of the columns every other row lines up in.
+    public string ValueText => IskFormat.WholeOrNoPrice(Value);
 
     /// <summary>The value without its unit, for the columns under a figure that already says ISK.</summary>
-    public string AmountText => _Marked(IskFormat.NumberOrNoPrice(Value));
-
-    private string _Marked(string figure) => IsLivePrice ? $"{figure} · live"
-        : IsBlueprintAppraisal ? $"{figure} · BP appraisal"
-        : figure;
+    public string AmountText => IskFormat.NumberOrNoPrice(Value);
 
     /// <summary>Spent rather than picked up. Its own category and never loot with a minus in front of it, which is
     /// the reading <see cref="LootKind"/> has carried since it was written.</summary>

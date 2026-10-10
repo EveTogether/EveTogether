@@ -313,7 +313,7 @@ public sealed class RunLootViewModelTests
         // ET-218: the display rounds to whole ISK from the exact sum (2,895.96 → 2,896), never from three
         // already-rounded lines of 965 (which would read 2,895).
         // No price is cached in this store, so none was fixed at capture: the line is valued live and says so (ET-463).
-        Assert.Equal($"{3 * 965.32m:N0} · live", scraps.AmountText);
+        Assert.Equal(($"{3 * 965.32m:N0}", true), (scraps.AmountText, scraps.IsLivePrice));
         Assert.Equal("(2 captures)", scraps.CaptureCountText);
         Assert.False(scraps.IsExcluded);
         Assert.Equal(3 * 965.32m + 20m, viewModel.NetIsk);

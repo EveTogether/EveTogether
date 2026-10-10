@@ -146,7 +146,7 @@ public sealed class BlueprintLootValueTests
 
         ActivityLootLineViewModel line = Assert.Single(viewModel.ItemRows);
         Assert.Equal((true, false), (line.IsBlueprintAppraisal, line.IsLivePrice));
-        Assert.EndsWith(" · BP appraisal", line.ValueText);
+        Assert.DoesNotContain("appraisal", line.ValueText);
     }
 
     private static TestClientInstance _Instance() =>

@@ -27,6 +27,16 @@
                 <Border Classes="badge" IsVisible="{Binding IsLost}">
                     <TextBlock Text="SPENT"/>
                 </Border>
+                <!-- Where the price came from sits here, never beside the figures (ET-503): quantity and ISK keep the
+                     columns every row lines up in. -->
+                <Border x:Name="LiveBadge" Classes="badge" IsVisible="{Binding IsLivePrice}"
+                        ToolTip.Tip="{x:Static vr:ActivityLootLineViewModel.LivePriceTip}">
+                    <TextBlock Text="LIVE"/>
+                </Border>
+                <Border x:Name="AppraisalBadge" Classes="badge appraisal" IsVisible="{Binding IsBlueprintAppraisal}"
+                        ToolTip.Tip="{x:Static vr:ActivityLootLineViewModel.BlueprintAppraisalTip}">
+                    <TextBlock Text="BP APPRAISAL"/>
+                </Border>
             </StackPanel>
             <TextBlock Grid.Column="2" Classes="money" MinWidth="44" Text="{Binding QuantityText}"/>
             <TextBlock Grid.Column="3" Classes="money" MinWidth="104" Text="{Binding AmountText}"/>

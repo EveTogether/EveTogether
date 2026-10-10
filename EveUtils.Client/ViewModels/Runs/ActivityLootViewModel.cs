@@ -138,14 +138,15 @@ public sealed partial class ActivityLootViewModel : ObservableObject
 
     /// <summary>The most valuable items the group picked up, the same type added up across the blocks. Priced lines
     /// first, by value; the ones with no price after them.</summary>
-    public IReadOnlyList<(string Name, long Quantity, decimal? Value)> TopItems(int count) =>
+    public IReadOnlyList<(string Name, long Quantity, decimal? Value, bool IsBlueprintAppraisal)> TopItems(int count) =>
     [
         .. Characters
             .SelectMany(block => block.Loot.ItemRows)
             .Where(row => !row.IsExcluded && !row.IsLost)
             .GroupBy(row => row.ItemTypeId)
             .Select(rows => (Name: rows.First().Name, Quantity: rows.Sum(row => row.Quantity ?? 1),
-                Value: rows.Any(row => row.Value is not null) ? rows.Sum(row => row.Value ?? 0m) : (decimal?)null))
+                Value: rows.Any(row => row.Value is not null) ? rows.Sum(row => row.Value ?? 0m) : (decimal?)null,
+                IsBlueprintAppraisal: rows.Any(row => row.IsBlueprintAppraisal)))
             .OrderByDescending(item => item.Value.HasValue)
             .ThenByDescending(item => item.Value)
             .Take(count)
