@@ -1441,6 +1441,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         bool includeLocationInLocalApi;
         EveUtils.Client.ViewModels.Activity.CompactRunStyle compactRunStyle;
         bool openRunsCompact;
+        bool autoUploadRuns = await (_services.GetService<EveUtils.Client.Runs.EveWorkbenchRunAutoPublisher>()?.IsAutoUploadAsync() ?? Task.FromResult(false));
         bool valueBlueprintsInLoot;
         using (var scope = _services.CreateScope())
         {
@@ -1480,7 +1481,7 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
             loadImages, _theme?.Current ?? FactionTheme.Gallente, SdeVersionLabel(), ApplySettingsAsync, openDetailAfterImport, toastPosition,
             localApiEnabled, localApiPort, localApiStatusLabel, localApi, checkUpdatesOnStartup, _clipboardWatch, initialCategory, openFleetRunWindow,
             autoPublishFleetRuns, shares.IsShared(MetricKind.Loot), shares.IsShared(MetricKind.MiningYield), autoStartMissions, autoStartSites,
-            _weekStart?.FirstDay ?? Calendar.WeekStartService.SystemDefault(), includeNightlyBuilds, _services.GetService<IUpdateService>(), offerHomefrontRuns, RunSetupAgainAsync, includeLocationInLocalApi, OpenWidgetManager, shares.IsKillmailShared(), followFleetCommanderEnd, compactRunStyle, openRunsCompact, valueBlueprintsInLoot);
+            _weekStart?.FirstDay ?? Calendar.WeekStartService.SystemDefault(), includeNightlyBuilds, _services.GetService<IUpdateService>(), offerHomefrontRuns, RunSetupAgainAsync, includeLocationInLocalApi, OpenWidgetManager, shares.IsKillmailShared(), followFleetCommanderEnd, compactRunStyle, openRunsCompact, valueBlueprintsInLoot, autoUploadRuns);
     }
 
     /// <summary>Opens the About dialog: app identity + version, creator credits with portraits,
@@ -1572,6 +1573,10 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
                 EveUtils.Client.Runs.CompactRunSettings.OpenCompactKey, result.OpenRunsCompact ? "true" : "false"));
             // A run window that is up and compact changes with the preference at once.
             _activityWindow?.UseCompactStyle(result.CompactRunStyle);
+            if (_services.GetService<EveUtils.Client.Runs.EveWorkbenchRunAutoPublisher>() is { } uploader)
+            {
+                await uploader.SetAutoUploadAsync(result.AutoUploadRuns);
+            }
             await dispatcher.Send(new SetSettingCommand(
                 EveUtils.Client.Runs.FleetRunAutoPublisher.EnabledSettingKey, result.AutoPublishFleetRuns ? "true" : "false"));
             await dispatcher.Send(new SetSettingCommand(
@@ -1927,6 +1932,8 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         await RefreshCharactersAsync();
         await RefreshFittingsTabsAsync();
     }
+
+    public EveUtils.Client.Runs.EveWorkbenchRunAutoPublisher? EveWorkbenchPublisher => _services?.GetService<EveUtils.Client.Runs.EveWorkbenchRunAutoPublisher>();
 
     /// <summary>What stands in the way of removing a character: an active fleet it commands, or a run still on the
     /// clock (ET-345).</summary>

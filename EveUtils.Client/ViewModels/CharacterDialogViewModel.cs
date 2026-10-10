@@ -92,6 +92,103 @@ public partial class CharacterDialogViewModel : ObservableObject, IDisposable
     {
         ApplyCharacterSnapshot();
         await ReloadServerLinksAsync();
+        await ReloadEveWorkbenchKeyAsync(refresh: true);
+    }
+
+    // ── EVE Workbench (optional, ET-325) ── the API key an upload uses: the pilot's own, or its EVE Workbench account's.
+    private global::EveUtils.Client.Runs.ResolvedEveWorkbenchKey? _key;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(SaveEveWorkbenchKeyCommand))]
+    private string _eveWorkbenchKeyInput = "";
+
+    /// <summary>Which of the three states the pilot is in: own key, alt on another key, or no key.</summary>
+    [ObservableProperty] private string _eveWorkbenchKeyState = "";
+
+    /// <summary>The EVE Workbench account's characters, or why a key was not accepted.</summary>
+    [ObservableProperty] private string _eveWorkbenchKeyStatus = "";
+
+    /// <summary>The how-to and the links, only while the pilot has no usable key.</summary>
+    [ObservableProperty] private bool _showEveWorkbenchKeyHelp;
+
+    public string EveWorkbenchHowTo => global::EveUtils.Client.Runs.EveWorkbenchLinks.HowTo;
+
+    [RelayCommand]
+    private static void OpenAbyssTrackerTokens() => global::EveUtils.Client.Runs.EveWorkbenchLinks.Open(global::EveUtils.Client.Runs.EveWorkbenchLinks.AbyssTrackerTokens);
+
+    [RelayCommand]
+    private static void OpenEveJournalTokens() => global::EveUtils.Client.Runs.EveWorkbenchLinks.Open(global::EveUtils.Client.Runs.EveWorkbenchLinks.EveJournalTokens);
+
+    /// <summary>Set while a key was saved that does not cover this pilot: EVE Workbench would refuse its runs.</summary>
+    [ObservableProperty] private string _eveWorkbenchPilotWarning = "";
+
+    /// <summary>Only an own key can be cleared here; an alt's key belongs to its main.</summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(ClearEveWorkbenchKeyCommand))]
+    private bool _hasOwnEveWorkbenchKey;
+
+    private async Task ReloadEveWorkbenchKeyAsync(bool refresh)
+    {
+        if (_owner.EveWorkbenchPublisher is not { } publisher)
+        {
+            return;
+        }
+
+        _key = await publisher.KeyForPilotAsync(CharacterId, refresh);
+        HasOwnEveWorkbenchKey = _key is { IsOwn: true };
+        ShowEveWorkbenchKeyHelp = _key is null or { Invalid: true };
+        EveWorkbenchKeyState = _key switch
+        {
+            null => "No key. Runs are only uploaded when you choose to, and then a key is needed.",
+            { Invalid: true } => "API key invalid — set it again.",
+            { IsOwn: true } => $"Own key (main: {_key.MainName}).",
+            _ => $"Uses the key of {_key.MainName} (alt). You can still enter an own key below."
+        };
+        EveWorkbenchKeyStatus = _key is null ? "" : "Characters on this account: " + string.Join(", ", _key.Characters.Select(c => c.Name)) + ".";
+    }
+
+    private bool CanSaveEveWorkbenchKey => !string.IsNullOrWhiteSpace(EveWorkbenchKeyInput);
+
+    [RelayCommand(CanExecute = nameof(CanSaveEveWorkbenchKey))]
+    private async Task SaveEveWorkbenchKey()
+    {
+        if (_owner.EveWorkbenchPublisher is not { } publisher)
+        {
+            return;
+        }
+
+        global::EveUtils.Client.Runs.EveWorkbenchKeyCheck check = await publisher.SaveKeyAsync(EveWorkbenchKeyInput);
+        EveWorkbenchPilotWarning = "";
+        if (check.Verdict == global::EveUtils.Client.Runs.EveWorkbenchKeyVerdict.Valid)
+        {
+            EveWorkbenchKeyInput = "";
+            await ReloadEveWorkbenchKeyAsync(refresh: false);
+            if (check.Characters.All(c => c.Id != CharacterId))
+            {
+                EveWorkbenchPilotWarning = $"This key does not cover {Name}: EVE Workbench would refuse this pilot's runs (\"Character does not belong to the authenticated account\").";
+            }
+        }
+        else
+        {
+            EveWorkbenchKeyStatus = check.Verdict == global::EveUtils.Client.Runs.EveWorkbenchKeyVerdict.Invalid
+                ? "EVE Workbench did not accept this key."
+                : "EVE Workbench could not be reached to check the key; it was not saved.";
+        }
+    }
+
+    private bool CanClearEveWorkbenchKey => HasOwnEveWorkbenchKey;
+
+    [RelayCommand(CanExecute = nameof(CanClearEveWorkbenchKey))]
+    private async Task ClearEveWorkbenchKey()
+    {
+        if (_owner.EveWorkbenchPublisher is not { } publisher || _key is not { IsOwn: true } key)
+        {
+            return;
+        }
+
+        await publisher.ClearKeyAsync(key.MainId);
+        EveWorkbenchPilotWarning = "";
+        await ReloadEveWorkbenchKeyAsync(refresh: false);
     }
 
     private void ApplyCharacterSnapshot()

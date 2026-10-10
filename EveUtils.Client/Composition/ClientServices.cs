@@ -83,7 +83,8 @@ public static class ClientServices
         // AddSharedServices so its MarketPriceAppraisalProvider registers after this and stays the plain
         // GetService<IAppraisalProvider>() default; IAppraisalProviderSelector honors the user's actual choice.
         services.AddSingleton<ITokenProtector>(_ => new AesGcmTokenProtector(DataDirectory()));
-        services.AddSingleton<IEveWorkbenchKeyStore, EveWorkbenchKeyStore>();
+        services.AddSingleton<EveWorkbenchKeyStore>();
+        services.AddSingleton<IEveWorkbenchKeyStore, EveUtils.Client.Runs.EveWorkbenchKeyStoreWithRing>();
         services.AddSingleton<IAppraisalProvider, EveWorkbenchAppraisalProvider>();
         services.AddSharedServices(ExecutionHost.Client);    // central marker-scan over the shared assembly
         services.AddAutoServices(typeof(ClientServices).Assembly, ExecutionHost.Client); // host-only marker-tagged services
@@ -97,6 +98,11 @@ public static class ClientServices
         {
             client.BaseAddress = new Uri("https://images.evetech.net/");
             // Nice CCP citizen: identify the app on the image server too, though it is not ESI itself.
+            client.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", AppInfo.UserAgent(ExecutionHost.Client));
+        });
+        services.AddHttpClient(EveUtils.Client.Runs.EveWorkbenchRunPublisher.HttpClientName, client =>
+        {
+            client.Timeout = TimeSpan.FromSeconds(60);
             client.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", AppInfo.UserAgent(ExecutionHost.Client));
         });
         services.AddSingleton<ITypeImageProvider>(sp => new TypeImageProvider(

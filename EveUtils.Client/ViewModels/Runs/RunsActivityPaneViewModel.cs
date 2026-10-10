@@ -6,6 +6,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using Material.Icons;
 using EveUtils.Client.Formatting;
 using EveUtils.Shared.Modules.Runs.Enums;
@@ -59,6 +60,8 @@ public sealed partial class RunsActivityPaneViewModel : ViewModelBase
     private readonly Func<ActivityOverviewRowViewModel, CancellationToken, Task<RunsPaneDetail>> _readDetail;
     private readonly Func<string?> _publishTargetName;
     private readonly TimeSpan _readDelay;
+    private readonly Func<ActivityOverviewRowViewModel, Task>? _uploadToEveWorkbench;
+    private readonly Func<ActivityOverviewRowViewModel, Task<string?>>? _uploadStatus;
     private CancellationTokenSource? _reading;
 
     /// <param name="readDetail">The activity's runs and loot, read off the UI thread by whoever owns the dispatcher.</param>
@@ -68,8 +71,12 @@ public sealed partial class RunsActivityPaneViewModel : ViewModelBase
     public RunsActivityPaneViewModel(
         Func<ActivityOverviewRowViewModel, CancellationToken, Task<RunsPaneDetail>> readDetail,
         Func<string?>? publishTargetName = null,
-        TimeSpan? readDelay = null)
+        TimeSpan? readDelay = null,
+        Func<ActivityOverviewRowViewModel, Task>? uploadToEveWorkbench = null,
+        Func<ActivityOverviewRowViewModel, Task<string?>>? uploadStatus = null)
     {
+        _uploadToEveWorkbench = uploadToEveWorkbench;
+        _uploadStatus = uploadStatus;
         _readDetail = readDetail;
         _publishTargetName = publishTargetName ?? (() => null);
         _readDelay = readDelay ?? ReadDelay;
@@ -83,6 +90,25 @@ public sealed partial class RunsActivityPaneViewModel : ViewModelBase
     private ActivityOverviewRowViewModel? _row;
 
     public bool HasActivity => Row is not null;
+
+    // ── Upload to EVE Workbench (ET-325): a deliberate act on the activity's own saved runs, optional by design ──
+
+    [ObservableProperty] private bool _canUploadToEveWorkbench;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasUploadStatus))]
+    private string? _uploadStatusText;
+
+    public bool HasUploadStatus => UploadStatusText is not null;
+
+    [RelayCommand]
+    private async Task UploadToEveWorkbenchAsync()
+    {
+        if (Row is { } row && _uploadToEveWorkbench is not null)
+        {
+            await _uploadToEveWorkbench(row);
+        }
+    }
 
     // ── Head, straight off the row ──────────────────────────────────────────────────────────────────────────────
 
@@ -204,6 +230,8 @@ public sealed partial class RunsActivityPaneViewModel : ViewModelBase
             row.ScanSignatureText
         }.OfType<string>());
         HasAutoSavedRun = row.HasAutoSavedRun;
+        CanUploadToEveWorkbench = row.IsFlownByOwnCharacter && _uploadToEveWorkbench is not null;
+        UploadStatusText = null;
         HasSyncState = row.HasSyncText;
         SyncText = row.SyncText;
         SyncIcon = row.SyncIcon;
@@ -274,6 +302,7 @@ public sealed partial class RunsActivityPaneViewModel : ViewModelBase
                 detail.Crew[index].IsAlternate = index % 2 == 1;
             Crew.ReconcileTo(detail.Crew);
             CrewStatus = detail.Status;
+            UploadStatusText = _uploadStatus is null ? null : await _uploadStatus(row);
             if (detail.Crew.Count > 0)
                 CrewSummaryText = detail.Crew.Count == 1 ? "solo" : $"{detail.Crew.Count} pilots";
             HasLoot = detail.LootItemCount > 0;

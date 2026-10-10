@@ -101,6 +101,29 @@
                     </Button>
                 </StackPanel>
 
+                <Separator IsVisible="{Binding CanRemove}"/>
+                <StackPanel Spacing="4" IsVisible="{Binding CanRemove}">
+                    <TextBlock Classes="label" Text="EVE WORKBENCH (OPTIONAL)"/>
+                    <TextBlock Text="{Binding EveWorkbenchKeyState}" FontSize="12" TextWrapping="Wrap" Foreground="{StaticResource TextBrightBrush}"/>
+                    <TextBlock Text="{Binding EveWorkbenchKeyStatus}" FontSize="11" TextWrapping="Wrap" Foreground="{StaticResource TextBrush}"
+                               IsVisible="{Binding EveWorkbenchKeyStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                    <StackPanel Spacing="6" IsVisible="{Binding ShowEveWorkbenchKeyHelp}">
+                        <TextBlock Text="{Binding EveWorkbenchHowTo}" FontSize="11" TextWrapping="Wrap" Foreground="{StaticResource TextBrush}"/>
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <Button Classes="rowaction" Content="Open on Abyss Tracker" Command="{Binding OpenAbyssTrackerTokensCommand}"/>
+                            <Button Classes="rowaction" Content="Open on EVE Journal" Command="{Binding OpenEveJournalTokensCommand}"/>
+                        </StackPanel>
+                    </StackPanel>
+                    <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
+                        <TextBox Grid.Column="0" FontSize="11" PasswordChar="•" PlaceholderText="API key, to upload runs to EVE Workbench"
+                                 Text="{Binding EveWorkbenchKeyInput}"/>
+                        <Button Grid.Column="1" Content="SAVE" FontSize="10" Command="{Binding SaveEveWorkbenchKeyCommand}"/>
+                        <Button Grid.Column="2" Content="CLEAR" FontSize="10" Command="{Binding ClearEveWorkbenchKeyCommand}"/>
+                    </Grid>
+                    <TextBlock Text="{Binding EveWorkbenchPilotWarning}" FontSize="11" TextWrapping="Wrap" Foreground="{StaticResource WarnBrush}"
+                               IsVisible="{Binding EveWorkbenchPilotWarning, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                </StackPanel>
+
                 <!-- Remove character (ET-345): destructive, so last. The confirmation opens in place; an active fleet this
                      character commands answers the click with the way out instead. -->
                 <Separator IsVisible="{Binding CanRemove}"/>
