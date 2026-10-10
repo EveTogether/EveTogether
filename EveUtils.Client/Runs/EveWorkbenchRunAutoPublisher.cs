@@ -49,6 +49,7 @@ public sealed class EveWorkbenchRunAutoPublisher : ISingletonService, IDisposabl
     private readonly ILogger<EveWorkbenchRunAutoPublisher> _logger;
     private readonly IDisposable _runsChanged;
     private readonly Lock _gate = new();
+    private readonly SemaphoreSlim _stateLock = new(1, 1);
     private readonly HashSet<Guid> _changedRunIds = [];
     private Task _work = Task.CompletedTask;
     private TimeSpan _backoff = FirstBackoff;
@@ -100,19 +101,14 @@ public sealed class EveWorkbenchRunAutoPublisher : ISingletonService, IDisposabl
     /// discard). A run never passed here is never sent.</summary>
     public async Task UploadAsync(IReadOnlyCollection<Guid> runIds, CancellationToken cancellationToken = default)
     {
-        Dictionary<Guid, PublishEntry> state = await _LoadStateAsync(cancellationToken);
         List<Run> runs;
         await using (ClientDbContext db = await _contextFactory.CreateDbContextAsync(cancellationToken))
         {
             runs = await db.Set<Run>().AsNoTracking().Where(run => runIds.Contains(run.Id)).ToListAsync(cancellationToken);
         }
 
-        _Record(state, runs, "Pending", null);
-        await using (AsyncServiceScope scope = _scopeFactory.CreateAsyncScope())
-        {
-            await _SaveStateAsync(scope.ServiceProvider, state, cancellationToken);
-            _Announce(runs);
-        }
+        await _UpdateStateAsync(state => _Record(state, runs, "Pending", null), cancellationToken);
+        _Announce(runs);
 
         _ = _Enqueue(token => _PublishAsync([.. runIds], token));
     }
@@ -254,6 +250,7 @@ public sealed class EveWorkbenchRunAutoPublisher : ISingletonService, IDisposabl
         var publisher = new EveWorkbenchRunPublisher(_httpClientFactory.CreateClient(EveWorkbenchRunPublisher.HttpClientName),
             new LogAdapter(_logger));
         bool anyFailed = false;
+        Dictionary<Guid, PublishEntry> changes = [];
         // One request series per key: pilots of one EVE Workbench account share a key, and a refused key hits only them.
         List<(ResolvedEveWorkbenchKey? Key, List<Run> Runs)> groups = [];
         foreach (Run run in runs)
@@ -274,19 +271,18 @@ public sealed class EveWorkbenchRunAutoPublisher : ISingletonService, IDisposabl
         {
             if (key is null || key.Invalid)
             {
-                _Record(state, keyRuns, key is null ? "NoKey" : "KeyInvalid", key is null ? "no API key" : "API key refused");
+                _Record(changes, keyRuns, key is null ? "NoKey" : "KeyInvalid", key is null ? "no API key" : "API key refused");
                 continue;
             }
 
-            _Record(state, keyRuns, "Pending", null);
-            await _SaveStateAsync(scope.ServiceProvider, state, cancellationToken);
+            await _UpdateStateAsync(current => _Record(current, keyRuns, "Pending", null), cancellationToken);
             IReadOnlyList<RunWirePayload> payloads = await synchronization.BuildPayloadsAsync(keyRuns, cancellationToken);
             EveWorkbenchRunPublishOutcome outcome = await publisher.PublishAsync(true, baseUrl, key.Token, payloads, cancellationToken);
             foreach (EveWorkbenchRunImportResult result in outcome.Results)
             {
                 if (keyRuns.FirstOrDefault(run => run.Id == result.ExternalId) is { } run)
                 {
-                    state[run.Id] = new PublishEntry(run.CharacterId, run.Revision, result.Status.ToString(), result.Reason, DateTime.UtcNow);
+                    changes[run.Id] = new PublishEntry(run.CharacterId, run.Revision, result.Status.ToString(), result.Reason, DateTime.UtcNow);
                     if (result.Status == EveWorkbenchRunImportStatus.Rejected)
                     {
                         _logger.LogWarning("EVE Workbench rejected run {RunId}: {Reason}", run.Id, result.Reason);
@@ -294,7 +290,7 @@ public sealed class EveWorkbenchRunAutoPublisher : ISingletonService, IDisposabl
                 }
             }
 
-            _Record(state, [.. keyRuns.Where(run => outcome.Pending.Any(payload => payload.Run.Id == run.Id))],
+            _Record(changes, [.. keyRuns.Where(run => outcome.Pending.Any(payload => payload.Run.Id == run.Id))],
                 outcome.Unauthorized ? "KeyInvalid" : "Failed", outcome.Unauthorized ? "API key refused" : "EVE Workbench did not answer");
             if (outcome.Unauthorized)
             {
@@ -305,7 +301,14 @@ public sealed class EveWorkbenchRunAutoPublisher : ISingletonService, IDisposabl
             anyFailed |= outcome.Pending.Count > 0 && !outcome.Unauthorized;
         }
 
-        await _SaveStateAsync(scope.ServiceProvider, state, cancellationToken);
+        // Merged into a fresh copy: an upload may have marked other runs pending while the HTTP calls were out.
+        await _UpdateStateAsync(current =>
+        {
+            foreach ((Guid id, PublishEntry entry) in changes)
+            {
+                current[id] = entry;
+            }
+        }, cancellationToken);
         _ScheduleRetryIfNeeded(anyFailed);
         _Announce(runs);
     }
@@ -441,6 +444,23 @@ public sealed class EveWorkbenchRunAutoPublisher : ISingletonService, IDisposabl
         return string.IsNullOrEmpty(json)
             ? []
             : JsonSerializer.Deserialize<Dictionary<Guid, PublishEntry>>(json) ?? [];
+    }
+
+    /// <summary>Every change of the state is one load-change-save under this lock, so no writer overwrites another's.</summary>
+    private async Task _UpdateStateAsync(Action<Dictionary<Guid, PublishEntry>> change, CancellationToken cancellationToken)
+    {
+        await _stateLock.WaitAsync(cancellationToken);
+        try
+        {
+            Dictionary<Guid, PublishEntry> state = await _LoadStateAsync(cancellationToken);
+            change(state);
+            await using AsyncServiceScope scope = _scopeFactory.CreateAsyncScope();
+            await _SaveStateAsync(scope.ServiceProvider, state, cancellationToken);
+        }
+        finally
+        {
+            _stateLock.Release();
+        }
     }
 
     private static Task _SaveStateAsync(IServiceProvider services, Dictionary<Guid, PublishEntry> state, CancellationToken cancellationToken) =>

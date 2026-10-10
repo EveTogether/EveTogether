@@ -101,6 +101,36 @@ public sealed class EveWorkbenchKeyRingTests
         Assert.Equal("EWB ✓ uploaded", lastStatus);
     }
 
+    /// <summary>An upload made while another publish is out on HTTP is still sent: the publish must not overwrite its pending row.</summary>
+    [AvaloniaFact]
+    public async Task Upload_WhilePublishIsInFlight_IsStillSent()
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        var handler = new RecordingHandler();
+        using TestClientInstance instance = TestClientInstance.Create(services =>
+            services.AddSingleton<IHttpClientFactory>(new HandlerFactory(handler)));
+        var publisher = instance.Services.GetRequiredService<EveWorkbenchRunAutoPublisher>();
+        var dispatcher = instance.Services.GetRequiredService<IDispatcher>();
+        await instance.Services.GetRequiredService<EveWorkbenchKeyRing>().AddAsync("main-key", cancellationToken);
+        DateTime started = DateTime.UtcNow.AddMinutes(-20);
+        Guid[] runIds = new Guid[2];
+        for (int i = 0; i < runIds.Length; i++)
+        {
+            runIds[i] = (await dispatcher.Send(new StartRunCommand(Main, ActivityKind.Site, started, 1234, "Blood Refuge", 30000142), cancellationToken)).Value;
+            await dispatcher.Send(new SaveRunCommand(runIds[i], started.AddMinutes(15), started.AddMinutes(16), [], [], [], []), cancellationToken);
+        }
+
+        await publisher.WhenIdleAsync();
+        handler.Hold = new TaskCompletionSource();
+        await publisher.UploadAsync([runIds[0]], cancellationToken);
+        await handler.Entered.Task.WaitAsync(TimeSpan.FromSeconds(10), cancellationToken);
+        await publisher.UploadAsync([runIds[1]], cancellationToken);
+        handler.Hold.SetResult();
+        await publisher.WhenIdleAsync();
+
+        Assert.Contains(handler.Bodies, body => body.Contains(runIds[1].ToString()));
+    }
+
     private sealed class HandlerFactory(RecordingHandler handler) : IHttpClientFactory
     {
         public HttpClient CreateClient(string name) => new(handler, disposeHandler: false);
@@ -110,6 +140,9 @@ public sealed class EveWorkbenchKeyRingTests
     {
         public string? ImportToken { get; private set; }
         public string? ImportBody { get; private set; }
+        public System.Collections.Concurrent.ConcurrentQueue<string> Bodies { get; } = new();
+        public TaskCompletionSource? Hold { get; set; }
+        public TaskCompletionSource Entered { get; } = new();
 
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
@@ -122,6 +155,13 @@ public sealed class EveWorkbenchKeyRingTests
             {
                 ImportToken = request.Headers.GetValues("Character-Access-Token").Single();
                 ImportBody = await request.Content!.ReadAsStringAsync(cancellationToken);
+                Bodies.Enqueue(ImportBody);
+                Entered.TrySetResult();
+                if (Hold is { } hold)
+                {
+                    await hold.Task.WaitAsync(cancellationToken);
+                }
+
                 string[] ids = [.. System.Text.RegularExpressions.Regex.Matches(ImportBody, "\"Id\":\"([0-9a-f-]{36})\"").Select(match => match.Groups[1].Value)];
                 body = "{\"Error\":false,\"Results\":[" + string.Join(",", ids.Select(id => $"{{\"ExternalId\":\"{id}\",\"Status\":0}}")) + "]}";
             }
