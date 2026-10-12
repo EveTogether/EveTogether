@@ -145,6 +145,21 @@ public class CrashLogTests
         Assert.False(CrashLog.IsAbandonedGrpcRetry(new AggregateException()));
     }
 
+    /// <summary>ET-505: a bus read the client cancelled (its receive deadline, or decouple) leaves the same abandoned retry
+    /// task behind, now with Cancelled — still no crash, and still only when every inner exception has that shape.</summary>
+    [Fact]
+    public void AnAbandonedGrpcRetryTheClientCancelled_IsNotACrash_MixedWithAnythingElseItStillIs()
+    {
+        var cancelled = new global::Grpc.Core.RpcException(new global::Grpc.Core.Status(global::Grpc.Core.StatusCode.Cancelled,
+            "Call canceled by the client.", new OperationCanceledException()));
+        var unavailable = new global::Grpc.Core.RpcException(new global::Grpc.Core.Status(global::Grpc.Core.StatusCode.Unavailable, "down"));
+
+        Assert.True(CrashLog.IsAbandonedGrpcRetry(new AggregateException(cancelled)));
+        Assert.True(CrashLog.IsAbandonedGrpcRetry(new AggregateException(cancelled, unavailable)));
+        Assert.False(CrashLog.IsAbandonedGrpcRetry(new AggregateException(cancelled, new InvalidOperationException())));
+        Assert.False(CrashLog.IsAbandonedGrpcRetry(new AggregateException(new OperationCanceledException())));
+    }
+
     private static bool FileContains(string dir, string text)
     {
         var path = Path.Combine(dir, "app-errors.jsonl");

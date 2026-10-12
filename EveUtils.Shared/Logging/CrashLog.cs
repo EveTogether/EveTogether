@@ -25,8 +25,8 @@ public static class CrashLog
         {
             if (IsAbandonedGrpcRetry(e.Exception))
                 AppendLine(new LogEntry(DateTimeOffset.Now, LogLevel.Warning, "Transport",
-                    "A gRPC retry left a connection failure unobserved (network down); the bus reconnect loop already "
-                    + "handles this outage, so it is recorded here rather than as a crash",
+                    "A gRPC retry left a failed or client-cancelled call unobserved; the bus reconnect loop already "
+                    + "handles this, so it is recorded here rather than as a crash",
                     e.Exception.InnerException?.Message));
             else
                 Write("TaskScheduler.UnobservedTaskException", e.Exception);
@@ -40,12 +40,17 @@ public static class CrashLog
     /// <c>RetryCall.StartRetry</c> with no frame of ours, and the call shapes the app makes — unary awaited, duplex
     /// read, duplex write under the 2 s write deadline, channel connect, dispose mid-retry — each observed its fault when
     /// probed against an unresolvable host with the app's retry policy. With no task of ours to await, what is left is
-    /// not to call a network outage a crash, which is what three of these did at every wake-up (ET-308). Anything
-    /// else — any other status, any other exception — stays Critical.
+    /// not to call a network outage a crash, which is what three of these did at every wake-up (ET-308). A bus read
+    /// the client cancelled itself (receive deadline, decouple) abandons the same retry task with
+    /// <see cref="global::Grpc.Core.StatusCode.Cancelled"/> instead (ET-505). Anything else — any other status, any
+    /// other exception — stays Critical.
     /// </summary>
     internal static bool IsAbandonedGrpcRetry(AggregateException exception) =>
         exception.InnerExceptions.Count > 0
-        && exception.InnerExceptions.All(inner => inner is global::Grpc.Core.RpcException { StatusCode: global::Grpc.Core.StatusCode.Unavailable });
+        && exception.InnerExceptions.All(inner => inner is global::Grpc.Core.RpcException
+        {
+            StatusCode: global::Grpc.Core.StatusCode.Unavailable or global::Grpc.Core.StatusCode.Cancelled
+        });
 
     /// <summary>
     /// Call once, as the last line on a clean exit path. Its absence after a session is itself the signal (ET-197
