@@ -272,17 +272,17 @@ public sealed partial class MapViewModel : ObservableObject, IRefreshableModule,
     private MapFollowMode _followMode = MapFollowMode.Off;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsFollowing), nameof(IsFollowingCharacter), nameof(NeedsCharacterPick), nameof(FollowChipText),
+    [NotifyPropertyChangedFor(nameof(IsFollowing), nameof(IsFollowActive), nameof(IsFollowingCharacter), nameof(NeedsCharacterPick), nameof(FollowChipText),
         nameof(FollowStatusText), nameof(TrailResetText))]
     private MapCharacterRowViewModel? _followedCharacter;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsFollowing), nameof(IsFollowingFleet), nameof(NeedsFleetPick), nameof(FollowChipText), nameof(FollowStatusText),
+    [NotifyPropertyChangedFor(nameof(IsFollowing), nameof(IsFollowActive), nameof(IsFollowingFleet), nameof(NeedsFleetPick), nameof(FollowChipText), nameof(FollowStatusText),
         nameof(FleetChipText))]
     private MapFleetRowViewModel? _followedFleet;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(FollowChipText), nameof(FollowStatusText), nameof(FleetChipText))]
+    [NotifyPropertyChangedFor(nameof(IsFollowActive), nameof(FollowChipText), nameof(FollowStatusText), nameof(FleetChipText))]
     private bool _isFollowPaused;
 
     /// <summary>The system of the followed character, ringed on the map; -1 when there is none or the map does not hold it.</summary>
@@ -319,6 +319,8 @@ public sealed partial class MapViewModel : ObservableObject, IRefreshableModule,
     public bool IsFollowingCharacter => FollowMode == MapFollowMode.Character && FollowedCharacter is not null;
     public bool IsFollowingFleet => FollowMode == MapFollowMode.Fleet && FollowedFleet is not null;
     public bool IsFollowing => IsFollowingCharacter || IsFollowingFleet;
+    /// <summary>Following and not paused: the map is keeping the followed target in view right now.</summary>
+    public bool IsFollowActive => IsFollowing && !IsFollowPaused;
     public bool NeedsCharacterPick => FollowMode == MapFollowMode.Character && FollowedCharacter is null;
     public bool NeedsFleetPick => FollowMode == MapFollowMode.Fleet && FollowedFleet is null;
     public bool HasCharacters => Characters.Count > 0;

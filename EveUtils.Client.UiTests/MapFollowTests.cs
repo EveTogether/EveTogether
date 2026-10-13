@@ -367,6 +367,95 @@ public sealed class MapFollowTests
         Assert.Equal(1, moves);
     }
 
+    /// <summary>ET-506: the wheel and the zoom buttons change the depth only — following goes on, the target stays in the
+    /// middle (also with the pointer far from it), and the chosen depth survives the next jump.</summary>
+    [AvaloniaFact]
+    public async Task Zooming_KeepsFollowing_AroundTheTarget_AndTheChosenDepth()
+    {
+        using var world = await World.OpenAsync();
+        (Window window, StarMapControl map) = world.Show();
+        int moves = 0;
+        map.ViewMovedByUser += (_, _) => moves++;
+        world.Follow();
+        world.Jump(Jita);
+        Settle();
+        Point target = map.ScreenPointOf(world.IndexOf(Jita));
+        double depth = map.ZoomLevel;
+        Point pointerAway = map.TranslatePoint(new Point(40, 40), window) ?? default;
+
+        window.MouseWheel(pointerAway, new Vector(0, -3));
+        Settle();
+        double zoomedOut = map.ZoomLevel;
+        map.ZoomBy(2);
+        Settle();
+
+        Assert.True(zoomedOut < depth);
+        Assert.True(map.ZoomLevel > zoomedOut);
+        Assert.Equal(0, moves);
+        Assert.False(world.Model.IsFollowPaused);
+        Assert.True(world.Model.IsFollowActive);
+        Assert.Equal(target.X, map.ScreenPointOf(world.IndexOf(Jita)).X, 0.5);
+        Assert.Equal(target.Y, map.ScreenPointOf(world.IndexOf(Jita)).Y, 0.5);
+
+        double chosen = map.ZoomLevel;
+        world.Jump(Perimeter);
+        Settle();
+
+        Assert.Equal(chosen, map.ZoomLevel, 3);
+        Assert.False(world.Model.IsFollowPaused);
+    }
+
+    [AvaloniaFact]
+    public async Task ADragBelowTheThreshold_KeepsFollowing_AndOneAboveStopsIt_UntilResume()
+    {
+        using var world = await World.OpenAsync();
+        (Window window, StarMapControl map) = world.Show();
+        world.Follow();
+        world.Jump(Jita);
+        Settle();
+        Point target = map.ScreenPointOf(world.IndexOf(Jita));
+        Point from = map.TranslatePoint(new Point(map.Bounds.Width / 2, map.Bounds.Height / 2), window) ?? default;
+
+        window.MouseDown(from, MouseButton.Left);
+        window.MouseMove(from + new Vector(1, 1));
+        window.MouseUp(from + new Vector(1, 1), MouseButton.Left);
+
+        Assert.False(world.Model.IsFollowPaused);
+        Assert.True(world.Model.IsFollowActive);
+        Assert.Equal(target.X, map.ScreenPointOf(world.IndexOf(Jita)).X, 0.5);
+
+        window.MouseDown(from, MouseButton.Left);
+        window.MouseMove(from + new Vector(30, 20));
+        window.MouseUp(from + new Vector(30, 20), MouseButton.Left);
+
+        Assert.True(world.Model.IsFollowPaused);
+        Assert.False(world.Model.IsFollowActive);
+        Assert.NotEqual(target.X, map.ScreenPointOf(world.IndexOf(Jita)).X);
+
+        world.Model.ResumeFollowCommand.Execute(null);
+        Settle();
+
+        Assert.True(world.Model.IsFollowActive);
+        Assert.Equal(target.X, map.ScreenPointOf(world.IndexOf(Jita)).X, 0.5);
+        Assert.Equal(target.Y, map.ScreenPointOf(world.IndexOf(Jita)).Y, 0.5);
+    }
+
+    /// <summary>Not following, the pointer still anchors the wheel zoom and a zoom still counts as moving the map.</summary>
+    [AvaloniaFact]
+    public async Task Zooming_WhileNotFollowing_StillRaisesViewMovedByUser()
+    {
+        using var world = await World.OpenAsync();
+        (Window window, StarMapControl map) = world.Show();
+        int moves = 0;
+        map.ViewMovedByUser += (_, _) => moves++;
+        Point at = map.TranslatePoint(new Point(200, 200), window) ?? default;
+
+        window.MouseWheel(at, new Vector(0, 1));
+        map.ZoomBy(2);
+
+        Assert.Equal(2, moves);
+    }
+
     internal static void Settle()
     {
         var clock = Stopwatch.StartNew();
