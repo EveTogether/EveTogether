@@ -451,6 +451,7 @@
                                     Markers="{Binding Markers}"
                                     Trail="{Binding Trail}"
                                     FollowIndex="{Binding FollowIndex}"
+                                    IsFollowing="{Binding IsFollowActive}"
                                     FleetBadges="{Binding FleetBadges}"
                                     Clock="{Binding Clock}"
                                     SystemInfoSource="{Binding SystemInfo}"

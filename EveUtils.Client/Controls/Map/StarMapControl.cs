@@ -100,6 +100,11 @@ public sealed class StarMapControl : Control
     public static readonly StyledProperty<int> FollowIndexProperty =
         AvaloniaProperty.Register<StarMapControl, int>(nameof(FollowIndex), -1);
 
+    /// <summary>The owner is following something right now (not paused): zooming then keeps the followed centre instead of
+    /// the pointer, and does not count as the pilot moving the map.</summary>
+    public static readonly StyledProperty<bool> IsFollowingProperty =
+        AvaloniaProperty.Register<StarMapControl, bool>(nameof(IsFollowing));
+
     /// <summary>Fleet members per system, drawn as numbered badges with who is there on hover; null for none.</summary>
     public static readonly StyledProperty<IReadOnlyList<MapFleetBadge>?> FleetBadgesProperty =
         AvaloniaProperty.Register<StarMapControl, IReadOnlyList<MapFleetBadge>?>(nameof(FleetBadges));
@@ -143,6 +148,9 @@ public sealed class StarMapControl : Control
     private bool _hasView;
     private MapFocusRequest? _pendingFocus;
     private MapFocusRequest? _followFraming;
+    // The zoom the pilot chose while following, as a multiple of the fit scale: the followed focus keeps it instead of
+    // snapping back to its default depth on every jump.
+    private double? _followZoom;
 
     private Point? _pressedAt;
     private Point _pressedCenter;
@@ -169,6 +177,11 @@ public sealed class StarMapControl : Control
         Cursor = GrabCursor;
         DoubleTapped += (_, e) =>
         {
+            if (IsFollowing)
+            {
+                _ZoomAroundFollowed(DoubleTapZoom, animate: true);
+                return;
+            }
             _RaiseViewMovedByUser();
             Point at = e.GetPosition(this);
             _FlyTo(_ToWorldX(at.X), _ToWorldY(at.Y), _ClampScale(_scale * DoubleTapZoom), ZoomDuration);
@@ -223,6 +236,12 @@ public sealed class StarMapControl : Control
     {
         get => GetValue(FollowIndexProperty);
         set => SetValue(FollowIndexProperty, value);
+    }
+
+    public bool IsFollowing
+    {
+        get => GetValue(IsFollowingProperty);
+        set => SetValue(IsFollowingProperty, value);
     }
 
     public IReadOnlyList<MapFleetBadge>? FleetBadges
@@ -288,8 +307,30 @@ public sealed class StarMapControl : Control
 
     public void ZoomBy(double factor)
     {
+        if (IsFollowing)
+        {
+            _ZoomAroundFollowed(factor, animate: true);
+            return;
+        }
         _RaiseViewMovedByUser();
         _FlyTo(_centerX, _centerY, _ClampScale(_scale * factor), ZoomDuration);
+    }
+
+    // Zooming only changes how close the pilot sits to the action: the view stays on what is followed (where the running
+    // flight is headed, so a zoom during a jump does not strand the map halfway) and the chosen depth is remembered.
+    private void _ZoomAroundFollowed(double factor, bool animate)
+    {
+        double x = _flight?.ToX ?? _centerX, y = _flight?.ToY ?? _centerY;
+        double scale = _ClampScale((_flight?.ToScale ?? _scale) * factor);
+        _followZoom = scale / _fitScale;
+        if (animate)
+        {
+            _FlyTo(x, y, scale, ZoomDuration);
+            return;
+        }
+        _flight = null;
+        (_centerX, _centerY, _scale) = (x, y, scale);
+        _PublishView();
     }
 
     public void ZoomToFit()
@@ -308,6 +349,11 @@ public sealed class StarMapControl : Control
             _OnViewSizeChanged();
         else if (change.Property == RouteProperty)
             _OnRouteChanged();
+        else if (change.Property == IsFollowingProperty)
+        {
+            if (!IsFollowing)
+                _followZoom = null;
+        }
         else if (change.Property == FocusRequestProperty)
         {
             _followFraming = null;
@@ -338,6 +384,7 @@ public sealed class StarMapControl : Control
     private void _RaiseViewMovedByUser()
     {
         _followFraming = null;
+        _followZoom = null;
         ViewMovedByUser?.Invoke(this, EventArgs.Empty);
     }
 
@@ -355,7 +402,9 @@ public sealed class StarMapControl : Control
         base.OnPointerPressed(e);
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
             return;
-        _flight = null;
+        // A press that turns out a click must not strand a followed map halfway through its flight: it stops when the drag starts.
+        if (!IsFollowing)
+            _flight = null;
         _HidePopover();
         _pressedAt = e.GetPosition(this);
         _pressedCenter = new Point(_centerX, _centerY);
@@ -374,6 +423,13 @@ public sealed class StarMapControl : Control
             {
                 _isDragging = true;
                 Cursor = DragCursor;
+                if (_flight is not null)
+                {
+                    _flight = null;
+                    _pressedAt = pressed = at;
+                    _pressedCenter = new Point(_centerX, _centerY);
+                    moved = default;
+                }
                 _RaiseViewMovedByUser();
             }
             if (_isDragging)
@@ -421,6 +477,12 @@ public sealed class StarMapControl : Control
     protected override void OnPointerWheelChanged(PointerWheelEventArgs e)
     {
         base.OnPointerWheelChanged(e);
+        if (IsFollowing)
+        {
+            _ZoomAroundFollowed(Math.Pow(WheelStep, e.Delta.Y), animate: false);
+            e.Handled = true;
+            return;
+        }
         _RaiseViewMovedByUser();
         _flight = null;
         Point at = e.GetPosition(this);
@@ -526,15 +588,17 @@ public sealed class StarMapControl : Control
             .ToList();
         if (systems.Count == 0)
             return;
+        double? chosenScale = IsFollowing && _followFraming is not null && _followZoom is { } zoom ? _ClampScale(_fitScale * zoom) : null;
         if (request.Framing == MapFraming.Fleet)
         {
             double left = systems.Min(s => s.X), right = systems.Max(s => s.X), top = systems.Min(s => s.Y), bottom = systems.Max(s => s.Y);
-            _FlyTo((left + right) / 2, (top + bottom) / 2, FleetFrameScale(right - left, bottom - top, _ViewSize, _fitScale), FlyDuration);
+            _FlyTo((left + right) / 2, (top + bottom) / 2,
+                chosenScale ?? FleetFrameScale(right - left, bottom - top, _ViewSize, _fitScale), FlyDuration);
             return;
         }
         if (systems.Count == 1)
         {
-            _FlyTo(systems[0].X, systems[0].Y, Math.Max(_scale, _fitScale * (request.MinZoom ?? SystemFocusZoom)), FlyDuration);
+            _FlyTo(systems[0].X, systems[0].Y, chosenScale ?? Math.Max(_scale, _fitScale * (request.MinZoom ?? SystemFocusZoom)), FlyDuration);
             return;
         }
 
