@@ -26,8 +26,6 @@ public static partial class ClipboardShapeRecogniser
     [GeneratedRegex(@"^[A-Za-z]{3}-\d{3}$")]
     private static partial Regex SignatureId();
 
-    private const string MissionObjectivesHeaderSuffix = " Objectives";
-
     public static ClipboardShape Recognise(string? text)
     {
         if (string.IsNullOrWhiteSpace(text))
@@ -82,8 +80,7 @@ public static partial class ClipboardShapeRecogniser
             if (trimmed.Length == 0)
                 continue;
 
-            if (trimmed.Length > MissionObjectivesHeaderSuffix.Length
-                && trimmed.EndsWith(MissionObjectivesHeaderSuffix, StringComparison.Ordinal))
+            if (ClipboardMissionParser.TryReadObjectivesHeaderName(trimmed) is not null)
                 return true;
 
             if (++nonEmptyLinesSeen >= MaxHeaderSearchLines)

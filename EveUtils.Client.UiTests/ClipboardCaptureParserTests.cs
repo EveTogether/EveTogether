@@ -392,6 +392,33 @@ public sealed class ClipboardCaptureParserTests
         Assert.Null(ClipboardMissionParser.Parse(halfBlock));
     }
 
+    // ET-507: a mission whose objectives are met opens "<mission> Objectives Complete", a destroy objective carries
+    // only a Location row (no "Report to"), so the old " Objectives" suffix matched neither recogniser nor parser.
+    [Fact]
+    public void Recognise_ObjectivesCompleteCapture_YieldsMissionShape()
+    {
+        string text = _Fixture("mission-anomic-team-objectives-complete.txt");
+
+        Assert.Equal(ClipboardShape.Mission, ClipboardShapeRecogniser.Recognise(text));
+    }
+
+    [Fact]
+    public void ParseMission_ObjectivesCompleteCapture_ReadsNameSystemRewardsAndBonus()
+    {
+        string text = _Fixture("mission-anomic-team-objectives-complete.txt");
+
+        var capture = ClipboardMissionParser.Parse(text);
+
+        Assert.NotNull(capture);
+        Assert.Equal("Anomic Team", capture!.ObjectivesHeaderName);
+        Assert.Null(capture.AgentName);
+        Assert.Equal("Kamda", capture.LocationSystemName);
+        Assert.Equal(5 * 3600 + 44 * 60, capture.BonusWindowSeconds);
+        Assert.Contains(capture.Rewards, r => r.ParameterKey == RunParameterKey.Isk && r.Amount == 2_070_000m);
+        Assert.Contains(capture.Rewards, r => r.ParameterKey == RunParameterKey.LoyaltyPoints && r.Amount == 8_106m);
+        Assert.Contains(capture.Rewards, r => r.ParameterKey == RunParameterKey.BonusIsk && r.Amount == 2_340_000m);
+    }
+
     private static string _Fixture(string name)
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
