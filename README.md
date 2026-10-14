@@ -1,5 +1,7 @@
 # EVE Together
 
+CI draait alleen op PR naar staging en bij een release; de poort voor main is scripts/local-gate.sh
+
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
 [![.NET](https://img.shields.io/badge/.NET-10.0-512BD4.svg)](https://dotnet.microsoft.com/)
 
