@@ -46,11 +46,13 @@ public sealed class EveWorkbenchKeyRingTests
         Assert.Contains(runId.ToString(), handler.ImportBody);
     }
 
-    /// <summary>Auto-upload on sends a run saved afterwards by itself; off sends nothing.</summary>
+    /// <summary>Auto-upload on sends a run saved afterwards by itself; off sends nothing. A freerun has no kind in EVE
+    /// Workbench's contract, so it is neither sent nor offered.</summary>
     [AvaloniaTheory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public async Task Save_WithAutoUpload_IsSentOnlyWhenSwitchedOn(bool autoOn)
+    [InlineData(true, ActivityKind.Site)]
+    [InlineData(false, ActivityKind.Site)]
+    [InlineData(true, ActivityKind.Free)]
+    public async Task Save_WithAutoUpload_IsSentOnlyWhenSwitchedOn(bool autoOn, ActivityKind kind)
     {
         CancellationToken cancellationToken = TestContext.Current.CancellationToken;
         var handler = new RecordingHandler();
@@ -62,11 +64,13 @@ public sealed class EveWorkbenchKeyRingTests
         await publisher.SetAutoUploadAsync(autoOn, cancellationToken);
 
         DateTime started = DateTime.UtcNow.AddMinutes(-20);
-        Guid runId = (await dispatcher.Send(new StartRunCommand(Main, ActivityKind.Site, started, 1234, "Blood Refuge", 30000142), cancellationToken)).Value;
+        Guid runId = (await dispatcher.Send(new StartRunCommand(Main, kind, started, 1234, "Blood Refuge", 30000142), cancellationToken)).Value;
         await dispatcher.Send(new SaveRunCommand(runId, DateTime.UtcNow.AddMinutes(-1), DateTime.UtcNow, [], [], [], []), cancellationToken);
         await publisher.WhenIdleAsync();
 
-        Assert.Equal(autoOn, handler.ImportBody?.Contains(runId.ToString()) ?? false);
+        bool uploadable = kind != ActivityKind.Free;
+        Assert.Equal(autoOn && uploadable, handler.ImportBody?.Contains(runId.ToString()) ?? false);
+        Assert.Equal(uploadable, (await publisher.FindUploadableRunsAsync(null, runId, new HashSet<long> { Main }, cancellationToken)).Count == 1);
     }
 
     /// <summary>A finished upload tells the runs screens, so the chip moves to uploaded without a reselect.</summary>
@@ -206,7 +210,7 @@ public sealed class EveWorkbenchKeyRingTests
                     await hold.Task.WaitAsync(cancellationToken);
                 }
 
-                string[] ids = [.. System.Text.RegularExpressions.Regex.Matches(ImportBody, "\"Id\":\"([0-9a-f-]{36})\"").Select(match => match.Groups[1].Value)];
+                string[] ids = [.. System.Text.RegularExpressions.Regex.Matches(ImportBody, "\"ExternalId\":\"([0-9a-f-]{36})\"").Select(match => match.Groups[1].Value)];
                 body = "{\"Error\":false,\"Results\":[" + string.Join(",", ids.Select(id => $"{{\"ExternalId\":\"{id}\",\"Status\":0}}")) + "]}";
             }
 

@@ -93,7 +93,7 @@ public sealed class EveWorkbenchRunAutoPublisher : ISingletonService, IDisposabl
         await using ClientDbContext db = await _contextFactory.CreateDbContextAsync(cancellationToken);
         return await db.Set<Run>().AsNoTracking()
             .Where(run => (groupCode != null ? run.GroupCode == groupCode : run.Id == runId)
-                && run.State == RunState.Saved && run.DeletedAtUtc == null && ownCharacterIds.Contains(run.CharacterId))
+                && run.State == RunState.Saved && run.DeletedAtUtc == null && run.ActivityKind != ActivityKind.Free && ownCharacterIds.Contains(run.CharacterId))
             .Select(run => new UploadableRun(run.Id, run.CharacterId))
             .ToListAsync(cancellationToken);
     }
@@ -363,7 +363,7 @@ public sealed class EveWorkbenchRunAutoPublisher : ISingletonService, IDisposabl
         await using (ClientDbContext db = await _contextFactory.CreateDbContextAsync(cancellationToken))
         {
             candidates = [.. (await db.Set<Run>().AsNoTracking()
-                    .Where(run => fresh.Contains(run.Id) && run.State == RunState.Saved && run.DeletedAtUtc == null && run.SavedAtUtc >= since)
+                    .Where(run => fresh.Contains(run.Id) && run.State == RunState.Saved && run.DeletedAtUtc == null && run.ActivityKind != ActivityKind.Free && run.SavedAtUtc >= since)
                     .Select(run => new { run.Id, run.CharacterId })
                     .ToListAsync(cancellationToken)).Select(run => (run.Id, run.CharacterId))];
         }
