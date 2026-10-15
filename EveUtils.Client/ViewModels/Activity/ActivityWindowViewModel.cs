@@ -3871,7 +3871,8 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     {
         bool isGroup = Participants.Count > 1;
         List<RunIskParameter> parameters = [.. PendingParameters.Select(parameter => new RunIskParameter(
-            parameter.ParameterKey, parameter.Amount, parameter.BonusWindowSeconds, parameter.ObservedAtUtc))];
+            parameter.ParameterKey, parameter.Amount, parameter.BonusWindowSeconds, parameter.ObservedAtUtc,
+            parameter.UnitPriceIsk * parameter.Amount.GetValueOrDefault()))];
         var consumables = _sections.GetValueOrDefault(RunSectionId.Consumables) as ConsumablesWindowSectionViewModel;
         var mining = _sections.GetValueOrDefault(RunSectionId.Mining) as MiningWindowSectionViewModel;
         // The one thing a homefront's own payout is read from (ET-269): HOMEFRONT's own live decision, drawn

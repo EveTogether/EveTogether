@@ -32,7 +32,8 @@ public static class IskContributors
     // the summaries built over them.  4 (ET-296): every activity also stores what each character of it earned, so the
     // totals can show the pilot's own share rather than the whole group's. 5 (ET-463): loot, ore and filament are
     // valued at the price fixed on each line, so every summary is added up again once at the prices the migration fixed.
-    private const int Revision = 5;
+    // 6 (ET-509): a mission's item reward counts at its price, so every saved summary is added up again once.
+    private const int Revision = 6;
 
     /// <param name="nowUtc">Stands in for the stop of a run that is still going.</param>
     public static IskBreakdown Breakdown(IReadOnlyList<RunIskFacts> runs, DateTime nowUtc) =>
