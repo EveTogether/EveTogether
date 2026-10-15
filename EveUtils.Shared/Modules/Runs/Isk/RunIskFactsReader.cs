@@ -48,11 +48,19 @@ internal static class RunIskFactsReader
             MiningIskValue = MiningValue(run.MiningEntries, ores, prices),
             HasMining = run.MiningEntries.Count > 0,
             Parameters = [.. all.Select(parameter => new RunIskParameter(
-                parameter.ParameterKey, parameter.Amount, parameter.BonusWindowSeconds, parameter.ObservedAtUtc))],
+                parameter.ParameterKey, parameter.Amount, parameter.BonusWindowSeconds, parameter.ObservedAtUtc,
+                RewardItemValue(parameter, runPrices)))],
             StoppedAtUtc = run.StoppedAtUtc,
             HomefrontExpectedPayoutIsk = HomefrontExpectedPayout(run)
         };
     }
+
+    /// <summary>What a mission's item reward is worth, valued like loot (ET-509); null for any other row and for an item
+    /// with no type or no price yet.</summary>
+    public static decimal? RewardItemValue(RunParameter parameter, RunPrices prices) =>
+        parameter.ParameterKey is RunParameterKey.Item && prices.Reward(parameter) is { } unitPrice
+            ? unitPrice * parameter.Amount.GetValueOrDefault()
+            : null;
 
     /// <summary>Every type a set of runs needs a price for — loot kept in the tally, each run's resolved filament
     /// (ET-249) and each ore resolved by its exact SDE name, never guessed (ET-229) — so one price read serves them
@@ -70,7 +78,11 @@ internal static class RunIskFactsReader
             .GroupBy(parameter => parameter.RunId)
             .Select(FilamentTypeId)
             .OfType<int>();
-        return [.. loot.Concat(filaments).Concat(ores.TypeIds)
+        IEnumerable<int> rewards = parameters
+            .Where(parameter => parameter.ParameterKey is RunParameterKey.Item)
+            .Select(parameter => parameter.ItemTypeId)
+            .OfType<int>();
+        return [.. loot.Concat(filaments).Concat(rewards).Concat(ores.TypeIds)
             .Concat(LossLines(losses.Select(loss => loss.Killmail)).Select(line => line.ItemTypeId)).Distinct()];
     }
 
@@ -206,5 +218,7 @@ internal static class RunIskFactsReader
         run.LootCaptures.Where(capture => !capture.IsExcluded).SelectMany(capture => capture.Entries).Any(entry => entry.UnitPriceIsk is null)
         || run.MiningEntries.Any(entry => entry.UnitPriceIsk is null)
         || RunPrices.FilamentRow(parameters) is { UnitPriceIsk: null }
+        || parameters.Any(parameter => parameter.ParameterKey is RunParameterKey.Item && parameter.ItemTypeId is not null
+                                       && parameter.UnitPriceIsk is null)
         || losses.Any(loss => loss.HasLivePrice);
 }

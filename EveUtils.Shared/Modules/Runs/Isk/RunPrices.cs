@@ -44,5 +44,9 @@ internal sealed class RunPrices
 
     public decimal? Filament(int typeId) => _fixedFilament ?? _Live(typeId);
 
+    /// <summary>What an item reward row is worth per piece (ET-509): its own fixed price, else the live one.</summary>
+    public decimal? Reward(RunParameter parameter) =>
+        parameter.UnitPriceIsk ?? (parameter.ItemTypeId is { } typeId ? _Live(typeId) : null);
+
     private decimal? _Live(int typeId) => _live.TryGetValue(typeId, out double price) ? (decimal)price : null;
 }

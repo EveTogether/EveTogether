@@ -76,7 +76,9 @@ internal sealed class FillRunPriceSnapshotsCommandHandler(
             .Where(entry => entry.UnitPriceIsk == null)
             .Select(entry => entry.RunId);
         IQueryable<Guid> withOpenFilament = db.Set<RunParameter>()
-            .Where(parameter => parameter.ParameterKey == RunParameterKey.AbyssalFilamentTypeId && parameter.UnitPriceIsk == null)
+            .Where(parameter => (parameter.ParameterKey == RunParameterKey.AbyssalFilamentTypeId
+                                 || parameter.ParameterKey == RunParameterKey.Item && parameter.ItemTypeId != null)
+                                && parameter.UnitPriceIsk == null)
             .Select(parameter => parameter.RunId);
         List<Run> runs = await db.Set<Run>()
             .Where(run => !run.DeletedAtUtc.HasValue
