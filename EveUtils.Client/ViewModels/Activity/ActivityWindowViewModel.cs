@@ -16,6 +16,7 @@ using EveUtils.Client.Imaging;
 using EveUtils.Client.Notifications;
 using EveUtils.Client.Opsec;
 using EveUtils.Client.Platform;
+using EveUtils.Client.Runs;
 using EveUtils.Client.ViewModels.Runs;
 using EveUtils.Client.ViewModels.Runs.Sections;
 using EveUtils.Shared.Cqrs;
@@ -1153,6 +1154,12 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             DateTime resumedAtUtc = DateTime.UtcNow;
             await _ResumeAdoptedRunAsync(resumedAtUtc);
 
+            // ET-508: the combat a run that survives a restart had collected went down with the window that held it.
+            // EVE's own gamelog still has it, so it is read back from the start up to where the catch-up below
+            // takes over — bounty and mining are not, they were stored as they came in.
+            if (RunType.SurvivesRestart)
+                await _RestoreCombatAsync(run.StartedAtUtc, run.StoppedAtUtc.Value);
+
             // ET-258: what EVE wrote to this character's gamelog while the app was closed — lost until now, because
             // GameLogWatcher.Start baselines every file to its current length rather than replaying history. Only
             // for this deliberate resume: StartRunAsync's own STOP/START pause (the other _ResumeAdoptedRunAsync
@@ -1173,6 +1180,26 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     /// <see cref="GamelogClientService.AddHitAsync"/>, so the live DPS graph gets no historical peaks. A run nobody
     /// named for resume (<see cref="_targetRunId"/> null) never calls this at all.
     /// </summary>
+    /// <summary>ENEMIES and the combat timeline of this character between <paramref name="startedAtUtc"/> and
+    /// <paramref name="lastAliveUtc"/>, read back from the gamelog (ET-508) — the same bounded read
+    /// <see cref="_CatchUpGamelogAsync"/> does for the gap, and like it never fed to the live DPS meter.</summary>
+    private async Task _RestoreCombatAsync(DateTime startedAtUtc, DateTime lastAliveUtc)
+    {
+        if (_runCharacterId is not { } characterId || _runCharacterName is not { } characterName
+            || _sections.GetValueOrDefault(RunSectionId.Enemies) is not EnemiesWindowSectionViewModel enemiesSection
+            || _services.GetService<GamelogWatcherService>()?.CurrentDirectory is not { Length: > 0 } directory)
+            return;
+
+        IReadOnlyList<GameLogEvent> events =
+            await Task.Run(() => GameLogCatchUpReader.Read(directory, characterName, startedAtUtc, lastAliveUtc));
+        foreach (GameLogEvent gameEvent in events)
+        {
+            enemiesSection.RecordCatchUpTelemetry(characterId, gameEvent);
+            if (gameEvent is CombatEvent combat)
+                enemiesSection.RecordCatchUpSighting(characterId, combat.Target, combat.Timestamp);
+        }
+    }
+
     private async Task _CatchUpGamelogAsync(DateTime lastAliveUtc, DateTime resumedAtUtc)
     {
         if (_runCharacterId is not { } characterId || _runCharacterName is not { } characterName || _gamelog is null)
@@ -2089,6 +2116,10 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         if (_additionalCharacters.Count > 0)
             GroupCode ??= RunGroupCode.Create();
 
+        // A freerun started again from this window is a new one, named after its own start (ET-508).
+        if (RunType.ManualStart is ManualStartRequirement.GeneratedName)
+            SignatureName = FreerunName.For(startedAtUtc);
+
         using var scope = _services.CreateScope();
         CqrsDispatcher dispatcher = scope.ServiceProvider.GetRequiredService<CqrsDispatcher>();
         // The whole group is on the one site, so its system is resolved once here rather than per character — a
@@ -2111,11 +2142,12 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
                 SolarSystemId: solarSystemId,
                 GroupCode: GroupCode,
                 Signature: SignatureId,
-                FleetId: FleetId,
+                // A type that stays per pilot (a freerun, ET-508) is not filed under the fleet at all.
+                FleetId: RunType.SharesWithFleet ? FleetId : null,
                 // The one thing that turns a site start into a shared run. Not CanControl: a member steering their
                 // own run may control it without commanding anybody, and answering "am I the boss" is the
                 // authority's own job rather than something reassembled here (ET-147, ET-152).
-                IsFleetCommander: Authority.IsFleetCommander,
+                IsFleetCommander: RunType.SharesWithFleet && Authority.IsFleetCommander,
                 FitContentHash: fitContentHash,
                 FitNameSnapshot: fitNameSnapshot,
                 CharacterNameSnapshot: _runCharacterName,
@@ -2202,7 +2234,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
             SolarSystemId: solarSystemId,
             GroupCode: GroupCode,
             Signature: SignatureId,
-            FleetId: FleetId,
+            FleetId: RunType.SharesWithFleet ? FleetId : null,
             IsFleetCommander: false,
             FitContentHash: fitContentHash,
             FitNameSnapshot: fitNameSnapshot,
@@ -4051,6 +4083,9 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
 
     private async Task _ApplySignatureSafelyAsync(string? id, string? group, string name, IReadOnlyList<SdeSite> sites)
     {
+        if (_KeepsRunOverCopy(name))
+            return;
+
         try
         {
             await ApplySignatureAsync(id, group, name, sites);
@@ -4073,6 +4108,9 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     /// </summary>
     public async Task ApplySignatureAsync(string? id, string? group, string name, IReadOnlyList<SdeSite> sites)
     {
+        if (_KeepsRunOverCopy(name))
+            return;
+
         if (RunState is ActivityRunState.NotStarted || _IsSameRun(SignatureId, SignatureName, id, name))
         {
             _pendingCopy = null;
@@ -4093,6 +4131,21 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         StopRun(DateTime.UtcNow);
         _SignatureDecision($"the open {OpsecText.Mark(SignatureName)} run is not this one, so this waits", name);
         Refresh(DateTime.UtcNow);
+    }
+
+    /// <summary>A freerun on this window goes on through a copied signature or mission (ET-508): the copy is dropped,
+    /// never held to wait, and the run is neither stopped nor renamed. Only while it has a run — a window still
+    /// waiting to start has nothing to keep. The automatic start the copy brought along is dropped too, or a freerun
+    /// paused on STOP would pick its clock back up on a copied site.</summary>
+    private bool _KeepsRunOverCopy(string copied)
+    {
+        if (!RunType.IgnoresCopiedSites || RunId is null || RunState is ActivityRunState.NotStarted or ActivityRunState.Saved)
+            return false;
+
+        StartsOnArrival = false;
+        FreerunCopyGuard.Tell(_services.GetService<IToastService>(), SignatureName, OpsecText.Mark(copied) ?? "the copy");
+        _SignatureDecision("a freerun is going, so the copy is ignored", copied);
+        return true;
     }
 
     private void _SetSignature(string? id, string? group, string name, IReadOnlyList<SdeSite> sites)
@@ -4128,6 +4181,9 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
     private async Task _ApplyMissionSafelyAsync(int? agentId, int? missionLevel, int? solarSystemId, string? agentName,
         IReadOnlyList<RunParameterInput> parameters)
     {
+        if (_KeepsRunOverCopy(agentName ?? "a mission"))
+            return;
+
         // A run that is not this one was going: the same wait a copied signature gets, for the same reason. Guarded
         // on a named agent because the waiting copy is what a new window is later built from, and a window has to
         // open on something the pilot recognises rather than on a stand-in this method made up. A copied mission opens

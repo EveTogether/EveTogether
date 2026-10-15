@@ -33,6 +33,7 @@ public sealed class KillmailRunLinkTests
 {
     private const int Pilot = 90000001;
     private const int KSpace = 30000142;
+    private const int OtherKSpace = 30002187;
     private const int Abyss = 32000001;
     private const int Rifter = 587;
     private const int Slasher = 585;
@@ -79,6 +80,19 @@ public sealed class KillmailRunLinkTests
     {
         KillmailRunMatch match = KillmailRunLinker.Match(_Loss(1, StartedAtUtc.AddMinutes(5), Abyss, Rifter),
             [_Run(kind, null)], [], StoppedAtUtc);
+
+        Assert.Equal(expectedCandidates, match.CandidateCount);
+    }
+
+    /// <summary>ET-508 AC-3. A freerun roams, so a loss systems away from where it started is still its loss, where a
+    /// site run's own system rules it out. Red without the freerun arm in the place rule.</summary>
+    [Theory]
+    [InlineData(ActivityKind.Site, 0)]
+    [InlineData(ActivityKind.Free, 1)]
+    public void Match_ALossInAnotherSystem_FitsOnlyAFreerun(ActivityKind kind, int expectedCandidates)
+    {
+        KillmailRunMatch match = KillmailRunLinker.Match(_Loss(1, StartedAtUtc.AddMinutes(5), OtherKSpace, Rifter),
+            [new LinkableRun(Guid.NewGuid(), Pilot, kind, KSpace, StartedAtUtc, StoppedAtUtc, null)], [], StoppedAtUtc);
 
         Assert.Equal(expectedCandidates, match.CandidateCount);
     }

@@ -38,6 +38,7 @@ public static class RunTypeResolver
             ActivityKind.Mission => RunTypeId.Mission,
             ActivityKind.Abyssal => RunTypeId.Abyssal,
             ActivityKind.Mining => RunTypeId.Mining,
+            ActivityKind.Free => RunTypeId.Free,
             ActivityKind.Site => _ResolveSite(signatureGroupSnapshot, siteTypeId, sde, siteName),
             _ => RunTypeId.Unknown
         };

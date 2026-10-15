@@ -88,8 +88,11 @@ public sealed partial class LootWindowSectionViewModel : RunWindowSection
                 nameof(ActivityLootMode.Clipboard) => ActivityLootMode.Clipboard,
                 // Nothing chosen yet (ET-384): an abyssal run has a hold worth naming from the start, so start + end
                 // hold is the default rather than something to find; other kinds have no hold to name and keep the
-                // clipboard-only default.
-                _ => Context.Kind is ActivityKind.Abyssal ? ActivityLootMode.CargoDiff : ActivityLootMode.Clipboard
+                // clipboard-only default. A freerun is the same (ET-508): it has no site to copy loot from, so the hold
+                // at start and at the end is what it brought home.
+                _ => Context.Kind is ActivityKind.Abyssal or ActivityKind.Free
+                    ? ActivityLootMode.CargoDiff
+                    : ActivityLootMode.Clipboard
             };
         }
 

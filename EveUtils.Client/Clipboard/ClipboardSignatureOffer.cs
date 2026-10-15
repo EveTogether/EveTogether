@@ -148,6 +148,9 @@ public sealed class ClipboardSignatureOffer : ISingletonService, IDisposable
     {
         try
         {
+            if (await FreerunCopyGuard.IgnoresCopyAsync(_services, _toasts, copiedByCharacter, "the copied signature"))
+                return;
+
             // The pilots who could be flying this site: the same InGameCharacters rule the run window's own START
             // question uses. One is not a question. Seeing none is not knowing, so the known characters stand in.
             var registry = _services.GetService<ICharacterRegistry>();

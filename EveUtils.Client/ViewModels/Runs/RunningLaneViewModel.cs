@@ -22,7 +22,7 @@ namespace EveUtils.Client.ViewModels.Runs;
 /// the exact bug <c>SetRunStoppedCommand</c> was written to close.
 /// </summary>
 public sealed partial class RunningLaneViewModel(Character character, CharacterFaceViewModel face,
-    Func<RunningLaneViewModel, Task> act) : ViewModelBase
+    Func<RunningLaneViewModel, Task> act, Func<RunningLaneViewModel, Task>? startFreerun = null) : ViewModelBase
 {
     public Character Character { get; } = character;
 
@@ -31,6 +31,8 @@ public sealed partial class RunningLaneViewModel(Character character, CharacterF
     public CharacterFaceViewModel Face { get; } = face;
 
     public string StartTooltip => $"{CharacterText} · start a run";
+
+    public string FreerunTooltip => $"{CharacterText} · start a freerun now";
 
     /// <summary>The run on this lane, or null when the pilot is sitting still.</summary>
     public RunningRunDto? Run { get; private set; }
@@ -80,4 +82,9 @@ public sealed partial class RunningLaneViewModel(Character character, CharacterF
 
     [RelayCommand]
     private Task ActAsync() => act(this);
+
+    /// <summary>FREERUN (ET-508): the one start that needs no screen, since a freerun asks nothing — not even a
+    /// name. Only for a pilot sitting still: a running lane opens its run window instead.</summary>
+    [RelayCommand]
+    private Task StartFreerunAsync() => !IsRunning && startFreerun is not null ? startFreerun(this) : Task.CompletedTask;
 }

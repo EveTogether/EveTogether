@@ -176,6 +176,40 @@ public sealed class GamelogCatchUpTests
         resumed.Dispose();
     }
 
+    /// <summary>
+    /// ET-508: a freerun survives a restart with its combat. What the window held before the app went down — here a
+    /// fight that never reached any window at all, which is the same loss — is read back from the gamelog between the
+    /// run's start and its last sign of life, beside the catch-up of the gap. Red while only the gap is read.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task ResumingAFreerun_ReadsItsCombatBackFromTheStart()
+    {
+        using var harness = await ActivityWindowHarness.CreateAsync();
+        IDispatcher dispatcher = harness.Services.GetRequiredService<IDispatcher>();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        DateTime startedAtUtc = DateTime.UtcNow.AddSeconds(-10);
+        Guid runId = (await dispatcher.Send(new StartRunCommand(ActivityWindowHarness.CharacterId, ActivityKind.Free,
+            startedAtUtc, 0, "Freerun 2030-01-01 12:00", null, CharacterNameSnapshot: ActivityWindowHarness.CharacterName,
+            SiteTypeSource: SiteTypeSource.Uncatalogued), cancellationToken)).Value;
+        await dispatcher.Send(new TouchRunAliveCommand(runId, DateTime.UtcNow.AddSeconds(-3)), cancellationToken);
+        await File.WriteAllTextAsync(Path.Combine(harness.GamelogDirectory, "20300101_140000_90000001.txt"),
+            _SessionHeader(ActivityWindowHarness.CharacterName, startedAtUtc)
+            + _IncomingCombatLine(startedAtUtc.AddSeconds(2), 48, "Centii Servant") + "\n",
+            cancellationToken);
+        await harness.StartWatchingAsync();
+        await dispatcher.Send(new StopRunsLeftRunningCommand(DateTime.UtcNow), cancellationToken);
+
+        ActivityWindowViewModel resumed = new(ActivityKind.Free, harness.Services);
+        resumed.UseCharacter(ActivityWindowHarness.CharacterId, ActivityWindowHarness.CharacterName);
+        resumed.ResumeRun(runId);
+        await resumed.LoadAsync();
+        Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+
+        Assert.Equal(ActivityRunState.Running, resumed.RunState);
+        Assert.Equal("Centii Servant", Assert.Single(resumed.Enemies().EnemyObservations).EnemyName);
+        resumed.Dispose();
+    }
+
     /// <summary>AC-3, and the other half of the guard: the in-window STOP/START pause shares
     /// <c>_ResumeAdoptedRunAsync</c> with ET-254's deliberate resume, but never names a run to resume — the live
     /// tail never stopped for it, so nothing here may ever run a catch-up read on top of what the tail already
