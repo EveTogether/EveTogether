@@ -42,6 +42,8 @@ public sealed class RunGroupListItem
         ActivityKind.Abyssal => "Abyssal",
         ActivityKind.Site => "Site",
         ActivityKind.Mission => "Mission",
-        _ => "Mining",
+        ActivityKind.Mining => "Mining",
+        ActivityKind.Free => "Freerun",
+        _ => "Run",
     };
 }

@@ -83,6 +83,19 @@ public sealed record RunTypeDefinition
     /// including AAR and an ordinary mining fleet: MINING then shows the fleet's total with no "remaining" line,
     /// since there is no fixed figure to subtract it from.</summary>
     public int? SiteMiningCapacityUnits { get; init; }
+
+    /// <summary>Whether a start in a fleet becomes the fleet's shared run, steered by its commander. False keeps every
+    /// pilot's run their own even inside a fleet (a freerun, ET-508).</summary>
+    public bool SharesWithFleet { get; init; } = true;
+
+    /// <summary>A copied signature or mission leaves a running run of this type alone instead of stopping it to wait
+    /// (a freerun, ET-508: a site flown during a roam is part of the roam).</summary>
+    public bool IgnoresCopiedSites { get; init; }
+
+    /// <summary>A run of this type left going when the app closed picks itself back up at the next start, with the
+    /// combat it had read back from EVE's own gamelog, instead of waiting for the pilot to resume it (a freerun,
+    /// ET-508: a roam lasts hours, and a crash or an update must not end it).</summary>
+    public bool SurvivesRestart { get; init; }
 }
 
 /// <summary>What the manual run-start dialog needs to ask before <see cref="StartRunCommand"/> can fire, per
@@ -104,7 +117,11 @@ public enum ManualStartRequirement
     /// <summary>Nothing beyond character(s) and a backdated moment. Declared now for Mining even though nothing
     /// resolves to it yet (ET-229) — the same "reserve ≠ build" the row itself already practises (AGENTS.md §1):
     /// once a kind exists for it, the picker offers it with no change here.</summary>
-    None
+    None,
+
+    /// <summary>Nothing at all, not even a location: the run names itself after its start moment (a freerun,
+    /// ET-508 — no system in the name, for OPSEC).</summary>
+    GeneratedName
 }
 
 /// <summary>
@@ -115,7 +132,8 @@ public enum ManualStartRequirement
 ///
 /// Icons are Material.Icons.Avalonia (ET-74), outline variants where one exists and is legible at 14px, chosen to be
 /// distinct from each other with no colour at all: a skull, a database, a stone, a gas cylinder, a meteor, a tunnel,
-/// a clipboard, a pickaxe, a castle, a storm, a map marker — eleven different silhouettes, not eleven shades of one.
+/// a clipboard, a pickaxe, a castle, a storm, a map marker, a compass — twelve different silhouettes, not twelve
+/// shades of one.
 /// </summary>
 public static class RunTypeCatalogue
 {
@@ -275,6 +293,26 @@ public static class RunTypeCatalogue
             Space = RunSpace.AbyssalPocket,
             LootStrategies = AbyssalLootStrategies,
             ManualStart = ManualStartRequirement.Abyssal
+        },
+        // A roam, ESS or officer hunting (ET-508): every section a site has, so anything that happens is recorded,
+        // and MINING, LOSS and FLEET KILLS still show the moment they have something. No loot strategy: "full clear"
+        // and "blitzed" are a site's words. Per pilot, even in a fleet, and a copied site does not end it.
+        [RunTypeId.Free] = new()
+        {
+            Id = RunTypeId.Free,
+            Name = "Freerun",
+            Icon = MaterialIconKind.CompassOutline,
+            WindowTitle = "FREERUN",
+            Noun = "a freerun",
+            WindowSections = StandardWindow,
+            DetailSections =
+            [
+                RunSectionId.Activity, RunSectionId.Enemies, RunSectionId.Fleet, RunSectionId.Bounty, RunSectionId.Loot
+            ],
+            ManualStart = ManualStartRequirement.GeneratedName,
+            SharesWithFleet = false,
+            IgnoresCopiedSites = true,
+            SurvivesRestart = true
         }
     };
 

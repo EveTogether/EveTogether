@@ -84,6 +84,32 @@ public sealed class StartupResumeNoticeServiceTests
         Assert.Equal((90000001, "Ra Vinter"), opened.PickedCharacter);
     }
 
+    /// <summary>ET-508: a freerun survives a restart. It picks itself back up without asking and without taking the
+    /// keyboard, while a site run stopped by the same restart is still offered as before. Red while a freerun waits
+    /// for its Resume click like every other run.</summary>
+    [AvaloniaFact]
+    public async Task AFreerunLeftRunning_ResumesOnItsOwn_AndOtherRunsAreStillOffered()
+    {
+        var toasts = new RecordingToastService();
+        var dialogs = new RecordingDialogService();
+        using var instance = TestClientInstance.Create(services =>
+        {
+            services.AddSingleton<IToastService>(toasts);
+            services.AddSingleton<IDialogService>(dialogs);
+        });
+        var service = instance.Services.GetRequiredService<StartupResumeNoticeService>();
+        service.Stage([_StoppedRun(), new StoppedRunDto(Guid.NewGuid(), 90000002, ActivityKind.Free, "Freerun 2026-09-12 07:12", null, StoppedAtUtc)]);
+
+        service.ShowPending();
+        await service.ResumedRun;
+
+        ActivityWindowViewModel opened = Assert.Single(dialogs.ShownActivityWindows);
+        Assert.Equal(ActivityKind.Free, opened.Kind);
+        Assert.Equal(RunWindowOpenTrigger.ResumedAtStartup, Assert.Single(dialogs.ShownActivityWindowTriggers));
+        Assert.Equal($"EVE Together closed while {OpsecText.Mark("Sansha Hideaway")} was running",
+            Assert.Single(toasts.ActionToasts).Title);
+    }
+
     [AvaloniaFact]
     public void ClickingKeepStopped_OpensNoWindow()
     {

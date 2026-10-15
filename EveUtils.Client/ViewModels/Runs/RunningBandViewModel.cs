@@ -13,7 +13,9 @@ using EveUtils.Client.Runs;
 using EveUtils.Client.ViewModels.Activity;
 using EveUtils.Shared.Identity;
 using EveUtils.Shared.Messaging;
+using EveUtils.Shared.Modules.Runs.Commands;
 using EveUtils.Shared.Modules.Runs.Dtos;
+using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Runs.Queries;
 using EveUtils.Shared.Modules.Sde;
 using Microsoft.Extensions.DependencyInjection;
@@ -89,7 +91,8 @@ public sealed partial class RunningBandViewModel : ObservableObject
                 continue;
 
             lanes.Add(shown.GetValueOrDefault(id)
-                      ?? new RunningLaneViewModel(character, _faceOf(id, character.Name), _ActOnLaneAsync));
+                      ?? new RunningLaneViewModel(character, _faceOf(id, character.Name), _ActOnLaneAsync,
+                          _StartFreerunAsync));
         }
 
         Lanes.ReconcileTo(lanes);
@@ -143,7 +146,8 @@ public sealed partial class RunningBandViewModel : ObservableObject
     /// A character's avatar in RUNNING, or their running line's OPEN. Idle, it is the one-click start (Jithran,
     /// ET-290): the manual start screen with exactly this character in it and no picker. Type and site are chosen
     /// there — the type comes preset from that screen's own memory — because a run needs both, and one started on a
-    /// guessed site gets the wrong name. The band never starts a run itself.
+    /// guessed site gets the wrong name. The band never starts a run itself — FREERUN beside the avatar is the one
+    /// exception, see <see cref="_StartFreerunAsync"/>.
     /// </summary>
     private async Task _ActOnLaneAsync(RunningLaneViewModel lane)
     {
@@ -162,6 +166,34 @@ public sealed partial class RunningBandViewModel : ObservableObject
             fleetParticipation: _services.GetService<IFleetParticipation>(),
             localPresence: _services.GetService<ILocalCharacterPresence>(), isCharacterFixed: true,
             systemLocator: _services.GetService<ICharacterSystemLocator>()));
+    }
+
+    /// <summary>FREERUN beside an idle avatar (ET-508): the one start the band makes itself, because a freerun asks
+    /// nothing a guess could get wrong — no type, no site, no name. Stored for exactly this lane's character, then the
+    /// run window opens on it the same way the manual start hands over.</summary>
+    private async Task _StartFreerunAsync(RunningLaneViewModel lane)
+    {
+        if (lane.Character.EsiCharacterId is not { } characterId)
+            return;
+
+        DateTime startedAtUtc = DateTime.UtcNow;
+        Result<Guid> started = await _dispatcher.Send(new StartRunCommand(characterId, ActivityKind.Free, startedAtUtc,
+            SiteTypeId: 0,
+            SiteName: FreerunName.For(startedAtUtc),
+            SolarSystemId: _services.GetService<ICharacterSystemLocator>()?.SolarSystemIdOf(characterId),
+            CharacterNameSnapshot: lane.CharacterText,
+            SiteTypeSource: SiteTypeSource.Uncatalogued,
+            Origin: RunOrigin.Manual));
+        if (!started.IsSuccess)
+        {
+            _services.GetService<IToastService>()?.Show("Freerun not started",
+                started.Messages.FirstOrDefault()?.Text ?? "Could not start a freerun.", ToastKind.Error);
+            return;
+        }
+
+        var window = new ActivityWindowViewModel(ActivityKind.Free, _services);
+        window.UseCharacter(characterId, lane.CharacterText);
+        _dialogs.ShowActivityWindow(window);
     }
 
     private Task _OpenRunningGroupAsync(RunningGroupViewModel group)

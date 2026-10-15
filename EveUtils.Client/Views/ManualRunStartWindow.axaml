@@ -160,6 +160,10 @@
             <TextBox PlaceholderText="e.g. a belt or system name" Text="{Binding LocationName}"/>
         </StackPanel>
 
+        <!-- A freerun asks nothing (ET-508): no location either, since its name must not carry one. -->
+        <TextBlock Classes="hint" TextWrapping="Wrap" IsVisible="{Binding NamesItself}"
+                   Text="Records everything from start to STOP. Named after when it starts, without a location."/>
+
         <StackPanel Spacing="3" IsVisible="{Binding CanBackdate}">
             <!-- No STARTTIME field on purpose: starting now means the starttime is now. BACKDATE is the one
                  exception, for a run typed in after the fact (ET-163) — so the toggle sits with the two time

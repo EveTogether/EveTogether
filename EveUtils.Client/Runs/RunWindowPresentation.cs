@@ -13,7 +13,11 @@ public enum RunWindowOpenTrigger
     /// <summary>A clipboard capture opened this window and started its run by itself — a combat-site signature
     /// (ET-158) or a mission (ET-172 sub 4). The whole point is that the pilot never leaves EVE, so this must not
     /// take the keyboard either.</summary>
-    CopiedFromClipboard
+    CopiedFromClipboard,
+
+    /// <summary>The app picked a freerun back up on its own at startup (ET-508). Nobody clicked anything, and the
+    /// pilot may already be back in EVE.</summary>
+    ResumedAtStartup
 }
 
 public enum RunWindowActivation

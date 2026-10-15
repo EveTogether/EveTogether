@@ -364,6 +364,33 @@ public sealed class ManualRunStartTests
         Assert.Equal(SiteTypeSource.Uncatalogued, run.SiteTypeSource);
     }
 
+    /// <summary>ET-508: a freerun asks for nothing — no site, no name, not even the location Mining offers — and is
+    /// named "Freerun" with its own start moment, a backdated one included, never a place. Red while NEW RUN either
+    /// lacks the kind or leaves it unnamed.</summary>
+    [AvaloniaFact]
+    public async Task AFreerun_AsksForNothing_AndIsNamedAfterItsStartMoment()
+    {
+        using var instance = CreateInstance();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        var vm = CreateViewModel(instance);
+        vm.SelectedActivityKind = ActivityKind.Free;
+        vm.IsBackdated = true;
+        vm.BackdatedDate = new DateTimeOffset(new DateTime(2026, 10, 15));
+        vm.BackdatedTime = new TimeSpan(21, 34, 0);
+
+        Assert.True(vm.NamesItself);
+        Assert.False(vm.HasOptionalLocationName);
+        Assert.True(vm.StartCommand.CanExecute(null), "a freerun waited on something before START");
+
+        await vm.StartCommand.ExecuteAsync(null);
+
+        await using ClientDbContext db = await instance.Services.GetRequiredService<IDbContextFactory<ClientDbContext>>()
+            .CreateDbContextAsync(cancellationToken);
+        Run run = await db.Set<Run>().SingleAsync(cancellationToken);
+        Assert.Equal(ActivityKind.Free, run.ActivityKind);
+        Assert.Equal("Freerun 2026-10-15 21:34", run.SiteName);
+    }
+
     /// <summary>The optional belt/system name, typed rather than picked from a catalogue — Mining has no site
     /// behind it at all (ET-229).</summary>
     [AvaloniaFact]

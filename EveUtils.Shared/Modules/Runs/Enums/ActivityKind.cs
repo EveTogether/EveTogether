@@ -15,5 +15,9 @@ public enum ActivityKind
 
     /// <summary>A mining run with no site behind it at all (ET-229, ET-265) — the manual-start dialog is the only
     /// caller that resolves to this today, since nothing yet detects a live mining activity on its own.</summary>
-    Mining
+    Mining,
+
+    /// <summary>A freerun (ET-508): no site, no mission, no pocket — a roam, ESS or officer hunting, anything none of
+    /// the kinds above covers. It records whatever happens from start to STOP and is named after its start moment.</summary>
+    Free
 }

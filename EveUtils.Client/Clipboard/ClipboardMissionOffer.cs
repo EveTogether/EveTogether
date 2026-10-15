@@ -112,6 +112,9 @@ public sealed class ClipboardMissionOffer : ISingletonService, IDisposable
     {
         try
         {
+            if (await FreerunCopyGuard.IgnoresCopyAsync(_services, _toasts, copiedByCharacter, "the copied mission"))
+                return;
+
             var registry = _services.GetService<ICharacterRegistry>();
             List<Character> known = registry is null
                 ? []
