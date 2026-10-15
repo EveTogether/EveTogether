@@ -22,8 +22,8 @@ public interface IToastService
     /// <summary>
     /// Shows a toast carrying one or more action buttons (e.g. "open metrics", or Accept / Decline). Each
     /// <see cref="ToastAction"/> renders as a button that runs its callback and then dismisses the toast. A toast with
-    /// actions persists until the user picks one (or closes the card) rather than auto-expiring, so the choice isn't
-    /// missed. An empty <paramref name="actions"/> list falls back to the plain
+    /// a <see cref="ToastActionRole.Decision"/> action persists until the user picks one (or closes the card) rather
+    /// than auto-expiring, so the choice isn't missed; one with only Dismiss/Undo actions expires by itself. An empty <paramref name="actions"/> list falls back to the plain
     /// <see cref="Show(string, string?, ToastKind, TimeSpan?, ToastPosition?)"/>.
     /// </summary>
     void Show(string title, string? message, ToastKind kind, IReadOnlyList<ToastAction> actions,

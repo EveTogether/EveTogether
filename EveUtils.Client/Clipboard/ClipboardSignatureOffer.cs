@@ -105,7 +105,7 @@ public sealed class ClipboardSignatureOffer : ISingletonService, IDisposable
         }
 
         _toasts.Show("Signature copied", BuildMessage(rows), ToastKind.Information,
-            [new ToastAction("Close", () => CloseOffer(fingerprint))], () => CloseOffer(fingerprint), FeatureName);
+            [new ToastAction("Close", () => CloseOffer(fingerprint), Role: ToastActionRole.Dismiss)], () => CloseOffer(fingerprint), FeatureName);
     }
 
     // _openFingerprint is left standing here too, unlike the card path's own CloseOffer: it is what stops a second

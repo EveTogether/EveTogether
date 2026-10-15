@@ -59,7 +59,7 @@ public sealed class ToastService : IToastService, ISingletonService
         }
 
         // Action toasts carry buttons, which Avalonia's Notification can't render, so they're shown as plain content
-        // (ToastActionContent), and they never auto-dismiss — see ExpirationFor.
+        // (ToastActionContent); whether they auto-dismiss depends on their action roles — see ExpirationFor.
         var replacementVersion = _ReserveReplacement(replacementKey);
         ShowOnActiveWindow(position, manager => ShowAction(manager, title, message, kind, actions, onClosed, replacementKey,
             replacementVersion));
@@ -90,17 +90,29 @@ public sealed class ToastService : IToastService, ISingletonService
         }, []);
     }
 
+    internal static readonly TimeSpan InformationalExpiration = TimeSpan.FromSeconds(6);
+    internal static readonly TimeSpan UndoExpiration = TimeSpan.FromSeconds(15);
+
     /// <summary>
-    /// How long a card stays up: buttons make it a question, and a question that withdraws itself after five seconds
-    /// is not a question, so an action toast stays until it is answered or dismissed.
+    /// How long a card stays up: a <see cref="ToastActionRole.Decision"/> makes it a question, and a question that
+    /// withdraws itself after five seconds is not a question, so it stays until answered or dismissed. A card that
+    /// only offers Close or Undo is not waiting for anything: it expires, an Undo one a bit later.
     /// </summary>
     /// <remarks>
     /// Avalonia reads a null expiration as "use the default" (~5 s) rather than "never", which is what
     /// <see cref="TimeSpan.Zero"/> means — the two are easy to swap and the difference is invisible until a card
     /// vanishes while the user is reading it.
     /// </remarks>
-    internal static TimeSpan? ExpirationFor(IReadOnlyList<ToastAction> actions) =>
-        actions.Count > 0 ? TimeSpan.Zero : null;
+    internal static TimeSpan? ExpirationFor(IReadOnlyList<ToastAction> actions)
+    {
+        if (actions.Count == 0)
+            return null;
+
+        if (actions.Any(action => action.Role == ToastActionRole.Decision))
+            return TimeSpan.Zero;
+
+        return actions.Any(action => action.Role == ToastActionRole.Undo) ? UndoExpiration : InformationalExpiration;
+    }
 
     public void Dismiss(string replacementKey)
     {

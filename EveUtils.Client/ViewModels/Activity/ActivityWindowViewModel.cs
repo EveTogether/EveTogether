@@ -3060,7 +3060,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
                 ? "Every one of your own runs in this group is gone. Undo brings the whole group back."
                 : "This run is gone. Undo brings it back, unfinished, exactly where it left off.",
             ToastKind.Success,
-            [new ToastAction("Undo", () => _ = _UndoDiscardAsync(ownGroupCode, runId))]);
+            [new ToastAction("Undo", () => _ = _UndoDiscardAsync(ownGroupCode, runId), Role: ToastActionRole.Undo)]);
 
         // Thrown away means this window is done, so it closes (ET-155). It used to be cleaned out and left standing
         // ready for the next START, which is the very shape in which old run state kept coming back. Only here: a
@@ -3162,7 +3162,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         // the DISCARD button, and the window is already on its way out either way.
         _services.GetService<IToastService>()?.Show("Run thrown away",
             "This run is gone. Undo brings it back, unfinished, exactly where it left off.", ToastKind.Success,
-            [new ToastAction("Undo", () => _ = _UndoDiscardAsync(groupCode: null, runId))]);
+            [new ToastAction("Undo", () => _ = _UndoDiscardAsync(groupCode: null, runId), Role: ToastActionRole.Undo)]);
         return true;
     }
 

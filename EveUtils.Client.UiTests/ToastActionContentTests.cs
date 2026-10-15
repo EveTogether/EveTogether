@@ -101,6 +101,23 @@ public class ToastActionContentTests
     }
 
     /// <summary>
+    /// A toast that only offers Close or Undo is not a question: left sticky it piles up one card per discarded run
+    /// until clicked away (ET-511). Undo may linger a little longer than a plain notice, and one real decision among
+    /// the buttons keeps the whole card up.
+    /// </summary>
+    [Fact]
+    public void AToastWithOnlyDismissOrUndo_Expires_AndADecisionKeepsItUp()
+    {
+        var close = new ToastAction("Close", () => { }, Role: ToastActionRole.Dismiss);
+        var undo = new ToastAction("Undo", () => { }, Role: ToastActionRole.Undo);
+
+        Assert.Equal(ToastService.InformationalExpiration, ToastService.ExpirationFor([close]));
+        Assert.Equal(ToastService.UndoExpiration, ToastService.ExpirationFor([undo]));
+        Assert.True(ToastService.UndoExpiration > ToastService.InformationalExpiration);
+        Assert.Equal(TimeSpan.Zero, ToastService.ExpirationFor([new ToastAction("Exclude", () => { }), close]));
+    }
+
+    /// <summary>
     /// The buttons must fit inside the card with their inset intact. A cap that leaves exactly enough puts the last
     /// button against the border, which is what a fourth button or a wordier label would quietly do again.
     /// </summary>
