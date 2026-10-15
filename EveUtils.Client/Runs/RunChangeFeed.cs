@@ -34,5 +34,9 @@ public sealed class RunChangeFeed(IEventBus eventBus, ILogger<RunChangeFeed> log
     /// Not on the bus: nothing about the run itself changed.</summary>
     public void Announce(string groupCode) => _feed.Announce(new RunsChangedEvent(null, groupCode));
 
+    /// <summary>The same for one run, e.g. where its EVE Workbench upload stands (ET-325); also not on the bus, so the
+    /// publisher that announces it is not woken by its own news.</summary>
+    public void Announce(Guid runId, string? groupCode) => _feed.Announce(new RunsChangedEvent(runId, groupCode));
+
     public void Dispose() => _feed.Dispose();
 }

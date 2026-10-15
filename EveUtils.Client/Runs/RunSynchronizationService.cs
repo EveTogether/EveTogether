@@ -45,19 +45,12 @@ public sealed class RunSynchronizationService(
         IReadOnlyList<Run> pendingRuns = pushPending
             ? await _LoadPendingAsync(serverAddress, characterId, onlyGroupCodes, cancellationToken)
             : [];
-        // The one combat switch, read at push (ET-472): turning it off withdraws a run's combat on its next push.
-        bool combatWithheld = pendingRuns.Count > 0 && !(await shares.LoadAsync(cancellationToken)).IsShared(MetricKind.Dps);
-        IReadOnlyDictionary<Guid, RunCombatTimeline> timelines = combatWithheld
-            ? new Dictionary<Guid, RunCombatTimeline>()
-            : await _LoadCombatTimelinesAsync([.. pendingRuns.Select(run => run.Id)], cancellationToken);
+        IReadOnlyList<RunWirePayload> payloads = await BuildPayloadsAsync(pendingRuns, cancellationToken);
         var pushedRunIds = new HashSet<Guid>();
-        foreach (Run run in pendingRuns)
+        for (int index = 0; index < pendingRuns.Count; index++)
         {
-            var payload = new RunWirePayload
-            {
-                Run = RunWireData.FromEntity(run, timelines.GetValueOrDefault(run.Id), combatWithheld),
-                SentAtUnixMilliseconds = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
-            };
+            Run run = pendingRuns[index];
+            RunWirePayload payload = payloads[index];
             var push = await client.PushAsync(serverAddress, payload, characterId, cancellationToken);
             if (!push.Accepted)
                 return (false, push.Message);
@@ -77,6 +70,22 @@ public sealed class RunSynchronizationService(
         return (true, "Runs synchronized.");
     }
 
+    /// <summary>The wire payload of <paramref name="runs"/> (loaded with <see cref="IncludeGraph"/>), one per run in the
+    /// same order; what both the server push and the EVE Workbench publish send.</summary>
+    public async Task<IReadOnlyList<RunWirePayload>> BuildPayloadsAsync(IReadOnlyList<Run> runs, CancellationToken cancellationToken)
+    {
+        // The one combat switch, read at push (ET-472): turning it off withdraws a run's combat on its next push.
+        bool combatWithheld = runs.Count > 0 && !(await shares.LoadAsync(cancellationToken)).IsShared(MetricKind.Dps);
+        IReadOnlyDictionary<Guid, RunCombatTimeline> timelines = combatWithheld
+            ? new Dictionary<Guid, RunCombatTimeline>()
+            : await _LoadCombatTimelinesAsync([.. runs.Select(run => run.Id)], cancellationToken);
+        return [.. runs.Select(run => new RunWirePayload
+        {
+            Run = RunWireData.FromEntity(run, timelines.GetValueOrDefault(run.Id), combatWithheld),
+            SentAtUnixMilliseconds = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+        })];
+    }
+
     /// <summary>Pending for THIS server, never pending as such: a run queued for another coupled server must not
     /// travel here because a sync happened to run first.</summary>
     private async Task<IReadOnlyList<Run>> _LoadPendingAsync(string serverAddress, long characterId,
@@ -87,7 +96,7 @@ public sealed class RunSynchronizationService(
             run.CharacterId == characterId && run.SyncState == RunSyncState.Pending && run.SyncServerAddress == serverAddress);
         if (onlyGroupCodes is not null)
             pending = pending.Where(run => run.GroupCode != null && onlyGroupCodes.Contains(run.GroupCode));
-        return await _IncludeGraph(pending).ToListAsync(cancellationToken);
+        return await IncludeGraph(pending).ToListAsync(cancellationToken);
     }
 
     private async Task<IReadOnlyList<Run>> _LoadGroupRunsAsync(string[]? onlyGroupCodes, CancellationToken cancellationToken)
@@ -119,7 +128,7 @@ public sealed class RunSynchronizationService(
             .SetProperty(run => run.LastPushedAtUtc, lastPushedAtUtc), cancellationToken);
     }
 
-    private static IQueryable<Run> _IncludeGraph(IQueryable<Run> runs) => runs
+    public static IQueryable<Run> IncludeGraph(IQueryable<Run> runs) => runs
         .Include(run => run.LootCaptures).ThenInclude(capture => capture.Entries)
         .Include(run => run.LootCaptures).ThenInclude(capture => capture.UnrecognisedLines)
         .Include(run => run.BountyEntries)

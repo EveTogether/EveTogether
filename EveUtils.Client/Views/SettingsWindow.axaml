@@ -174,6 +174,13 @@
                     </StackPanel>
 
                     <StackPanel Spacing="3">
+                        <TextBlock Text="UPLOAD" Classes="label" FontSize="9"/>
+                        <CheckBox x:Name="AutoUploadRunsBox" Content="Automatically upload finished runs to EVE Workbench"/>
+                        <TextBlock Text="Off by default. Applies to runs you save from now on, for pilots that have an EVE Workbench API key. You can always upload a single run yourself from the runs screen."
+                                   FontSize="10" Opacity="0.6" TextWrapping="Wrap"/>
+                    </StackPanel>
+
+                    <StackPanel Spacing="3">
                         <TextBlock Text="RUN WINDOW" Classes="label" FontSize="9"/>
                         <TextBlock Text="Compact view style" FontSize="11"/>
                         <WrapPanel>

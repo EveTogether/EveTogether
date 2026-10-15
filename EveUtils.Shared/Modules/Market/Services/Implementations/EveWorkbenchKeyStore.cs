@@ -26,7 +26,7 @@ public sealed class EveWorkbenchKeyStore(IDispatcher dispatcher, ITokenProtector
 
         try
         {
-            return protector.Unprotect(_Decode(stored));
+            return protector.Unprotect(Decode(stored));
         }
         catch (Exception ex) when (ex is FormatException or CryptographicException)
         {
@@ -44,10 +44,10 @@ public sealed class EveWorkbenchKeyStore(IDispatcher dispatcher, ITokenProtector
             return;
         }
 
-        await dispatcher.Send(new SetSettingCommand(SettingKey, _Encode(protector.Protect(token))), cancellationToken);
+        await dispatcher.Send(new SetSettingCommand(SettingKey, Encode(protector.Protect(token))), cancellationToken);
     }
 
-    private static string _Encode(EncryptedToken token)
+    public static string Encode(EncryptedToken token)
     {
         var blob = new byte[token.Nonce.Length + token.Tag.Length + token.Cipher.Length];
         Buffer.BlockCopy(token.Nonce, 0, blob, 0, token.Nonce.Length);
@@ -56,7 +56,7 @@ public sealed class EveWorkbenchKeyStore(IDispatcher dispatcher, ITokenProtector
         return Convert.ToBase64String(blob);
     }
 
-    private static EncryptedToken _Decode(string encoded)
+    public static EncryptedToken Decode(string encoded)
     {
         var blob = Convert.FromBase64String(encoded);
         if (blob.Length < NonceSize + TagSize)
