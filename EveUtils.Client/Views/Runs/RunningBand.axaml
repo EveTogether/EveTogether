@@ -47,11 +47,20 @@
                     </ItemsControl.ItemsPanel>
                     <ItemsControl.ItemTemplate>
                         <DataTemplate DataType="vr:RunningLaneViewModel">
-                            <Button Classes="avatar" Command="{Binding ActCommand}"
-                                    ToolTip.Tip="{Binding StartTooltip}">
-                                <ctl:HexPortrait Size="22" Source="{Binding Face.Portrait}"
-                                                 Initial="{Binding Face.Initial}"/>
-                            </Button>
+                            <!-- The avatar opens the start screen; the compass beside it starts a freerun outright
+                                 (ET-508), one click with nothing asked. -->
+                            <StackPanel Orientation="Horizontal" Spacing="1" Margin="0,0,6,0">
+                                <Button Classes="avatar" Command="{Binding ActCommand}"
+                                        ToolTip.Tip="{Binding StartTooltip}">
+                                    <ctl:HexPortrait Size="22" Source="{Binding Face.Portrait}"
+                                                     Initial="{Binding Face.Initial}"/>
+                                </Button>
+                                <Button x:Name="FreerunButton" Classes="freerun" VerticalAlignment="Center"
+                                        Command="{Binding StartFreerunCommand}"
+                                        ToolTip.Tip="{Binding FreerunTooltip}">
+                                    <mi:MaterialIcon Classes="icon-sm" Kind="CompassOutline"/>
+                                </Button>
+                            </StackPanel>
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>

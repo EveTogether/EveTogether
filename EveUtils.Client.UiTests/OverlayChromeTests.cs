@@ -57,7 +57,7 @@ public class OverlayChromeTests
             Dispatcher.UIThread.RunJobs();
 
         var row = window.GetVisualDescendants().OfType<OverlayChromeButtons>().Single();
-        var buttons = row.GetVisualDescendants().OfType<Button>().ToList();
+        var buttons = row.GetVisualDescendants().OfType<Button>().Where(b => b.IsEffectivelyVisible).ToList();
         var pin = buttons.OfType<ToggleButton>().Single();
         var plain = buttons.Where(b => b is not ToggleButton).ToList();
         return (window, plain[0], pin, plain[1]);
@@ -187,7 +187,7 @@ public class OverlayChromeTests
             Dispatcher.UIThread.RunJobs();
 
         var row = window.GetVisualDescendants().OfType<OverlayChromeButtons>().Single();
-        Assert.Equal(3, row.GetVisualDescendants().OfType<Button>().Count());
+        Assert.Equal(3, row.GetVisualDescendants().OfType<Button>().Count(b => b.IsEffectivelyVisible));
         Assert.True(row.Bounds.Width <= 80, $"the three buttons take {row.Bounds.Width}px of a 250px title bar");
 
         Capture(window, "chrome-small");

@@ -216,8 +216,11 @@ public partial class ManualRunStartViewModel : ViewModelBase
     /// <summary>An abyssal's own START does not reach <see cref="StartRunCommand"/> at all — <see cref="_PrepareAbyssalRun"/>
     /// hands over a run that has not started yet, and the window it opens on already resolves its own live fleet
     /// membership the moment it does (ET-265). Offering a choice here that <see cref="StartAsync"/> never reads from
-    /// for that kind would be a control that looks like it does something and does not.</summary>
-    public bool ShowFleetChoice => HasFleetOptions && !IsAbyssal;
+    /// for that kind would be a control that looks like it does something and does not. A kind that never shares with
+    /// the fleet (a freerun, ET-508) has no choice to offer either.</summary>
+    public bool ShowFleetChoice => HasFleetOptions && !IsAbyssal && _SharesWithFleet;
+
+    private bool _SharesWithFleet => RunTypeCatalogue.For(SelectedActivityKind, null).SharesWithFleet;
 
     [ObservableProperty] private FleetStartOption _selectedFleetOption = SoloOption;
 
@@ -285,6 +288,7 @@ public partial class ManualRunStartViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(NeedsSite))]
     [NotifyPropertyChangedFor(nameof(NeedsMissionName))]
     [NotifyPropertyChangedFor(nameof(HasOptionalLocationName))]
+    [NotifyPropertyChangedFor(nameof(NamesItself))]
     [NotifyPropertyChangedFor(nameof(CanBackdate))]
     [NotifyPropertyChangedFor(nameof(StartButtonText))]
     [NotifyPropertyChangedFor(nameof(ShowFleetChoice))]
@@ -309,6 +313,10 @@ public partial class ManualRunStartViewModel : ViewModelBase
     /// <see cref="ManualStartRequirement.None"/>. Unlike a site or a mission, naming it is optional: a belt or a
     /// system typed in is a courtesy, not something <see cref="CanStart"/> waits on.</summary>
     public bool HasOptionalLocationName => _ManualStart == ManualStartRequirement.None;
+
+    /// <summary>Whether this kind asks for nothing at all and names itself after its start moment (a freerun,
+    /// ET-508) — no location field, since the name must not carry one.</summary>
+    public bool NamesItself => _ManualStart == ManualStartRequirement.GeneratedName;
 
     /// <summary>An abyssal run is not given a start time here — <see cref="_PrepareAbyssalRun"/> hands over a run
     /// that is not on the clock yet, so there is nothing for an earlier moment to move.</summary>
@@ -580,6 +588,14 @@ public partial class ManualRunStartViewModel : ViewModelBase
         // (ET-229, ET-265) — an optional belt/system typed in, with no catalogue behind it at all. Either of the
         // last two gives no dungeon id (0, the same sentinel RunRewardStorageTests' own mission rows use), and its
         // own SiteTypeSource so SiteTypeId's id space reads correctly back (ET-137).
+        //
+        // "Earlier moment" types a past moment; without it the starttime is simply now. Either way this is the
+        // only place StartedAtUtc is decided — nothing downstream corrects it (ET-163 AC-3: no measured start to
+        // correct means TimesCorrectedAtUtc stays untouched). A freerun is named after it (ET-508).
+        DateTime startedAtUtc = IsBackdated && BackdatedDate is { } date && BackdatedTime is { } time
+            ? DateTime.SpecifyKind(date.Date + time, DateTimeKind.Local).ToUniversalTime()
+            : DateTime.UtcNow;
+
         int siteTypeId;
         string? name;
         SiteTypeSource siteTypeSource;
@@ -603,6 +619,12 @@ public partial class ManualRunStartViewModel : ViewModelBase
             name = string.IsNullOrWhiteSpace(LocationName) ? null : LocationName.Trim();
             siteTypeSource = SiteTypeSource.Uncatalogued;
         }
+        else if (NamesItself)
+        {
+            siteTypeId = 0;
+            name = FreerunName.For(startedAtUtc);
+            siteTypeSource = SiteTypeSource.Uncatalogued;
+        }
         else
             return;
 
@@ -614,13 +636,6 @@ public partial class ManualRunStartViewModel : ViewModelBase
             : null;
         IReadOnlyList<RunParameterInput> rewardParameters = NeedsMissionName ? _BuildMissionRewardParameters() : [];
 
-        // "Earlier moment" types a past moment; without it the starttime is simply now. Either way this is the
-        // only place StartedAtUtc is decided — nothing downstream corrects it (ET-163 AC-3: no measured start to
-        // correct means TimesCorrectedAtUtc stays untouched).
-        DateTime startedAtUtc = IsBackdated && BackdatedDate is { } date && BackdatedTime is { } time
-            ? DateTime.SpecifyKind(date.Date + time, DateTimeKind.Local).ToUniversalTime()
-            : DateTime.UtcNow;
-
         // More than one picked shares one group code, minted here exactly like ActivityWindowViewModel._StoreRunAsync
         // mints one for the clipboard flow's own multi-pick (ET-210) — a single character keeps today's plain,
         // code-less run (AC-3: one character picked is exactly today's behaviour).
@@ -631,7 +646,7 @@ public partial class ManualRunStartViewModel : ViewModelBase
         // that is RunControlAuthority's job, off the same live membership ActivityWindowViewModel already reads its
         // own FleetId/IsFleetCommander from — this dialog only ever answers "am I in that fleet's roster right now",
         // never "am I the boss".
-        long? fleetId = SelectedFleetOption.FleetId;
+        long? fleetId = _SharesWithFleet ? SelectedFleetOption.FleetId : null;
         int? fleetCommanderCharacterId = fleetId is { } lookupFleetId
             ? (_fleetParticipation?.Current ?? [])
                 .FirstOrDefault(participant => participant.CharacterId == pilotCharacterId && participant.FleetId == lookupFleetId)

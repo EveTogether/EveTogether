@@ -219,20 +219,20 @@ public sealed class SdeSiteCatalogTests : IDisposable
     }
 
     [Fact]
-    public void SchemaVersion_IsEleven_AndAStoreFromThePreviousVersionReadsAsUnavailable()
+    public void SchemaVersion_IsThirteen_AndAStoreFromThePreviousVersionReadsAsUnavailable()
     {
-        Assert.Equal(11, SdeSchema.SchemaVersion);
+        Assert.Equal(13, SdeSchema.SchemaVersion);
 
-        // A v10 store lacks the map tables. Refusing it lets the importer rebuild before any map query runs.
+        // A store one version behind lacks the newest tables. Refusing it lets the importer rebuild before any query runs.
         Directory.CreateDirectory(_dir);
-        var dbPath = Path.Combine(_dir, "v10.db");
+        var dbPath = Path.Combine(_dir, "previous.db");
         using (var connection = new SqliteConnection($"Data Source={dbPath};Pooling=False"))
         {
             connection.Open();
             using var command = connection.CreateCommand();
             command.CommandText =
                 "CREATE TABLE Meta (key TEXT PRIMARY KEY, value TEXT NOT NULL) WITHOUT ROWID;" +
-                $"INSERT INTO Meta VALUES ('{SdeSchema.MetaSchemaVersion}', '10'), ('{SdeSchema.MetaBuildNumber}', '3539543');";
+                $"INSERT INTO Meta VALUES ('{SdeSchema.MetaSchemaVersion}', '{SdeSchema.SchemaVersion - 1}'), ('{SdeSchema.MetaBuildNumber}', '3539543');";
             command.ExecuteNonQuery();
         }
 

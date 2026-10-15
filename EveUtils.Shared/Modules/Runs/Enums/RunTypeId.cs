@@ -33,5 +33,8 @@ public enum RunTypeId
     /// own kind (Raid, Metaliminal Meteoroid, …) besides — read from <see cref="HomefrontCatalogue"/> by
     /// <see cref="Entities.Run.SiteTypeId"/>, never a second truth stored on the run (ET-228).</summary>
     Homefront,
-    Abyssal
+    Abyssal,
+
+    /// <summary>A freerun (ET-508), resolved straight from <see cref="ActivityKind.Free"/>.</summary>
+    Free
 }

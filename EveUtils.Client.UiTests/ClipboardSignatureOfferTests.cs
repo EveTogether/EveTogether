@@ -11,8 +11,10 @@ using EveUtils.Client.Opsec;
 using EveUtils.Client.Platform;
 using EveUtils.Client.Runs;
 using EveUtils.Client.ViewModels.Activity;
+using CqrsDispatcher = EveUtils.Shared.Cqrs.IDispatcher;
 using EveUtils.Shared.Identity;
 using Microsoft.Extensions.DependencyInjection;
+using EveUtils.Shared.Modules.Runs.Commands;
 using EveUtils.Shared.Modules.Sde.Dtos;
 using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Settings.Repositories;
@@ -630,6 +632,34 @@ public sealed class ClipboardSignatureOfferTests
         Assert.Equal("Destroyer, Frigate", opened.Activity().ShipRestrictionText);
         Assert.Equal($"{OpsecText.Mark("Suspicious Signal: Secure the Intel")} · Homefront Operations · Caldari State · DED 4 · ship-restricted",
             opened.Activity().HeaderSummary);
+    }
+
+    // ── ET-508 — a freerun goes on through a copied site ────────────────────────────────────────────
+
+    /// <summary>ET-508 AC-7: a site copied by the pilot on a freerun is ignored — no window, no question, one line
+    /// saying so — while the same copy from another of the user's characters still starts that character's run.
+    /// Red while a copy opens a site window whatever is running.</summary>
+    [AvaloniaTheory]
+    [InlineData("First Pilot", 0, true)]
+    [InlineData("Second Pilot", 1, false)]
+    public async Task ACopyDuringAFreerun_IsIgnored_OnlyWhenTheFreerunnerCopiedIt(
+        string copier, int expectedWindows, bool toldIgnored)
+    {
+        using var env = await Env.StartAsync(services =>
+            services.AddSingleton<ILocalCharacterPresence>(
+                new ActivityWindowHarness.StubPresence(inGame: true, 90000002)), copiedByCharacter: copier);
+        var registry = env.Services.GetRequiredService<ICharacterRegistry>();
+        await registry.AddOrUpdateAsync(new Character("First Pilot", 90000001));
+        await registry.AddOrUpdateAsync(new Character("Second Pilot", 90000002));
+        await env.Services.GetRequiredService<CqrsDispatcher>().Send(new StartRunCommand(90000001, ActivityKind.Free,
+            DateTime.UtcNow, 0, "Freerun 2026-10-15 20:00", null, SiteTypeSource: SiteTypeSource.Uncatalogued),
+            TestContext.Current.CancellationToken);
+
+        env.Copy("AAA-001\tCosmic Anomaly\tCombat Site\tHaunted Yard\t100.0%\t2.71 AU");
+        await ActivityWindowHarness.WaitUntil(() => env.Dialogs.ShownActivityWindows.Count > 0 || env.Toasts.Toasts.Count > 0);
+
+        Assert.Equal(expectedWindows, env.Dialogs.ShownActivityWindows.Count);
+        Assert.Equal(toldIgnored, env.Toasts.Toasts.Exists(toast => toast.Title == "Copy ignored"));
     }
 
     private static SdeSite Site(int dungeonId, string name, string? archetype = null, int? archetypeId = null,

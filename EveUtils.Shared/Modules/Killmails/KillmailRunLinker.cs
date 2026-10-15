@@ -63,9 +63,11 @@ public static class KillmailRunLinker
         }
 
         // The abyss has no system worth comparing: any abyssal run of the time may be it, and nothing else can be.
-        bool placeFits = AbyssalSpace.IsAbyssalSystem(loss.SolarSystemId)
-            ? run.ActivityKind is ActivityKind.Abyssal
-            : run.SolarSystemId is null || run.SolarSystemId == loss.SolarSystemId;
+        // A freerun roams (ET-508): the system it started in says nothing about where it lost a ship.
+        bool placeFits = run.ActivityKind is ActivityKind.Free
+                         || (AbyssalSpace.IsAbyssalSystem(loss.SolarSystemId)
+                             ? run.ActivityKind is ActivityKind.Abyssal
+                             : run.SolarSystemId is null || run.SolarSystemId == loss.SolarSystemId);
         return placeFits && (run.ShipTypeId is null || run.ShipTypeId == loss.VictimShipTypeId);
     }
 }

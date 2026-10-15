@@ -42,9 +42,25 @@ public sealed class StartupResumeNoticeService(IServiceProvider services) : ISin
         if (runs.Count == 0 || services.GetService<IToastService>() is not { } toasts)
             return;
 
-        foreach (StoppedRunDto run in runs)
+        // A freerun is not asked about (ET-508): it was meant to go on, so it picks itself back up. Only the latest:
+        // there is one run window, and a second would take it over — any other is offered like every other run.
+        StoppedRunDto? resumed = runs
+            .Where(run => RunTypeCatalogue.For(run.ActivityKind, run.SignatureGroupSnapshot, run.SiteTypeId).SurvivesRestart)
+            .MaxBy(run => run.StoppedAtUtc);
+        if (resumed is not null)
+        {
+            ResumedRun = _ResumeAsync(resumed, RunWindowOpenTrigger.ResumedAtStartup);
+            toasts.Show($"{OpsecText.Mark(resumed.SiteName)} picked back up",
+                "EVE Together closed while it was running. It goes on from its original start, and what it collected "
+                + "meanwhile is read back from the game log.", ToastKind.Information);
+        }
+
+        foreach (StoppedRunDto run in runs.Where(run => !ReferenceEquals(run, resumed)))
             _Offer(toasts, run);
     }
+
+    /// <summary>The freerun picked back up by <see cref="ShowPending"/>, so a test can await it.</summary>
+    internal Task ResumedRun { get; private set; } = Task.CompletedTask;
 
     private void _Offer(IToastService toasts, StoppedRunDto run)
     {
@@ -60,13 +76,13 @@ public sealed class StartupResumeNoticeService(IServiceProvider services) : ISin
             + "Resume picks the clock back up from its original start, with everything it already collected.",
             ToastKind.Information,
             [
-                new ToastAction("Resume", () => _ = _ResumeAsync(run), ToastActionStyle.Affirmative),
+                new ToastAction("Resume", () => _ = _ResumeAsync(run, RunWindowOpenTrigger.LocalUser), ToastActionStyle.Affirmative),
                 new ToastAction("Keep stopped", () => { })
             ],
             onClosed: null, replacementKey: $"startup-resume:{run.RunId}");
     }
 
-    private async Task _ResumeAsync(StoppedRunDto run)
+    private async Task _ResumeAsync(StoppedRunDto run, RunWindowOpenTrigger trigger)
     {
         if (services.GetService<IDialogService>() is not { } dialogs)
             return;
@@ -80,6 +96,6 @@ public sealed class StartupResumeNoticeService(IServiceProvider services) : ISin
                 is { EsiCharacterId: { } characterId } character)
             window.UseCharacter(characterId, character.Name);
         window.ResumeRun(run.RunId);
-        dialogs.ShowActivityWindow(window);
+        dialogs.ShowActivityWindow(window, trigger);
     }
 }

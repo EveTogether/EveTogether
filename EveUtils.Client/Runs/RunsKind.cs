@@ -10,7 +10,8 @@ public enum RunsKind
     Abyssal,
     Combat,
     Mission,
-    Mining
+    Mining,
+    Free
 }
 
 public static class RunsKinds
@@ -22,6 +23,7 @@ public static class RunsKinds
         RunsKind.Combat => type is RunTypeId.CombatSite or RunTypeId.Homefront,
         RunsKind.Mission => type is RunTypeId.Mission,
         RunsKind.Mining => type is RunTypeId.Mining or RunTypeId.OreSite or RunTypeId.GasSite,
+        RunsKind.Free => type is RunTypeId.Free,
         _ => false
     };
 }

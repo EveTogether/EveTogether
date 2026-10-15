@@ -61,7 +61,7 @@ public class IconSetTests
         var vm = new MainWindowViewModel();
         vm.Characters.Add(new CharacterViewModel(new Character("Jithran", 100))
         {
-            EsiTokenStatus = TokenStatus.NeedsReauth,
+            EsiTokenStatus = TokenStatus.TemporarilyUnavailable,
         });
         vm.Characters.Add(new CharacterViewModel(new Character("Lyra Custos", 200))
         {

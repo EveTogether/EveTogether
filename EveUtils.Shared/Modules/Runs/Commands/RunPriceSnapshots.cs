@@ -38,7 +38,9 @@ internal static class RunPriceSnapshots
                             && (!migrating || entry.PriceSource == PriceSnapshotSource.Migrated))
             .ToListAsync(cancellationToken);
         List<RunParameter> filaments = await db.Set<RunParameter>()
-            .Where(parameter => runIds.Contains(parameter.RunId) && parameter.ParameterKey == RunParameterKey.AbyssalFilamentTypeId
+            .Where(parameter => runIds.Contains(parameter.RunId)
+                                && (parameter.ParameterKey == RunParameterKey.AbyssalFilamentTypeId
+                                    || parameter.ParameterKey == RunParameterKey.Item && parameter.ItemTypeId != null)
                                 && (replaces || parameter.UnitPriceIsk == null)
                                 && (!migrating || parameter.PriceSource == PriceSnapshotSource.Migrated))
             .ToListAsync(cancellationToken);
@@ -123,7 +125,9 @@ internal static class RunPriceSnapshots
         return lines;
     }
 
+    // The filament row names its type in its text; a mission's item reward (ET-509) carries it as a column.
     private static int? _FilamentTypeId(RunParameter parameter) =>
+        parameter.ParameterKey is RunParameterKey.Item ? parameter.ItemTypeId :
         int.TryParse(parameter.TypedValue, NumberStyles.Integer, CultureInfo.InvariantCulture, out int typeId) ? typeId : null;
 
     private static decimal? _Live(IReadOnlyDictionary<int, double> live, int typeId) =>

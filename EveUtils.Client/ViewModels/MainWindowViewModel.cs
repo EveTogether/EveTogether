@@ -834,21 +834,10 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         _dialogs.ShowWidgetManager(new ViewModels.Widgets.WidgetManagerViewModel(_services, _dialogs));
     }
 
-    /// <summary>Opens the Appraisal tool (ET-83) — non-modal, like the other modules. A fresh view-model per open so
-    /// it reads the price cache as it stands now rather than as it stood when the window was first built.</summary>
+    /// <summary>Opens the Appraisal tool (ET-83) — non-modal, like the other modules. Built by
+    /// <see cref="AppraisalOpener"/>, the one place a loot line's "Open in appraisal" goes through too.</summary>
     [RelayCommand]
-    private void OpenAppraisal()
-    {
-        if (_dialogs is null || _services is null)
-            return;
-        _dialogs.ShowAppraisal(new AppraisalViewModel(
-            _services.GetRequiredService<IEnumerable<IAppraisalProvider>>(),
-            _services.GetRequiredService<ISdeAccessor>(),
-            _dialogs,
-            _services.GetService<IAppraisalProviderSelector>(),
-            _services.GetService<IEveWorkbenchKeyStore>(),
-            _services.GetService<IDispatcher>()));
-    }
+    private void OpenAppraisal() => _services?.GetService<AppraisalOpener>()?.Open();
 
     /// <summary>Opens the runs screen (ET-161) — the only place in the app a saved run can be read back, and the
     /// only way into an activity's detail. The character list comes from the registry as it stands now, because the

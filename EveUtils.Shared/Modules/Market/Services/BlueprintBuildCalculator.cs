@@ -19,6 +19,16 @@ public static class BlueprintBuildCalculator
 
     public const int MaxMaterialEfficiency = 10;
 
+    public const int MaxTimeEfficiency = 20;
+
+    /// <summary>The job time before skills and structure (ET-502): <c>base × runs × (1 − TE/100)</c>.</summary>
+    public static int BuildSeconds(int baseTimeSeconds, int runs, int timeEfficiency)
+    {
+        timeEfficiency = Math.Clamp(timeEfficiency, 0, MaxTimeEfficiency);
+        decimal seconds = (decimal)baseTimeSeconds * Math.Max(1, runs) * (1m - timeEfficiency / 100m);
+        return (int)Math.Round(seconds, MidpointRounding.AwayFromZero);
+    }
+
     public static long RequiredQuantity(long baseQuantity, int runs, int materialEfficiency)
     {
         runs = Math.Max(1, runs);

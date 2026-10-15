@@ -812,7 +812,11 @@ public sealed class HomefrontMoneyScenarioTests
             await using (ClientDbContext db = await DbAsync())
             {
                 if (!isIndexUp)
+                {
                     await db.GetService<IMigrator>().MigrateAsync("20260912144246_AddHomefrontOutcomeSource");
+                    // The current model reads Run.CombatWithheld, which a later migration adds; removed again before the final migrate.
+                    await db.Database.ExecuteSqlRawAsync("ALTER TABLE Run ADD COLUMN CombatWithheld INTEGER NOT NULL DEFAULT 0");
+                }
                 List<Run> originals = await db.Set<Run>().AsNoTracking()
                     .Include(run => run.AttendanceEntries)
                     .Where(run => run.GroupCode == GroupCode && run.DeletedAtUtc == null).ToListAsync();
@@ -857,6 +861,8 @@ public sealed class HomefrontMoneyScenarioTests
                     .ExecuteUpdateAsync(properties => properties
                         .SetProperty(summary => summary.TotalIsk, 135_000_000m)
                         .SetProperty(summary => summary.IskSources, "Bounty,Loot,Rewards,Consumables,Mining,HomefrontPayout;r2"));
+                if (!isIndexUp)
+                    await db.Database.ExecuteSqlRawAsync("ALTER TABLE Run DROP COLUMN CombatWithheld");
             }
 
             await using (ClientDbContext db = await DbAsync())

@@ -37,6 +37,9 @@
                         ToolTip.Tip="{x:Static vr:ActivityLootLineViewModel.BlueprintAppraisalTip}">
                     <TextBlock Text="BP APPRAISAL"/>
                 </Border>
+                <Button x:Name="OpenInAppraisalLink" Classes="lootlink" IsVisible="{Binding CanOpenInAppraisal}"
+                        Command="{Binding OpenInAppraisalCommand}" Content="Open in appraisal ↗"
+                        ToolTip.Tip="Show this blueprint in Tools → Appraisal: its build breakdown, runs, ME and TE."/>
             </StackPanel>
             <TextBlock Grid.Column="2" Classes="money" MinWidth="44" Text="{Binding QuantityText}"/>
             <TextBlock Grid.Column="3" Classes="money" MinWidth="104" Text="{Binding AmountText}"/>

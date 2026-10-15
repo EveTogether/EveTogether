@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Windows.Input;
 using Avalonia.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
 using EveUtils.Client.Formatting;
@@ -35,6 +36,12 @@ public sealed partial class ActivityLootLineViewModel : ObservableObject
     }
 
     public int ItemTypeId { get; }
+
+    /// <summary>Shows a blueprint line in the Appraisal tool's BLUEPRINTS mode (ET-502); null on any other line, or
+    /// where no tool can be opened.</summary>
+    public ICommand? OpenInAppraisalCommand { get; init; }
+
+    public bool CanOpenInAppraisal => OpenInAppraisalCommand is not null;
 
     public string Name { get; }
 

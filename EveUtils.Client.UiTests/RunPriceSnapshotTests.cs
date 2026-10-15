@@ -286,6 +286,42 @@ public sealed class RunPriceSnapshotTests
     }
 
     [AvaloniaFact]
+    public async Task MissionItemReward_CountsInTheTotalAtItsFixedPrice_WhenThePriceMoves()
+    {
+        using TestClientInstance instance = _Instance();
+        await _PriceAsync(instance, (Filament, 1000));
+        Guid runId = await _SaveRunWithItemRewardAsync(instance, quantity: 2);
+        await _PriceAsync(instance, (Filament, 9000));
+
+        await _RebuildAsync(instance);
+
+        await using ClientDbContext db = await _DbAsync(instance);
+        RunParameter reward = await db.Set<RunParameter>().AsNoTracking()
+            .SingleAsync(parameter => parameter.RunId == runId && parameter.ParameterKey == RunParameterKey.Item, Token);
+        Assert.Equal((1000m, PriceSnapshotSource.Capture), (reward.UnitPriceIsk, reward.PriceSource));
+        Assert.Equal(196_000m + 2000m, (await _SummaryAsync(instance)).TotalIsk);
+    }
+
+    [AvaloniaFact]
+    public async Task Fill_PricesAnItemRewardSavedWithoutAPrice_AndAddsItToTheSavedTotal()
+    {
+        using TestClientInstance instance = _Instance();
+        await _AddLocalCharacterAsync(instance, Pilot);
+        Guid runId = await _SaveRunWithItemRewardAsync(instance, quantity: 1);
+        Assert.Equal(196_000m, (await _SummaryAsync(instance)).TotalIsk);
+        int revisionBefore = (await _RunAsync(instance, runId)).Revision;
+        await _PriceAsync(instance, (Filament, 3000));
+
+        Result<int> filled = await _Dispatcher(instance).Send(new FillRunPriceSnapshotsCommand(), Token);
+        Result<int> again = await _Dispatcher(instance).Send(new FillRunPriceSnapshotsCommand(), Token);
+
+        Assert.Equal(1, filled.Value);
+        Assert.Equal(0, again.Value);
+        Assert.Equal(196_000m + 3000m, (await _SummaryAsync(instance)).TotalIsk);
+        Assert.Equal(revisionBefore + 1, (await _RunAsync(instance, runId)).Revision);
+    }
+
+    [AvaloniaFact]
     public async Task HandWrittenList_KeepsThePriceTheRunAlreadyFixedForAType()
     {
         using TestClientInstance instance = _Instance();
@@ -623,6 +659,24 @@ public sealed class RunPriceSnapshotTests
                 CapturedAtUtc = StartedAtUtc.AddMinutes(10), Source = LootCaptureSource.Pasted, CharacterId = characterId, Entries = entries
             }
         ], [], [], []), Token)).IsSuccess);
+        return started.Value;
+    }
+
+    /// <summary>A saved mission with its 196,000 ISK reward and an item reward of <paramref name="quantity"/> pieces.</summary>
+    private static async Task<Guid> _SaveRunWithItemRewardAsync(TestClientInstance instance, int quantity)
+    {
+        IDispatcher dispatcher = _Dispatcher(instance);
+        Result<Guid> started = await dispatcher.Send(new StartRunCommand(Pilot, ActivityKind.Mission, StartedAtUtc, 0, null, null), Token);
+        Assert.True((await dispatcher.Send(new SaveRunCommand(started.Value, StartedAtUtc.AddMinutes(20), StartedAtUtc.AddMinutes(21),
+            [], [], [],
+            [
+                new RunParameterInput { ParameterKey = RunParameterKey.Isk, TypedValue = "196000 ISK", Amount = 196_000m, ObservedAtUtc = StartedAtUtc },
+                new RunParameterInput
+                {
+                    ParameterKey = RunParameterKey.Item, TypedValue = $"{quantity} x Agitated Dark Filament", Amount = quantity,
+                    ItemTypeId = Filament, ObservedAtUtc = StartedAtUtc
+                }
+            ]), Token)).IsSuccess);
         return started.Value;
     }
 

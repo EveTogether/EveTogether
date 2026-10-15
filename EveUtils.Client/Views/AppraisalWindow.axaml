@@ -56,13 +56,36 @@
 
         <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,10">
             <StackPanel Grid.Column="0" Spacing="2">
-                <TextBlock Text="APPRAISAL" FontWeight="Bold" FontSize="15"
-                           Foreground="{StaticResource TextBrightBrush}"/>
+                <StackPanel Orientation="Horizontal" Spacing="12">
+                    <TextBlock Text="APPRAISAL" FontWeight="Bold" FontSize="15" VerticalAlignment="Center"
+                               Foreground="{StaticResource TextBrightBrush}"/>
+                    <!-- ET-502: what is appraised. Hidden where the tool was built without a blueprint mode. -->
+                    <StackPanel x:Name="ModeSwitch" Orientation="Horizontal" IsVisible="{Binding HasBlueprintMode}">
+                        <ToggleButton x:Name="ItemsModeButton" Classes="segmented" Content="ITEMS" FontSize="10"
+                                      IsChecked="{Binding IsItemsMode}"/>
+                        <ToggleButton x:Name="BlueprintsModeButton" Classes="segmented" Content="BLUEPRINTS" FontSize="10"
+                                      IsChecked="{Binding IsBlueprintsMode}"/>
+                    </StackPanel>
+                </StackPanel>
                 <TextBlock FontSize="11" Foreground="{DynamicResource TextAccentBrush}" TextWrapping="Wrap"
                            Text="Paste what is in a hangar, a wreck or a can and see what it is worth. Nothing is sent anywhere: the prices come from the copy of EVE's market averages this client already keeps."/>
             </StackPanel>
             <!-- Hidden while one price source is installed: with a single entry a picker is a question without an answer. -->
-            <StackPanel Grid.Column="1" Spacing="3" IsVisible="{Binding ShowProviderPicker}" VerticalAlignment="Top">
+            <!-- Blueprints are valued on EVE average prices only (ET-502): the chip says so where the picker would be. -->
+            <Border Grid.Column="1" Classes="panel" Padding="9,5" VerticalAlignment="Top" IsVisible="{Binding IsBlueprintsMode}">
+                <StackPanel Spacing="1">
+                    <TextBlock Classes="label" Text="PRICE SOURCE"/>
+                    <TextBlock FontSize="11" Foreground="{StaticResource TextBrightBrush}" Text="EVE average (ESI)"/>
+                    <TextBlock FontSize="10" Opacity="0.6" Text="no Jita / Amarr orders"/>
+                </StackPanel>
+            </Border>
+            <StackPanel Grid.Column="1" Spacing="3" VerticalAlignment="Top">
+                <StackPanel.IsVisible>
+                    <MultiBinding Converter="{x:Static BoolConverters.And}">
+                        <Binding Path="ShowProviderPicker"/>
+                        <Binding Path="IsItemsMode"/>
+                    </MultiBinding>
+                </StackPanel.IsVisible>
                 <TextBlock Classes="label" Text="PRICE SOURCE"/>
                 <Grid ColumnDefinitions="Auto,Auto" ColumnSpacing="6">
                     <ComboBox Grid.Column="0" MinWidth="180" FontSize="11" ItemsSource="{Binding Providers}"
@@ -84,7 +107,13 @@
 
         <!-- The EVE Workbench personal access token (ET-364): offered only once that provider is installed. The box
              never shows the saved token back — it is write-only, and clears itself the moment SAVE succeeds. -->
-        <Border DockPanel.Dock="Top" Classes="panel" Padding="11,9" Margin="0,0,0,10" IsVisible="{Binding ShowEveWorkbenchToken}">
+        <Border DockPanel.Dock="Top" Classes="panel" Padding="11,9" Margin="0,0,0,10">
+            <Border.IsVisible>
+                <MultiBinding Converter="{x:Static BoolConverters.And}">
+                    <Binding Path="ShowEveWorkbenchToken"/>
+                    <Binding Path="IsItemsMode"/>
+                </MultiBinding>
+            </Border.IsVisible>
             <StackPanel Spacing="4">
                 <TextBlock Classes="label" Text="EVE WORKBENCH TOKEN"/>
                 <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
@@ -100,144 +129,156 @@
         </Border>
 
         <Grid DockPanel.Dock="Bottom" ColumnDefinitions="*,Auto" ColumnSpacing="10" Margin="0,10,0,0">
-            <Border Grid.Column="0" Padding="11,7" Classes="statusline"
+            <Border Grid.Column="0" Padding="11,7" Classes="statusline" IsVisible="{Binding IsItemsMode}"
                     Classes.failed="{Binding StatusIsError}" Background="#22000000" BorderThickness="1">
                 <TextBlock Text="{Binding Status}" FontSize="11" TextWrapping="Wrap"
+                           Foreground="{StaticResource TextBrightBrush}"/>
+            </Border>
+            <Border Grid.Column="0" Padding="11,7" Classes="statusline" IsVisible="{Binding IsBlueprintsMode}"
+                    Classes.failed="{Binding Blueprints.StatusIsError, FallbackValue=False}" Background="#22000000" BorderThickness="1">
+                <TextBlock x:Name="BlueprintStatus" Text="{Binding Blueprints.Status, FallbackValue=''}" FontSize="11" TextWrapping="Wrap"
                            Foreground="{StaticResource TextBrightBrush}"/>
             </Border>
             <Button Grid.Column="1" Content="Close" Click="OnClose" VerticalAlignment="Center"/>
         </Grid>
 
-        <Grid x:Name="AppraisalBodyGrid" ColumnDefinitions="300,12,*">
+        <!-- One body per mode in one cell: a DockPanel would dock the first of two loose children to the left. -->
+        <Panel>
+            <Panel IsVisible="{Binding IsBlueprintsMode}">
+                <v:BlueprintAppraisalView x:Name="BlueprintBody" DataContext="{Binding Blueprints}"/>
+            </Panel>
 
-            <Border Grid.Column="0" Classes="panel" Padding="11,9">
-                <DockPanel>
-                    <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,*" Margin="0,0,0,6">
-                        <TextBlock Grid.Column="0" Classes="diamond" Text="◆" Margin="0,0,6,0"/>
-                        <TextBlock Grid.Column="1" Classes="panel-title" Text="PASTE" VerticalAlignment="Center"/>
-                    </Grid>
+            <Grid x:Name="AppraisalBodyGrid" ColumnDefinitions="300,12,*" IsVisible="{Binding IsItemsMode}">
 
-                    <StackPanel DockPanel.Dock="Bottom" Spacing="6" Margin="0,8,0,0">
-                        <ProgressBar IsIndeterminate="True" Height="4" IsVisible="{Binding IsBusy}"/>
-                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
-                            <Button Grid.Column="0" Classes="accent" Content="APPRAISE" FontSize="10"
-                                    HorizontalAlignment="Stretch" Command="{Binding AppraiseCommand}"/>
-                            <Button Grid.Column="1" Content="CLEAR" FontSize="10" Command="{Binding ClearCommand}"/>
-                        </Grid>
-                        <TextBlock FontSize="10" Opacity="0.55" TextWrapping="Wrap"
-                                   Text="Tab-separated inventory rows, as EVE copies them. A multibuy list (name and amount separated by a space) is not read yet."/>
-                    </StackPanel>
-
-                    <TextBox AcceptsReturn="True" AcceptsTab="True" FontSize="11" FontFamily="Consolas,monospace"
-                             TextWrapping="NoWrap" VerticalContentAlignment="Top"
-                             VerticalAlignment="Stretch" MinHeight="120"
-                             PlaceholderText="Paste here."
-                             Text="{Binding PasteText}"
-                             ScrollViewer.HorizontalScrollBarVisibility="Auto"
-                             ScrollViewer.VerticalScrollBarVisibility="Auto"/>
-                </DockPanel>
-            </Border>
-
-            <Border Grid.Column="2" Classes="panel" Padding="11,9">
-                <DockPanel>
-                    <StackPanel DockPanel.Dock="Top" Spacing="4" Margin="0,0,0,8">
-                        <Grid ColumnDefinitions="Auto,*,Auto,Auto">
+                <Border Grid.Column="0" Classes="panel" Padding="11,9">
+                    <DockPanel>
+                        <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,*" Margin="0,0,0,6">
                             <TextBlock Grid.Column="0" Classes="diamond" Text="◆" Margin="0,0,6,0"/>
-                            <TextBlock Grid.Column="1" x:Name="ItemsHeading" Classes="panel-title"
-                                       Text="{Binding RowsHeader}" VerticalAlignment="Center"
-                                       TextTrimming="CharacterEllipsis"/>
-                            <!-- Auto column: the total is written out in full, so it takes the width it needs and the
-                                 heading beside it gives way rather than the figure being cut off. -->
-                            <TextBlock Grid.Column="2" x:Name="TotalReadout" Text="{Binding TotalDisplay}"
-                                       FontSize="18" FontWeight="Bold" IsVisible="{Binding HasRows}"
-                                       Foreground="{StaticResource TextBrightBrush}" VerticalAlignment="Center"/>
-                            <!-- Copies the total exactly as shown (ET-91): hidden together with the empty/priceless
-                                 states the total itself reads "— ISK" for, so it never hands out that placeholder. -->
-                            <Button Grid.Column="3" Padding="6,4" Margin="6,0,0,0" VerticalAlignment="Center"
-                                    IsVisible="{Binding HasTotal}" Command="{Binding CopyTotalCommand}"
-                                    ToolTip.Tip="Copy the total to the clipboard">
-                                <mi:MaterialIcon Kind="ContentCopy"/>
-                            </Button>
+                            <TextBlock Grid.Column="1" Classes="panel-title" Text="PASTE" VerticalAlignment="Center"/>
                         </Grid>
-                        <!-- The provider says what its figures are; the screen never claims more than the source can back. -->
-                        <TextBlock Text="{Binding PricingBasis}" FontSize="10" Opacity="0.6" TextWrapping="Wrap"
-                                   IsVisible="{Binding HasRows}"/>
-                    </StackPanel>
 
-                    <!-- What the SDE could not place, kept in sight: a dropped name is a hole in the total. -->
-                    <StackPanel DockPanel.Dock="Bottom" Spacing="4" Margin="0,8,0,0"
-                                IsVisible="{Binding HasUnresolved}">
-                        <TextBlock Classes="label" Text="{Binding UnresolvedHeader}"/>
-                        <ScrollViewer VerticalScrollBarVisibility="Auto" MaxHeight="96">
-                            <ItemsControl ItemsSource="{Binding Unresolved}">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate x:DataType="sys:String">
-                                        <TextBlock Classes="entry" Text="{Binding}"/>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                        </ScrollViewer>
-                        <TextBlock FontSize="10" Opacity="0.55" TextWrapping="Wrap"
-                                   Text="These names are not in the loaded SDE and count for nothing in the total."/>
-                    </StackPanel>
+                        <StackPanel DockPanel.Dock="Bottom" Spacing="6" Margin="0,8,0,0">
+                            <ProgressBar IsIndeterminate="True" Height="4" IsVisible="{Binding IsBusy}"/>
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+                                <Button Grid.Column="0" Classes="accent" Content="APPRAISE" FontSize="10"
+                                        HorizontalAlignment="Stretch" Command="{Binding AppraiseCommand}"/>
+                                <Button Grid.Column="1" Content="CLEAR" FontSize="10" Command="{Binding ClearCommand}"/>
+                            </Grid>
+                            <TextBlock FontSize="10" Opacity="0.55" TextWrapping="Wrap"
+                                       Text="Tab-separated inventory rows, as EVE copies them. A multibuy list (name and amount separated by a space) is not read yet."/>
+                        </StackPanel>
 
-                    <Panel>
-                        <TextBlock FontSize="11" Opacity="0.5" Margin="2,10" TextWrapping="Wrap"
-                                   IsVisible="{Binding !HasRows}"
-                                   Text="Nothing appraised yet. Paste a listing on the left and press APPRAISE."/>
-                        <DataGrid x:CompileBindings="False" IsVisible="{Binding HasRows}"
-                                  ItemsSource="{Binding Rows}"
-                                  AutoGenerateColumns="False" IsReadOnly="True"
-                                  SelectionMode="Single" CanUserReorderColumns="False"
-                                  CanUserResizeColumns="True" CanUserSortColumns="True">
-                            <DataGrid.Columns>
-                                <!-- The one column that used to take whatever was left over, down to Avalonia's own
-                                     20px DataGrid floor: below the fixed columns' combined minimum the grid now
-                                     scrolls horizontally instead, so a name never bottoms out unreadable and the
-                                     money columns beside it are never squeezed to make room (ET-90). -->
-                                <DataGridTextColumn Header="NAME" Binding="{Binding Name}" Width="*" MinWidth="180"/>
-                                <!-- MinWidth == Width on these three: without it Avalonia's DataGrid still treats a
-                                     pixel Width as a mere preference and keeps shrinking it — proportionally, past
-                                     NAME's own floor above — once nothing else can give. That is exactly the "clip
-                                     a figure to make room" outcome ET-90 rules out; pinning them makes the grid
-                                     scroll horizontally instead when the sum of minimums does not fit. It matters
-                                     more than it did pre-ET-90: right-aligned (below), a squeeze eats the leading
-                                     digits first, and a total that loses its front reads as a much smaller number,
-                                     not as an obviously-cut-off one.
+                        <TextBox AcceptsReturn="True" AcceptsTab="True" FontSize="11" FontFamily="Consolas,monospace"
+                                 TextWrapping="NoWrap" VerticalContentAlignment="Top"
+                                 VerticalAlignment="Stretch" MinHeight="120"
+                                 PlaceholderText="Paste here."
+                                 Text="{Binding PasteText}"
+                                 ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                                 ScrollViewer.VerticalScrollBarVisibility="Auto"/>
+                    </DockPanel>
+                </Border>
 
-                                     The pinned widths are measured against the font the app actually renders in.
-                                     They used to be 130/130, set when the headless renders came out in the
-                                     platform's default face rather than Inter (ET-110 fixed that in TestAppBuilder):
-                                     in Inter a cell of 130 hands its TextBlock 106 while a billion-ISK total wants
-                                     119, so the figure really was being clipped on screen while the test that
-                                     guarded it stayed green. Measured at FontSize 11 in Inter, the text alone is
-                                     85px for a billion, 97px for a hundred billion and 105px for a trillion, and
-                                     the DataGrid cell's own chrome costs another 24. 160 and 170 hold a hundred
-                                     billion each and a trillion respectively; the sum of the minimums is 600
-                                     against the window's own 760, so nothing starts scrolling that did not. -->
-                                <DataGridTextColumn Binding="{Binding QuantityDisplay}" Width="90" MinWidth="90"
-                                                    SortMemberPath="Quantity" CellStyleClasses="money">
-                                    <DataGridTextColumn.Header>
-                                        <TextBlock Text="QTY" HorizontalAlignment="Right"/>
-                                    </DataGridTextColumn.Header>
-                                </DataGridTextColumn>
-                                <DataGridTextColumn Binding="{Binding UnitPriceDisplay}" Width="160" MinWidth="160"
-                                                    SortMemberPath="UnitPrice" CellStyleClasses="money">
-                                    <DataGridTextColumn.Header>
-                                        <TextBlock Text="PRICE EACH" HorizontalAlignment="Right"/>
-                                    </DataGridTextColumn.Header>
-                                </DataGridTextColumn>
-                                <DataGridTextColumn Binding="{Binding TotalDisplay}" Width="170" MinWidth="170"
-                                                    SortMemberPath="Total" CellStyleClasses="money">
-                                    <DataGridTextColumn.Header>
-                                        <TextBlock Text="TOTAL" HorizontalAlignment="Right"/>
-                                    </DataGridTextColumn.Header>
-                                </DataGridTextColumn>
-                            </DataGrid.Columns>
-                        </DataGrid>
-                    </Panel>
-                </DockPanel>
-            </Border>
-        </Grid>
+                <Border Grid.Column="2" Classes="panel" Padding="11,9">
+                    <DockPanel>
+                        <StackPanel DockPanel.Dock="Top" Spacing="4" Margin="0,0,0,8">
+                            <Grid ColumnDefinitions="Auto,*,Auto,Auto">
+                                <TextBlock Grid.Column="0" Classes="diamond" Text="◆" Margin="0,0,6,0"/>
+                                <TextBlock Grid.Column="1" x:Name="ItemsHeading" Classes="panel-title"
+                                           Text="{Binding RowsHeader}" VerticalAlignment="Center"
+                                           TextTrimming="CharacterEllipsis"/>
+                                <!-- Auto column: the total is written out in full, so it takes the width it needs and the
+                                     heading beside it gives way rather than the figure being cut off. -->
+                                <TextBlock Grid.Column="2" x:Name="TotalReadout" Text="{Binding TotalDisplay}"
+                                           FontSize="18" FontWeight="Bold" IsVisible="{Binding HasRows}"
+                                           Foreground="{StaticResource TextBrightBrush}" VerticalAlignment="Center"/>
+                                <!-- Copies the total exactly as shown (ET-91): hidden together with the empty/priceless
+                                     states the total itself reads "— ISK" for, so it never hands out that placeholder. -->
+                                <Button Grid.Column="3" Padding="6,4" Margin="6,0,0,0" VerticalAlignment="Center"
+                                        IsVisible="{Binding HasTotal}" Command="{Binding CopyTotalCommand}"
+                                        ToolTip.Tip="Copy the total to the clipboard">
+                                    <mi:MaterialIcon Kind="ContentCopy"/>
+                                </Button>
+                            </Grid>
+                            <!-- The provider says what its figures are; the screen never claims more than the source can back. -->
+                            <TextBlock Text="{Binding PricingBasis}" FontSize="10" Opacity="0.6" TextWrapping="Wrap"
+                                       IsVisible="{Binding HasRows}"/>
+                        </StackPanel>
+
+                        <!-- What the SDE could not place, kept in sight: a dropped name is a hole in the total. -->
+                        <StackPanel DockPanel.Dock="Bottom" Spacing="4" Margin="0,8,0,0"
+                                    IsVisible="{Binding HasUnresolved}">
+                            <TextBlock Classes="label" Text="{Binding UnresolvedHeader}"/>
+                            <ScrollViewer VerticalScrollBarVisibility="Auto" MaxHeight="96">
+                                <ItemsControl ItemsSource="{Binding Unresolved}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="sys:String">
+                                            <TextBlock Classes="entry" Text="{Binding}"/>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+                            <TextBlock FontSize="10" Opacity="0.55" TextWrapping="Wrap"
+                                       Text="These names are not in the loaded SDE and count for nothing in the total."/>
+                        </StackPanel>
+
+                        <Panel>
+                            <TextBlock FontSize="11" Opacity="0.5" Margin="2,10" TextWrapping="Wrap"
+                                       IsVisible="{Binding !HasRows}"
+                                       Text="Nothing appraised yet. Paste a listing on the left and press APPRAISE."/>
+                            <DataGrid x:CompileBindings="False" IsVisible="{Binding HasRows}"
+                                      ItemsSource="{Binding Rows}"
+                                      AutoGenerateColumns="False" IsReadOnly="True"
+                                      SelectionMode="Single" CanUserReorderColumns="False"
+                                      CanUserResizeColumns="True" CanUserSortColumns="True">
+                                <DataGrid.Columns>
+                                    <!-- The one column that used to take whatever was left over, down to Avalonia's own
+                                         20px DataGrid floor: below the fixed columns' combined minimum the grid now
+                                         scrolls horizontally instead, so a name never bottoms out unreadable and the
+                                         money columns beside it are never squeezed to make room (ET-90). -->
+                                    <DataGridTextColumn Header="NAME" Binding="{Binding Name}" Width="*" MinWidth="180"/>
+                                    <!-- MinWidth == Width on these three: without it Avalonia's DataGrid still treats a
+                                         pixel Width as a mere preference and keeps shrinking it — proportionally, past
+                                         NAME's own floor above — once nothing else can give. That is exactly the "clip
+                                         a figure to make room" outcome ET-90 rules out; pinning them makes the grid
+                                         scroll horizontally instead when the sum of minimums does not fit. It matters
+                                         more than it did pre-ET-90: right-aligned (below), a squeeze eats the leading
+                                         digits first, and a total that loses its front reads as a much smaller number,
+                                         not as an obviously-cut-off one.
+
+                                         The pinned widths are measured against the font the app actually renders in.
+                                         They used to be 130/130, set when the headless renders came out in the
+                                         platform's default face rather than Inter (ET-110 fixed that in TestAppBuilder):
+                                         in Inter a cell of 130 hands its TextBlock 106 while a billion-ISK total wants
+                                         119, so the figure really was being clipped on screen while the test that
+                                         guarded it stayed green. Measured at FontSize 11 in Inter, the text alone is
+                                         85px for a billion, 97px for a hundred billion and 105px for a trillion, and
+                                         the DataGrid cell's own chrome costs another 24. 160 and 170 hold a hundred
+                                         billion each and a trillion respectively; the sum of the minimums is 600
+                                         against the window's own 760, so nothing starts scrolling that did not. -->
+                                    <DataGridTextColumn Binding="{Binding QuantityDisplay}" Width="90" MinWidth="90"
+                                                        SortMemberPath="Quantity" CellStyleClasses="money">
+                                        <DataGridTextColumn.Header>
+                                            <TextBlock Text="QTY" HorizontalAlignment="Right"/>
+                                        </DataGridTextColumn.Header>
+                                    </DataGridTextColumn>
+                                    <DataGridTextColumn Binding="{Binding UnitPriceDisplay}" Width="160" MinWidth="160"
+                                                        SortMemberPath="UnitPrice" CellStyleClasses="money">
+                                        <DataGridTextColumn.Header>
+                                            <TextBlock Text="PRICE EACH" HorizontalAlignment="Right"/>
+                                        </DataGridTextColumn.Header>
+                                    </DataGridTextColumn>
+                                    <DataGridTextColumn Binding="{Binding TotalDisplay}" Width="170" MinWidth="170"
+                                                        SortMemberPath="Total" CellStyleClasses="money">
+                                        <DataGridTextColumn.Header>
+                                            <TextBlock Text="TOTAL" HorizontalAlignment="Right"/>
+                                        </DataGridTextColumn.Header>
+                                    </DataGridTextColumn>
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </Panel>
+                    </DockPanel>
+                </Border>
+            </Grid>
+        </Panel>
     </DockPanel>
 </v:ChromedWindow>

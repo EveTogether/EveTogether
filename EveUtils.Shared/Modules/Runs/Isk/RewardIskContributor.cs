@@ -3,7 +3,8 @@ using EveUtils.Shared.Modules.Runs.Enums;
 namespace EveUtils.Shared.Modules.Runs.Isk;
 
 /// <summary>
-/// The ISK-denominated reward lines a run carries — Isk, BonusIsk, Escrow — on any type, not only a mission (ET-210).
+/// The ISK-denominated reward lines a run carries — Isk, BonusIsk, Escrow — on any type, not only a mission (ET-210),
+/// and an item reward at its priced value like loot (ET-509): one never priced counts nothing rather than a guess.
 /// Never <see cref="RunParameterKey.Bounty"/>: that is a mission's own stated reward line, and the gamelog's bounty
 /// already counts the same money. Never <see cref="RunParameterKey.FixedPayout"/> either: that is a homefront payout
 /// typed over the table's, which <see cref="HomefrontPayoutIskContributor"/> counts only while the payout is owed
@@ -24,15 +25,18 @@ internal sealed class RewardIskContributor : IIskContributor
             .Distinct()];
         return counted.Length == 0
             ? null
-            : new IskContribution(Source, counted.Sum(parameter => parameter.Amount.GetValueOrDefault()), IskCertainty.Measured);
+            : new IskContribution(Source, counted.Sum(IskOf), IskCertainty.Measured);
     }
+
+    private static decimal IskOf(RunIskParameter parameter) =>
+        (parameter.Key is RunParameterKey.Item ? parameter.ItemValue : parameter.Amount).GetValueOrDefault();
 
     /// <summary>Whether this line counts on a run that stopped at <paramref name="judgedAtUtc"/> — the very rule
     /// <see cref="Contribute"/> filters by, so <see cref="IskContributors.BreakdownByCharacter"/> can hand the one
     /// copy of a duplicated line to one character and still add up to what the activity counts (ET-296).</summary>
     internal static bool Counts(RunIskParameter parameter, DateTime judgedAtUtc) =>
-        parameter.Key is RunParameterKey.Isk or RunParameterKey.BonusIsk or RunParameterKey.Escrow
-        && parameter.Amount is not null
+        (parameter.Key is RunParameterKey.Isk or RunParameterKey.BonusIsk or RunParameterKey.Escrow && parameter.Amount is not null
+         || parameter.Key is RunParameterKey.Item && parameter.ItemValue is not null)
         && !(parameter.Key is RunParameterKey.BonusIsk
              && MissionBonusDeadline.HasPassed(parameter.BonusWindowSeconds, parameter.ObservedAtUtc, judgedAtUtc));
 }

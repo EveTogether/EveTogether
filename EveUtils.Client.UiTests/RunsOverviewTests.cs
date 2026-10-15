@@ -415,6 +415,32 @@ public sealed class RunsOverviewTests
         Assert.Empty(running.Value!);
     }
 
+    /// <summary>ET-508 AC-1: the compass beside an idle avatar starts a freerun for exactly that character in one click
+    /// — no dialog, named after its start rather than a place — and opens its run window. Red without the lane's own
+    /// start.</summary>
+    [AvaloniaFact]
+    public async Task FreerunClick_StartsAFreerunForThatCharacter_WithNoDialog()
+    {
+        using var instance = TestClientInstance.Create();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        var dialogs = new RecordingDialogService();
+        (_, RunsOverviewViewModel viewModel) = await _WindowAsync(
+            instance, 758, cancellationToken, characters: Crew.Take(2).ToList(), dialogs: dialogs);
+        RunningLaneViewModel avatar = Assert.Single(viewModel.Running.IdleLanes,
+            lane => lane.Character.EsiCharacterId == Crew[1].EsiCharacterId);
+
+        await avatar.StartFreerunCommand.ExecuteAsync(null);
+
+        Assert.Null(dialogs.LastManualRunStart);
+        Result<IReadOnlyList<RunningRunDto>> running =
+            await _Dispatcher(instance).Query(new GetRunningRunsQuery(), cancellationToken);
+        RunningRunDto run = Assert.Single(running.Value ?? []);
+        Assert.Equal<long?>(Crew[1].EsiCharacterId, run.CharacterId);
+        Assert.Equal(ActivityKind.Free, run.ActivityKind);
+        Assert.Matches(@"^Freerun \d{4}-\d{2}-\d{2} \d{2}:\d{2}$", run.SiteName);
+        Assert.Equal(ActivityKind.Free, Assert.Single(dialogs.ShownActivityWindows).Kind);
+    }
+
     /// <summary>ET-221, kept by ET-290: START RUN ▾ is the general start — every registered character offered and none
     /// fixed, so several can still be picked. Counter-proof: route it through the avatar's fixed start and Characters
     /// counts 1.</summary>

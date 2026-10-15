@@ -17,7 +17,8 @@ public sealed record ClipboardMissionCapture(string? ObjectivesHeaderName, strin
 /// <summary>The location row next to "Report to &lt;agent&gt;" is never read: the agent name alone is the resolving key (ET-172 sub 1), and the location text is free-form prose no parser should trust.</summary>
 public static partial class ClipboardMissionParser
 {
-    private const string ObjectivesHeaderSuffix = " Objectives";
+    // ET-507: a mission whose objectives are already met is copied as "<mission> Objectives Complete".
+    private static readonly string[] ObjectivesHeaderSuffixes = [" Objectives Complete", " Objectives"];
     private const string ReportToPrefix = "Report to ";
 
     // ET-253: the plain Objective's own destination ("Location\t0.6 Aphend") — never "Drop-off Location" (cargo's
@@ -67,9 +68,9 @@ public static partial class ClipboardMissionParser
             if (headerSearchOpen)
             {
                 nonEmptyLinesSeen++;
-                if (trimmed.Length > ObjectivesHeaderSuffix.Length && trimmed.EndsWith(ObjectivesHeaderSuffix, StringComparison.Ordinal))
+                if (TryReadObjectivesHeaderName(trimmed) is { } headerName)
                 {
-                    objectivesHeaderName = trimmed[..^ObjectivesHeaderSuffix.Length];
+                    objectivesHeaderName = headerName;
                     headerSearchOpen = false;
                     continue;
                 }
@@ -145,6 +146,17 @@ public static partial class ClipboardMissionParser
             ? null
             : new ClipboardMissionCapture(objectivesHeaderName, agentName, bonusWindowSeconds, rewards, isImportantMission,
                 locationSystemName);
+    }
+
+    internal static string? TryReadObjectivesHeaderName(string trimmedLine)
+    {
+        foreach (string suffix in ObjectivesHeaderSuffixes)
+        {
+            if (trimmedLine.Length > suffix.Length && trimmedLine.EndsWith(suffix, StringComparison.Ordinal))
+                return trimmedLine[..^suffix.Length];
+        }
+
+        return null;
     }
 
     // "0.6 Aphend" -> "Aphend": the security rating and the name are always tab-adjacent as one field, separated by

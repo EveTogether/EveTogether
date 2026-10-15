@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
+using EveUtils.Client.Dialogs;
 using EveUtils.Client.Formatting;
 using EveUtils.Shared.Modules.Market.Services;
 using EveUtils.Shared.Modules.Runs;
@@ -27,7 +28,7 @@ public sealed partial class LootDetailSectionViewModel : RunDetailSection
             // ET-364: the selector (when the app wired one through Services) picks up the user's chosen provider
             // fresh each price refresh; services.Appraisal only still matters for callers that never set Services.
             () => new RunLootViewModel(services.Dispatcher, services.Appraisal, services.Sde, services.Images,
-                services.Services?.GetService<IAppraisalProviderSelector>()),
+                services.Services?.GetService<IAppraisalProviderSelector>(), services.Services?.GetService<AppraisalOpener>()),
             services.Portraits);
         LootOverview.LootCorrected += RaiseActivityCorrected;
     }

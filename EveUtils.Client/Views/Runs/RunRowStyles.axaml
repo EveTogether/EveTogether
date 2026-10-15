@@ -175,4 +175,17 @@
         <Setter Property="Ring" Value="{DynamicResource AccentBrightBrush}"/>
     </Style>
 
+    <!-- FREERUN beside an idle avatar (ET-508): quiet until pointed at, so a row of pilots stays a row of faces. -->
+    <Style Selector="Button.freerun">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Padding" Value="3"/>
+        <Setter Property="MinHeight" Value="0"/>
+        <Setter Property="Foreground" Value="{DynamicResource TextDimBrush}"/>
+    </Style>
+    <Style Selector="Button.freerun:pointerover /template/ ContentPresenter, Button.freerun:focus-visible /template/ ContentPresenter">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+    </Style>
+
 </Styles>

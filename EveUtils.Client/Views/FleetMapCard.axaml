@@ -45,6 +45,7 @@
                                     Graph="{Binding Graph}"
                                     Markers="{Binding Markers}"
                                     FollowIndex="{Binding FollowIndex}"
+                                    IsFollowing="{Binding IsFollowActive}"
                                     FleetBadges="{Binding FleetBadges}"
                                     Clock="{Binding Clock}"
                                     SystemInfoSource="{Binding SystemInfo}"
