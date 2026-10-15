@@ -36,10 +36,10 @@ public sealed class EveWorkbenchRunImportTests
                 Assert.Equal([Start.AddMinutes(5)], run.RoomStartsUtc);
                 Assert.Equal([0, 300, 0], run.Combat!.Series.Single().PerSecond);
                 Assert.Equal(EveWorkbenchHitQuality.Smashes, run.Combat.HitTallies[0].Quality);
-                Assert.Contains(run.Loot, loot => loot is { TypeId = 34, Quantity = 7, Lost: false });
+                Assert.Contains(run.Loot, loot => loot is { TypeId: 34, Quantity: 7, Lost: false });
                 break;
             case "mining":
-                Assert.Contains(run.Loot, loot => loot is { TypeId = 1230, Quantity = 100 });
+                Assert.Contains(run.Loot, loot => loot is { TypeId: 1230, Quantity: 100 });
                 Assert.Equal(1, skippedOreLines);
                 break;
             case "withheld":
