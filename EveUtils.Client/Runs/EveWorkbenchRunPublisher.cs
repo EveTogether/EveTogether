@@ -1,6 +1,7 @@
 using System.Net.Http.Json;
 using System.Text.Json;
 using EveUtils.Shared.Modules.Runs.Dtos;
+using EveUtils.Shared.Modules.Sde;
 
 namespace EveUtils.Client.Runs;
 
@@ -9,16 +10,17 @@ public interface IEveWorkbenchRunPublishLogger
     void Log(string message);
 }
 
-/// <summary>The HTTP leg of the EVE Workbench publish (ET-325): ET's own <see cref="RunWirePayload"/>, unchanged, in one
-/// POST v1/runs/import. Knows nothing of settings or storage; the caller keeps what comes back as pending.</summary>
-public sealed class EveWorkbenchRunPublisher(HttpClient client, IEveWorkbenchRunPublishLogger? logger = null)
+/// <summary>The HTTP leg of the EVE Workbench publish (ET-325): each <see cref="RunWirePayload"/> mapped onto EVE
+/// Workbench's import contract (<see cref="EveWorkbenchRunImport"/>), in one POST v1/runs/import. Knows nothing of
+/// settings or storage; the caller keeps what comes back as pending.</summary>
+public sealed class EveWorkbenchRunPublisher(HttpClient client, IEveWorkbenchRunPublishLogger? logger = null, ISdeAccessor? sde = null)
 {
     public const string HttpClientName = "EveWorkbenchRunPublisher";
 
     /// <summary>EVE Workbench refuses a request with more runs than this.</summary>
     public const int MaxRunsPerRequest = 50;
 
-    // PascalCase on purpose: the import contract names its fields that way, and the payload must not be reshaped.
+    // PascalCase on purpose: the import contract names its fields that way.
     private static readonly JsonSerializerOptions RequestOptions = new();
     private static readonly JsonSerializerOptions ResponseOptions = new() { PropertyNameCaseInsensitive = true };
 
@@ -94,11 +96,23 @@ public sealed class EveWorkbenchRunPublisher(HttpClient client, IEveWorkbenchRun
     private async Task<(IReadOnlyList<EveWorkbenchRunImportResult>? Results, bool Unauthorized)> _SendAsync(string baseUrl, string token,
         RunWirePayload[] batch, CancellationToken cancellationToken)
     {
+        List<EveWorkbenchImportedRun> runs = [];
+        foreach (RunWirePayload payload in batch)
+        {
+            (EveWorkbenchImportedRun run, int skippedOreLines) = EveWorkbenchRunImport.From(payload, sde);
+            if (skippedOreLines > 0)
+            {
+                logger?.Log($"EVE Workbench run {run.ExternalId}: {skippedOreLines} mining line(s) left out, their ore has no known type id.");
+            }
+
+            runs.Add(run);
+        }
+
         try
         {
             using var request = new HttpRequestMessage(HttpMethod.Post, new Uri(new Uri(baseUrl), "v1/runs/import"))
             {
-                Content = JsonContent.Create(new EveWorkbenchRunImportRequest { Runs = batch }, options: RequestOptions)
+                Content = JsonContent.Create(new EveWorkbenchRunImportRequest { Runs = runs }, options: RequestOptions)
             };
             request.Headers.Add("Character-Access-Token", token);
             using HttpResponseMessage response = await client.SendAsync(request, cancellationToken);
@@ -133,11 +147,6 @@ public sealed class EveWorkbenchRunPublisher(HttpClient client, IEveWorkbenchRun
             return (null, false);
         }
     }
-}
-
-public sealed class EveWorkbenchRunImportRequest
-{
-    public required IReadOnlyList<RunWirePayload> Runs { get; init; }
 }
 
 public sealed class EveWorkbenchRunImportResponse

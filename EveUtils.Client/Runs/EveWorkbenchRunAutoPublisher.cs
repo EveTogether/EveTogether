@@ -8,6 +8,7 @@ using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Entities;
 using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Runs.Events;
+using EveUtils.Shared.Modules.Sde;
 using EveUtils.Shared.Modules.Settings.Entities;
 using EveUtils.Shared.Modules.Settings.Repositories;
 using Microsoft.EntityFrameworkCore;
@@ -248,7 +249,7 @@ public sealed class EveWorkbenchRunAutoPublisher : ISingletonService, IDisposabl
 
         string baseUrl = settings.FirstOrDefault(setting => setting.Key == UrlSettingKey)?.Value ?? EveWorkbenchFitClient.BaseUrl;
         var publisher = new EveWorkbenchRunPublisher(_httpClientFactory.CreateClient(EveWorkbenchRunPublisher.HttpClientName),
-            new LogAdapter(_logger));
+            new LogAdapter(_logger), scope.ServiceProvider.GetService<ISdeAccessor>());
         bool anyFailed = false;
         Dictionary<Guid, PublishEntry> changes = [];
         // One request series per key: pilots of one EVE Workbench account share a key, and a refused key hits only them.

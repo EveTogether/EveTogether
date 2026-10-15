@@ -22,7 +22,7 @@ public sealed class EveWorkbenchRunPublisherTests
     }
 
     [Fact]
-    public async Task PublishAsync_EnabledSavedRun_SendsUnchangedPayload()
+    public async Task PublishAsync_EnabledSavedRun_SendsTheMappedImportRequest()
     {
         CancellationToken cancellationToken = TestContext.Current.CancellationToken;
         var handler = new Handler(_ => _Response("{\"Error\":false,\"Results\":[]}"));
@@ -31,7 +31,7 @@ public sealed class EveWorkbenchRunPublisherTests
         await publisher.PublishAsync(true, "https://workbench.example/", "token", [payload], cancellationToken);
         Assert.Equal("/v1/runs/import", handler.Request!.RequestUri!.AbsolutePath);
         Assert.Equal("token", handler.Request.Headers.GetValues("Character-Access-Token").Single());
-        Assert.Equal(JsonSerializer.Serialize(new { Runs = new[] { payload } }, new JsonSerializerOptions()), handler.Body);
+        Assert.Equal(JsonSerializer.Serialize(new EveWorkbenchRunImportRequest { Runs = [EveWorkbenchRunImport.From(payload, null).Run] }), handler.Body);
     }
 
     [Fact]
