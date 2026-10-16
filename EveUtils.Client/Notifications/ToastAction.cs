@@ -8,5 +8,7 @@ namespace EveUtils.Client.Notifications;
 /// passive notification. <see cref="Style"/> tints the button (green/red) for affirmative/destructive choices.
 /// Construct one per button and pass them to
 /// <see cref="IToastService.Show(string, string?, ToastKind, System.Collections.Generic.IReadOnlyList{ToastAction})"/>.
+/// <see cref="Role"/> decides whether the toast waits for an answer or expires by itself.
 /// </summary>
-public sealed record ToastAction(string Label, Action Run, ToastActionStyle Style = ToastActionStyle.Default);
+public sealed record ToastAction(string Label, Action Run, ToastActionStyle Style = ToastActionStyle.Default,
+    ToastActionRole Role = ToastActionRole.Decision);

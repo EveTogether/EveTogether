@@ -255,6 +255,7 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsLocalTabSelected))]
     [NotifyPropertyChangedFor(nameof(ShowUnfinishedBand))]
+    [NotifyPropertyChangedFor(nameof(ShowRecentlyDiscardedBand))]
     [NotifyPropertyChangedFor(nameof(ShowOpenEscalationsBand))]
     [NotifyPropertyChangedFor(nameof(LocalInViewCount))]
     [NotifyPropertyChangedFor(nameof(ShowPublishView))]
@@ -282,6 +283,22 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
     private bool _hasUnfinishedRuns;
 
     public bool ShowUnfinishedBand => HasUnfinishedRuns && IsLocalTabSelected;
+
+    /// <summary>How long a thrown-away run stays on offer in RECENTLY THROWN AWAY. The run itself stays on disk
+    /// longer (nothing purges it); this only bounds the list, so it does not grow into a second history.</summary>
+    private static readonly TimeSpan RecentlyDiscardedWindow = TimeSpan.FromHours(24);
+
+    /// <summary>Runs thrown away in the last day, restorable without the Undo toast (ET-511).</summary>
+    public ObservableCollection<RecentlyDiscardedRunViewModel> RecentlyDiscardedRuns { get; } = [];
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowRecentlyDiscardedBand))]
+    [NotifyPropertyChangedFor(nameof(RecentlyDiscardedHeaderText))]
+    private bool _hasRecentlyDiscardedRuns;
+
+    public bool ShowRecentlyDiscardedBand => HasRecentlyDiscardedRuns && IsLocalTabSelected;
+
+    public string RecentlyDiscardedHeaderText => $"RECENTLY THROWN AWAY ({RecentlyDiscardedRuns.Count})";
 
     /// <summary>Escalations still to be flown across this machine's characters, soonest deadline first (ET-451) — the
     /// one place they are seen together, each a click away from its run. Local only, like UNFINISHED: an escalation
@@ -752,6 +769,7 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
 
         Running.Show(read.Running);
         _ShowUnfinished(read.Unfinished);
+        await _ShowRecentlyDiscardedAsync();
         await _ShowOpenEscalationsAsync();
         foreach ((string address, string header) in read.NewServers)
         {
@@ -998,6 +1016,28 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
         }
 
         return (servers.Count > 0, added, headers);
+    }
+
+    private async Task _ShowRecentlyDiscardedAsync()
+    {
+        Result<IReadOnlyList<RecentlyDiscardedRunDto>> discarded = await _dispatcher.Query(
+            new GetRecentlyDiscardedRunsQuery(_time.GetUtcNow().UtcDateTime - RecentlyDiscardedWindow));
+        Dictionary<Guid, RecentlyDiscardedRunViewModel> shown = RecentlyDiscardedRuns.ToDictionary(run => run.RunId);
+        RecentlyDiscardedRuns.ReconcileTo([.. (discarded.Value ?? []).Select(run =>
+            shown.TryGetValue(run.RunId, out RecentlyDiscardedRunViewModel? same) && same.IsShowing(run)
+                ? same
+                : new RecentlyDiscardedRunViewModel(run, _NameOf(run.CharacterId), _RestoreDiscardedRunAsync))]);
+        HasRecentlyDiscardedRuns = RecentlyDiscardedRuns.Count > 0;
+        OnPropertyChanged(nameof(RecentlyDiscardedHeaderText));
+    }
+
+    /// <summary>RESTORE: the run comes back as UNFINISHED, the same as the Undo toast (ET-220), so the pilot decides
+    /// about it again from there.</summary>
+    private async Task _RestoreDiscardedRunAsync(RecentlyDiscardedRunViewModel run)
+    {
+        Guid runId = run.RunId;
+        Result restored = await Task.Run(() => _dispatcher.Send(new RestoreRunCommand(runId)));
+        await _AfterFinishingAsync(restored, "The run could not be restored.");
     }
 
     private async Task _ShowOpenEscalationsAsync()

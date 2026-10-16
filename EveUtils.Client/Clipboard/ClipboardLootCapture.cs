@@ -235,7 +235,7 @@ public sealed class ClipboardLootCapture : ISingletonService, IDisposable
                 $"No item in this copy is known to the EVE static data yet. {unrecognisedNames.Count} name(s) are kept in the "
                 + $"unrecognised items log{(saved.CaptureId == Guid.Empty ? " without a run" : " and added to the current run")} "
                 + "and count as 0 until they are known.", ToastKind.Information,
-                [new ToastAction("Close", () => CloseOffer(fingerprint))], () => CloseOffer(fingerprint), FeatureName);
+                [new ToastAction("Close", () => CloseOffer(fingerprint), Role: ToastActionRole.Dismiss)], () => CloseOffer(fingerprint), FeatureName);
             return;
         }
         var unresolvedSuffix = unresolvedCount > 0
@@ -247,8 +247,8 @@ public sealed class ClipboardLootCapture : ISingletonService, IDisposable
             _toasts.Show("Loot copy repeated",
                 $"Identical to the copy at {repeatOf:HH:mm:ss} — kept, but excluded from the run's total.{unresolvedSuffix}",
                 ToastKind.Information,
-                [new ToastAction("Include", () => SetExcluded(saved.CaptureId, isExcluded: false)),
-                    new ToastAction("Close", () => CloseOffer(fingerprint))],
+                [new ToastAction("Include", () => SetExcluded(saved.CaptureId, isExcluded: false), Role: ToastActionRole.Undo),
+                    new ToastAction("Close", () => CloseOffer(fingerprint), Role: ToastActionRole.Dismiss)],
                 () => CloseOffer(fingerprint), FeatureName);
             return;
         }
@@ -263,8 +263,8 @@ public sealed class ClipboardLootCapture : ISingletonService, IDisposable
         _toasts.Show("Loot copied",
             $"Recognised {lines.Count} EVE item type(s) from this inventory and added them to the current run.{unresolvedSuffix}",
             ToastKind.Information,
-            [new ToastAction("Exclude", () => SetExcluded(saved.CaptureId, isExcluded: true)),
-                new ToastAction("Close", () => CloseOffer(fingerprint))],
+            [new ToastAction("Exclude", () => SetExcluded(saved.CaptureId, isExcluded: true), Role: ToastActionRole.Undo),
+                new ToastAction("Close", () => CloseOffer(fingerprint), Role: ToastActionRole.Dismiss)],
             () => CloseOffer(fingerprint), FeatureName);
     }
 

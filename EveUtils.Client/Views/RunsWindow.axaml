@@ -592,6 +592,38 @@
             </StackPanel>
         </Border>
 
+        <!-- ══ Recently thrown away ══ (ET-511) the Undo toast expires on its own, so a run thrown away stays on
+             offer here for a day. Collapsed by default: the normal flow never needs it, and it stays out of the way
+             until someone looks for a run they regret. Gone when nothing was thrown away. Local only. -->
+        <Border DockPanel.Dock="Top" Padding="14,6" BorderThickness="0,0,0,1"
+                BorderBrush="{DynamicResource BorderBrush}"
+                IsVisible="{Binding ShowRecentlyDiscardedBand}">
+            <Expander IsExpanded="False" Padding="0,6,0,0" HorizontalAlignment="Stretch">
+                <Expander.Header>
+                    <TextBlock Classes="label" Text="{Binding RecentlyDiscardedHeaderText}"/>
+                </Expander.Header>
+                <ScrollViewer MaxHeight="180" HorizontalScrollBarVisibility="Disabled">
+                    <ItemsControl x:Name="RecentlyDiscardedList" ItemsSource="{Binding RecentlyDiscardedRuns}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="vr:RecentlyDiscardedRunViewModel">
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10" Margin="0,3">
+                                    <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                        <TextBlock FontSize="11.5" TextTrimming="CharacterEllipsis"
+                                                   Foreground="{StaticResource TextBrightBrush}"
+                                                   Text="{Binding TitleText}"/>
+                                        <TextBlock Classes="rowsub" Text="{Binding DiscardedText}"/>
+                                    </StackPanel>
+                                    <Button Grid.Column="1" Classes="rowaction" MinWidth="62"
+                                            Content="RESTORE" Command="{Binding RestoreCommand}"
+                                            ToolTip.Tip="Bring this run back, unfinished, exactly where it left off"/>
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </Expander>
+        </Border>
+
         <!-- ══ Open escalations ══ (ET-451) every escalation still to be flown, across runs and characters, soonest
              deadline first — START is the one click from a registered escalation to its run. Gone once none is open;
              local only, like UNFINISHED. -->
