@@ -247,7 +247,7 @@ public sealed class ClipboardLootCapture : ISingletonService, IDisposable
             _toasts.Show("Loot copy repeated",
                 $"Identical to the copy at {repeatOf:HH:mm:ss} — kept, but excluded from the run's total.{unresolvedSuffix}",
                 ToastKind.Information,
-                [new ToastAction("Include", () => SetExcluded(saved.CaptureId, isExcluded: false)),
+                [new ToastAction("Include", () => SetExcluded(saved.CaptureId, isExcluded: false), Role: ToastActionRole.Undo),
                     new ToastAction("Close", () => CloseOffer(fingerprint), Role: ToastActionRole.Dismiss)],
                 () => CloseOffer(fingerprint), FeatureName);
             return;
@@ -263,7 +263,7 @@ public sealed class ClipboardLootCapture : ISingletonService, IDisposable
         _toasts.Show("Loot copied",
             $"Recognised {lines.Count} EVE item type(s) from this inventory and added them to the current run.{unresolvedSuffix}",
             ToastKind.Information,
-            [new ToastAction("Exclude", () => SetExcluded(saved.CaptureId, isExcluded: true)),
+            [new ToastAction("Exclude", () => SetExcluded(saved.CaptureId, isExcluded: true), Role: ToastActionRole.Undo),
                 new ToastAction("Close", () => CloseOffer(fingerprint), Role: ToastActionRole.Dismiss)],
             () => CloseOffer(fingerprint), FeatureName);
     }

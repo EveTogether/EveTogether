@@ -55,6 +55,35 @@ public sealed class RunDiscardDeleteTests
         Assert.Equal(RunState.Stopped, run.State);
     }
 
+    /// <summary>ET-511: a thrown-away run stays on offer for restoring once its Undo toast has expired, only inside the
+    /// window asked for, and leaves the list again when restored.</summary>
+    [AvaloniaFact]
+    public async Task RecentlyDiscardedRuns_ListsAThrownAwayRunInsideTheWindow_AndDropsItOnceRestored()
+    {
+        using var instance = TestClientInstance.Create();
+        IDispatcher dispatcher = instance.Services.GetRequiredService<IDispatcher>();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+
+        Result<Guid> started = await dispatcher.Send(new StartRunCommand(90000001, ActivityKind.Site,
+            StartedAtUtc, 1234, "Homefront", 30000142), cancellationToken);
+        DateTime discardedAtUtc = StartedAtUtc.AddMinutes(5);
+        await dispatcher.Send(new DiscardRunCommand(started.Value, discardedAtUtc, DeleteAfterDiscard: true),
+            cancellationToken);
+
+        Result<IReadOnlyList<RecentlyDiscardedRunDto>> inside = await dispatcher.Query(
+            new GetRecentlyDiscardedRunsQuery(discardedAtUtc.AddHours(-24)), cancellationToken);
+        Result<IReadOnlyList<RecentlyDiscardedRunDto>> outside = await dispatcher.Query(
+            new GetRecentlyDiscardedRunsQuery(discardedAtUtc.AddMinutes(1)), cancellationToken);
+        Assert.Equal(started.Value, Assert.Single(inside.Value!).RunId);
+        Assert.Empty(outside.Value!);
+
+        await dispatcher.Send(new RestoreRunCommand(started.Value), cancellationToken);
+
+        Result<IReadOnlyList<RecentlyDiscardedRunDto>> afterRestore = await dispatcher.Query(
+            new GetRecentlyDiscardedRunsQuery(discardedAtUtc.AddHours(-24)), cancellationToken);
+        Assert.Empty(afterRestore.Value!);
+    }
+
     /// <summary>ET-105 AC-1, still true with the new flag: a run already saved before the pilot discards it keeps
     /// its history, flag or no flag. Counter-proof: drop the <c>wasAlreadySaved</c> guard in the handler and this
     /// goes red with the saved run soft-deleted too.</summary>
