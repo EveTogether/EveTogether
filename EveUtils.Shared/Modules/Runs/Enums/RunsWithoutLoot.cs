@@ -7,6 +7,6 @@ public enum RunsWithoutLoot
     /// <summary>Counted as a run without loot: a mission, where the reward carries the value.</summary>
     Counted,
 
-    /// <summary>Left out: a site, where uncounted loot would read as a run that brought nothing.</summary>
+    /// <summary>Left out: a site or an abyssal, where uncounted loot would read as a run that brought nothing.</summary>
     Excluded
 }

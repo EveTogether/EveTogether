@@ -8,10 +8,12 @@ public sealed record EarningsPolicy
 {
     public static EarningsPolicy Default { get; } = new();
 
-    /// <summary>The policy an activity of <paramref name="kind"/> is read by: a site leaves its runs without counted
-    /// loot out, every other kind counts them (Jithran 18-10).</summary>
+    /// <summary>The policy an activity of <paramref name="kind"/> is read by: a site and an abyssal leave their runs
+    /// without counted loot out, a mission and a homefront count them (Jithran 18-10).</summary>
     public static EarningsPolicy For(ActivityStatsKind kind) =>
-        kind is ActivityStatsKind.Site ? Default with { RunsWithoutLoot = RunsWithoutLoot.Excluded } : Default;
+        kind is ActivityStatsKind.Site or ActivityStatsKind.Abyssal
+            ? Default with { RunsWithoutLoot = RunsWithoutLoot.Excluded }
+            : Default;
 
     public RunsWithoutLoot RunsWithoutLoot { get; init; } = RunsWithoutLoot.Counted;
 

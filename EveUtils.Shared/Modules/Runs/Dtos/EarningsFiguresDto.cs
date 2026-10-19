@@ -27,8 +27,8 @@ public sealed class EarningsFiguresDto
     /// <summary>Activities in the window left out for being shorter than the minimum duration.</summary>
     public required int ExcludedRunCount { get; init; }
 
-    /// <summary>Activities in the window with no loot counted at all: left out of a site's figures, counted as no loot
-    /// in every other kind's (<see cref="RunsWithoutLoot"/>, Jithran 18-10).</summary>
+    /// <summary>Activities in the window with no loot counted at all: left out of a site's and an abyssal's figures,
+    /// counted as no loot in a mission's and a homefront's (<see cref="RunsWithoutLoot"/>, Jithran 18-10).</summary>
     public required int WithoutLootCount { get; init; }
 
     /// <summary>Counted activities with pasted lines no SDE type carries yet, whose loot is short by those.</summary>

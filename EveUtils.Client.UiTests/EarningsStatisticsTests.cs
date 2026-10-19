@@ -168,7 +168,7 @@ public sealed class EarningsStatisticsTests
         Assert.Equal(1, figures.UnpricedItemCount);
     }
 
-    /// <summary>Jithran 18-10: a run whose loot was never counted is left out of a site's figures, where it would read
+    /// <summary>Jithran 18-10: a run whose loot was never counted is left out of a site's or an abyssal's figures, where it would read
     /// as a run that brought nothing, and kept for a mission's, where the reward carries the value. Reported either
     /// way. Five runs of 10 and six uncounted runs of 0: left out, the typical run is 10; counted, it is 0.</summary>
     [Theory]
@@ -194,9 +194,9 @@ public sealed class EarningsStatisticsTests
     [Theory]
     [InlineData(ActivityStatsKind.Site, RunsWithoutLoot.Excluded)]
     [InlineData(ActivityStatsKind.Mission, RunsWithoutLoot.Counted)]
-    [InlineData(ActivityStatsKind.Abyssal, RunsWithoutLoot.Counted)]
+    [InlineData(ActivityStatsKind.Abyssal, RunsWithoutLoot.Excluded)]
     [InlineData(ActivityStatsKind.Homefront, RunsWithoutLoot.Counted)]
-    public void PolicyFor_OnlyASiteLeavesItsRunsWithoutCountedLootOut(ActivityStatsKind kind, RunsWithoutLoot rule) =>
+    public void PolicyFor_SitesAndAbyssalsLeaveTheirRunsWithoutCountedLootOut(ActivityStatsKind kind, RunsWithoutLoot rule) =>
         Assert.Equal(rule, EarningsPolicy.For(kind).RunsWithoutLoot);
 
     private static EarningsSample _Sample(string pilot, decimal fixedIsk, DateTime? completedAtUtc = null) => new()
