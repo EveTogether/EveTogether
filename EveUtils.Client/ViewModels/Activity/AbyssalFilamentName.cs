@@ -1,4 +1,4 @@
-using System.Globalization;
+using EveUtils.Shared.Modules.Runs;
 
 namespace EveUtils.Client.ViewModels.Activity;
 
@@ -14,11 +14,7 @@ public static class AbyssalFilamentName
         Parse(typedValue) is var (tier, weatherName) ? From(tier, weatherName) : "Abyssal";
 
     /// <summary>The stored tier index and weather name, or null where nothing (readable) was stored.</summary>
-    public static (int Tier, string Weather)? Parse(string? typedValue) =>
-        typedValue?.Split('|') is [{ } tierText, { Length: > 0 } weatherName]
-        && int.TryParse(tierText, NumberStyles.Integer, CultureInfo.InvariantCulture, out int tier)
-            ? (tier, weatherName)
-            : null;
+    public static (int Tier, string Weather)? Parse(string? typedValue) => AbyssalPocket.Parse(typedValue);
 
     /// <summary>The same name from the two facts as a fleet announcement carries them (ET-246).</summary>
     public static string From(int? tierIndex, string? weatherName) =>

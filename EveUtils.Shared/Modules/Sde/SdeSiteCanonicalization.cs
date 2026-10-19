@@ -39,6 +39,18 @@ public static class SdeSiteCanonicalization
             .OrderBy(site => site.Name, StringComparer.Ordinal)
             .ThenBy(site => site.DungeonId)];
 
+    /// <summary>The id <see cref="Canonicalize"/> keeps for the twin group <paramref name="dungeonId"/> is in, among
+    /// <paramref name="sites"/> — what lets a run saved under the other half of a pair count with it (ET-513). The id
+    /// itself when <paramref name="sites"/> does not carry it.</summary>
+    public static int CanonicalDungeonId(IReadOnlyList<SdeSite> sites, int dungeonId)
+    {
+        if (sites.FirstOrDefault(site => site.DungeonId == dungeonId) is not { } own)
+            return dungeonId;
+
+        string key = EqualityKey(own);
+        return sites.Where(site => EqualityKey(site) == key).Min(site => site.DungeonId);
+    }
+
     /// <summary>
     /// SHA-256 over name, archetype, faction, DED, ship restriction and description, in that fixed order — written
     /// down here rather than left to a record's own member order, which is an implementation detail free to change.
