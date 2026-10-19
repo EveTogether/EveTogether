@@ -19,18 +19,20 @@ internal sealed class GetActivityEarningsQueryHandler(IDbContextFactory<ClientDb
     public async Task<Result<IReadOnlyList<ActivityEarningsDto>>> Handle(GetActivityEarningsQuery query,
         CancellationToken cancellationToken = default)
     {
-        EarningsPolicy policy = query.Window is { } window
-            ? EarningsPolicy.Default with { Window = window, FallbackWindow = null }
-            : EarningsPolicy.Default;
         DateTime nowUtc = DateTime.UtcNow;
-        TimeSpan widest = policy.FallbackWindow is { } fallback && fallback > policy.Window ? fallback : policy.Window;
+        EarningsPolicy defaults = EarningsPolicy.Default;
+        TimeSpan widest = query.Window
+                          ?? (defaults.FallbackWindow is { } fallback && fallback > defaults.Window ? fallback : defaults.Window);
 
         await using ClientDbContext db = await contextFactory.CreateDbContextAsync(cancellationToken);
         IReadOnlyList<ActivityEarningsSample> samples = await LocalEarningsSamples.ReadAsync(db, sde, nowUtc - widest, nowUtc,
             cancellationToken);
         ActivityEarningsSample[] asked = [.. samples.Where(sample => query.Key is null || sample.Key == query.Key)];
-        Func<int, decimal?> unitPrice = await TodaysLootPrices.ForAsync(marketPrices, blueprints,
-            [.. asked.SelectMany(sample => sample.Sample.LootGained.Concat(sample.Sample.LootLost)).Select(line => line.TypeId).Distinct()],
+        Func<int, decimal?> unitPrice = await TodaysLootPrices.ForAsync(marketPrices, blueprints, sde,
+            [.. asked
+                .SelectMany(sample => sample.Sample.LootGained.Concat(sample.Sample.LootLost).Concat(sample.Sample.Mined))
+                .Select(line => line.TypeId)
+                .Distinct()],
             cancellationToken);
 
         return Result<IReadOnlyList<ActivityEarningsDto>>.Success(
@@ -41,10 +43,16 @@ internal sealed class GetActivityEarningsQueryHandler(IDbContextFactory<ClientDb
                 {
                     Key = activity.Key,
                     SiteName = activity.MaxBy(sample => sample.Sample.CompletedAtUtc)?.SiteName,
-                    Figures = EarningsStatistics.Compute([.. activity.Select(sample => sample.Sample)], unitPrice, policy, nowUtc)
+                    Figures = EarningsStatistics.Compute([.. activity.Select(sample => sample.Sample)], unitPrice,
+                        _PolicyFor(activity.Key, query.Window), nowUtc)
                 })
                 .OrderByDescending(activity => activity.Figures.EffectiveRunCount)
                 .ThenBy(activity => activity.Key.Code, StringComparer.Ordinal)
         ]);
     }
+
+    private static EarningsPolicy _PolicyFor(ActivityStatsKey key, TimeSpan? window) =>
+        window is { } asked
+            ? EarningsPolicy.For(key.Kind) with { Window = asked, FallbackWindow = null }
+            : EarningsPolicy.For(key.Kind);
 }

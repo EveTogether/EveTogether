@@ -32,6 +32,7 @@ internal static class LocalEarningsSamples
             .Include(run => run.LootCaptures)
                 .ThenInclude(capture => capture.Entries)
             .Include(run => run.BountyEntries)
+            .Include(run => run.MiningEntries)
             .AsSplitQuery()
             .ToListAsync(cancellationToken);
         if (runs.Count == 0)
@@ -69,13 +70,13 @@ internal static class LocalEarningsSamples
                 continue;
 
             samples.Add(new ActivityEarningsSample(key, source.SiteName,
-                _Sample(ordered, parametersByRun, ores, isCharge, openUnrecognisedByCapture, nowUtc)));
+                _Sample(key, ordered, parametersByRun, ores, isCharge, openUnrecognisedByCapture, nowUtc)));
         }
 
         return samples;
     }
 
-    private static EarningsSample _Sample(IReadOnlyList<Run> runs, ILookup<Guid, RunParameter> parametersByRun,
+    private static EarningsSample _Sample(ActivityStatsKey key, IReadOnlyList<Run> runs, ILookup<Guid, RunParameter> parametersByRun,
         MiningOreTypes ores, Func<int, bool> isCharge, IReadOnlyDictionary<Guid, int> openUnrecognisedByCapture, DateTime nowUtc)
     {
         // No live prices: loot is valued later at today's price, and an item reward counts at the price fixed on it
@@ -99,6 +100,7 @@ internal static class LocalEarningsSamples
                 .Sum(source => isk.Of(source)?.Amount ?? 0m),
             LootGained = _Merged(loot, LootKind.Gained),
             LootLost = _Merged(loot, LootKind.Lost),
+            Mined = key.Kind is ActivityStatsKind.Homefront ? _Mined(runs, ores) : [],
             LootBasis = runs.Min(_LootBasis),
             OpenUnrecognisedLootCount = runs
                 .SelectMany(run => run.LootCaptures)
@@ -108,6 +110,17 @@ internal static class LocalEarningsSamples
     }
 
     // Without a starting hold the tally hands back every paste's lines one after another (LootTally.Count).
+    // Units only: residue was depleted but never collected (RunMiningEntry). An ore the SDE cannot name has no type to
+    // price and adds nothing, the "not priced yet, not zero" rule MiningValue follows.
+    private static IReadOnlyList<EarningsLootLine> _Mined(IEnumerable<Run> runs, MiningOreTypes ores) =>
+        [.. runs
+            .SelectMany(run => run.MiningEntries)
+            .SelectMany(entry => ores.Of(entry.OreType) is { } ore && entry.Units > 0
+                ? [new EarningsLootLine(ore.TypeId, entry.Units)]
+                : Array.Empty<EarningsLootLine>())
+            .GroupBy(line => line.TypeId)
+            .Select(type => new EarningsLootLine(type.Key, type.Sum(line => line.Quantity)))];
+
     private static IReadOnlyList<EarningsLootLine> _Merged(IEnumerable<LootTallyLine> loot, LootKind kind) =>
         [.. loot
             .Where(line => line.LootKind == kind)

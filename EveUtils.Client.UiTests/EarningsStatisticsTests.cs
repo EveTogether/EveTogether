@@ -147,24 +147,57 @@ public sealed class EarningsStatisticsTests
         Assert.Equal(1000m, figures.Best?.YieldIsk);
     }
 
-    /// <summary>Loot is valued at the price handed in, not at any price fixed when it was captured: 1,000,000 fixed
-    /// plus 10 × 100 gained less 1 × 50 lost, and the type without a price counts 0 and is reported.</summary>
+    /// <summary>Loot and a homefront's ore are valued at the price handed in, not at any price fixed when they were
+    /// captured: 1,000,000 fixed plus 10 × 100 gained less 1 × 50 lost plus 100 × 2 mined, and the type without a
+    /// price counts 0 and is reported.</summary>
     [Fact]
-    public void Compute_ValuesLootAtTodaysPrice_AndReportsAnUnpricedType()
+    public void Compute_ValuesLootAndOreAtTodaysPrice_AndReportsAnUnpricedType()
     {
-        Dictionary<int, decimal> today = new() { [34] = 100m, [36] = 50m };
+        Dictionary<int, decimal> today = new() { [34] = 100m, [36] = 50m, [1230] = 2m };
         EarningsSample sample = _Sample("pilot", 1_000_000m) with
         {
             LootGained = [new EarningsLootLine(34, 10), new EarningsLootLine(35, 5)],
-            LootLost = [new EarningsLootLine(36, 1)]
+            LootLost = [new EarningsLootLine(36, 1)],
+            Mined = [new EarningsLootLine(1230, 100)]
         };
 
         EarningsFiguresDto figures = EarningsStatistics.Compute([sample],
             typeId => today.TryGetValue(typeId, out decimal price) ? price : null, AnyCount, NowUtc);
 
-        Assert.Equal(1_000_950m, figures.Typical);
+        Assert.Equal(1_001_150m, figures.Typical);
         Assert.Equal(1, figures.UnpricedItemCount);
     }
+
+    /// <summary>Jithran 18-10: a run whose loot was never counted is left out of a site's figures, where it would read
+    /// as a run that brought nothing, and kept for a mission's, where the reward carries the value. Reported either
+    /// way. Five runs of 10 and six uncounted runs of 0: left out, the typical run is 10; counted, it is 0.</summary>
+    [Theory]
+    [InlineData(RunsWithoutLoot.Excluded, 5, 10)]
+    [InlineData(RunsWithoutLoot.Counted, 11, 0)]
+    public void Compute_RunsWithoutCountedLoot_AreLeftOutOnlyWhenThePolicySaysSo(RunsWithoutLoot rule, int runCount,
+        double typical)
+    {
+        EarningsSample[] samples =
+        [
+            .. Enumerable.Range(0, 5).Select(index => _Sample($"pilot-{index}", 10m)),
+            .. Enumerable.Range(0, 6).Select(index => _Sample($"unpasted-{index}", 0m) with { LootBasis = LootBasis.None })
+        ];
+
+        EarningsFiguresDto figures = EarningsStatistics.Compute(samples, _ => null,
+            EarningsPolicy.Default with { RunsWithoutLoot = rule }, NowUtc);
+
+        Assert.Equal(runCount, figures.RunCount);
+        Assert.Equal(6, figures.WithoutLootCount);
+        Assert.Equal((decimal)typical, figures.Typical);
+    }
+
+    [Theory]
+    [InlineData(ActivityStatsKind.Site, RunsWithoutLoot.Excluded)]
+    [InlineData(ActivityStatsKind.Mission, RunsWithoutLoot.Counted)]
+    [InlineData(ActivityStatsKind.Abyssal, RunsWithoutLoot.Counted)]
+    [InlineData(ActivityStatsKind.Homefront, RunsWithoutLoot.Counted)]
+    public void PolicyFor_OnlyASiteLeavesItsRunsWithoutCountedLootOut(ActivityStatsKind kind, RunsWithoutLoot rule) =>
+        Assert.Equal(rule, EarningsPolicy.For(kind).RunsWithoutLoot);
 
     private static EarningsSample _Sample(string pilot, decimal fixedIsk, DateTime? completedAtUtc = null) => new()
     {

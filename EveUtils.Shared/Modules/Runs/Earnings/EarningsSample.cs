@@ -28,6 +28,10 @@ public sealed record EarningsSample
     /// <summary>Counted loot lost, one line per type: what left the hold that was not a charge fired.</summary>
     public IReadOnlyList<EarningsLootLine> LootLost { get; init; } = [];
 
+    /// <summary>Ore mined that belongs to the site's yield, one line per type and residue left out: only a homefront's
+    /// (Metaliminal Meteoroid, Abyssal Artifact Recovery), where mining is part of the site (Jithran 18-10).</summary>
+    public IReadOnlyList<EarningsLootLine> Mined { get; init; } = [];
+
     public LootBasis LootBasis { get; init; }
 
     /// <summary>Pasted lines no SDE type carries yet (ET-460): their value is missing from the loot.</summary>

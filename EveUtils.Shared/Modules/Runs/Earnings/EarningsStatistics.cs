@@ -47,10 +47,10 @@ public static class EarningsStatistics
             EffectiveRunCount = effective,
             PilotCount = counted.Select(entry => entry.Sample.PilotBucket).Distinct().Count(),
             ExcludedRunCount = samples.Count(sample => sample.CompletedAtUtc >= sinceUtc && _IsTooShort(sample, policy)),
-            WithoutLootCount = counted.Count(entry => entry.Sample.LootBasis is LootBasis.None),
+            WithoutLootCount = _InWindow(samples, sinceUtc, policy).Count(sample => sample.LootBasis is LootBasis.None),
             IncompleteLootCount = counted.Count(entry => entry.Sample.OpenUnrecognisedLootCount > 0),
             UnpricedItemCount = counted
-                .SelectMany(entry => entry.Sample.LootGained.Concat(entry.Sample.LootLost))
+                .SelectMany(entry => entry.Sample.LootGained.Concat(entry.Sample.LootLost).Concat(entry.Sample.Mined))
                 .Select(line => line.TypeId)
                 .Distinct()
                 .Count(typeId => unitPrice(typeId) is null),
@@ -72,13 +72,23 @@ public static class EarningsStatistics
         };
     }
 
-    /// <summary>Gross yield at today's price: the fixed ISK plus the loot gained less the loot lost.</summary>
+    /// <summary>Gross yield at today's price: the fixed ISK plus the loot gained less the loot lost, plus the ore that
+    /// belongs to the site.</summary>
     public static decimal YieldOf(EarningsSample sample, Func<int, decimal?> unitPrice) =>
         sample.FixedIsk
-        + sample.LootGained.Sum(line => unitPrice(line.TypeId).GetValueOrDefault() * line.Quantity)
-        - sample.LootLost.Sum(line => unitPrice(line.TypeId).GetValueOrDefault() * line.Quantity);
+        + _Value(sample.LootGained, unitPrice)
+        - _Value(sample.LootLost, unitPrice)
+        + _Value(sample.Mined, unitPrice);
+
+    private static decimal _Value(IEnumerable<EarningsLootLine> lines, Func<int, decimal?> unitPrice) =>
+        lines.Sum(line => unitPrice(line.TypeId).GetValueOrDefault() * line.Quantity);
 
     private static IEnumerable<EarningsSample> _Counted(IEnumerable<EarningsSample> samples, DateTime sinceUtc,
+        EarningsPolicy policy) =>
+        _InWindow(samples, sinceUtc, policy)
+            .Where(sample => policy.RunsWithoutLoot is RunsWithoutLoot.Counted || sample.LootBasis is not LootBasis.None);
+
+    private static IEnumerable<EarningsSample> _InWindow(IEnumerable<EarningsSample> samples, DateTime sinceUtc,
         EarningsPolicy policy) =>
         samples.Where(sample => sample.CompletedAtUtc >= sinceUtc && !_IsTooShort(sample, policy));
 
