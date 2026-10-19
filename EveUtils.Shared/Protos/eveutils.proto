@@ -52,6 +52,68 @@ message ListPublishedRunsRequest { string from_utc = 1; string to_utc = 2; }
 message RunActionReply { bool accepted = 1; string message = 2; string last_pushed_at_utc = 3; }
 message PullRunsReply { bool accepted = 1; string message = 2; repeated string payload_json = 3; }
 
+// --- Anonymous run outcomes for the earnings statistic (ET-514): opt-in on the client, a separate minimal record —
+// never the RunWirePayload. The sharer is the authenticated session; the server keeps only keyed pseudonyms of the
+// character and the activity, and hands back no id, pilot, bucket, name or place, only the per-pilot cap weight.
+// Enum fields carry the C# enum's int value. Days are ISO 8601 dates (yyyy-MM-dd), ISK an invariant decimal string.
+// A refusal is accepted = false with a machine-readable code (PERMISSION_DENIED while the server's switch is off). ---
+service RunOutcomes {
+  // Stores or replaces the outcome of one activity, or with deleted = true takes it back (the tombstone).
+  rpc ShareOutcome (ShareOutcomeRequest) returns (RunOutcomeActionReply);
+  // The opt-out: removes every outcome the acting character shared. Never refused by the switch.
+  rpc WithdrawMyOutcomes (WithdrawMyOutcomesRequest) returns (RunOutcomeActionReply);
+  rpc GetOutcomes (GetOutcomesRequest) returns (GetOutcomesReply);
+  // The loot lines of one activity's outcomes, read only when a loot table opens (ET-519).
+  rpc GetOutcomeLoot (GetOutcomeLootRequest) returns (GetOutcomeLootReply);
+  rpc ListOutcomeKeys (ListOutcomeKeysRequest) returns (ListOutcomeKeysReply);
+}
+
+// ActivityStatsKey (ET-513): only the parts its kind uses are read.
+message RunOutcomeKey {
+  int32 kind = 1;
+  optional int32 site_type_source = 2;
+  int32 type_id = 3;
+  string name = 4;
+  optional int32 mission_level = 5;
+  optional int32 abyssal_tier = 6;
+  string abyssal_weather = 7;
+}
+message RunOutcomeLootLine { int32 kind = 1; int32 type_id = 2; int64 quantity = 3; }
+message ShareOutcomeRequest {
+  // The activity's group code, or the run id of a solo run: hashed with the server's key, never stored as sent.
+  string activity_ref = 1;
+  int64 revision = 2;
+  bool deleted = 3;
+  RunOutcomeKey key = 4;
+  string completed_on = 5;
+  optional int32 duration_seconds = 6;
+  string fixed_isk = 7;
+  int32 fleet_size = 8;
+  int32 loot_basis = 9;
+  int32 open_unrecognised_loot_count = 10;
+  repeated RunOutcomeLootLine loot = 11;
+}
+message RunOutcomeActionReply { bool accepted = 1; string message = 2; string code = 3; int32 status = 4; int32 count = 5; }
+message WithdrawMyOutcomesRequest { }
+message GetOutcomesRequest { repeated RunOutcomeKey keys = 1; string since = 2; }
+message RunOutcomeRow {
+  string completed_on = 1;
+  optional int32 duration_seconds = 2;
+  string fixed_isk = 3;
+  int32 fleet_size = 4;
+  int32 loot_basis = 5;
+  int32 open_unrecognised_loot_count = 6;
+  double weight = 7;
+}
+message ActivityOutcomes { RunOutcomeKey key = 1; int32 pilot_count = 2; repeated RunOutcomeRow outcomes = 3; }
+message GetOutcomesReply { bool accepted = 1; string message = 2; string code = 3; repeated ActivityOutcomes activities = 4; }
+message GetOutcomeLootRequest { RunOutcomeKey key = 1; string since = 2; }
+message RunOutcomeLoot { string completed_on = 1; int32 fleet_size = 2; int32 loot_basis = 3; double weight = 4; repeated RunOutcomeLootLine lines = 5; }
+message GetOutcomeLootReply { bool accepted = 1; string message = 2; string code = 3; repeated RunOutcomeLoot outcomes = 4; }
+message ListOutcomeKeysRequest { string since = 1; }
+message OutcomeKeyCount { RunOutcomeKey key = 1; int32 run_count = 2; double effective_run_count = 3; int32 pilot_count = 4; }
+message ListOutcomeKeysReply { bool accepted = 1; string message = 2; string code = 3; repeated OutcomeKeyCount keys = 4; }
+
 message DeleteSharedFitRequest { int32 id = 1; }
 message DeleteSharedFitReply { bool accepted = 1; string message = 2; }
 

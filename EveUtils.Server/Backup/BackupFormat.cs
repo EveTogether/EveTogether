@@ -11,6 +11,7 @@ namespace EveUtils.Server.Backup;
 /// database/000.&lt;Table&gt;.jsonl       one file per table; the number is the insert order
 /// data/token-protector.key            decrypts SyncedCharacter.RefreshTokenCipher — the reason this exists
 /// data/server-cert.pfx                the pinned TLS identity; without it every client must pair again
+/// data/run-outcomes.key               keys the shared run outcomes' pseudonyms; without it every sharer is a new one
 /// </code>
 /// Deliberately absent: <c>appsettings.*</c>, connection strings and the ESI secret (they are per-installation),
 /// and <c>esi-cache/</c> + <c>sde/</c> (both rebuild themselves, and the SDE is large).

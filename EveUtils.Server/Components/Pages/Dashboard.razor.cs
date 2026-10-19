@@ -2,7 +2,10 @@ using EveUtils.Server.DataExplorer;
 using EveUtils.Server.Permissions;
 using EveUtils.Server.Transport;
 using EveUtils.Shared.Modules.AdminAuth.Permissions;
+using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.Modules.Permissions.Repositories;
+using EveUtils.Shared.Modules.RunOutcomes;
+using EveUtils.Shared.Modules.RunOutcomes.Queries;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Authorization;
@@ -17,8 +20,11 @@ public partial class Dashboard : ComponentBase
     [Inject] private AuthenticationStateProvider AuthState { get; set; } = default!;
     [Inject] private IAuthorizationService Authorization { get; set; } = default!;
 
+    [Inject] private IDispatcher Dispatcher { get; set; } = default!;
+
     private DashboardOverview? _overview;
     private bool _canViewData;
+    private int _runOutcomeCount;
 
     private string Fingerprint => CertificateInfo.Fingerprint;
     private bool FitSyncEnabled
@@ -32,9 +38,17 @@ public partial class Dashboard : ComponentBase
         set => Toggles.SetEnabled(EveUtils.Shared.Modules.Fittings.FittingsPermissions.Manage, value);
     }
 
-    // The tiles and the attention list carry names and ids from the Data pages, so they need the same permission.
+    private bool RunOutcomesEnabled
+    {
+        get => Toggles.IsEnabled(RunOutcomesModule.EnabledToggle);
+        set => Toggles.SetEnabled(RunOutcomesModule.EnabledToggle, value);
+    }
+
+    // The tiles and the attention list carry names and ids from the Data pages, so they need the same permission. The
+    // outcome count names nobody.
     protected override async Task OnInitializedAsync()
     {
+        _runOutcomeCount = (await Dispatcher.Query(new CountRunOutcomesQuery())).Value;
         var user = (await AuthState.GetAuthenticationStateAsync()).User;
         _canViewData = (await Authorization.AuthorizeAsync(user, PanelPermissions.DataView)).Succeeded;
         if (_canViewData)

@@ -12,6 +12,7 @@ using EveUtils.Server.Fittings;
 using EveUtils.Server.Grpc;
 using EveUtils.Server.Messaging;
 using EveUtils.Server.Permissions;
+using EveUtils.Server.RunOutcomes;
 using EveUtils.Server.Stream;
 using EveUtils.Server.Transport;
 using EveUtils.Shared.Cqrs;
@@ -136,6 +137,7 @@ builder.Services.AddHostedService<DpsBroadcastBridge>();                // serve
 builder.Services.AddHostedService<ServerTokenRefreshService>();         // token refresh
 builder.Services.AddHostedService<ServerSessionCleanupService>();       // purge expired sessions
 builder.Services.AddHostedService<MessageRetentionService>();           // purge expired queued messages
+builder.Services.AddHostedService<RunOutcomeRetentionService>();        // purge shared run outcomes past 400 days
 
 builder.Services.AddServerIdentity();                      // foundation: fixed server principal
 // IPermissionToggleStore/EfPermissionToggleStore now live in Shared (Modules/Permissions/Repositories) and
@@ -175,6 +177,7 @@ builder.Services.AddServerAuthModule(dataDirectory);
 // Backup/restore engine: the exporter, restorer and panel service carry lifetime markers and are picked up by
 // AddAutoServices above; only the data directory has to be handed in, like the modules that write into it.
 builder.Services.AddSingleton(new ServerBackupOptions(dataDirectory));
+builder.Services.AddSingleton(new RunOutcomePseudonyms(dataDirectory)); // keyed pseudonyms of shared run outcomes (ET-514)
 builder.Services.AddAdminAuthModule();      // admin users/roles/RBAC catalog for the Blazor panel
 builder.Services.AddFittingsServerModule(); // SharedFit store + wire events + fit.sync gate
 builder.Services.AddFleetModule();          // fleet persistence
@@ -303,6 +306,7 @@ app.MapGrpcService<SessionService>();
 app.MapGrpcService<EventBusStreamService>();
 app.MapGrpcService<FittingsGrpcService>();
 app.MapGrpcService<RunsGrpcService>();
+app.MapGrpcService<RunOutcomesGrpcService>();
 app.MapGrpcService<FleetsGrpcService>();
 app.MapRazorComponents<App>().AddInteractiveServerRenderMode(); // Blazor admin panel at "/"
 app.MapHub<DpsHub>("/hubs/dps");                                // live DPS stream hub

@@ -770,6 +770,115 @@ namespace EveUtils.Migrations.Server.PostgreSql.Migrations
                     b.ToTable("PermissionToggle");
                 });
 
+            modelBuilder.Entity("EveUtils.Shared.Modules.RunOutcomes.Entities.RunOutcome", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<int?>("AbyssalTier")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("AbyssalWeather")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("ActivityId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime>("CompletedOn")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ContributorBucket")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<int?>("DurationSeconds")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("FixedIsk")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<int>("FleetSize")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("KeyCode")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)");
+
+                    b.Property<int>("LootBasis")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("MissionLevel")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("NormalizedName")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<int>("OpenUnrecognisedLootCount")
+                        .HasColumnType("integer");
+
+                    b.Property<long>("Revision")
+                        .HasColumnType("bigint");
+
+                    b.Property<int?>("SiteTypeSource")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("StatsKind")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("TypeId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ActivityId")
+                        .IsUnique();
+
+                    b.HasIndex("CompletedOn");
+
+                    b.HasIndex("ContributorBucket");
+
+                    b.HasIndex("KeyCode", "CompletedOn");
+
+                    b.ToTable("RunOutcome");
+                });
+
+            modelBuilder.Entity("EveUtils.Shared.Modules.RunOutcomes.Entities.RunOutcomeLootLine", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("integer");
+
+                    b.Property<long>("Quantity")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("RunOutcomeId")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("TypeId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RunOutcomeId");
+
+                    b.ToTable("RunOutcomeLootLine");
+                });
+
             modelBuilder.Entity("EveUtils.Shared.Modules.Runs.Entities.Run", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1748,6 +1857,17 @@ namespace EveUtils.Migrations.Server.PostgreSql.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("EveUtils.Shared.Modules.RunOutcomes.Entities.RunOutcomeLootLine", b =>
+                {
+                    b.HasOne("EveUtils.Shared.Modules.RunOutcomes.Entities.RunOutcome", "RunOutcome")
+                        .WithMany("LootLines")
+                        .HasForeignKey("RunOutcomeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("RunOutcome");
+                });
+
             modelBuilder.Entity("EveUtils.Shared.Modules.Runs.Entities.RunAttendanceEntry", b =>
                 {
                     b.HasOne("EveUtils.Shared.Modules.Runs.Entities.Run", "Run")
@@ -1894,6 +2014,11 @@ namespace EveUtils.Migrations.Server.PostgreSql.Migrations
                     b.Navigation("Permissions");
 
                     b.Navigation("UserRoles");
+                });
+
+            modelBuilder.Entity("EveUtils.Shared.Modules.RunOutcomes.Entities.RunOutcome", b =>
+                {
+                    b.Navigation("LootLines");
                 });
 
             modelBuilder.Entity("EveUtils.Shared.Modules.Runs.Entities.Run", b =>

@@ -51,6 +51,10 @@
                             <div class="lbl"><span class="c">fit.manage</span> — allow clients to delete fits from the shared library</div>
                             <label class="switch"><input type="checkbox" aria-label="fit.manage" @bind="FitManageEnabled" /><span class="track"><span class="knob"></span></span></label>
                         </div>
+                        <div class="switchrow">
+                            <div class="lbl"><span class="c">runs.outcomes.enabled</span> — collect anonymous run outcomes for the earnings statistic (@_runOutcomeCount stored)</div>
+                            <label class="switch"><input type="checkbox" aria-label="runs.outcomes.enabled" @bind="RunOutcomesEnabled" /><span class="track"><span class="knob"></span></span></label>
+                        </div>
                     </Card>
                 </div>
             </div>

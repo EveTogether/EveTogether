@@ -22,6 +22,7 @@ using EveUtils.Shared.Modules.Killmails.Entities;
 using EveUtils.Shared.Modules.Killmails.Enums;
 using EveUtils.Shared.Modules.Killmails.Events;
 using EveUtils.Shared.Modules.Messaging.Commands;
+using EveUtils.Shared.Modules.RunOutcomes.Commands;
 using EveUtils.Shared.Modules.Runs.Commands;
 using EveUtils.Shared.Modules.Runs.Events;
 using EveUtils.Shared.Modules.Settings.Commands;
@@ -184,7 +185,17 @@ public sealed class CommandSignalCoverageTests
         [typeof(StoreSharedFitCommand)] = "writes the server's shared fit library, which the client harness has no store "
             + "for; proven through the server relay in SharedFitLibraryBroadcastTests",
         [typeof(DeleteSharedFitCommand)] = "writes the server's shared fit library, which the client harness has no store "
-            + "for; proven through the server relay in SharedFitLibraryBroadcastTests and AdminDeleteBroadcastTests"
+            + "for; proven through the server relay in SharedFitLibraryBroadcastTests and AdminDeleteBroadcastTests",
+        // ET-514: the shared run outcomes exist on a server only; the client harness has no table for them. Each raises
+        // RunOutcomesChangedEvent after its write, proven through the gRPC service in RunOutcomesGrpcServiceTests.
+        [typeof(ShareRunOutcomeCommand)] = "writes the server's shared run outcomes, which the client harness has no store "
+            + "for; its signal is proven in RunOutcomesGrpcServiceTests",
+        [typeof(RetractRunOutcomeCommand)] = "writes the server's shared run outcomes, which the client harness has no store "
+            + "for; its signal is proven in RunOutcomesGrpcServiceTests",
+        [typeof(WithdrawRunOutcomesCommand)] = "writes the server's shared run outcomes, which the client harness has no "
+            + "store for; its signal is proven in RunOutcomesGrpcServiceTests",
+        [typeof(PruneRunOutcomesCommand)] = "writes the server's shared run outcomes, which the client harness has no store "
+            + "for; its signal is proven in RunOutcomesGrpcServiceTests"
     };
 
     /// <summary>Commands measured by ET-379 to publish no signal, each against the ticket that closes it. This list
