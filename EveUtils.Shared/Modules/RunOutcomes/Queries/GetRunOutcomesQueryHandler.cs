@@ -3,6 +3,7 @@ using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Permissions.Repositories;
 using EveUtils.Shared.Modules.RunOutcomes.Dtos;
 using EveUtils.Shared.Modules.RunOutcomes.Entities;
+using EveUtils.Shared.Modules.RunOutcomes.Enums;
 using EveUtils.Shared.Modules.RunOutcomes.Repositories;
 using EveUtils.Shared.Modules.Runs.Earnings;
 
@@ -25,32 +26,35 @@ internal sealed class GetRunOutcomesQueryHandler(IRunOutcomeReader outcomes, IPe
         if (keys.Count == 0)
             return Result<IReadOnlyList<ActivityOutcomesDto>>.Success([]);
 
-        IReadOnlyList<RunOutcome> stored = await outcomes.ListAsync(keys.Keys, RunOutcomesGate.Since(query.Since), cancellationToken);
+        ILookup<string, RunOutcome> stored = (await outcomes.ListAsync(keys.Keys, RunOutcomesGate.Since(query.Since), cancellationToken))
+            .ToLookup(outcome => outcome.KeyCode, StringComparer.Ordinal);
+        // Every key asked for answers, so a client can tell "too few pilots" apart from a key it got wrong.
         return Result<IReadOnlyList<ActivityOutcomesDto>>.Success(
-        [
-            .. stored
-                .GroupBy(outcome => outcome.KeyCode, StringComparer.Ordinal)
-                .Select(activity => _Activity(keys[activity.Key], [.. activity]))
-        ]);
+            [.. keys.Select(key => _Activity(key.Value, [.. stored[key.Key]]))]);
     }
 
     private static ActivityOutcomesDto _Activity(ActivityStatsKey key, IReadOnlyList<RunOutcome> outcomes)
     {
         IReadOnlyList<(RunOutcome Outcome, double Weight)> weighted = RunOutcomeWeights.Of(outcomes);
+        int pilotCount = RunOutcomeWeights.PilotCount(weighted);
+        SharedOutcomesAvailability availability = RunOutcomeWeights.Availability(pilotCount);
         return new ActivityOutcomesDto
         {
             Key = key,
-            PilotCount = RunOutcomeWeights.PilotCount(weighted),
-            Outcomes = [.. weighted.Select(entry => new RunOutcomeDto
-            {
-                CompletedOn = DateOnly.FromDateTime(entry.Outcome.CompletedOn),
-                DurationSeconds = entry.Outcome.DurationSeconds,
-                FixedIsk = entry.Outcome.FixedIsk,
-                FleetSize = entry.Outcome.FleetSize,
-                LootBasis = entry.Outcome.LootBasis,
-                OpenUnrecognisedLootCount = entry.Outcome.OpenUnrecognisedLootCount,
-                Weight = entry.Weight
-            })]
+            Availability = availability,
+            PilotCount = pilotCount,
+            Outcomes = availability is SharedOutcomesAvailability.Shared
+                ? [.. weighted.Select(entry => new RunOutcomeDto
+                {
+                    CompletedOn = DateOnly.FromDateTime(entry.Outcome.CompletedOn),
+                    DurationSeconds = entry.Outcome.DurationSeconds,
+                    FixedIsk = entry.Outcome.FixedIsk,
+                    FleetSize = entry.Outcome.FleetSize,
+                    LootBasis = entry.Outcome.LootBasis,
+                    OpenUnrecognisedLootCount = entry.Outcome.OpenUnrecognisedLootCount,
+                    Weight = entry.Weight
+                })]
+                : []
         };
     }
 }

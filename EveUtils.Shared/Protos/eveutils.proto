@@ -65,6 +65,7 @@ service RunOutcomes {
   rpc GetOutcomes (GetOutcomesRequest) returns (GetOutcomesReply);
   // The loot lines of one activity's outcomes, read only when a loot table opens (ET-519).
   rpc GetOutcomeLoot (GetOutcomeLootRequest) returns (GetOutcomeLootReply);
+  // Only activities at least 2 pilots contribute to in the window.
   rpc ListOutcomeKeys (ListOutcomeKeysRequest) returns (ListOutcomeKeysReply);
 }
 
@@ -105,11 +106,13 @@ message RunOutcomeRow {
   int32 open_unrecognised_loot_count = 6;
   double weight = 7;
 }
-message ActivityOutcomes { RunOutcomeKey key = 1; int32 pilot_count = 2; repeated RunOutcomeRow outcomes = 3; }
+// availability: SharedOutcomesAvailability (0 = Shared, 1 = TooFewPilots: fewer than 2 pilots contribute in the window,
+// so no outcomes are handed out and the client falls back to its own runs; Jithran 19-10).
+message ActivityOutcomes { RunOutcomeKey key = 1; int32 pilot_count = 2; repeated RunOutcomeRow outcomes = 3; int32 availability = 4; }
 message GetOutcomesReply { bool accepted = 1; string message = 2; string code = 3; repeated ActivityOutcomes activities = 4; }
 message GetOutcomeLootRequest { RunOutcomeKey key = 1; string since = 2; }
 message RunOutcomeLoot { string completed_on = 1; int32 fleet_size = 2; int32 loot_basis = 3; double weight = 4; repeated RunOutcomeLootLine lines = 5; }
-message GetOutcomeLootReply { bool accepted = 1; string message = 2; string code = 3; repeated RunOutcomeLoot outcomes = 4; }
+message GetOutcomeLootReply { bool accepted = 1; string message = 2; string code = 3; repeated RunOutcomeLoot outcomes = 4; int32 availability = 5; int32 pilot_count = 6; }
 message ListOutcomeKeysRequest { string since = 1; }
 message OutcomeKeyCount { RunOutcomeKey key = 1; int32 run_count = 2; double effective_run_count = 3; int32 pilot_count = 4; }
 message ListOutcomeKeysReply { bool accepted = 1; string message = 2; string code = 3; repeated OutcomeKeyCount keys = 4; }

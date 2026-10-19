@@ -1,4 +1,5 @@
 using EveUtils.Shared.Modules.RunOutcomes.Entities;
+using EveUtils.Shared.Modules.RunOutcomes.Enums;
 using EveUtils.Shared.Modules.Runs.Earnings;
 
 namespace EveUtils.Shared.Modules.RunOutcomes;
@@ -24,6 +25,9 @@ internal static class RunOutcomeWeights
     /// <summary>The contributors behind the outcomes the statistic counts.</summary>
     public static int PilotCount(IReadOnlyList<(RunOutcome Outcome, double Weight)> weighted) =>
         weighted.Where(entry => entry.Weight > 0).Select(entry => entry.Outcome.ContributorBucket).Distinct(StringComparer.Ordinal).Count();
+
+    public static SharedOutcomesAvailability Availability(int pilotCount) =>
+        pilotCount >= RunOutcomesModule.MinimumPilots ? SharedOutcomesAvailability.Shared : SharedOutcomesAvailability.TooFewPilots;
 
     // Only what the cap and the exclusions read: the window is already applied by the query.
     private static EarningsSample _Sample(RunOutcome outcome) => new()

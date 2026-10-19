@@ -244,6 +244,40 @@ public sealed class RunOutcomesGrpcServiceTests : IDisposable
         Assert.Empty(await _StoredAsync());
     }
 
+    /// <summary>Jithran 19-10: on a small server one pilot's outcomes are that pilot's own runs, readable by anyone. No
+    /// shared figure, loot table or count exists until a second pilot contributes in the window.</summary>
+    [Fact]
+    public async Task Reads_OnePilotsOutcomes_AreNeverReturned_TwoPilotsAre()
+    {
+        RunOutcomesGrpcService service = await _ServiceAsync();
+        ServerCallContext ayla = _Context(Ayla);
+        for (int run = 0; run < 6; run++)
+            await service.ShareOutcome(_Share($"j-{run}", _Today(-1 - run)), _Context(Jithran));
+
+        GetOutcomesReply alone = await service.GetOutcomes(_Get(_Today(-90)), ayla);
+        GetOutcomeLootReply aloneLoot = await service.GetOutcomeLoot(new GetOutcomeLootRequest { Key = _SiteKey(), Since = _Today(-90) }, ayla);
+        ListOutcomeKeysReply aloneKeys = await service.ListOutcomeKeys(new ListOutcomeKeysRequest { Since = _Today(-90) }, ayla);
+
+        Assert.True(alone.Accepted && aloneLoot.Accepted && aloneKeys.Accepted);
+        Assert.All(alone.Activities, activity => Assert.Empty(activity.Outcomes));
+        Assert.Empty(aloneLoot.Outcomes);
+        Assert.Empty(aloneKeys.Keys);
+        ActivityOutcomes withheld = Assert.Single(alone.Activities);
+        Assert.Equal(((int)SharedOutcomesAvailability.TooFewPilots, 1), (withheld.Availability, withheld.PilotCount));
+        Assert.Equal(((int)SharedOutcomesAvailability.TooFewPilots, 1), (aloneLoot.Availability, aloneLoot.PilotCount));
+
+        await service.ShareOutcome(_Share("r-0", _Today(-1)), _Context(Raymond));
+        GetOutcomesReply together = await service.GetOutcomes(_Get(_Today(-90)), ayla);
+        GetOutcomeLootReply togetherLoot = await service.GetOutcomeLoot(new GetOutcomeLootRequest { Key = _SiteKey(), Since = _Today(-90) }, ayla);
+        ListOutcomeKeysReply togetherKeys = await service.ListOutcomeKeys(new ListOutcomeKeysRequest { Since = _Today(-90) }, ayla);
+
+        Assert.Equal(7, Assert.Single(together.Activities).Outcomes.Count);
+        Assert.Equal((int)SharedOutcomesAvailability.Shared, together.Activities[0].Availability);
+        Assert.Equal((int)SharedOutcomesAvailability.Shared, togetherLoot.Availability);
+        Assert.Equal(7, togetherLoot.Outcomes.Count);
+        Assert.Equal(2, Assert.Single(togetherKeys.Keys).PilotCount);
+    }
+
     [Fact]
     public async Task GetOutcomes_FarmerAndCasual_CapsEachPilotAtTenRuns()
     {
@@ -274,11 +308,12 @@ public sealed class RunOutcomesGrpcServiceTests : IDisposable
             await service.ShareOutcome(_Share($"j-{run}", _Today(-1)), jithran);
         await service.ShareOutcome(_Share("j-uncounted", _Today(-1), lootBasis: LootBasis.None), jithran);
         await service.ShareOutcome(_Share("j-short", _Today(-1), durationSeconds: 59), jithran);
+        await service.ShareOutcome(_Share("r-0", _Today(-1)), _Context(Raymond));
 
         RunOutcomeRow[] rows = [.. Assert.Single((await service.GetOutcomes(_Get(_Today(-90)), jithran)).Activities).Outcomes];
 
-        Assert.Equal(12, rows.Length);
-        Assert.Equal(10, rows.Count(row => row.Weight == 1));
+        Assert.Equal(13, rows.Length);
+        Assert.Equal(11, rows.Count(row => row.Weight == 1));
         Assert.Single(rows, row => row is { LootBasis: (int)LootBasis.None, Weight: 0 });
         Assert.Single(rows, row => row is { DurationSeconds: 0, Weight: 0 });
     }
@@ -291,9 +326,12 @@ public sealed class RunOutcomesGrpcServiceTests : IDisposable
         RunOutcomeKey mission = new() { Kind = (int)ActivityStatsKind.Mission, TypeId = 2821, MissionLevel = 4 };
 
         await service.ShareOutcome(_Share("m-1", _Today(-1), lootBasis: LootBasis.None, key: mission), jithran);
+        await service.ShareOutcome(_Share("m-2", _Today(-1), lootBasis: LootBasis.None, key: mission), _Context(Raymond));
         GetOutcomesReply reply = await service.GetOutcomes(new GetOutcomesRequest { Keys = { mission }, Since = _Today(-90) }, jithran);
 
-        Assert.Equal(1, Assert.Single(Assert.Single(reply.Activities).Outcomes).Weight);
+        RunOutcomeRow[] rows = [.. Assert.Single(reply.Activities).Outcomes];
+        Assert.Equal(2, rows.Length);
+        Assert.All(rows, row => Assert.Equal(1, row.Weight));
     }
 
     [Fact]
@@ -303,13 +341,14 @@ public sealed class RunOutcomesGrpcServiceTests : IDisposable
         ServerCallContext jithran = _Context(Jithran);
         await service.ShareOutcome(_Share("recent", _Today(-10)), jithran);
         await service.ShareOutcome(_Share("older", _Today(-200)), jithran);
+        await service.ShareOutcome(_Share("mate", _Today(-10)), _Context(Raymond));
         await _SeedAsync(DateOnly.FromDateTime(DateTime.UtcNow).AddDays(-380));
 
         GetOutcomesReply recent = await service.GetOutcomes(_Get(_Today(-90)), jithran);
         GetOutcomesReply widest = await service.GetOutcomes(_Get(_Today(-1000)), jithran);
 
-        Assert.Equal(new[] { _Today(-10) }, Assert.Single(recent.Activities).Outcomes.Select(outcome => outcome.CompletedOn));
-        Assert.Equal(new[] { _Today(-10), _Today(-200) },
+        Assert.Equal(new[] { _Today(-10), _Today(-10) }, Assert.Single(recent.Activities).Outcomes.Select(outcome => outcome.CompletedOn));
+        Assert.Equal(new[] { _Today(-10), _Today(-10), _Today(-200) },
             Assert.Single(widest.Activities).Outcomes.Select(outcome => outcome.CompletedOn).Order(StringComparer.Ordinal).Reverse());
     }
 
@@ -337,7 +376,7 @@ public sealed class RunOutcomesGrpcServiceTests : IDisposable
         RunOutcomeKey Named(string name) => new() { Kind = (int)ActivityStatsKind.Site, SiteTypeSource = (int)SiteTypeSource.Uncatalogued, Name = name };
 
         await service.ShareOutcome(_Share("a", _Today(-1), key: Named("Forgotten  Perimeter Gateway "), durationSeconds: 1199), jithran);
-        await service.ShareOutcome(_Share("b", _Today(-1), key: Named("forgotten perimeter gateway")), jithran);
+        await service.ShareOutcome(_Share("b", _Today(-1), key: Named("forgotten perimeter gateway")), _Context(Raymond));
         ActivityOutcomes activity = Assert.Single((await service.GetOutcomes(
             new GetOutcomesRequest { Keys = { Named("FORGOTTEN PERIMETER GATEWAY") }, Since = _Today(-90) }, jithran)).Activities);
 

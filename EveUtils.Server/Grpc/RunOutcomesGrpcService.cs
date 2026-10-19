@@ -72,7 +72,10 @@ public sealed class RunOutcomesGrpcService(ServerSessionService sessions, RunOut
         GetOutcomesReply reply = new() { Accepted = true };
         reply.Activities.AddRange(activities.Select(activity =>
         {
-            ActivityOutcomes wire = new() { Key = _Wire(activity.Key), PilotCount = activity.PilotCount };
+            ActivityOutcomes wire = new()
+            {
+                Key = _Wire(activity.Key), PilotCount = activity.PilotCount, Availability = (int)activity.Availability
+            };
             wire.Outcomes.AddRange(activity.Outcomes.Select(outcome =>
             {
                 RunOutcomeRow row = new()
@@ -99,13 +102,13 @@ public sealed class RunOutcomesGrpcService(ServerSessionService sessions, RunOut
         if (!_TryDate(request.Since, out DateOnly since) || request.Key is null)
             return new GetOutcomeLootReply { Accepted = false, Code = MessageCodes.ValidationFailed, Message = "Invalid request." };
 
-        Result<IReadOnlyList<RunOutcomeLootDto>> read = await dispatcher.Query(
+        Result<ActivityOutcomeLootDto> read = await dispatcher.Query(
             new GetRunOutcomeLootQuery(_Key(request.Key), since), context.CancellationToken);
-        if (!read.IsSuccess || read.Value is not { } outcomes)
+        if (!read.IsSuccess || read.Value is not { } loot)
             return new GetOutcomeLootReply { Accepted = false, Code = _Code(read), Message = _Text(read) };
 
-        GetOutcomeLootReply reply = new() { Accepted = true };
-        reply.Outcomes.AddRange(outcomes.Select(outcome =>
+        GetOutcomeLootReply reply = new() { Accepted = true, Availability = (int)loot.Availability, PilotCount = loot.PilotCount };
+        reply.Outcomes.AddRange(loot.Outcomes.Select(outcome =>
         {
             RunOutcomeLoot wire = new()
             {

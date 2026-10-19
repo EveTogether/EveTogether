@@ -3,6 +3,7 @@ using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.Permissions.Repositories;
 using EveUtils.Shared.Modules.RunOutcomes.Dtos;
 using EveUtils.Shared.Modules.RunOutcomes.Entities;
+using EveUtils.Shared.Modules.RunOutcomes.Enums;
 using EveUtils.Shared.Modules.RunOutcomes.Repositories;
 
 namespace EveUtils.Shared.Modules.RunOutcomes.Queries;
@@ -32,6 +33,8 @@ internal sealed class ListRunOutcomeKeysQueryHandler(IRunOutcomeReader outcomes,
                         PilotCount = RunOutcomeWeights.PilotCount(weighted)
                     };
                 })
+                // Even a count of one pilot's runs is that pilot's data (Jithran 19-10).
+                .Where(activity => RunOutcomeWeights.Availability(activity.PilotCount) is SharedOutcomesAvailability.Shared)
                 .OrderByDescending(activity => activity.EffectiveRunCount)
                 .ThenBy(activity => activity.Key.Code, StringComparer.Ordinal)
         ]);
