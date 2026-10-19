@@ -83,10 +83,27 @@ public static class EarningsStatistics
     private static decimal _Value(IEnumerable<EarningsLootLine> lines, Func<int, decimal?> unitPrice) =>
         lines.Sum(line => unitPrice(line.TypeId).GetValueOrDefault() * line.Quantity);
 
+    /// <summary>The per-pilot cap weight of each sample, in order, as <see cref="Compute"/> weighs them: min(1, C / the
+    /// pilot's counted samples), and 0 for a sample the policy leaves out. For a caller that hands the weights on
+    /// without the pilot bucket they were counted by — a server's anonymous outcomes (ET-514).</summary>
+    public static IReadOnlyList<double> CapWeights(IReadOnlyList<EarningsSample> samples, EarningsPolicy policy)
+    {
+        Dictionary<string, int> runsByPilot = samples
+            .Where(sample => _IsCounted(sample, policy))
+            .GroupBy(sample => sample.PilotBucket, StringComparer.Ordinal)
+            .ToDictionary(pilot => pilot.Key, pilot => pilot.Count(), StringComparer.Ordinal);
+        return [.. samples.Select(sample => _IsCounted(sample, policy)
+            ? Math.Min(1d, (double)policy.RunsPerPilotCap / runsByPilot[sample.PilotBucket])
+            : 0d)];
+    }
+
     private static IEnumerable<EarningsSample> _Counted(IEnumerable<EarningsSample> samples, DateTime sinceUtc,
         EarningsPolicy policy) =>
-        _InWindow(samples, sinceUtc, policy)
-            .Where(sample => policy.RunsWithoutLoot is RunsWithoutLoot.Counted || sample.LootBasis is not LootBasis.None);
+        samples.Where(sample => sample.CompletedAtUtc >= sinceUtc && _IsCounted(sample, policy));
+
+    private static bool _IsCounted(EarningsSample sample, EarningsPolicy policy) =>
+        !_IsTooShort(sample, policy)
+        && (policy.RunsWithoutLoot is RunsWithoutLoot.Counted || sample.LootBasis is not LootBasis.None);
 
     private static IEnumerable<EarningsSample> _InWindow(IEnumerable<EarningsSample> samples, DateTime sinceUtc,
         EarningsPolicy policy) =>

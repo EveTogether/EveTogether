@@ -731,6 +731,111 @@ namespace EveUtils.Migrations.Server.Sqlite.Migrations
                     b.ToTable("PermissionToggle");
                 });
 
+            modelBuilder.Entity("EveUtils.Shared.Modules.RunOutcomes.Entities.RunOutcome", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("AbyssalTier")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("AbyssalWeather")
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ActivityId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CompletedOn")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ContributorBucket")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("DurationSeconds")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<decimal>("FixedIsk")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("FleetSize")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("KeyCode")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("LootBasis")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("MissionLevel")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("NormalizedName")
+                        .HasMaxLength(255)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("OpenUnrecognisedLootCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("Revision")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("SiteTypeSource")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("StatsKind")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("TypeId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ActivityId")
+                        .IsUnique();
+
+                    b.HasIndex("CompletedOn");
+
+                    b.HasIndex("ContributorBucket");
+
+                    b.HasIndex("KeyCode", "CompletedOn");
+
+                    b.ToTable("RunOutcome");
+                });
+
+            modelBuilder.Entity("EveUtils.Shared.Modules.RunOutcomes.Entities.RunOutcomeLootLine", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("Quantity")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("RunOutcomeId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("TypeId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RunOutcomeId");
+
+                    b.ToTable("RunOutcomeLootLine");
+                });
+
             modelBuilder.Entity("EveUtils.Shared.Modules.Runs.Entities.Run", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1697,6 +1802,17 @@ namespace EveUtils.Migrations.Server.Sqlite.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("EveUtils.Shared.Modules.RunOutcomes.Entities.RunOutcomeLootLine", b =>
+                {
+                    b.HasOne("EveUtils.Shared.Modules.RunOutcomes.Entities.RunOutcome", "RunOutcome")
+                        .WithMany("LootLines")
+                        .HasForeignKey("RunOutcomeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("RunOutcome");
+                });
+
             modelBuilder.Entity("EveUtils.Shared.Modules.Runs.Entities.RunAttendanceEntry", b =>
                 {
                     b.HasOne("EveUtils.Shared.Modules.Runs.Entities.Run", "Run")
@@ -1843,6 +1959,11 @@ namespace EveUtils.Migrations.Server.Sqlite.Migrations
                     b.Navigation("Permissions");
 
                     b.Navigation("UserRoles");
+                });
+
+            modelBuilder.Entity("EveUtils.Shared.Modules.RunOutcomes.Entities.RunOutcome", b =>
+                {
+                    b.Navigation("LootLines");
                 });
 
             modelBuilder.Entity("EveUtils.Shared.Modules.Runs.Entities.Run", b =>

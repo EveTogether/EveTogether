@@ -1,3 +1,5 @@
+using EveUtils.Server.RunOutcomes;
+
 namespace EveUtils.Server.Backup;
 
 /// <summary>Where the backup engine reads and writes the server's identity files. Registered by the host, which is
@@ -15,6 +17,7 @@ internal sealed class ServerBackupOptions(string dataDirectory)
     public static readonly IReadOnlyList<string> ArchivedFiles =
     [
         BackupFormat.ServerCertificateFile,
+        RunOutcomePseudonyms.KeyFileName,
         BackupFormat.TokenProtectorKeyFile,
     ];
 }
