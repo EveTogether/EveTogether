@@ -1474,13 +1474,16 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
 
         var localApi = _services.GetService<LocalApi.ILocalApiServer>();
         var localApiStatusLabel = localApi is not null ? _LocalApiStatusLabel(localApi.Status) : "";
+        var outcomeSharing = await OutcomeSharingSettingsViewModel.LoadAsync(
+            _services.GetRequiredService<EveUtils.Client.Runs.RunOutcomePublisher>(),
+            _services.GetRequiredService<IClientSessionStore>(), _services.GetRequiredService<IServerRegistry>(), DateTime.UtcNow);
         _dialogs.ShowSettings(
             current, GameLogLocations.Default(),
             shares.IsShared(MetricKind.Location), shares.IsShared(MetricKind.Bounty), shares.IsShared(MetricKind.Dps),
             loadImages, _theme?.Current ?? FactionTheme.Gallente, SdeVersionLabel(), ApplySettingsAsync, openDetailAfterImport, toastPosition,
             localApiEnabled, localApiPort, localApiStatusLabel, localApi, checkUpdatesOnStartup, _clipboardWatch, initialCategory, openFleetRunWindow,
             autoPublishFleetRuns, shares.IsShared(MetricKind.Loot), shares.IsShared(MetricKind.MiningYield), autoStartMissions, autoStartSites,
-            _weekStart?.FirstDay ?? Calendar.WeekStartService.SystemDefault(), includeNightlyBuilds, _services.GetService<IUpdateService>(), offerHomefrontRuns, RunSetupAgainAsync, includeLocationInLocalApi, OpenWidgetManager, shares.IsKillmailShared(), followFleetCommanderEnd, compactRunStyle, openRunsCompact, valueBlueprintsInLoot);
+            _weekStart?.FirstDay ?? Calendar.WeekStartService.SystemDefault(), includeNightlyBuilds, _services.GetService<IUpdateService>(), offerHomefrontRuns, RunSetupAgainAsync, includeLocationInLocalApi, OpenWidgetManager, shares.IsKillmailShared(), followFleetCommanderEnd, compactRunStyle, openRunsCompact, valueBlueprintsInLoot, outcomeSharing);
     }
 
     /// <summary>Opens the About dialog: app identity + version, creator credits with portraits,
@@ -1587,6 +1590,11 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
             if (result.ValueBlueprintsInLoot && !blueprintsWereValued)
                 await dispatcher.Send(new FillRunPriceSnapshotsCommand());
         }
+
+        // The answer is recorded here; the sharing, or the withdrawal, then goes on in the background.
+        var outcomePublisher = _services.GetRequiredService<EveUtils.Client.Runs.RunOutcomePublisher>();
+        foreach (var change in result.OutcomeSharing ?? [])
+            await outcomePublisher.SetChoiceAsync(change.ServerAddress, change.Choice, change.Backfill);
 
         await _services.GetRequiredService<FleetKillmailSharePublisher>().PublishCurrentAsync();
 

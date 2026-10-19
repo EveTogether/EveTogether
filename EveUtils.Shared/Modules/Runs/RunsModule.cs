@@ -29,6 +29,8 @@ public static class RunsModule
         modelBuilder.ApplyConfiguration(new RunGroupOriginConfiguration());
         // Client-only (ET-464): a loss is never published, so neither is the price it is valued at.
         modelBuilder.ApplyConfiguration(new RunLossPriceConfiguration());
+        // Client-only (ET-515): which outcomes this client shared with which server; the server holds no copy of it.
+        modelBuilder.ApplyConfiguration(new OutcomeShareRecordConfiguration());
         ConfigureCombatTelemetry(modelBuilder);
     }
 

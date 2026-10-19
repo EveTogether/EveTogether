@@ -83,6 +83,13 @@ public sealed class CommandSignalCoverageTests
         // handling of RunsChangedEvent, so a signal here would only hand that handler its own write back.
         [typeof(RecordRunGroupServerCommand)] = "writes which server a group's fleet lives on, read by the automatic "
             + "publisher alone and shown nowhere; it changes no run",
+        // ET-515: the bookkeeping of RunOutcomePublisher — which outcome it sent to which server, as it would resend or
+        // take it back. Read by the publisher and the settings line alone; it changes no run, and the publisher writes it
+        // from inside its own handling of RunsChangedEvent, so a signal would hand that handler its own write back.
+        [typeof(SaveOutcomeShareRecordsCommand)] = "writes which outcomes this client sent to which server, read by the "
+            + "outcome publisher and one settings line alone; it changes no run",
+        [typeof(DeleteOutcomeShareRecordsCommand)] = "forgets which outcomes this client sent to a server, read by the "
+            + "outcome publisher and one settings line alone; it changes no run",
         // ET-228, widened to every archetype by ET-275: its only effect is matching a run's SiteName against the
         // SDE's own site catalogue, which TestClientInstance carries none of. It does publish RunsChangedEvent through
         // the RebuildActivitySummariesCommand it delegates to once repaired — proven against a FakeSdeAccessor seeded

@@ -945,6 +945,45 @@ namespace EveUtils.Migrations.Client.Sqlite.Migrations
                     b.ToTable("ActivitySummary");
                 });
 
+            modelBuilder.Entity("EveUtils.Shared.Modules.Runs.Entities.OutcomeShareRecord", b =>
+                {
+                    b.Property<string>("ServerAddress")
+                        .HasMaxLength(512)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ActivityRef")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("CharacterId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(512)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("SentRevision")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime?>("SharedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("SourceRevision")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("State")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("ServerAddress", "ActivityRef");
+
+                    b.HasIndex("ActivityRef");
+
+                    b.ToTable("OutcomeShareRecord");
+                });
+
             modelBuilder.Entity("EveUtils.Shared.Modules.Runs.Entities.Run", b =>
                 {
                     b.Property<Guid>("Id")
