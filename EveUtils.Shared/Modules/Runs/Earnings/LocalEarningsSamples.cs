@@ -102,6 +102,7 @@ internal static class LocalEarningsSamples
         {
             PilotBucket = runs[0].CharacterId.ToString(CultureInfo.InvariantCulture),
             ActivityRef = activityRef,
+            CapWeight = 1,
             CompletedAtUtc = stoppedAtUtc ?? runs.Max(run => run.StoppedAtUtc ?? run.StartedAtUtc),
             // The activity's own span, as its summary measures it (ActivitySummaryBuilder).
             DurationSeconds = stoppedAtUtc is { } end ? Math.Max(0, (int)(end - startedAtUtc).TotalSeconds) : null,

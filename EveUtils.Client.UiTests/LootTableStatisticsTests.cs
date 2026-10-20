@@ -111,6 +111,36 @@ public sealed class LootTableStatisticsTests
         Assert.Equal(200, Item(table, Tag).RunCount);
     }
 
+    /// <summary>ET-523: one pilot's 97 runs are 97 effective runs, so the table shows percentages. Counter-proof: capped,
+    /// they are 10 and the table stays at "seen in X of N".</summary>
+    [Fact]
+    public void OnePilotsRuns_AreNotCapped_AndGiveRatedPercentages()
+    {
+        EarningsSample[] runs = [.. Enumerable.Range(0, 97).Select(index => Run("only-pilot", lines: index < 50 ? [(Tag, 1)] : []))];
+
+        LootTableDto table = Compute(runs);
+
+        Assert.Equal(97d, table.EffectiveRunCount, 9);
+        Assert.Equal(LootTableConfidence.Rated, table.Confidence);
+        Assert.Equal(LootTableConfidence.Rated, Item(table, Tag).Confidence);
+        Assert.Equal(50 / 97d, Item(table, Tag).DropRate, 9);
+    }
+
+    [Fact]
+    public void TwoPilotsOneWith97Runs_StillCapsThatPilot()
+    {
+        EarningsSample[] runs =
+        [
+            .. Enumerable.Range(0, 97).Select(_ => Run("farmer", lines: [(Tag, 1)])),
+            .. Enumerable.Range(0, 3).Select(_ => Run("other", lines: [(Tag, 1)]))
+        ];
+
+        LootTableDto table = Compute(runs);
+
+        Assert.Equal(13d, table.EffectiveRunCount, 9);
+        Assert.Equal(LootTableConfidence.Seen, table.Confidence);
+    }
+
     [Theory]
     [InlineData(4, LootTableConfidence.None)]
     [InlineData(5, LootTableConfidence.Seen)]

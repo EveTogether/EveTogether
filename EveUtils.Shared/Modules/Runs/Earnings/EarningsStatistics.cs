@@ -127,16 +127,12 @@ public static class EarningsStatistics
     private static bool _IsTooShort(EarningsSample sample, EarningsPolicy policy) =>
         sample.DurationSeconds is { } seconds && seconds < policy.MinimumDuration.TotalSeconds;
 
-    // w = min(1, C / runs of that pilot in the window): a pilot's runs together never weigh more than C.
     private static IReadOnlyList<(EarningsSample Sample, double Weight)> _Weighted(IEnumerable<EarningsSample> samples,
         EarningsPolicy policy)
     {
         EarningsSample[] all = [.. samples];
-        Dictionary<string, int> runsByPilot = all
-            .GroupBy(sample => sample.PilotBucket, StringComparer.Ordinal)
-            .ToDictionary(pilot => pilot.Key, pilot => pilot.Count(), StringComparer.Ordinal);
-        return [.. all.Select(sample => (sample,
-            sample.CapWeight ?? Math.Min(1d, (double)policy.RunsPerPilotCap / runsByPilot[sample.PilotBucket])))];
+        double[] weights = PilotCap.Weights(all, policy.RunsPerPilotCap);
+        return [.. all.Select((sample, index) => (sample, weights[index]))];
     }
 
     private static decimal? _TypicalPerHour(IEnumerable<(EarningsSample Sample, decimal Yield, double Weight)> valued,

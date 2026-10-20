@@ -16,7 +16,7 @@ public sealed record EarningsSample
     public required DateTime CompletedAtUtc { get; init; }
 
     /// <summary>The per-pilot cap weight a server already applied to this sample (ET-514), used as it is: the bucket it
-    /// was counted by never leaves the server. Null for the own runs, which the statistic weighs itself.</summary>
+    /// was counted by never leaves the server. 1 for the own runs: they are one person's, so every run counts. Null where the statistic caps by pilot itself.</summary>
     public double? CapWeight { get; init; }
 
     /// <summary>Null when the activity has no stop: it still counts per run, never per hour.</summary>
