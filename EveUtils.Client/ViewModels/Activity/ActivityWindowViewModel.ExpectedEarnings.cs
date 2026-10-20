@@ -41,7 +41,7 @@ public sealed partial class ActivityWindowViewModel
         }
 
         _earningsInputs = inputs;
-        _ = panel.TrackAsync(_EarningsKey(inputs), _ActingCharacterId());
+        _ = panel.TrackAsync(_EarningsKey(inputs), _ActingCharacterId(), GroupCode ?? RunId?.ToString());
     }
 
     // A freerun is no activity and a type with no key (mining) has nothing to compare: neither gets a panel.

@@ -82,7 +82,7 @@ public sealed partial class ExpectedEarningsViewModel(IExpectedEarningsSource so
     public ActivityStatsKey? Key => _key;
 
     /// <summary>Points the panel at the activity the window is on, or at none. The same key again is left alone.</summary>
-    public Task TrackAsync(ActivityStatsKey? key, int? characterId)
+    public Task TrackAsync(ActivityStatsKey? key, int? characterId, string? activityRef = null)
     {
         if (key == _key)
             return Task.CompletedTask;
@@ -98,7 +98,7 @@ public sealed partial class ExpectedEarningsViewModel(IExpectedEarningsSource so
         }
 
         _loading = new CancellationTokenSource();
-        return _LoadAsync(key, characterId, _loading.Token);
+        return _LoadAsync(key, characterId, activityRef, _loading.Token);
     }
 
     /// <summary>The group's TOTAL ISK right now, for the marker. Null while there is no figure to compare.</summary>
@@ -122,7 +122,7 @@ public sealed partial class ExpectedEarningsViewModel(IExpectedEarningsSource so
             _Render();
     }
 
-    private async Task _LoadAsync(ActivityStatsKey key, int? characterId, CancellationToken cancellationToken)
+    private async Task _LoadAsync(ActivityStatsKey key, int? characterId, string? activityRef, CancellationToken cancellationToken)
     {
         try
         {
@@ -138,7 +138,7 @@ public sealed partial class ExpectedEarningsViewModel(IExpectedEarningsSource so
             if (characterId is not { } character)
                 return;
 
-            SharedEarningsAttempt attempt = await source.LoadSharedAsync(key, character, cancellationToken);
+            SharedEarningsAttempt attempt = await source.LoadSharedAsync(key, character, cancellationToken, activityRef);
             if (attempt.Shared is { } shared)
                 _Show(shared, OwnRunsReason.None, cancellationToken);
             else

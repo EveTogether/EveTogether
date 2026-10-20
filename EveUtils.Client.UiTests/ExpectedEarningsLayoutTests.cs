@@ -151,7 +151,7 @@ public sealed class ExpectedEarningsLayoutTests
         public Task<ExpectedEarnings> LoadOwnAsync(ActivityStatsKey key, CancellationToken cancellationToken = default) =>
             Task.FromResult(own);
 
-        public Task<SharedEarningsAttempt> LoadSharedAsync(ActivityStatsKey key, int characterId, CancellationToken cancellationToken = default) =>
+        public Task<SharedEarningsAttempt> LoadSharedAsync(ActivityStatsKey key, int characterId, CancellationToken cancellationToken = default, string? activityRef = null) =>
             Task.FromResult(new SharedEarningsAttempt(null, OwnRunsReason.None));
     }
 }

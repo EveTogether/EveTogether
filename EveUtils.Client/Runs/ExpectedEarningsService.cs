@@ -37,7 +37,7 @@ public sealed class ExpectedEarningsService(IServiceScopeFactory scopeFactory, I
     }
 
     public async Task<SharedEarningsAttempt> LoadSharedAsync(ActivityStatsKey key, int characterId,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default, string? activityRef = null)
     {
         await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
         IServiceProvider services = scope.ServiceProvider;
@@ -52,20 +52,31 @@ public sealed class ExpectedEarningsService(IServiceScopeFactory scopeFactory, I
 
         IDispatcher dispatcher = services.GetRequiredService<IDispatcher>();
         IServerRegistry registry = services.GetRequiredService<IServerRegistry>();
+        string? runServer = await _ServerOfRunAsync(dispatcher, activityRef, cancellationToken);
         OwnRunsReason reason = OwnRunsReason.ServerUnavailable;
+        List<ExpectedEarnings> answers = [];
         foreach (string server in sharing.Where(server => connector.StateFor(server, characterId) == ServerConnectionState.Connected))
         {
             (ExpectedEarnings? shared, OwnRunsReason why) = await _ReadServerAsync(dispatcher, registry, server, characterId, key, cancellationToken);
             if (shared is not null)
-                return new SharedEarningsAttempt(shared, OwnRunsReason.None);
-
+                answers.Add(shared);
             // A server that answered "too few" tells the pilot more than one that could not be asked.
-            if (reason is OwnRunsReason.ServerUnavailable || why is OwnRunsReason.TooFewSharedRuns)
+            else if (reason is OwnRunsReason.ServerUnavailable || why is OwnRunsReason.TooFewSharedRuns)
                 reason = why;
         }
 
-        return new SharedEarningsAttempt(null, reason);
+        return answers.Count == 0
+            ? new SharedEarningsAttempt(null, reason)
+            : new SharedEarningsAttempt(SharedServerChoice.Pick(answers, runServer), OwnRunsReason.None);
     }
+
+    /// <summary>The server the run already belongs to: the one its fleet's group came from, else the one a run was
+    /// published to. Null for a run that has neither yet, which is the usual case at the moment a site is copied.</summary>
+    private static async Task<string?> _ServerOfRunAsync(IDispatcher dispatcher, string? activityRef, CancellationToken cancellationToken) =>
+        activityRef is null
+            ? null
+            : (await dispatcher.Query(new GetOutcomeSharesQuery(DateTime.UtcNow, [activityRef]), cancellationToken)).Value?
+            .FirstOrDefault(share => share.ActivityRef == activityRef)?.PreferredServer;
 
     private async Task<(ExpectedEarnings? Shared, OwnRunsReason Reason)> _ReadServerAsync(IDispatcher dispatcher,
         IServerRegistry registry, string server, int characterId, ActivityStatsKey key, CancellationToken cancellationToken)
@@ -91,7 +102,7 @@ public sealed class ExpectedEarningsService(IServiceScopeFactory scopeFactory, I
             return (null, taken.Pilots < RunOutcomesModule.MinimumPilots ? OwnRunsReason.TooFewPilots : OwnRunsReason.TooFewSharedRuns);
 
         return (new ExpectedEarnings(EarningsBasis.AllPilots, taken.Figures, taken.Pilots,
-            await registry.DisplayNameAsync(server, cancellationToken)), OwnRunsReason.None);
+            await registry.DisplayNameAsync(server, cancellationToken), server), OwnRunsReason.None);
     }
 
     /// <summary>The server's figures over one window with the pilots behind them, or null when the server could not

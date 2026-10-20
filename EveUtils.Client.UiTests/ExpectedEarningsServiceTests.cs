@@ -22,6 +22,7 @@ public sealed class ExpectedEarningsServiceTests
 {
     private const int Pilot = 90000001;
     private const string Server = "https://krah.invalid";
+    private const string OtherServer = "https://alliance.invalid";
     private static readonly ActivityStatsKey Sanctum = ActivityStatsKey.Site(SiteTypeSource.Site, 2311);
     private static CancellationToken Token => TestContext.Current.CancellationToken;
 
@@ -65,6 +66,45 @@ public sealed class ExpectedEarningsServiceTests
         Assert.Equal(10_000_000m, shared.Figures.Worst!.YieldIsk);
         Assert.Equal(60_000_000m, shared.Figures.Best!.YieldIsk);
         Assert.Single(fixture.Outcomes.OutcomeCalls);
+    }
+
+    /// <summary>Several coupled servers (decision 10): without a server of the run, the one with the most data for this
+    /// activity feeds the figure. Counter-proof: take the first by address and the smaller server wins.</summary>
+    [AvaloniaFact]
+    public async Task SeveralServers_TheOneWithTheMostDataFeedsTheFigure()
+    {
+        using Fixture fixture = await Fixture.CreateAsync(secondServer: true);
+        fixture.Outcomes.PerServer[OtherServer] = _ => Scripted.Shared(Sanctum, count: 6, pilots: 2);
+        fixture.Outcomes.PerServer[Server] = _ => Scripted.Shared(Sanctum, count: 9, pilots: 4);
+
+        SharedEarningsAttempt attempt = await fixture.Service.LoadSharedAsync(Sanctum, Pilot, Token);
+
+        Assert.Equal(Server, Assert.IsType<ExpectedEarnings>(attempt.Shared).ServerAddress);
+        Assert.Equal(4, attempt.Shared.PilotCount);
+    }
+
+    [AvaloniaFact]
+    public async Task SeveralServers_OneThatCannotAnswer_DoesNotStopTheOther()
+    {
+        using Fixture fixture = await Fixture.CreateAsync(secondServer: true);
+        fixture.Outcomes.PerServer[Server] = _ => Scripted.TooFewPilots(Sanctum, pilots: 1);
+        fixture.Outcomes.PerServer[OtherServer] = _ => Scripted.Shared(Sanctum, count: 6, pilots: 3);
+
+        SharedEarningsAttempt attempt = await fixture.Service.LoadSharedAsync(Sanctum, Pilot, Token);
+
+        Assert.Equal(OtherServer, attempt.Shared!.ServerAddress);
+    }
+
+    /// <summary>The server the run belongs to wins over the one with more data, whatever the sizes.</summary>
+    [Fact]
+    public void TheServerOfTheRun_WinsOverTheOneWithMoreData()
+    {
+        ExpectedEarnings small = Shared(Server, runs: 6);
+        ExpectedEarnings big = Shared(OtherServer, runs: 40);
+
+        Assert.Equal(Server, SharedServerChoice.Pick([big, small], Server).ServerAddress);
+        Assert.Equal(OtherServer, SharedServerChoice.Pick([small, big], runServer: null).ServerAddress);
+        Assert.Equal(OtherServer, SharedServerChoice.Pick([small, big], "https://elsewhere.invalid").ServerAddress);
     }
 
     [AvaloniaFact]
@@ -235,6 +275,17 @@ public sealed class ExpectedEarningsServiceTests
         Assert.Null(ServerRunOutcomeClient.FromWire(Sanctum, wire).Outcomes[0].DurationSeconds);
     }
 
+    private static ExpectedEarnings Shared(string server, int runs)
+    {
+        EarningsSample[] samples = [.. Enumerable.Range(0, runs).Select(index => new EarningsSample
+        {
+            PilotBucket = $"pilot-{index}", CompletedAtUtc = DateTime.UtcNow.AddDays(-1), FixedIsk = 1_000_000m,
+            LootBasis = LootBasis.CargoDifference
+        })];
+        return new ExpectedEarnings(EarningsBasis.AllPilots,
+            EarningsStatistics.Compute(samples, _ => null, EarningsPolicy.For(ActivityStatsKind.Site), DateTime.UtcNow), 2, server, server);
+    }
+
     private sealed class Fixture : IDisposable
     {
         private readonly TestClientInstance _instance;
@@ -248,7 +299,7 @@ public sealed class ExpectedEarningsServiceTests
         public ScriptedOutcomeServer Outcomes { get; }
         public ExpectedEarningsService Service => _instance.Services.GetRequiredService<ExpectedEarningsService>();
 
-        public static async Task<Fixture> CreateAsync(bool couple = true, bool optedIn = true, bool connected = true)
+        public static async Task<Fixture> CreateAsync(bool couple = true, bool optedIn = true, bool connected = true, bool secondServer = false)
         {
             var outcomes = new ScriptedOutcomeServer();
             var connector = new FakeRemoteBusConnector();
@@ -260,6 +311,14 @@ public sealed class ExpectedEarningsServiceTests
             if (couple)
                 await instance.Services.GetRequiredService<IClientSessionStore>()
                     .SaveAsync(Server, new ClientSessionTokens("access", "refresh", "Jithran", Pilot), Token);
+            if (secondServer)
+            {
+                await instance.Services.GetRequiredService<IClientSessionStore>()
+                    .SaveAsync(OtherServer, new ClientSessionTokens("access", "refresh", "Jithran", Pilot), Token);
+                await instance.Services.GetRequiredService<RunOutcomeSharingChoices>().SetAsync(OtherServer, OutcomeSharingChoice.Shared, Token);
+                connector.RaiseCharacterStateChanged(OtherServer, Pilot, ServerConnectionState.Connected);
+            }
+
             if (optedIn)
                 await instance.Services.GetRequiredService<RunOutcomeSharingChoices>()
                     .SetAsync(Server, OutcomeSharingChoice.Shared, Token);
@@ -276,9 +335,13 @@ public sealed class ExpectedEarningsServiceTests
         public Func<DateOnly, (ActivityOutcomesDto, ActivityOutcomeLootDto)> Script { get; set; } =
             _ => Scripted.TooFewPilots(Sanctum, pilots: 0);
 
+        public Dictionary<string, Func<DateOnly, (ActivityOutcomesDto, ActivityOutcomeLootDto)>> PerServer { get; } = [];
         public bool Unreachable { get; set; }
         public List<DateOnly> OutcomeCalls { get; } = [];
         public int LootCalls { get; private set; }
+
+        private (ActivityOutcomesDto, ActivityOutcomeLootDto) ScriptFor(string server, DateOnly since) =>
+            (PerServer.TryGetValue(server, out var script) ? script : Script)(since);
 
         public Task<OutcomeCallResult> ShareAsync(string serverAddress, long characterId, string activityRef, long revision,
             RunOutcomeShareDto? outcome, CancellationToken cancellationToken = default) =>
@@ -293,14 +356,14 @@ public sealed class ExpectedEarningsServiceTests
             OutcomeCalls.Add(since);
             return Task.FromResult(Unreachable
                 ? OutcomeReadResult<ActivityOutcomesDto>.Transient("down")
-                : new OutcomeReadResult<ActivityOutcomesDto>(Script(since).Item1, "", ""));
+                : new OutcomeReadResult<ActivityOutcomesDto>(ScriptFor(serverAddress, since).Item1, "", ""));
         }
 
         public Task<OutcomeReadResult<ActivityOutcomeLootDto>> GetOutcomeLootAsync(string serverAddress, long characterId,
             ActivityStatsKey key, DateOnly since, CancellationToken cancellationToken = default)
         {
             LootCalls++;
-            return Task.FromResult(new OutcomeReadResult<ActivityOutcomeLootDto>(Script(since).Item2, "", ""));
+            return Task.FromResult(new OutcomeReadResult<ActivityOutcomeLootDto>(ScriptFor(serverAddress, since).Item2, "", ""));
         }
     }
 

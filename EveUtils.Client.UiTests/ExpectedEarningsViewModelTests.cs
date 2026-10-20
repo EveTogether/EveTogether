@@ -296,7 +296,7 @@ public sealed class ExpectedEarningsViewModelTests
         }
 
         public async Task<SharedEarningsAttempt> LoadSharedAsync(ActivityStatsKey key, int characterId,
-            CancellationToken cancellationToken = default)
+            CancellationToken cancellationToken = default, string? activityRef = null)
         {
             SharedCalls++;
             if (SharedGate is not null)
