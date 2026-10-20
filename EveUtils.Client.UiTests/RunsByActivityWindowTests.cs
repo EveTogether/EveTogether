@@ -471,7 +471,7 @@ public sealed class RunsByActivityWindowTests
 
         Control section = _Named<Control>(presented, "PanePositionSection");
         Control block = _Named<Control>(presented, "PanePosition");
-        Control bar = _Named<Control>(presented, "PositionBar");
+        Control bar = _Named<Control>(presented, "BandBar");
         Assert.True(section.IsEffectivelyVisible);
         Assert.True(block.Bounds.Width is >= 395 and <= 435, $"block is {block.Bounds.Width} wide");
         Assert.InRange(bar.Bounds.Width, block.Bounds.Width - 29, block.Bounds.Width - 27);
@@ -483,8 +483,18 @@ public sealed class RunsByActivityWindowTests
             Assert.NotEqual(DimInk, _Color(text.Foreground));
         }
 
-        Assert.True(_Named<TextBlock>(presented, "PositionRank").IsEffectivelyVisible);
-        Assert.True(_Named<TextBlock>(presented, "PositionThisRun").IsEffectivelyVisible);
+        Rect label = _Rect(presented, _Named<TextBlock>(presented, "MarkerText"));
+        Rect worst = _Rect(presented, _Named<TextBlock>(presented, "WorstLabel"));
+        Rect best = _Rect(presented, _Named<TextBlock>(presented, "BestLabel"));
+        Rect scale = _Rect(presented, block.GetVisualDescendants().OfType<TextBlock>().First(text => text.Text == "log scale"));
+        Rect barRect = _Rect(presented, bar);
+        Assert.True(label.Bottom <= barRect.Top + 0.5 && barRect.Bottom <= worst.Top + 0.5, $"label {label}, bar {barRect}, worst {worst}");
+        Assert.False(label.Intersects(worst) || label.Intersects(best));
+        Assert.True(worst.Right <= scale.Left + 0.5 && scale.Right <= best.Left + 0.5, $"worst {worst}, log scale {scale}, best {best} overlap at {width}");
+        Assert.True(label.Left >= barRect.Left - 0.5 && label.Right <= barRect.Right + 0.5, $"label {label} is off the bar {barRect}");
+        Assert.True(block.Bounds.Height < 300, $"the block is {block.Bounds.Height} high; it was 387 before ET-524");
+        Assert.Contains("better than", _Named<TextBlock>(presented, "MarkerText").Text);
+        Assert.True(_Named<TextBlock>(presented, "MarkerText").IsEffectivelyVisible);
         Assert.True(_Named<TextBlock>(presented, "PositionOutlier").IsEffectivelyVisible);
         Assert.True(_Named<Control>(presented, "PositionTopDrop").IsEffectivelyVisible);
         Assert.True(_Named<Button>(presented, "PositionLootTable").IsEffectivelyVisible);

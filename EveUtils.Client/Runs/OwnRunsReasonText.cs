@@ -17,4 +17,14 @@ public static class OwnRunsReasonText
         OwnRunsReason.ServerUnavailable => "The server could not be reached, so this is your own runs.",
         _ => string.Empty
     };
+
+    /// <summary>The same reason as the tail of a one-line footer: "own runs (too few pilots share this site)".</summary>
+    public static string Short(OwnRunsReason reason) => reason switch
+    {
+        OwnRunsReason.NotSharing => "own runs (sharing is off)",
+        OwnRunsReason.TooFewPilots => "own runs (too few pilots share this site)",
+        OwnRunsReason.TooFewSharedRuns => "own runs (the pilots sharing this site have too few runs)",
+        OwnRunsReason.ServerUnavailable => "own runs (server unreachable)",
+        _ => string.Empty
+    };
 }

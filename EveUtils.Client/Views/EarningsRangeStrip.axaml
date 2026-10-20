@@ -1,0 +1,50 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:v="using:EveUtils.Client.Views"
+             xmlns:va="using:EveUtils.Client.ViewModels.Activity"
+             x:Class="EveUtils.Client.Views.EarningsRangeStrip"
+             x:DataType="va:ExpectedEarningsViewModel">
+
+    <!-- The text classes (eelabel, eebig, eefigure, eemono, eenow) come from the host's styles: the run window and the
+         run position block both define them, all in TextBrush or brighter, as the dim ink is under 4.5:1 on their bodies. -->
+    <StackPanel Spacing="3">
+        <Grid ColumnDefinitions="Auto,Auto,*" ColumnSpacing="18">
+            <StackPanel Grid.Column="0" Spacing="2">
+                <TextBlock Classes="eelabel" Text="TYPICAL RUN"/>
+                <StackPanel Orientation="Horizontal" Spacing="4">
+                    <TextBlock x:Name="TypicalFigure" Classes="eebig" Text="{Binding TypicalText}"/>
+                    <TextBlock Classes="eemono" VerticalAlignment="Bottom" Margin="0,0,0,3" Text="ISK"/>
+                </StackPanel>
+                <TextBlock x:Name="PerPilotLine" Classes="eemono" IsVisible="{Binding HasPerPilot}" Text="{Binding PerPilotText}"/>
+            </StackPanel>
+            <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Bottom" IsVisible="{Binding HasPerHour}">
+                <TextBlock Classes="eelabel" Text="TYPICAL ISK/H"/>
+                <TextBlock x:Name="PerHourFigure" Classes="eefigure" Text="{Binding PerHourText}"/>
+            </StackPanel>
+            <StackPanel Grid.Column="2" Spacing="2" VerticalAlignment="Bottom" HorizontalAlignment="Right">
+                <TextBlock Classes="eelabel" HorizontalAlignment="Right" Text="{Binding BandLabel}"/>
+                <TextBlock x:Name="BandFigure" Classes="eefigure" HorizontalAlignment="Right" Text="{Binding BandText}"/>
+            </StackPanel>
+        </Grid>
+
+        <!-- This run, above its marker: the label sits in a row of its own, so it can never run into the worst and best
+             labels under the bar. -->
+        <v:MarkerLabelPanel x:Name="MarkerLabel" Margin="0,8,0,0" Mark="{Binding CurrentMark}" IsVisible="{Binding HasCurrent}">
+            <TextBlock x:Name="MarkerText" Classes="eenow" TextWrapping="Wrap" Text="{Binding CurrentText}"/>
+        </v:MarkerLabelPanel>
+        <v:EarningsBandBar x:Name="BandBar" Height="30"
+                           RangeStart="{Binding BandStart}" RangeEnd="{Binding BandEnd}"
+                           TypicalMark="{Binding TypicalMark}" CurrentMark="{Binding CurrentMark}"
+                           TrackBrush="{DynamicResource DividerBrush}"
+                           RangeBrush="{DynamicResource AccentBrush}"
+                           TypicalBrush="{StaticResource TextBrightBrush}"
+                           CurrentBrush="{StaticResource ValueBrush}"/>
+        <Grid ColumnDefinitions="*,Auto,*" ColumnSpacing="8">
+            <TextBlock x:Name="WorstLabel" Grid.Column="0" Classes="eemono" TextTrimming="CharacterEllipsis"
+                       Text="{Binding WorstLine}" ToolTip.Tip="{Binding WorstLine}"/>
+            <TextBlock Grid.Column="1" Classes="eemono" Text="log scale"/>
+            <TextBlock x:Name="BestLabel" Grid.Column="2" Classes="eemono" HorizontalAlignment="Right" TextTrimming="CharacterEllipsis"
+                       Text="{Binding BestLine}" ToolTip.Tip="{Binding BestLine}"/>
+        </Grid>
+    </StackPanel>
+</UserControl>

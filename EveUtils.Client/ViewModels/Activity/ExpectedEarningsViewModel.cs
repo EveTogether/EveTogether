@@ -41,6 +41,7 @@ public sealed partial class ExpectedEarningsViewModel(IExpectedEarningsSource? s
     private IReadOnlyList<ExpectedEarnings> _answers = [];
     private OwnRunsReason _reason;
     private decimal? _currentIsk;
+    private string _rankSuffix = string.Empty;
     private int _fleetSize = 1;
     private LogScale _scale = new(1, 1);
 
@@ -55,12 +56,8 @@ public sealed partial class ExpectedEarningsViewModel(IExpectedEarningsSource? s
     [ObservableProperty] private string _perPilotText = string.Empty;
     [ObservableProperty] private string _bandLabel = string.Empty;
     [ObservableProperty] private string _bandText = string.Empty;
-    [ObservableProperty] private string _scaleMinText = string.Empty;
-    [ObservableProperty] private string _scaleMaxText = string.Empty;
-    [ObservableProperty] private string _worstText = string.Empty;
-    [ObservableProperty] private string _worstMeta = string.Empty;
-    [ObservableProperty] private string _bestText = string.Empty;
-    [ObservableProperty] private string _bestMeta = string.Empty;
+    [ObservableProperty] private string _worstLine = string.Empty;
+    [ObservableProperty] private string _bestLine = string.Empty;
     [ObservableProperty] private string _basisText = string.Empty;
     [ObservableProperty] private string _confidenceText = string.Empty;
     [ObservableProperty] private string _noteText = string.Empty;
@@ -102,8 +99,6 @@ public sealed partial class ExpectedEarningsViewModel(IExpectedEarningsSource? s
 
     /// <summary>The note of a pilot who does not share names the setting that fixes it, and the setting is one click away.</summary>
     public bool ShowsSharingLink => screens is not null && _reason is OwnRunsReason.NotSharing;
-
-    public bool ShowsPlainNote => HasNote && !ShowsSharingLink;
 
     public string SharingNoteLead => OwnRunsReasonText.NotSharingLead;
 
@@ -219,12 +214,23 @@ public sealed partial class ExpectedEarningsViewModel(IExpectedEarningsSource? s
         _shown = null;
         _answers = [];
         _currentIsk = null;
+        _rankSuffix = string.Empty;
         _NotifyKey();
         _Hide();
     }
 
     /// <summary>Raised when the pilot switched the panel to another server's figures (ET-520: the rank follows them).</summary>
     public event Action<ExpectedEarnings>? ServerChosen;
+
+    /// <summary>Where a saved run ranks, as the tail of the marker label ("better than 17%"); empty when it has no rank.</summary>
+    public void SetRank(string suffix)
+    {
+        if (suffix == _rankSuffix)
+            return;
+
+        _rankSuffix = suffix;
+        _RenderCurrent();
+    }
 
     /// <summary>The group's TOTAL ISK right now, for the marker. Null while there is no figure to compare.</summary>
     public void UpdateCurrentIsk(decimal? totalIsk)
@@ -359,8 +365,8 @@ public sealed partial class ExpectedEarningsViewModel(IExpectedEarningsSource? s
         EarningsFiguresDto figures = earnings.Figures;
         SourceChip = earnings.Basis is EarningsBasis.AllPilots ? $"ALL PILOTS · {earnings.ServerName}" : "YOUR RUNS";
         IsSharedSource = earnings.Basis is EarningsBasis.AllPilots;
-        BasisText = _BasisLine(earnings);
         NoteText = OwnRunsReasonText.For(_reason);
+        BasisText = _BasisLine(earnings, ShowsSharingLink ? string.Empty : OwnRunsReasonText.Short(_reason));
         RefreshAge();
         _RenderServerOptions();
 
@@ -381,12 +387,8 @@ public sealed partial class ExpectedEarningsViewModel(IExpectedEarningsSource? s
         BandLabel = figures.Band is EarningsBand.Deciles ? "8 OF 10 RUNS" : "HALF OF RUNS";
         BandText = $"{IskFormat.Compact(low)} – {IskFormat.Compact(high)}";
         ConfidenceText = figures.Confidence is EarningsConfidence.Low ? "Low confidence: fewer than 20 runs" : string.Empty;
-        ScaleMinText = IskFormat.Compact(worst);
-        ScaleMaxText = IskFormat.Compact(best);
-        WorstText = figures.Worst is { } worstRun ? $"{IskFormat.Compact(worstRun.YieldIsk)} ISK" : string.Empty;
-        WorstMeta = figures.Worst is { } ? RunMeta(figures.Worst) : string.Empty;
-        BestText = figures.Best is { } bestRun ? $"{IskFormat.Compact(bestRun.YieldIsk)} ISK" : string.Empty;
-        BestMeta = figures.Best is { } ? RunMeta(figures.Best) : string.Empty;
+        WorstLine = _ExtremeLine("worst", worst, figures.Worst);
+        BestLine = _ExtremeLine("best", best, figures.Best);
         _scale = new LogScale(worst, best);
         BandStart = _scale.Position(low);
         BandEnd = _scale.Position(high);
@@ -425,7 +427,7 @@ public sealed partial class ExpectedEarningsViewModel(IExpectedEarningsSource? s
 
         CurrentMark = _scale.Position(current);
         string beyond = current > _scale.High ? " ▲ above best" : current < _scale.Low ? " ▼ below worst" : string.Empty;
-        CurrentText = $"THIS RUN +{IskFormat.Compact(current)}{beyond}";
+        CurrentText = $"This run {IskFormat.Compact(current)}{beyond}{_rankSuffix}";
         OnPropertyChanged(nameof(HasCurrent));
     }
 
@@ -444,16 +446,21 @@ public sealed partial class ExpectedEarningsViewModel(IExpectedEarningsSource? s
         OnPropertyChanged(nameof(HasConfidenceText));
         OnPropertyChanged(nameof(HasNote));
         OnPropertyChanged(nameof(ShowsSharingLink));
-        OnPropertyChanged(nameof(ShowsPlainNote));
     }
 
-    private static string _BasisLine(ExpectedEarnings earnings)
+    private static string _BasisLine(ExpectedEarnings earnings, string ownRunsReason)
     {
         EarningsFiguresDto figures = earnings.Figures;
-        return earnings.Basis is EarningsBasis.AllPilots
-            ? $"based on {figures.RunCount} runs · {earnings.PilotCount} pilots · {WindowText(figures)}"
-            : $"based on {figures.RunCount} of your runs · {WindowText(figures)}";
+        if (earnings.Basis is EarningsBasis.AllPilots)
+            return $"{figures.RunCount} runs · {earnings.PilotCount} pilots · {WindowText(figures)}";
+
+        string line = $"{figures.RunCount} of your runs · {WindowText(figures)}";
+        return ownRunsReason.Length > 0 ? $"{line} · {ownRunsReason}" : line;
     }
+
+    // "worst 2.17M · 2m · 11 Oct": the run itself when the figures name it, else just the end of the scale.
+    private static string _ExtremeLine(string label, decimal scaleEnd, EarningsRunDto? run) =>
+        run is null ? $"{label} {IskFormat.Compact(scaleEnd)}" : $"{label} {IskFormat.Compact(run.YieldIsk)} · {RunMeta(run)}";
 
     internal static string WindowText(EarningsFiguresDto figures) =>
         figures.Window is EarningsWindow.Extended ? "older data · last 365 days" : "last 90 days";

@@ -289,7 +289,7 @@ public sealed class ExpectedEarningsViewModelTests
         Assert.Equal([Sanctum], screens.Opened);
 
         Assert.True(panel.ShowsSharingLink);
-        Assert.False(panel.ShowsPlainNote);
+        Assert.DoesNotContain("own runs (", panel.BasisText);
         Assert.Equal("Showing your own runs. Turn on sharing in Settings to include the other pilots' runs.", panel.NoteText);
         Assert.Equal(panel.NoteText, panel.SharingNoteLead + panel.SharingLinkText + panel.SharingNoteTail);
         panel.TurnOnSharingCommand.Execute(null);
@@ -307,7 +307,21 @@ public sealed class ExpectedEarningsViewModelTests
         await panel.TrackAsync(Sanctum, 90000001);
 
         Assert.False(panel.ShowsSharingLink);
-        Assert.True(panel.ShowsPlainNote);
+        Assert.EndsWith(" · own runs (too few pilots share this site)", panel.BasisText);
+        Assert.Equal(OwnRunsReasonText.For(OwnRunsReason.TooFewPilots), panel.NoteText);
+    }
+
+    /// <summary>ET-524: the worst and the best run each get one line for the ends of the bar, with the run's length and day.
+    /// Nothing the old WORST/BEST rows said is missing.</summary>
+    [Fact]
+    public async Task WorstAndBest_AreOneLineEach_WithLengthAndDay()
+    {
+        var panel = new ExpectedEarningsViewModel(new ScriptedSource { Own = Own(runs: 8), Shared = new SharedEarningsAttempt(null, OwnRunsReason.None) });
+
+        await panel.TrackAsync(Sanctum, 90000001);
+
+        Assert.Matches(@"^worst \S+ · \d+m · \d{1,2} \w{3}$", panel.WorstLine);
+        Assert.Matches(@"^best \S+ · \d+m · \d{1,2} \w{3}$", panel.BestLine);
     }
 
     /// <summary>ET-521: the source chip stays when there are too few runs for a number, so the dots say whose runs they count.

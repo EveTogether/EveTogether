@@ -980,7 +980,7 @@ public sealed class ActivityDetailTests
         Control Named(string name) => root.GetVisualDescendants().OfType<Control>().First(control => control.Name == name);
         Control section = Named("DetailPositionSection");
         Control block = Named("DetailPosition");
-        Control bar = Named("PositionBar");
+        Control bar = Named("BandBar");
         Assert.True(section.IsEffectivelyVisible);
         Assert.InRange(block.Bounds.Width, 700, 758);
         Assert.InRange(bar.Bounds.Width, block.Bounds.Width - 29, block.Bounds.Width - 27);
@@ -992,7 +992,7 @@ public sealed class ActivityDetailTests
             Assert.NotEqual(Avalonia.Media.Color.Parse("#FF8A7E6B"), (text.Foreground as Avalonia.Media.ISolidColorBrush)?.Color);
         }
 
-        Assert.True(Named("PositionRank").IsEffectivelyVisible);
+        Assert.True(Named("MarkerText").IsEffectivelyVisible);
         Assert.True(Named("PositionTopDrop").IsEffectivelyVisible);
         Assert.True(Named("PositionLootTable").IsEffectivelyVisible);
         Assert.NotEmpty(viewModel.Sections);

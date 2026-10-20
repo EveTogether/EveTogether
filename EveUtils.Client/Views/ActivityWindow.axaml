@@ -853,50 +853,7 @@
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
 
-                        <StackPanel x:Name="ExpectedEarningsFigures" Spacing="6" IsVisible="{Binding HasFigures}">
-                            <Grid ColumnDefinitions="Auto,Auto,*" ColumnSpacing="18">
-                                <StackPanel Grid.Column="0" Spacing="2">
-                                    <TextBlock Classes="eelabel" Text="TYPICAL RUN"/>
-                                    <StackPanel Orientation="Horizontal" Spacing="4">
-                                        <TextBlock x:Name="TypicalFigure" Classes="eebig" Text="{Binding TypicalText}"/>
-                                        <TextBlock Classes="eemono" VerticalAlignment="Bottom" Margin="0,0,0,3" Text="ISK"/>
-                                    </StackPanel>
-                                    <TextBlock x:Name="PerPilotLine" Classes="eemono" IsVisible="{Binding HasPerPilot}"
-                                               Text="{Binding PerPilotText}"/>
-                                </StackPanel>
-                                <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Bottom" IsVisible="{Binding HasPerHour}">
-                                    <TextBlock Classes="eelabel" Text="TYPICAL ISK/H"/>
-                                    <TextBlock x:Name="PerHourFigure" Classes="eefigure" Text="{Binding PerHourText}"/>
-                                </StackPanel>
-                                <StackPanel Grid.Column="2" Spacing="2" VerticalAlignment="Bottom" HorizontalAlignment="Right">
-                                    <TextBlock Classes="eelabel" HorizontalAlignment="Right" Text="{Binding BandLabel}"/>
-                                    <TextBlock x:Name="BandFigure" Classes="eefigure" HorizontalAlignment="Right" Text="{Binding BandText}"/>
-                                </StackPanel>
-                            </Grid>
-
-                            <v:EarningsBandBar x:Name="BandBar" Height="30" Margin="0,6,0,0"
-                                               RangeStart="{Binding BandStart}" RangeEnd="{Binding BandEnd}"
-                                               TypicalMark="{Binding TypicalMark}" CurrentMark="{Binding CurrentMark}"
-                                               TrackBrush="{DynamicResource DividerBrush}"
-                                               RangeBrush="{DynamicResource AccentBrush}"
-                                               TypicalBrush="{StaticResource TextBrightBrush}"
-                                               CurrentBrush="{StaticResource ValueBrush}"/>
-                            <Grid ColumnDefinitions="*,Auto,*">
-                                <TextBlock Grid.Column="0" Classes="eemono" Text="{Binding ScaleMinText}"/>
-                                <TextBlock Grid.Column="1" Classes="eemono" Text="log scale"/>
-                                <TextBlock Grid.Column="2" Classes="eemono" HorizontalAlignment="Right" Text="{Binding ScaleMaxText}"/>
-                            </Grid>
-                            <TextBlock x:Name="CurrentRunLine" Classes="eenow" IsVisible="{Binding HasCurrent}" Text="{Binding CurrentText}"/>
-
-                            <Grid ColumnDefinitions="52,Auto,*" RowDefinitions="Auto,Auto" ColumnSpacing="10" RowSpacing="3">
-                                <TextBlock Grid.Row="0" Grid.Column="0" Classes="eelabel" Text="WORST"/>
-                                <TextBlock x:Name="WorstFigure" Grid.Row="0" Grid.Column="1" Classes="eefigure" FontSize="11.5" Text="{Binding WorstText}"/>
-                                <TextBlock Grid.Row="0" Grid.Column="2" Classes="eemono" Text="{Binding WorstMeta}"/>
-                                <TextBlock Grid.Row="1" Grid.Column="0" Classes="eelabel" Text="BEST"/>
-                                <TextBlock x:Name="BestFigure" Grid.Row="1" Grid.Column="1" Classes="eefigure" FontSize="11.5" Text="{Binding BestText}"/>
-                                <TextBlock Grid.Row="1" Grid.Column="2" Classes="eemono" Text="{Binding BestMeta}"/>
-                            </Grid>
-                        </StackPanel>
+                        <v:EarningsRangeStrip x:Name="ExpectedEarningsFigures" IsVisible="{Binding HasFigures}"/>
 
                         <StackPanel x:Name="ExpectedEarningsTooFew" Spacing="6" IsVisible="{Binding IsTooFewRuns}">
                             <ItemsControl ItemsSource="{Binding RunDots}">
@@ -917,8 +874,6 @@
                         <Border Classes="chip warn" HorizontalAlignment="Left" IsVisible="{Binding HasConfidenceText}">
                             <TextBlock Text="{Binding ConfidenceText}"/>
                         </Border>
-                        <TextBlock x:Name="ExpectedEarningsNote" Classes="eetext" TextWrapping="Wrap" IsVisible="{Binding ShowsPlainNote}"
-                                   Text="{Binding NoteText}"/>
                         <!-- A pilot who shares nothing is told so, and the setting is one click away (ET-521). -->
                         <WrapPanel x:Name="SharingNote" IsVisible="{Binding ShowsSharingLink}">
                             <TextBlock Classes="eetext" VerticalAlignment="Center" Text="{Binding SharingNoteLead}"/>

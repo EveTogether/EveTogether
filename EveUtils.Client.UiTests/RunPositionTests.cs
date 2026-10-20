@@ -129,16 +129,15 @@ public sealed class RunPositionTests(ITestOutputHelper output)
 
         Assert.True(viewModel.Earnings.IsLoading);
         Assert.False(shown.IsCompleted);
-        Assert.False(viewModel.HasRank);
+        Assert.False(viewModel.Earnings.HasCurrent);
 
         source.Complete("run", Position(3500m, [.. Many(6)]));
         await shown;
 
         Assert.True(viewModel.Earnings.HasFigures);
-        Assert.Equal("Better than 50% of runs", viewModel.RankText);
-        Assert.StartsWith("ranked against 6 of your other runs · last 90 days", viewModel.RankDetailText);
         Assert.True(viewModel.Earnings.HasCurrent);
-        Assert.Contains("THIS RUN", viewModel.Earnings.CurrentText);
+        Assert.Matches(@"^This run \S+ · better than 50%$", viewModel.Earnings.CurrentText);
+        Assert.DoesNotContain("ranked against", viewModel.Earnings.BasisText);
     }
 
     [AvaloniaFact]
@@ -148,7 +147,7 @@ public sealed class RunPositionTests(ITestOutputHelper output)
 
         await viewModel.ShowAsync("run", [(int)Pilot]);
 
-        Assert.Equal("Better than 100% of runs · top 1%", viewModel.RankText);
+        Assert.EndsWith(" · better than 100% · top 1%", viewModel.Earnings.CurrentText);
     }
 
     /// <summary>A run above the range of the band gets the drop that made it, and the link to the loot table. Counter-proof:
@@ -207,7 +206,6 @@ public sealed class RunPositionTests(ITestOutputHelper output)
 
         Assert.True(viewModel.Earnings.IsTooFewRuns);
         Assert.Equal("Not enough runs yet — 3 of 5 needed", viewModel.Earnings.TooFewText);
-        Assert.False(viewModel.HasRank);
         Assert.False(viewModel.Earnings.HasCurrent);
         Assert.Equal(string.Empty, viewModel.Earnings.TypicalText);
     }
@@ -219,7 +217,7 @@ public sealed class RunPositionTests(ITestOutputHelper output)
 
         await viewModel.ShowAsync("run", [(int)Pilot]);
 
-        Assert.False(viewModel.HasRank);
+        Assert.DoesNotContain("better than", viewModel.Earnings.CurrentText);
         Assert.Contains("does not count", viewModel.RankNoteText);
         Assert.True(viewModel.Earnings.HasCurrent);
     }
@@ -232,7 +230,7 @@ public sealed class RunPositionTests(ITestOutputHelper output)
         await viewModel.ShowAsync("run", [(int)Pilot]);
 
         Assert.True(viewModel.Earnings.HasFigures);
-        Assert.False(viewModel.HasRank);
+        Assert.DoesNotContain("better than", viewModel.Earnings.CurrentText);
         Assert.Equal("Not enough other runs to rank this one yet.", viewModel.RankNoteText);
     }
 
@@ -246,19 +244,19 @@ public sealed class RunPositionTests(ITestOutputHelper output)
         await viewModel.ShowAsync("run", [(int)Pilot]);
 
         Assert.Equal(OwnRunsReasonText.For(OwnRunsReason.TooFewPilots), viewModel.Earnings.NoteText);
-        Assert.Contains("of your runs", viewModel.Earnings.BasisText);
+        Assert.Equal("6 of your runs · last 90 days · own runs (too few pilots share this site)", viewModel.Earnings.BasisText);
         Assert.Equal("YOUR RUNS", viewModel.Earnings.SourceChip);
     }
 
     [AvaloniaFact]
-    public async Task AServersFigures_AreRankedWithTheirPilotsAndWindow()
+    public async Task AServersFigures_AreSourcedWithTheirPilotsAndWindow()
     {
         RunPosition position = Position(2500m, [.. Many(6)], shared: true);
         var viewModel = new RunPositionViewModel(new ScriptedPositions().Returning("run", position));
 
         await viewModel.ShowAsync("run", [(int)Pilot]);
 
-        Assert.StartsWith("ranked against 6 other runs · 3 pilots · last 90 days", viewModel.RankDetailText);
+        Assert.Equal("6 runs · 3 pilots · last 90 days", viewModel.Earnings.BasisText);
         Assert.Equal("ALL PILOTS · Krah Server", viewModel.Earnings.SourceChip);
     }
 
@@ -271,12 +269,12 @@ public sealed class RunPositionTests(ITestOutputHelper output)
         RunPosition both = first with { Answers = [first.Basis, second.Basis with { ServerAddress = "https://other.invalid", ServerName = "Other" }] };
         var viewModel = new RunPositionViewModel(new ScriptedPositions().Returning("run", both));
         await viewModel.ShowAsync("run", [(int)Pilot]);
-        Assert.Equal("Better than 50% of runs", viewModel.RankText);
+        Assert.Contains("better than 50%", viewModel.Earnings.CurrentText);
 
         ServerOptionViewModel other = viewModel.Earnings.ServerOptions.Single(option => !option.IsCurrent);
         await other.ChooseCommand.ExecuteAsync(null);
 
-        Assert.Equal("Better than 0% of runs", viewModel.RankText);
+        Assert.Contains("better than 0%", viewModel.Earnings.CurrentText);
     }
 
     /// <summary>A late answer for the run the pilot already left never lands on the one they are looking at.</summary>
@@ -295,7 +293,7 @@ public sealed class RunPositionTests(ITestOutputHelper output)
         source.Complete("first", Position(100m, [.. Many(8)]));
         await first;
 
-        Assert.Equal("Better than 100% of runs · top 1%", viewModel.RankText);
+        Assert.EndsWith(" · better than 100% · top 1%", viewModel.Earnings.CurrentText);
     }
 
     [AvaloniaFact]
