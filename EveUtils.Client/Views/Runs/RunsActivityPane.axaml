@@ -2,6 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vr="using:EveUtils.Client.ViewModels.Runs"
              xmlns:ctl="using:EveUtils.Client.Controls"
+             xmlns:pos="using:EveUtils.Client.Views.Runs"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d" d:DesignWidth="400" d:DesignHeight="720"
@@ -236,6 +237,12 @@
                                 <TextBlock Text="{Binding ComparisonText, StringFormat='{}{0} ›'}"/>
                             </Button>
                         </StackPanel>
+                    </Border>
+
+                    <!-- ══ EXPECTED EARNINGS ══ (ET-520) the run against its activity: the run window's panel with this
+                         run marked, its rank, and for an outlier the drop that made it. Filled once the pane is up. -->
+                    <Border x:Name="PanePositionSection" Classes="psec" Padding="0" IsVisible="{Binding Position.Earnings.IsShown}">
+                        <pos:RunPositionView x:Name="PanePosition" DataContext="{Binding Position}"/>
                     </Border>
 
                     <!-- ══ ISK ══ the whole figure, the split as a bar, and a line per source with its own ink. -->

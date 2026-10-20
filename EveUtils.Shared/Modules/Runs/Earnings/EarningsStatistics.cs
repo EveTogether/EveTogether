@@ -75,9 +75,16 @@ public static class EarningsStatistics
             Best = enough ? _Run(valued[^1]) : null,
             WorstRuns = [.. valued.Take(ExtremeRunCount).Select(_Run)],
             BestRuns = [.. Enumerable.Reverse(valued).Take(ExtremeRunCount).Select(_Run)],
-            Yields = [.. valued.Select(entry => new EarningsYieldDto { YieldIsk = entry.Yield, Weight = entry.Weight })]
+            Yields = [.. valued.Select(entry => new EarningsYieldDto
+            {
+                YieldIsk = entry.Yield, Weight = entry.Weight, ActivityRef = entry.Sample.ActivityRef
+            })]
         };
     }
+
+    /// <summary>Whether the policy lets <paramref name="sample"/> into the figures: not too short, and with counted loot
+    /// where the policy asks for it. Not the window: that is the figures' own.</summary>
+    public static bool IsCounted(EarningsSample sample, EarningsPolicy policy) => _IsCounted(sample, policy);
 
     /// <summary>Gross yield at today's price: the fixed ISK plus the loot gained less the loot lost, plus the ore that
     /// belongs to the site.</summary>

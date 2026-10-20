@@ -6,4 +6,8 @@ public sealed class EarningsYieldDto
 {
     public required decimal YieldIsk { get; init; }
     public required double Weight { get; init; }
+
+    /// <summary>The own activity this yield is (ET-520), so a run can find itself in the distribution; null for a
+    /// server's outcome, which never carries one.</summary>
+    public string? ActivityRef { get; init; }
 }

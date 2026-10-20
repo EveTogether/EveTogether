@@ -20,6 +20,8 @@ using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Runs.Isk;
 using EveUtils.Shared.Modules.Runs.Queries;
 using EveUtils.Shared.Modules.Sde;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using CqrsDispatcher = EveUtils.Shared.Cqrs.IDispatcher;
 
 namespace EveUtils.Client.ViewModels.Runs;
@@ -104,6 +106,10 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
         _dialogs = dialogs;
         _sde = sde;
         Combat = new CombatTelemetryChoice(dispatcher, ownCharacterIds);
+        // A server's copy is not the pilot's own take, so it has no place among the pilot's own figures (ET-520).
+        if (serverCopy is null && services?.GetService<IRunPositionSource>() is { } positions)
+            Position = new RunPositionViewModel(positions, services.GetService<ILootTableOpener>(),
+                services.GetService<ISharedServerPicks>(), services.GetService<ILogger<RunPositionViewModel>>());
         var sectionServices = new RunDetailSectionServices(dispatcher, appraisal, nameOf, esi, locations, sde, portraits,
             images, ownCharacterIds, services, Combat);
         _sections = [.. RunSectionModules.All
@@ -119,6 +125,25 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
 
     /// <summary>The pilot COMBAT and TIMELINE show; its idle time stands under DURATION (ET-468).</summary>
     public CombatTelemetryChoice Combat { get; }
+
+    /// <summary>Where this activity stands among the runs of its kind (ET-520); null for a server's copy and where no
+    /// source of earnings is registered. Filled after the screen is up: nothing here waits for it.</summary>
+    public RunPositionViewModel? Position { get; }
+
+    private void _ShowPosition(ActivityDetailDto detail)
+    {
+        if (Position is null)
+            return;
+
+        if ((detail.GroupCode ?? detail.Runs.FirstOrDefault()?.RunId.ToString()) is not { } activityRef)
+        {
+            Position.Clear();
+            return;
+        }
+
+        int[] characterIds = [.. (_ownCharacterIds ?? new HashSet<long>()).Select(id => (int)id)];
+        _ = Position.ShowAsync(activityRef, characterIds);
+    }
 
     /// <summary>"loot X − consumed Y" under TOTAL ISK (ET-468), only where both figures are known.</summary>
     [ObservableProperty] private string? _lootConsumedText;
@@ -553,6 +578,7 @@ public sealed partial class ActivityDetailViewModel : ViewModelBase, IRefreshabl
         _ApplySectionsPerType(type);
         _ApplyTotalIsk(detail);
         CanDelete = !IsReadOnly && _OwnRunIds(detail).Count > 0;
+        _ShowPosition(detail);
         return input;
     }
 

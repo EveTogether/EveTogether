@@ -39,6 +39,9 @@ public sealed record RunComparison(ActivityStatsKey Key, string Text)
     }
 }
 
+/// <summary>The saved activity whose position in its activity (ET-520) the pane shows, and the pilot's characters that read it.</summary>
+public sealed record RunPositionTarget(string ActivityRef, IReadOnlyList<int> CharacterIds);
+
 /// <summary>One line of the ISK section: the source's own ink, its name and its whole figure.</summary>
 /// <param name="Ink">A breakdown of this source alone, so the swatch is the same <c>IskSourceBar</c> the row and the
 /// day header draw — one place decides what a source's colour is. Null for consumables, which the bar leaves out on
@@ -82,6 +85,7 @@ public sealed partial class RunsActivityPaneViewModel : ViewModelBase
     private readonly TimeSpan _readDelay;
     private readonly Func<ActivityOverviewRowViewModel, CancellationToken, Task<RunComparison?>>? _compare;
     private readonly Action<ActivityStatsKey>? _openStats;
+    private readonly Func<ActivityOverviewRowViewModel, RunPositionTarget?>? _positionTarget;
     private CancellationTokenSource? _reading;
     private RunComparison? _comparison;
 
@@ -92,13 +96,19 @@ public sealed partial class RunsActivityPaneViewModel : ViewModelBase
     /// <param name="compare">How the run stands against the typical run of its activity (ET-517), read after the detail; null
     /// leaves the line out.</param>
     /// <param name="openStats">Opens an activity's earnings in the overview's BY ACTIVITY detail.</param>
+    /// <param name="position">The run's place among the runs of its activity (ET-520); null leaves the block out.</param>
+    /// <param name="positionTarget">Which saved activity a row is, or null for a row that is not the pilot's own take.</param>
     public RunsActivityPaneViewModel(
         Func<ActivityOverviewRowViewModel, CancellationToken, Task<RunsPaneDetail>> readDetail,
         Func<string?>? publishTargetName = null,
         TimeSpan? readDelay = null,
         Func<ActivityOverviewRowViewModel, CancellationToken, Task<RunComparison?>>? compare = null,
-        Action<ActivityStatsKey>? openStats = null)
+        Action<ActivityStatsKey>? openStats = null,
+        RunPositionViewModel? position = null,
+        Func<ActivityOverviewRowViewModel, RunPositionTarget?>? positionTarget = null)
     {
+        Position = position;
+        _positionTarget = positionTarget;
         _compare = compare;
         _openStats = openStats;
         _readDetail = readDetail;
@@ -193,6 +203,21 @@ public sealed partial class RunsActivityPaneViewModel : ViewModelBase
             _openStats?.Invoke(comparison.Key);
     }
 
+    /// <summary>Where the run stands among the runs of its activity (ET-520): the panel of the run window over this run,
+    /// its rank and its notable drop. Filled after the pane is up, never before it: opening the pane waits for none of it.</summary>
+    public RunPositionViewModel? Position { get; }
+
+    private void _ShowPosition(ActivityOverviewRowViewModel? row)
+    {
+        if (Position is null)
+            return;
+
+        if (row is not null && _positionTarget?.Invoke(row) is { } target)
+            _ = Position.ShowAsync(target.ActivityRef, target.CharacterIds, _readDelay);
+        else
+            Position.Clear();
+    }
+
     // ── Actions ─────────────────────────────────────────────────────────────────────────────────────────────────
 
     /// <summary>"PUBLISH TO ET" where exactly one server is coupled, the bare verb where the target is a choice.</summary>
@@ -216,12 +241,14 @@ public sealed partial class RunsActivityPaneViewModel : ViewModelBase
         {
             Crew.Clear();
             CrewStatus = null;
+            _ShowPosition(null);
             return;
         }
 
         _ShowHead(row);
         _ShowIsk(row);
         _ShowWaitingForDetail(row);
+        _ShowPosition(row);
 
         var reading = new CancellationTokenSource();
         _reading = reading;
@@ -240,6 +267,7 @@ public sealed partial class RunsActivityPaneViewModel : ViewModelBase
         var reading = new CancellationTokenSource();
         _reading = reading;
         _ = _ReadDetailAsync(row, reading.Token);
+        _ShowPosition(row);
     }
 
     private void _ShowHead(ActivityOverviewRowViewModel row)

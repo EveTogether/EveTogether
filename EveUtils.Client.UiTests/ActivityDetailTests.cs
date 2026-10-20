@@ -954,6 +954,68 @@ public sealed class ActivityDetailTests
         return _Present(await _WindowAsync(instance, width, cancellationToken), width);
     }
 
+    /// <summary>ET-520: the run details hold the run window's panel over this activity — the diagram with the run marked, the
+    /// rank, the drop of an outlier — above the sections, which are all still there. Bounds: the bar fills the block less its
+    /// 14 px padding, and nothing runs past the edge at 758.</summary>
+    [AvaloniaFact]
+    public async Task ThePosition_IsInTheRunDetails_AboveTheSectionsThatWereAlreadyThere()
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        var drop = new ActivityTopDropDto { TypeId = 1, Name = "Gistii A-Type Shield Booster", Quantity = 3, ValueIsk = 15_000m, Rarity = LootRarityClass.Faction };
+        RunPosition position = RunPositionTests.Position(20_000m, [.. RunPositionTests.Many(8)], drop: drop);
+        using var instance = TestClientInstance.Create(services =>
+            services.AddSingleton<IRunPositionSource>(new RunPositionTests.FixedPosition(position)));
+        ICqrsDispatcher dispatcher = instance.Services.GetRequiredService<ICqrsDispatcher>();
+        await _SaveSiteRunAsync(dispatcher, 90000001, null, cancellationToken);
+        ActivityOverviewRowDto row = Assert.Single(_Value(await dispatcher.Query(new GetActivityOverviewQuery(), cancellationToken)));
+        var viewModel = new ActivityDetailViewModel(dispatcher, row.ActivitySummaryId,
+            instance.Services.GetRequiredService<IAppraisalProvider>(), services: instance.Services);
+        await viewModel.LoadAsync(cancellationToken);
+
+        (_, Window root) = _Present(new ActivityDetailWindow(viewModel) { Width = 758, Height = 1400 }, 758);
+        await ActivityWindowHarness.WaitUntil(() => viewModel.Position?.Earnings.HasFigures is true);
+        Dispatcher.UIThread.RunJobs();
+        root.UpdateLayout();
+
+        Control Named(string name) => root.GetVisualDescendants().OfType<Control>().First(control => control.Name == name);
+        Control section = Named("DetailPositionSection");
+        Control block = Named("DetailPosition");
+        Control bar = Named("PositionBar");
+        Assert.True(section.IsEffectivelyVisible);
+        Assert.InRange(block.Bounds.Width, 700, 758);
+        Assert.InRange(bar.Bounds.Width, block.Bounds.Width - 29, block.Bounds.Width - 27);
+        Assert.Equal(30, bar.Bounds.Height);
+        foreach (TextBlock text in block.GetVisualDescendants().OfType<TextBlock>().Where(text => text.IsEffectivelyVisible && text.Bounds.Width > 0))
+        {
+            Point origin = text.TranslatePoint(new Point(0, 0), block) ?? default;
+            Assert.True(origin.X + text.Bounds.Width <= block.Bounds.Width + 1, $"{text.Text} runs past the block");
+            Assert.NotEqual(Avalonia.Media.Color.Parse("#FF8A7E6B"), (text.Foreground as Avalonia.Media.ISolidColorBrush)?.Color);
+        }
+
+        Assert.True(Named("PositionRank").IsEffectivelyVisible);
+        Assert.True(Named("PositionTopDrop").IsEffectivelyVisible);
+        Assert.True(Named("PositionLootTable").IsEffectivelyVisible);
+        Assert.NotEmpty(viewModel.Sections);
+        Assert.True(section.TranslatePoint(new Point(0, 0), root)!.Value.Y < Named("SectionList").TranslatePoint(new Point(0, 0), root)!.Value.Y);
+    }
+
+    /// <summary>A server's copy is not the pilot's own take: it gets no block at all.</summary>
+    [AvaloniaFact]
+    public async Task AServersCopy_HasNoPositionBlock()
+    {
+        using var instance = TestClientInstance.Create(services =>
+            services.AddSingleton<IRunPositionSource>(new RunPositionTests.FixedPosition(null)));
+        ICqrsDispatcher dispatcher = instance.Services.GetRequiredService<ICqrsDispatcher>();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        await _SaveSiteRunAsync(dispatcher, 90000001, null, cancellationToken);
+        ActivityOverviewRowDto row = Assert.Single(_Value(await dispatcher.Query(new GetActivityOverviewQuery(), cancellationToken)));
+        ActivityDetailDto copy = _Value(await dispatcher.Query(new GetActivityDetailQuery(row.ActivitySummaryId), cancellationToken));
+
+        var viewModel = new ActivityDetailViewModel(dispatcher, row.ActivitySummaryId, services: instance.Services, serverCopy: copy);
+
+        Assert.Null(viewModel.Position);
+    }
+
     private static (ActivityDetailWindow Window, Window Root) _Present(ActivityDetailWindow window, double width)
     {
         var display = new FakeDisplay();

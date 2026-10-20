@@ -6,6 +6,7 @@ using EveUtils.Shared.Modules.Market.Repositories;
 using EveUtils.Shared.Modules.Market.Services;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Earnings;
+using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Sde;
 using Microsoft.EntityFrameworkCore;
 
@@ -31,7 +32,28 @@ internal sealed class GetActivityYieldQueryHandler(IDbContextFactory<ClientDbCon
         return Result<ActivityYieldDto?>.Success(new ActivityYieldDto
         {
             Key = activity.Key,
-            YieldIsk = EarningsStatistics.YieldOf(sample, unitPrice)
+            YieldIsk = EarningsStatistics.YieldOf(sample, unitPrice),
+            CompletedAtUtc = sample.CompletedAtUtc,
+            IsCounted = EarningsStatistics.IsCounted(sample, EarningsPolicy.For(activity.Key.Kind)),
+            TopDrop = _TopDrop(sample, unitPrice)
         });
+    }
+
+    private ActivityTopDropDto? _TopDrop(EarningsSample sample, Func<int, decimal?> unitPrice)
+    {
+        Func<int, LootRarityClass> rarity = LootRarity.Of(sde);
+        return sample.LootGained
+            .Select(line => (Line: line, Value: unitPrice(line.TypeId).GetValueOrDefault() * line.Quantity))
+            .Where(entry => entry.Value > 0)
+            .OrderByDescending(entry => entry.Value)
+            .Select(entry => new ActivityTopDropDto
+            {
+                TypeId = entry.Line.TypeId,
+                Name = sde.GetType(entry.Line.TypeId)?.Name ?? $"Type {entry.Line.TypeId}",
+                Quantity = entry.Line.Quantity,
+                ValueIsk = entry.Value,
+                Rarity = rarity(entry.Line.TypeId)
+            })
+            .FirstOrDefault();
     }
 }

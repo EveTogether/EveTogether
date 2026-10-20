@@ -22,7 +22,9 @@ namespace EveUtils.Client.ViewModels.Activity;
 /// A fetch belongs to its key: switching to another site cancels the old one, so a late answer can never land on the
 /// new site's panel.</para>
 /// </summary>
-public sealed partial class ExpectedEarningsViewModel(IExpectedEarningsSource source, ILogger<ExpectedEarningsViewModel>? logger = null,
+/// <remarks>Without a <paramref name="source"/> the panel reads nothing itself and only shows what <see cref="Present"/> hands
+/// it: a saved run's position (ET-520) lays its figures out the way the run window does.</remarks>
+public sealed partial class ExpectedEarningsViewModel(IExpectedEarningsSource? source, ILogger<ExpectedEarningsViewModel>? logger = null,
     ISharedServerPicks? picks = null, ILootTableOpener? lootTables = null) : ViewModelBase
 {
     private const int MinimumRunsDots = 5;
@@ -105,7 +107,7 @@ public sealed partial class ExpectedEarningsViewModel(IExpectedEarningsSource so
     /// <summary>Points the panel at the activity the window is on, or at none. The same key again is left alone.</summary>
     public Task TrackAsync(ActivityStatsKey? key, int? characterId, string? activityRef = null)
     {
-        if (key == _key)
+        if (key == _key || source is null)
             return Task.CompletedTask;
 
         _loading?.Cancel();
@@ -122,8 +124,42 @@ public sealed partial class ExpectedEarningsViewModel(IExpectedEarningsSource so
         }
 
         _loading = new CancellationTokenSource();
-        return _LoadAsync(key, characterId, activityRef, _loading.Token);
+        return _LoadAsync(source, key, characterId, activityRef, _loading.Token);
     }
+
+    /// <summary>The loading state of a screen that reads the figures elsewhere (ET-520), until <see cref="Present"/> or <see cref="Clear"/>.</summary>
+    public void BeginLoading()
+    {
+        State = ExpectedEarningsState.Loading;
+        HeaderSummary = "Loading…";
+    }
+
+    /// <summary>Shows figures somebody else read (ET-520): a saved run's position in its activity, with the run's own ISK
+    /// as the marker. Nothing is read here and nothing is cached: the caller holds the figures.</summary>
+    public void Present(ActivityStatsKey key, int? characterId, ExpectedEarnings earnings, OwnRunsReason reason,
+        IReadOnlyList<ExpectedEarnings> answers, decimal runIsk)
+    {
+        _key = key;
+        _characterId = characterId;
+        OnPropertyChanged(nameof(IsLootTableShown));
+        _currentIsk = runIsk;
+        _Show(earnings, reason, answers: answers);
+    }
+
+    /// <summary>Hides the panel and forgets what it showed.</summary>
+    public void Clear()
+    {
+        _loading?.Cancel();
+        _key = null;
+        _shown = null;
+        _answers = [];
+        _currentIsk = null;
+        OnPropertyChanged(nameof(IsLootTableShown));
+        _Hide();
+    }
+
+    /// <summary>Raised when the pilot switched the panel to another server's figures (ET-520: the rank follows them).</summary>
+    public event Action<ExpectedEarnings>? ServerChosen;
 
     /// <summary>The group's TOTAL ISK right now, for the marker. Null while there is no figure to compare.</summary>
     public void UpdateCurrentIsk(decimal? totalIsk)
@@ -146,7 +182,8 @@ public sealed partial class ExpectedEarningsViewModel(IExpectedEarningsSource so
             _Render();
     }
 
-    private async Task _LoadAsync(ActivityStatsKey key, int? characterId, string? activityRef, CancellationToken cancellationToken)
+    private async Task _LoadAsync(IExpectedEarningsSource source, ActivityStatsKey key, int? characterId, string? activityRef,
+        CancellationToken cancellationToken)
     {
         try
         {
@@ -203,6 +240,7 @@ public sealed partial class ExpectedEarningsViewModel(IExpectedEarningsSource so
 
         IsServerListOpen = false;
         _Show(answer, OwnRunsReason.None, answers: _answers);
+        ServerChosen?.Invoke(answer);
         if (picks is not null)
             await picks.SetAsync(address);
     }
@@ -343,11 +381,13 @@ public sealed partial class ExpectedEarningsViewModel(IExpectedEarningsSource so
     private static string _BasisLine(ExpectedEarnings earnings)
     {
         EarningsFiguresDto figures = earnings.Figures;
-        string window = figures.Window is EarningsWindow.Extended ? "older data · last 365 days" : "last 90 days";
         return earnings.Basis is EarningsBasis.AllPilots
-            ? $"based on {figures.RunCount} runs · {earnings.PilotCount} pilots · {window}"
-            : $"based on {figures.RunCount} of your runs · {window}";
+            ? $"based on {figures.RunCount} runs · {earnings.PilotCount} pilots · {WindowText(figures)}"
+            : $"based on {figures.RunCount} of your runs · {WindowText(figures)}";
     }
+
+    internal static string WindowText(EarningsFiguresDto figures) =>
+        figures.Window is EarningsWindow.Extended ? "older data · last 365 days" : "last 90 days";
 
     /// <summary>"12m · 3 Oct": how long a run took and the day it finished (the detail view in the runs overview lists runs the same way).</summary>
     internal static string RunMeta(EarningsRunDto run)

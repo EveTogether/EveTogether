@@ -2,6 +2,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:va="using:EveUtils.Client.ViewModels.Activity"
         xmlns:vr="using:EveUtils.Client.ViewModels.Runs"
+        xmlns:pos="using:EveUtils.Client.Views.Runs"
         xmlns:mi="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -202,6 +203,13 @@
         <Panel>
         <ScrollViewer HorizontalScrollBarVisibility="Disabled" IsVisible="{Binding !IsDeleted}">
             <StackPanel>
+
+                <!-- ══ Expected earnings ══ (ET-520) the run window's panel over this activity: where it stands among the
+                     runs of its kind, its rank, and for an outlier the drop behind it. Filled once the screen is up. -->
+                <Border x:Name="DetailPositionSection" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource BorderBrush}"
+                        IsVisible="{Binding Position.Earnings.IsShown}">
+                    <pos:RunPositionView x:Name="DetailPosition" DataContext="{Binding Position}"/>
+                </Border>
 
                 <!-- ══ The sections ══ whichever ones the activity's type has, plus any other it has data for
                      (ET-236). Each is its own module: the header here, the body the module's own view, found by the
