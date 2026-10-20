@@ -401,11 +401,13 @@ public sealed partial class LootTableViewModel(ILootTableSource source, Activity
         List<string> leftOut = [];
         if (table.UncountedRunCount > 0)
             leftOut.Add($"{table.UncountedRunCount.ToString(CultureInfo.InvariantCulture)} {(table.UncountedRunCount == 1 ? "run" : "runs")} without a loot count");
+        if (table.UnrecognisedRunCount > 0)
+            leftOut.Add($"{table.UnrecognisedRunCount.ToString(CultureInfo.InvariantCulture)} {(table.UnrecognisedRunCount == 1 ? "run" : "runs")} with unrecognised loot lines");
         if (table.FleetRunCount > 0)
             leftOut.Add($"{table.FleetRunCount.ToString(CultureInfo.InvariantCulture)} fleet {(table.FleetRunCount == 1 ? "run" : "runs")}");
         LeftOutText = leftOut.Count == 0
             ? string.Empty
-            : $"Left out: {string.Join(" and ", leftOut)}. A run whose loot was not counted between a starting and an ending hold is not a run with nothing, and a fleet run holds one pilot's loot only.";
+            : $"Left out: {string.Join(" and ", leftOut)}. A run whose loot was never pasted or counted is not a run with nothing, and a fleet run holds one pilot's loot only.";
         UnpricedText = table.UnpricedItemCount > 0
             ? $"{table.UnpricedItemCount.ToString(CultureInfo.InvariantCulture)} {(table.UnpricedItemCount == 1 ? "item has" : "items have")} no price and {(table.UnpricedItemCount == 1 ? "counts" : "count")} as 0."
             : string.Empty;

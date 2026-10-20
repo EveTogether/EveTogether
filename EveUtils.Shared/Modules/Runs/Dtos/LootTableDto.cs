@@ -26,9 +26,12 @@ public sealed class LootTableDto
 
     public int PilotCount { get; init; }
 
-    /// <summary>Runs left out because their loot was never counted between two holds, or still has unrecognised lines:
-    /// not "runs with nothing".</summary>
+    /// <summary>Runs left out because their loot was never counted, by pastes or by a cargo difference: not "runs with
+    /// nothing".</summary>
     public int UncountedRunCount { get; init; }
+
+    /// <summary>Runs left out because a line of their loot is still unrecognised, so what dropped is incomplete.</summary>
+    public int UnrecognisedRunCount { get; init; }
 
     /// <summary>Fleet runs left out in v1: a capture holds one pilot's loot, not the activity's.</summary>
     public int FleetRunCount { get; init; }

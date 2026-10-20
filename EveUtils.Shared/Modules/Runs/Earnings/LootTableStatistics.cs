@@ -5,8 +5,8 @@ namespace EveUtils.Shared.Modules.Runs.Earnings;
 
 /// <summary>
 /// What can drop in one activity, out of its samples (ET-519) — pure, no IO, the same for the own runs and a server's
-/// outcomes. A drop rate counts only runs whose loot was counted between a starting and an ending hold: a run that was
-/// never pasted is not "a run with nothing" and would pull every rate down. A fleet run holds one pilot's loot, not the
+/// outcomes. A drop rate counts only runs whose loot was counted, by loose pastes or by a starting and an ending hold:
+/// both ways are equal (ET-522), and a run that was never counted is not "a run with nothing" and would pull every rate down. A fleet run holds one pilot's loot, not the
 /// activity's, and is left out and reported (Jithran 18-10). Each pilot weighs at most
 /// <see cref="LootTablePolicy.RunsPerPilotCap"/> runs, as in <see cref="EarningsStatistics"/>.
 /// </summary>
@@ -29,9 +29,10 @@ public static class LootTableStatistics
             : LootTableConfidence.None;
         int pilots = counted.Select(entry => entry.Sample.PilotBucket).Distinct().Count();
         int fleetRuns = inWindow.Count(_IsFleet);
-        int uncounted = inWindow.Count(sample => !_IsFleet(sample) && !_IsComplete(sample));
+        int uncounted = inWindow.Count(sample => !_IsFleet(sample) && !_HasLootCount(sample));
+        int unrecognised = inWindow.Count(sample => !_IsFleet(sample) && _HasLootCount(sample) && !_IsComplete(sample));
         if (confidence is LootTableConfidence.None)
-            return _Names(key, counted, classify, window, sinceUtc, updateUtc, pilots, fleetRuns, uncounted, effective);
+            return _Names(key, counted, classify, window, sinceUtc, updateUtc, pilots, fleetRuns, uncounted, unrecognised, effective);
 
         Dictionary<int, LootRarityClass> classes = [];
         LootRarityClass ClassOf(int typeId) =>
@@ -70,6 +71,7 @@ public static class LootTableStatistics
             EffectiveRunCount = effective,
             PilotCount = pilots,
             UncountedRunCount = uncounted,
+            UnrecognisedRunCount = unrecognised,
             FleetRunCount = fleetRuns,
             UnpricedItemCount = items.Count(item => item.UnitPrice is null),
             ExpectedLoot = expected,
@@ -85,7 +87,7 @@ public static class LootTableStatistics
     }
 
     /// <summary>How many runs the table of this activity would count over its long window: the ones whose loot was counted
-    /// between a starting and an ending hold, fleet runs left out (ET-521). What the picker says a site has to go on.</summary>
+    /// by pastes or by a cargo difference, fleet runs left out (ET-521). What the picker says a site has to go on.</summary>
     public static int CountedRunCount(IEnumerable<EarningsSample> samples, LootTablePolicy policy, DateTime nowUtc) =>
         _Counted(samples, nowUtc - policy.LongWindow, policy).Count();
 
@@ -121,8 +123,12 @@ public static class LootTableStatistics
 
     private static bool _IsFleet(EarningsSample sample) => sample.FleetSize > 1;
 
+    private static bool _HasLootCount(EarningsSample sample) => sample.LootBasis is not LootBasis.None;
+
+    // Pastes and a cargo difference are the same footing here: a run's pastes are the loot of its containers, merged per
+    // type by the sample (LocalEarningsSamples), so a type dropped in two pastes of one run counts once for the rate.
     private static bool _IsComplete(EarningsSample sample) =>
-        sample.LootBasis is LootBasis.CargoDifference && sample.OpenUnrecognisedLootCount == 0;
+        _HasLootCount(sample) && sample.OpenUnrecognisedLootCount == 0;
 
     private static IEnumerable<EarningsSample> _Counted(IEnumerable<EarningsSample> samples, DateTime sinceUtc,
         LootTablePolicy policy) =>
@@ -217,7 +223,7 @@ public static class LootTableStatistics
 
     // Below the minimum: what was seen, by name only.
     private static LootTableDto _Names(ActivityStatsKey key, IReadOnlyList<Counted> counted, Func<int, LootRarityClass> classify,
-        LootTableWindow window, DateTime sinceUtc, DateTime? updateUtc, int pilots, int fleetRuns, int uncounted, double effective) =>
+        LootTableWindow window, DateTime sinceUtc, DateTime? updateUtc, int pilots, int fleetRuns, int uncounted, int unrecognised, double effective) =>
         new()
         {
             Key = key,
@@ -229,6 +235,7 @@ public static class LootTableStatistics
             EffectiveRunCount = effective,
             PilotCount = pilots,
             UncountedRunCount = uncounted,
+            UnrecognisedRunCount = unrecognised,
             FleetRunCount = fleetRuns,
             Items =
             [
