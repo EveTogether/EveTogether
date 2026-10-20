@@ -23,7 +23,8 @@ public sealed partial class ActivityWindowViewModel
     private void _CreateExpectedEarnings() =>
         ExpectedEarnings = _services.GetService<IExpectedEarningsSource>() is { } source
             ? new ExpectedEarningsViewModel(source, _services.GetService<ILogger<ExpectedEarningsViewModel>>(),
-                _services.GetService<ISharedServerPicks>(), _services.GetService<ILootTableOpener>())
+                _services.GetService<ISharedServerPicks>(), _services.GetService<ILootTableOpener>(),
+                _services.GetService<IEarningsScreens>())
             : null;
 
     /// <summary>Re-points the panel when the site, mission or pocket changed since the last tick. The key is looked up
@@ -38,6 +39,7 @@ public sealed partial class ActivityWindowViewModel
         if (inputs.Equals(_earningsInputs))
         {
             panel.UpdateFleetSize(FleetMemberCount);
+            panel.RefreshAge();
             return;
         }
 

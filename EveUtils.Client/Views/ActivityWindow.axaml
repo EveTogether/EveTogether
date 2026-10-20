@@ -794,7 +794,7 @@
         </Border>
 
         <!-- ══ Expected earnings ══ (ET-516) what this site typically yields, open by itself once the site is known.
-             Informational: nothing in it asks for a click. -->
+             Nothing in it asks for a click; a click anywhere on it, or DETAILS, opens the full figures (ET-521). -->
         <Border x:Name="ExpectedEarningsPanel" DockPanel.Dock="Top" DataContext="{Binding ExpectedEarnings}"
                 x:DataType="va:ExpectedEarningsViewModel" IsVisible="{Binding IsShown}">
             <StackPanel>
@@ -827,7 +827,8 @@
                         </DataTemplate>
                     </ToggleButton.ContentTemplate>
                 </ToggleButton>
-                <Border x:Name="ExpectedEarningsBody" Classes="sectionbody" Padding="14,8,14,12" IsVisible="{Binding IsExpanded}">
+                <Border x:Name="ExpectedEarningsBody" Classes="sectionbody" Padding="14,8,14,12" IsVisible="{Binding IsExpanded}"
+                        Background="Transparent" PointerReleased="OnExpectedEarningsBodyReleased">
                     <StackPanel Spacing="8">
                         <TextBlock x:Name="ExpectedEarningsLoading" Classes="eetext" Text="Looking up this site…"
                                    IsVisible="{Binding IsLoading}"/>
@@ -913,14 +914,31 @@
                             <TextBlock x:Name="TooFewLine" Classes="eefigure" FontSize="11.5" Text="{Binding TooFewText}"/>
                         </StackPanel>
 
-                        <TextBlock x:Name="BasisLine" Classes="eemono" TextWrapping="Wrap" IsVisible="{Binding !IsLoading}"
-                                   Text="{Binding BasisText}"/>
                         <Border Classes="chip warn" HorizontalAlignment="Left" IsVisible="{Binding HasConfidenceText}">
                             <TextBlock Text="{Binding ConfidenceText}"/>
                         </Border>
-                        <TextBlock x:Name="ExpectedEarningsNote" Classes="eetext" IsVisible="{Binding HasNote}" Text="{Binding NoteText}"/>
-                        <Button x:Name="LootTableButton" Classes="pick" HorizontalAlignment="Left"
-                                IsVisible="{Binding IsLootTableShown}" Command="{Binding OpenLootTableCommand}" Content="LOOT TABLE ›"/>
+                        <TextBlock x:Name="ExpectedEarningsNote" Classes="eetext" TextWrapping="Wrap" IsVisible="{Binding ShowsPlainNote}"
+                                   Text="{Binding NoteText}"/>
+                        <!-- A pilot who shares nothing is told so, and the setting is one click away (ET-521). -->
+                        <TextBlock x:Name="SharingNote" Classes="eetext" TextWrapping="Wrap" IsVisible="{Binding ShowsSharingLink}">
+                            <Run Text="{Binding SharingNoteLead}"/><InlineUIContainer BaselineAlignment="Center">
+                                <Button x:Name="TurnOnSharingLink" Classes="link" Command="{Binding TurnOnSharingCommand}"
+                                        Content="{Binding SharingLinkText}" ToolTip.Tip="Settings › Privacy &amp; Sharing"/>
+                            </InlineUIContainer><Run Text="{Binding SharingNoteTail}"/>
+                        </TextBlock>
+                        <!-- The foot: how many runs it rests on and how old it is, and the two ways further in. -->
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10" IsVisible="{Binding !IsLoading}">
+                            <TextBlock x:Name="BasisLine" Grid.Column="0" Classes="eemono" TextWrapping="Wrap" VerticalAlignment="Center">
+                                <Run Text="{Binding BasisText}"/><Run Text=" · "/><Run Text="{Binding UpdatedText}"/>
+                            </TextBlock>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Top">
+                                <Button x:Name="DetailsButton" Classes="pick" IsVisible="{Binding IsDetailsShown}"
+                                        Command="{Binding OpenDetailsCommand}" Content="DETAILS ›"
+                                        ToolTip.Tip="This site's figures in the runs overview"/>
+                                <Button x:Name="LootTableButton" Classes="pick"
+                                        IsVisible="{Binding IsLootTableShown}" Command="{Binding OpenLootTableCommand}" Content="LOOT TABLE ›"/>
+                            </StackPanel>
+                        </Grid>
                     </StackPanel>
                 </Border>
             </StackPanel>

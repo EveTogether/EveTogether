@@ -509,6 +509,10 @@ public sealed class RunPositionTests(ITestOutputHelper output)
             return Read(activityRef).Task;
         }
 
+        public Task<IReadOnlyDictionary<string, RunVsTypical>> ReadVsTypicalAsync(IReadOnlyCollection<string> activityRefs,
+            IReadOnlyList<int> characterIds, CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyDictionary<string, RunVsTypical>>(new Dictionary<string, RunVsTypical>());
+
         private TaskCompletionSource<RunPosition?> Read(string activityRef) =>
             _reads.TryGetValue(activityRef, out TaskCompletionSource<RunPosition?>? read)
                 ? read
@@ -557,9 +561,13 @@ public sealed class RunPositionTests(ITestOutputHelper output)
     }
 
     /// <summary>Hands every read the same position, for a screen test that is about the layout and not about the figures.</summary>
-    internal sealed class FixedPosition(RunPosition? position) : IRunPositionSource
+    internal sealed class FixedPosition(RunPosition? position, IReadOnlyDictionary<string, RunVsTypical>? vsTypical = null) : IRunPositionSource
     {
         public Task<RunPosition?> ReadAsync(string activityRef, IReadOnlyList<int> characterIds, CancellationToken cancellationToken = default) =>
             Task.FromResult(position);
+
+        public Task<IReadOnlyDictionary<string, RunVsTypical>> ReadVsTypicalAsync(IReadOnlyCollection<string> activityRefs,
+            IReadOnlyList<int> characterIds, CancellationToken cancellationToken = default) =>
+            Task.FromResult(vsTypical ?? new Dictionary<string, RunVsTypical>());
     }
 }

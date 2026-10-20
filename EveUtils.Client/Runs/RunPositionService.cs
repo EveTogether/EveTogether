@@ -2,6 +2,8 @@ using System.Collections.Concurrent;
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.DependencyInjection;
 using EveUtils.Shared.Messaging;
+using EveUtils.Shared.Modules.Runs.Dtos;
+using EveUtils.Shared.Modules.Runs.Earnings;
 using EveUtils.Shared.Modules.Runs.Events;
 using EveUtils.Shared.Modules.Runs.Queries;
 using Microsoft.Extensions.DependencyInjection;
@@ -51,6 +53,29 @@ public sealed class RunPositionService : IRunPositionSource, ISingletonService
         if (generation == Volatile.Read(ref _generation))
             _positions[cacheKey] = new Cached(position);
         return position;
+    }
+
+    public async Task<IReadOnlyDictionary<string, RunVsTypical>> ReadVsTypicalAsync(IReadOnlyCollection<string> activityRefs,
+        IReadOnlyList<int> characterIds, CancellationToken cancellationToken = default)
+    {
+        if (activityRefs.Count == 0)
+            return new Dictionary<string, RunVsTypical>();
+
+        IReadOnlyDictionary<string, ActivityYieldDto> yields;
+        await using (AsyncServiceScope scope = _scopeFactory.CreateAsyncScope())
+            yields = (await scope.ServiceProvider.GetRequiredService<IDispatcher>()
+                .Query(new GetActivityYieldsQuery(activityRefs), cancellationToken)).Value ?? new Dictionary<string, ActivityYieldDto>();
+
+        // One read per activity, not per run: the figures are the activity's and come from the caches the drawer shares.
+        Dictionary<ActivityStatsKey, EarningsFiguresDto?> figures = [];
+        foreach (ActivityStatsKey key in yields.Values.Select(yield => yield.Key).Distinct())
+            figures[key] = (await _stats.ReadKeyAsync(key, characterIds, cancellationToken)).Basis?.Figures;
+
+        Dictionary<string, RunVsTypical> against = [];
+        foreach ((string activityRef, ActivityYieldDto run) in yields)
+            if (run.IsCounted && figures[run.Key] is { } basis && RunVsTypical.Of(run.YieldIsk, basis) is { } standing)
+                against[activityRef] = standing;
+        return against;
     }
 
     private async Task<RunPosition?> _ReadAsync(string activityRef, IReadOnlyList<int> characterIds, CancellationToken cancellationToken)

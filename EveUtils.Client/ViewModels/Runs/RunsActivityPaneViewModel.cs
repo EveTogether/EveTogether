@@ -9,6 +9,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Material.Icons;
 using EveUtils.Client.Formatting;
+using EveUtils.Client.Runs;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Earnings;
 using EveUtils.Shared.Modules.Runs.Enums;
@@ -28,14 +29,17 @@ public sealed record RunComparison(ActivityStatsKey Key, string Text)
     /// <summary>Null where the figures have no typical run: below the minimum there is nothing to compare with.</summary>
     public static RunComparison? Of(ActivityStatsKey key, decimal yield, EarningsFiguresDto figures)
     {
-        if (figures.Typical is not { } typical)
+        if (RunVsTypical.Of(yield, figures) is not { } against)
             return null;
 
-        decimal difference = yield - typical;
-        string standing = yield >= (figures.P75 ?? typical) && yield > typical ? " (top 25 %)"
-            : yield <= (figures.P25 ?? typical) && yield < typical ? " (bottom 25 %)"
-            : string.Empty;
-        return new RunComparison(key, $"Compared to typical: {(difference >= 0 ? "+" : string.Empty)}{IskFormat.Compact(difference)}{standing}");
+        string standing = against.Band switch
+        {
+            RunBand.Top => " (top 25 %)",
+            RunBand.Bottom => " (bottom 25 %)",
+            _ => string.Empty
+        };
+        return new RunComparison(key,
+            $"Compared to typical: {(against.Difference >= 0 ? "+" : string.Empty)}{IskFormat.Compact(against.Difference)}{standing}");
     }
 }
 

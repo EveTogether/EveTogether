@@ -975,6 +975,8 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
         List<Task> subRunReads = [];
         _AdoptRows(read.Rows, changed, subRunReads);
         _loadedRows = [.. read.Rows.Select(pair => pair.Row)];
+        foreach (ActivityOverviewRowViewModel row in _loadedRows)
+            row.ShowVsTypical(row.ActivityRef is { } activityRef ? _vsTypical.GetValueOrDefault(activityRef) : null);
         if (read.ServerReads is { } serverReads)
         {
             foreach (ServerTabRead serverRead in serverReads.Values)
@@ -1004,6 +1006,41 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
         // A change to the runs is a change to the figures too; the list is read again, from the services' own cache
         // where a server's figure was read a moment ago.
         _ = _ReloadStatsAsync(force: true);
+        _ = _ReadVsTypicalAsync();
+    }
+
+    private IReadOnlyDictionary<string, RunVsTypical> _vsTypical = new Dictionary<string, RunVsTypical>();
+    private CancellationTokenSource? _readingVsTypical;
+
+    /// <summary>"vs typical" and the top or bottom quarter on the local rows (ET-521): one read for the whole list, off the
+    /// UI thread, from the figures the run drawer shares. A read overtaken by the next is dropped; a row built meanwhile
+    /// starts from the last answer, so it never flickers empty.</summary>
+    private async Task _ReadVsTypicalAsync()
+    {
+        _readingVsTypical?.Cancel();
+        if (_services.GetService<IRunPositionSource>() is not { } positions)
+            return;
+
+        var reading = _readingVsTypical = new CancellationTokenSource();
+        string[] refs = [.. _loadedRows.Select(row => row.ActivityRef).OfType<string>()];
+        try
+        {
+            IReadOnlyDictionary<string, RunVsTypical> read = await Task.Run(
+                () => positions.ReadVsTypicalAsync(refs, _ownCharacterIds, reading.Token), reading.Token);
+            if (reading.IsCancellationRequested)
+                return;
+
+            _vsTypical = read;
+            foreach (ActivityOverviewRowViewModel row in _loadedRows)
+                row.ShowVsTypical(row.ActivityRef is { } activityRef ? read.GetValueOrDefault(activityRef) : null);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception exception)
+        {
+            _services.GetService<ILogger<RunsOverviewViewModel>>()?.LogError(exception, "The runs' standing against typical could not be read");
+        }
     }
 
     /// <summary>The rows one read built, taken onto the screen: a new row is wired up and takes over from the one it

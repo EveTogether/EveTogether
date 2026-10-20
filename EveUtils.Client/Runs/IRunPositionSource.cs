@@ -8,4 +8,9 @@ public interface IRunPositionSource
     /// <param name="characterIds">The pilot's own characters: whichever of them is connected to a server asks it.</param>
     /// <returns>Null for an activity with no statistic key (mining, a free run, an unnamed site).</returns>
     Task<RunPosition?> ReadAsync(string activityRef, IReadOnlyList<int> characterIds, CancellationToken cancellationToken = default);
+
+    /// <summary>Several saved activities against the typical run of their own activity, for the RUNS list's rows (ET-521).
+    /// An activity with no key, no typical run yet, or left out of the figures by the policy is not in the answer.</summary>
+    Task<IReadOnlyDictionary<string, RunVsTypical>> ReadVsTypicalAsync(IReadOnlyCollection<string> activityRefs,
+        IReadOnlyList<int> characterIds, CancellationToken cancellationToken = default);
 }

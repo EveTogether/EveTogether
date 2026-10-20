@@ -25,9 +25,13 @@ namespace EveUtils.Client.ViewModels.Activity;
 /// <remarks>Without a <paramref name="source"/> the panel reads nothing itself and only shows what <see cref="Present"/> hands
 /// it: a saved run's position (ET-520) lays its figures out the way the run window does.</remarks>
 public sealed partial class ExpectedEarningsViewModel(IExpectedEarningsSource? source, ILogger<ExpectedEarningsViewModel>? logger = null,
-    ISharedServerPicks? picks = null, ILootTableOpener? lootTables = null) : ViewModelBase
+    ISharedServerPicks? picks = null, ILootTableOpener? lootTables = null, IEarningsScreens? screens = null,
+    TimeProvider? time = null) : ViewModelBase
 {
     private const int MinimumRunsDots = 5;
+
+    private readonly TimeProvider _time = time ?? TimeProvider.System;
+    private DateTime _readAtUtc;
 
     private readonly Dictionary<string, SharedEarningsAttempt> _cache = new(StringComparer.Ordinal);
     private CancellationTokenSource? _loading;
@@ -80,14 +84,75 @@ public sealed partial class ExpectedEarningsViewModel(IExpectedEarningsSource? s
     /// <summary>Several servers gave a figure: the source chip opens a list to switch between them (ET-512 decision 10).</summary>
     public bool HasServerChoice => ServerOptions.Count > 1;
 
-    public bool ShowsPlainSourceChip => HasFigures && !HasServerChoice;
+    // The chip stays when there are too few runs for a number: it still says whose runs the dots count.
+    public bool ShowsPlainSourceChip => (HasFigures || IsTooFewRuns) && !HasServerChoice;
 
-    public bool ShowsChoiceSourceChip => HasFigures && HasServerChoice;
+    public bool ShowsChoiceSourceChip => (HasFigures || IsTooFewRuns) && HasServerChoice;
 
     public ObservableCollection<ServerOptionViewModel> ServerOptions { get; } = [];
 
     /// <summary>The LOOT TABLE button: on screen where a window can open and the panel knows which activity it is on.</summary>
     public bool IsLootTableShown => lootTables is not null && _key is not null;
+
+    /// <summary>The DETAILS link, and the click on the panel itself: the activity's figures in the runs overview.</summary>
+    public bool IsDetailsShown => screens is not null && _key is not null;
+
+    /// <summary>"updated 2 min ago": how old the figures on show are, moved on by <see cref="RefreshAge"/>.</summary>
+    [ObservableProperty] private string _updatedText = string.Empty;
+
+    /// <summary>The note of a pilot who does not share names the setting that fixes it, and the setting is one click away.</summary>
+    public bool ShowsSharingLink => screens is not null && _reason is OwnRunsReason.NotSharing;
+
+    public bool ShowsPlainNote => HasNote && !ShowsSharingLink;
+
+    public string SharingNoteLead => OwnRunsReasonText.NotSharingLead;
+
+    public string SharingLinkText => OwnRunsReasonText.NotSharingLink;
+
+    public string SharingNoteTail => OwnRunsReasonText.NotSharingTail;
+
+    [RelayCommand]
+    private void OpenDetails()
+    {
+        if (screens is not null && _key is { } key)
+            _ = _OpenAsync(() => screens.OpenStatsAsync(key), $"the figures of {key.Code}");
+    }
+
+    [RelayCommand]
+    private void TurnOnSharing()
+    {
+        if (screens is not null)
+            _ = _OpenAsync(screens.OpenSharingSettingsAsync, "Settings on sharing");
+    }
+
+    private async Task _OpenAsync(Func<Task> open, string what)
+    {
+        try
+        {
+            await open();
+        }
+        catch (Exception exception)
+        {
+            logger?.LogError(exception, "Expected earnings could not open {What}", what);
+        }
+    }
+
+    private void _NotifyKey()
+    {
+        OnPropertyChanged(nameof(IsLootTableShown));
+        OnPropertyChanged(nameof(IsDetailsShown));
+    }
+
+    /// <summary>Moves "updated … ago" on; the window calls it with its own tick and nothing changes unless the text does.</summary>
+    public void RefreshAge()
+    {
+        if (_shown is null)
+            return;
+
+        string text = $"updated {OutcomeSharingServerViewModel.Age(_time.GetUtcNow().UtcDateTime - _readAtUtc)}";
+        if (text != UpdatedText)
+            UpdatedText = text;
+    }
 
     [RelayCommand]
     private void OpenLootTable()
@@ -113,7 +178,7 @@ public sealed partial class ExpectedEarningsViewModel(IExpectedEarningsSource? s
         _loading?.Cancel();
         _key = key;
         _characterId = characterId;
-        OnPropertyChanged(nameof(IsLootTableShown));
+        _NotifyKey();
         _shown = null;
         _answers = [];
         _reason = OwnRunsReason.None;
@@ -141,7 +206,7 @@ public sealed partial class ExpectedEarningsViewModel(IExpectedEarningsSource? s
     {
         _key = key;
         _characterId = characterId;
-        OnPropertyChanged(nameof(IsLootTableShown));
+        _NotifyKey();
         _currentIsk = runIsk;
         _Show(earnings, reason, answers: answers);
     }
@@ -154,7 +219,7 @@ public sealed partial class ExpectedEarningsViewModel(IExpectedEarningsSource? s
         _shown = null;
         _answers = [];
         _currentIsk = null;
-        OnPropertyChanged(nameof(IsLootTableShown));
+        _NotifyKey();
         _Hide();
     }
 
@@ -227,6 +292,7 @@ public sealed partial class ExpectedEarningsViewModel(IExpectedEarningsSource? s
             _cache[key.Code] = new SharedEarningsAttempt(earnings, OwnRunsReason.None, _answers);
         _shown = earnings;
         _reason = reason;
+        _readAtUtc = earnings.ReadAtUtc ?? _time.GetUtcNow().UtcDateTime;
         _Render();
     }
 
@@ -279,7 +345,7 @@ public sealed partial class ExpectedEarningsViewModel(IExpectedEarningsSource? s
     private void _Hide()
     {
         State = ExpectedEarningsState.Hidden;
-        HeaderSummary = string.Empty;
+        HeaderSummary = UpdatedText = string.Empty;
         CompactLine = string.Empty;
         OnPropertyChanged(nameof(CompactLine));
         _Notify();
@@ -295,6 +361,7 @@ public sealed partial class ExpectedEarningsViewModel(IExpectedEarningsSource? s
         IsSharedSource = earnings.Basis is EarningsBasis.AllPilots;
         BasisText = _BasisLine(earnings);
         NoteText = OwnRunsReasonText.For(_reason);
+        RefreshAge();
         _RenderServerOptions();
 
         if (figures.Typical is not { } typical)
@@ -376,6 +443,8 @@ public sealed partial class ExpectedEarningsViewModel(IExpectedEarningsSource? s
         OnPropertyChanged(nameof(HasPerPilot));
         OnPropertyChanged(nameof(HasConfidenceText));
         OnPropertyChanged(nameof(HasNote));
+        OnPropertyChanged(nameof(ShowsSharingLink));
+        OnPropertyChanged(nameof(ShowsPlainNote));
     }
 
     private static string _BasisLine(ExpectedEarnings earnings)

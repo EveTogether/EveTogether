@@ -771,6 +771,10 @@ public sealed class RunsByActivityWindowTests
     {
         public Task<RunPosition?> ReadAsync(string activityRef, IReadOnlyList<int> characterIds, CancellationToken cancellationToken = default) =>
             position;
+
+        public Task<IReadOnlyDictionary<string, RunVsTypical>> ReadVsTypicalAsync(IReadOnlyCollection<string> activityRefs,
+            IReadOnlyList<int> characterIds, CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyDictionary<string, RunVsTypical>>(new Dictionary<string, RunVsTypical>());
     }
 
     /// <summary>Two activities, one with plenty of runs from four pilots and one the pilot flew a few times; the best runs of
