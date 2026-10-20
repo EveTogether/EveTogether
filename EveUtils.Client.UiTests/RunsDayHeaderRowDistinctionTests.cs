@@ -68,7 +68,7 @@ public sealed class RunsDayHeaderRowDistinctionTests
         Control rowContainer = list.ContainerFromItem(row) ?? throw new Xunit.Sdk.XunitException("row not realised");
 
         Grid dayTotals = dayContainer.GetVisualDescendants().OfType<Grid>().Single(g => g.Name == "DayTotals");
-        Grid rowGrid = rowContainer.GetVisualDescendants().OfType<Grid>().First(g => g.ColumnDefinitions.Count == 7);
+        Grid rowGrid = rowContainer.GetVisualDescendants().OfType<Grid>().First(g => g.ColumnDefinitions.Count == 8);
         Button rowCaretBtn = rowContainer.GetVisualDescendants().OfType<Button>().Single(b => b.Classes.Contains("caretbtn"));
 
         // The caret's own slot, not the glyph's centred TextBlock inside it (a smaller/dimmer rowcaret glyph
