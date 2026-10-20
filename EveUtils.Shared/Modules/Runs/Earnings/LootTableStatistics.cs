@@ -135,16 +135,11 @@ public static class LootTableStatistics
         samples.Where(sample => sample.CompletedAtUtc >= sinceUtc && _Weighs(sample, policy) && !_IsFleet(sample)
                                 && _IsComplete(sample));
 
-    // w = min(1, C / runs of that pilot in the window), unless a server already applied it.
     private static IReadOnlyList<Counted> _Weighted(IEnumerable<EarningsSample> samples, LootTablePolicy policy)
     {
         EarningsSample[] all = [.. samples];
-        Dictionary<string, int> runsByPilot = all
-            .GroupBy(sample => sample.PilotBucket, StringComparer.Ordinal)
-            .ToDictionary(pilot => pilot.Key, pilot => pilot.Count(), StringComparer.Ordinal);
-        return [.. all.Select(sample => new Counted(sample,
-            sample.CapWeight ?? Math.Min(1d, (double)policy.RunsPerPilotCap / runsByPilot[sample.PilotBucket]),
-            _Quantities(sample)))];
+        double[] weights = PilotCap.Weights(all, policy.RunsPerPilotCap);
+        return [.. all.Select((sample, index) => new Counted(sample, weights[index], _Quantities(sample)))];
     }
 
     // One run drops a type once however many lines hold it: a local reading merges them already, a wire one may not.

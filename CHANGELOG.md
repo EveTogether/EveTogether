@@ -17,6 +17,8 @@ entries under `[Unreleased]` below that were not there yet at the previous night
 
 ## [Unreleased]
 
+- **Fixed: your own runs no longer read as "low confidence" once you have plenty.** With 97 runs of one site, expected earnings said "Low confidence: fewer than 20 runs" and the loot table showed "seen in X of 97" instead of percentages, because a pilot's runs were limited to the weight of 10 even when no other pilot was involved. That limit now only applies when the runs of several pilots are combined, so every run of your own counts.
+
 - **Fixed: the runs overview no longer slows down as you collect runs.** Every time a run changed, the BY ACTIVITY list and everything that compares a run with its site's typical run read the runs of the last year again. They now read again only the sites whose runs changed, and open with one read instead of two. With around 800 runs, updating after a change takes about 10 ms instead of about half a second, and the overview opens in roughly half the time.
 
 - **Added: the run window's EXPECTED EARNINGS block leads somewhere.** A click on the block, or its new DETAILS button, opens the full figures of the site in the runs overview. The foot says how old the figures are ("updated 2 min ago"), the YOUR RUNS / ALL PILOTS chip stays while there are too few runs for a number, and "Turn on sharing" is now a link that opens Settings on Privacy & Sharing.

@@ -48,6 +48,54 @@ public sealed class EarningsStatisticsTests
         Assert.Equal(100m, figures.P90);
     }
 
+    /// <summary>ET-523: one pilot's 97 runs are 97 effective runs, not 10. Counter-proof: capped, the same runs give
+    /// 10 effective runs, low confidence, quartiles and no long-run average.</summary>
+    [Fact]
+    public void Compute_OnePilotsRuns_AreNotCapped()
+    {
+        EarningsFiguresDto figures = EarningsStatistics.Compute(
+            [.. Enumerable.Range(0, 97).Select(_ => _Sample("only-pilot", 100m))], _ => null, EarningsPolicy.Default, NowUtc);
+
+        Assert.Equal(97d, figures.EffectiveRunCount, 9);
+        Assert.Equal(EarningsConfidence.Normal, figures.Confidence);
+        Assert.Equal(EarningsBand.Deciles, figures.Band);
+        Assert.NotNull(figures.LongRunAverage);
+    }
+
+    /// <summary>ET-523: two of the own characters are still the pilot's own runs, and a sample that carries a weight
+    /// is used as it is, so neither is capped.</summary>
+    [Fact]
+    public void Compute_OwnRunsOfTwoCharacters_KeepTheirOwnWeight()
+    {
+        EarningsSample[] samples =
+        [
+            .. Enumerable.Range(0, 97).Select(_ => _Sample("character-1", 100m) with { CapWeight = 1 }),
+            .. Enumerable.Range(0, 3).Select(_ => _Sample("character-2", 100m) with { CapWeight = 1 })
+        ];
+
+        EarningsFiguresDto figures = EarningsStatistics.Compute(samples, _ => null, EarningsPolicy.Default, NowUtc);
+
+        Assert.Equal(100d, figures.EffectiveRunCount, 9);
+        Assert.Equal(EarningsConfidence.Normal, figures.Confidence);
+    }
+
+    /// <summary>ET-523: with a second pilot the cap applies again: 97 runs weigh 10 next to 3 runs, 13 effective runs.</summary>
+    [Fact]
+    public void Compute_TwoPilotsOneWith97Runs_StillCapsThatPilot()
+    {
+        EarningsSample[] samples =
+        [
+            .. Enumerable.Range(0, 97).Select(_ => _Sample("farmer", 100m)),
+            .. Enumerable.Range(0, 3).Select(_ => _Sample("other", 100m))
+        ];
+
+        EarningsFiguresDto figures = EarningsStatistics.Compute(samples, _ => null, EarningsPolicy.Default, NowUtc);
+
+        Assert.Equal(13d, figures.EffectiveRunCount, 9);
+        Assert.Equal(EarningsConfidence.Low, figures.Confidence);
+        Assert.Equal(EarningsBand.Quartiles, figures.Band);
+    }
+
     [Theory]
     [InlineData(4, EarningsConfidence.None, EarningsBand.None, false, false, false)]
     [InlineData(5, EarningsConfidence.Low, EarningsBand.Quartiles, true, false, false)]
