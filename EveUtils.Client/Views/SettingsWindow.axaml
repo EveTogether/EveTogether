@@ -1,4 +1,5 @@
 <v:ChromedWindow xmlns="https://github.com/avaloniaui" xmlns:v="using:EveUtils.Client.Views"
+        xmlns:vm="using:EveUtils.Client.ViewModels"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -244,6 +245,44 @@
                                    FontSize="10" Opacity="0.6" TextWrapping="Wrap"/>
                         <TextBlock Text="On a run you fly together with a fleet, loot, bounty and mining are shared unless you turn them off: the run window says so at the top, and one click there stops it for that run."
                                    FontSize="10" Opacity="0.6" TextWrapping="Wrap"/>
+                    </StackPanel>
+
+                    <!-- ET-515: the outcome of a saved run, shared anonymously with a coupled server. Apart from the fleet
+                         metrics above and from the EVE Workbench upload; applied on SAVE like the rest of this dialog. -->
+                    <StackPanel x:Name="OutcomeSharingPanel" Spacing="6" IsVisible="False">
+                        <TextBlock Text="EARNINGS STATS" Classes="label" FontSize="9"/>
+                        <TextBlock x:Name="OutcomeSharingDescriptionBlock" FontSize="11" Opacity="0.85" TextWrapping="Wrap"/>
+                        <TextBlock x:Name="OutcomeSharingNoServersBlock" FontSize="11" Opacity="0.85" TextWrapping="Wrap"/>
+                        <ItemsControl x:Name="OutcomeSharingServers">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:OutcomeSharingServerViewModel">
+                                    <StackPanel Spacing="2" Margin="0,0,0,8">
+                                        <CheckBox IsChecked="{Binding IsShared}">
+                                            <TextBlock>
+                                                <Run Text="Share my run outcomes with "/><Run Text="{Binding Name}" FontWeight="Bold"/>
+                                            </TextBlock>
+                                        </CheckBox>
+                                        <TextBlock Text="{Binding StatusText}" FontSize="11" Margin="22,0,0,0"
+                                                   Foreground="{DynamicResource TextAccentBrush}" TextWrapping="Wrap"/>
+                                        <TextBlock Text="{Binding Problem}" IsVisible="{Binding HasProblem}" FontSize="11"
+                                                   Margin="22,0,0,0" Foreground="{DynamicResource RedBrush}" TextWrapping="Wrap"/>
+                                        <CheckBox IsChecked="{Binding Backfill}" IsVisible="{Binding OffersBackfill}" Margin="22,2,0,0">
+                                            <TextBlock Text="{Binding BackfillText}" FontSize="11"/>
+                                        </CheckBox>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <Expander Header="What is shared">
+                            <StackPanel Spacing="6">
+                                <TextBlock FontSize="11" TextWrapping="Wrap"
+                                           Text="SHARED: the site, mission or filament tier · bounty, rewards and the loot items with their quantities · the duration in whole minutes and the day · the fleet size."/>
+                                <TextBlock FontSize="11" TextWrapping="Wrap"
+                                           Text="NEVER SHARED: system, signature or any location · your character or fit name · the time of day · fleet members and combat data."/>
+                                <TextBlock x:Name="OutcomeSharingAnonymityBlock" FontSize="11" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </Expander>
+                        <TextBlock x:Name="OutcomeSharingSeparateBlock" FontSize="11" Opacity="0.85" TextWrapping="Wrap"/>
                     </StackPanel>
 
                     <!-- Clipboard watch. The disclosure is deliberately long and concrete: this is the one feature

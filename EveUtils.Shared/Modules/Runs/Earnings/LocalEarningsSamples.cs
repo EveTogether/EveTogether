@@ -17,15 +17,21 @@ namespace EveUtils.Shared.Modules.Runs.Earnings;
 /// </summary>
 internal static class LocalEarningsSamples
 {
-    /// <summary>Every activity with a key that completed since <paramref name="sinceUtc"/>.</summary>
+    /// <summary>Every activity with a key that completed since <paramref name="sinceUtc"/>, or with
+    /// <paramref name="activityRefs"/> given only those activities, however long ago they completed.</summary>
     public static async Task<IReadOnlyList<ActivityEarningsSample>> ReadAsync(ClientDbContext db, ISdeAccessor sde,
-        DateTime sinceUtc, DateTime nowUtc, CancellationToken cancellationToken)
+        DateTime sinceUtc, DateTime nowUtc, CancellationToken cancellationToken,
+        IReadOnlyCollection<string>? activityRefs = null)
     {
         IQueryable<Run> saved = db.Set<Run>()
             .AsNoTracking()
             .Where(run => run.State == RunState.Saved && !run.DeletedAtUtc.HasValue
                           && run.ActivityKind != ActivityKind.Mining && run.ActivityKind != ActivityKind.Free);
-        IQueryable<Run> recent = saved.Where(run => (run.StoppedAtUtc ?? run.StartedAtUtc) >= sinceUtc);
+        if (activityRefs is not null)
+            saved = ActivityRefs.Of(saved, activityRefs);
+        IQueryable<Run> recent = activityRefs is null
+            ? saved.Where(run => (run.StoppedAtUtc ?? run.StartedAtUtc) >= sinceUtc)
+            : saved;
         // Whole activities: a group's run that stopped just before the window still belongs to the take of the group.
         List<Run> runs = await saved
             .Where(run => recent.Any(member => member.Id == run.Id || (run.GroupCode != null && member.GroupCode == run.GroupCode)))
@@ -70,7 +76,8 @@ internal static class LocalEarningsSamples
                 continue;
 
             samples.Add(new ActivityEarningsSample(key, source.SiteName,
-                _Sample(key, ordered, parametersByRun, ores, isCharge, openUnrecognisedByCapture, nowUtc)));
+                _Sample(key, ordered, parametersByRun, ores, isCharge, openUnrecognisedByCapture, nowUtc),
+                activity.Key, source.CharacterId));
         }
 
         return samples;

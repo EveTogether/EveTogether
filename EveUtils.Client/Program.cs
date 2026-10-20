@@ -253,6 +253,8 @@ sealed class Program
         // Publishes a fleet run to its fleet's server on SAVE and pulls a group mate's the moment the server says it
         // arrived (ET-245). Up before the startup auto-save below, so a fleet run that save commits is queued too.
         _ = Services.GetRequiredService<EveUtils.Client.Runs.FleetRunAutoPublisher>();
+        // Shares the outcome of a saved run with a server the pilot opted in to (ET-515): apart from the above.
+        _ = Services.GetRequiredService<EveUtils.Client.Runs.RunOutcomePublisher>();
         _ = Services.GetRequiredService<EveUtils.Client.Fleet.FleetKillmailSharePublisher>();
         _ = Services.GetRequiredService<EveUtils.Client.Fleet.FleetKillmailShareReceiver>();
 

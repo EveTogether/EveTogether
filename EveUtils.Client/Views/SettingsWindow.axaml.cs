@@ -55,6 +55,7 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
     // return null once the content is stolen for a docked tab).
     private TextBox _gamelogDirBox = null!;
     private TextBlock _hintBlock = null!;
+    private ViewModels.OutcomeSharingSettingsViewModel? _outcomeSharing;
     private CheckBox _shareLocationBox = null!, _shareBountyBox = null!, _shareCombatBox = null!;
     private CheckBox? _shareLootBox;
     private CheckBox? _shareMiningBox;
@@ -131,7 +132,8 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
     }
 
     public SettingsWindow(string currentDirectory, string detectedDefault, bool shareLocation, bool shareBounty, bool shareCombat, bool loadTypeImages, Theming.FactionTheme currentFaction, string sdeVersionLabel, bool openFitDetailAfterImport = true, Notifications.ToastPosition toastPosition = Notifications.ToastPosition.TopRight, bool enableLocalApi = false, int localApiPort = LocalApi.LocalApiServer.DefaultPort, string localApiStatusLabel = "", ILocalApiServer? localApiServer = null, bool checkUpdatesOnStartup = true, ClipboardWatchService? clipboardWatch = null, Func<SettingsResult, Task>? onApply = null,
-        int initialCategory = 0, bool openFleetRunWindowImmediately = false, bool autoPublishFleetRuns = true, bool shareLoot = false, bool shareMining = false, bool autoStartMissions = true, bool autoStartSites = true, DayOfWeek weekStartsOn = DayOfWeek.Monday, bool includeNightlyBuilds = false, IUpdateService? updates = null, bool offerHomefrontRuns = true, Func<Task>? runSetupAgain = null, bool includeLocationInLocalApi = false, Action? openWidgetManager = null, bool shareKillmails = true, bool followFleetCommanderEnd = false, ViewModels.Activity.CompactRunStyle compactRunStyle = ViewModels.Activity.CompactRunStyle.Card, bool openRunsCompact = false, bool valueBlueprintsInLoot = true) : this()
+        int initialCategory = 0, bool openFleetRunWindowImmediately = false, bool autoPublishFleetRuns = true, bool shareLoot = false, bool shareMining = false, bool autoStartMissions = true, bool autoStartSites = true, DayOfWeek weekStartsOn = DayOfWeek.Monday, bool includeNightlyBuilds = false, IUpdateService? updates = null, bool offerHomefrontRuns = true, Func<Task>? runSetupAgain = null, bool includeLocationInLocalApi = false, Action? openWidgetManager = null, bool shareKillmails = true, bool followFleetCommanderEnd = false, ViewModels.Activity.CompactRunStyle compactRunStyle = ViewModels.Activity.CompactRunStyle.Card, bool openRunsCompact = false, bool valueBlueprintsInLoot = true,
+        ViewModels.OutcomeSharingSettingsViewModel? outcomeSharing = null) : this()
     {
         _runSetupAgain = runSetupAgain;
         _openWidgetManager = openWidgetManager;
@@ -283,6 +285,7 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
         OfferHomefrontRunsBox.IsChecked = offerHomefrontRuns;
         IncludeLocationInLocalApiBox.IsChecked = includeLocationInLocalApi;
         ValueBlueprintsInLootBox.IsChecked = valueBlueprintsInLoot;
+        _SetUpOutcomeSharing(outcomeSharing);
         this.FindControl<TextBlock>("SdeVersionBlock")!.Text = sdeVersionLabel;
         this.FindControl<TextBlock>("DataFolderBlock")!.Text = Composition.ClientServices.DataDirectory();
         _toastPositionBox.SelectedIndex = (int)toastPosition;
@@ -485,6 +488,22 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
         : _factionCaldari.IsChecked == true ? Theming.FactionTheme.Caldari
         : _factionMinmatar.IsChecked == true ? Theming.FactionTheme.Minmatar
         : Theming.FactionTheme.Gallente;
+
+    private void _SetUpOutcomeSharing(ViewModels.OutcomeSharingSettingsViewModel? outcomeSharing)
+    {
+        _outcomeSharing = outcomeSharing;
+        if (outcomeSharing is null)
+            return;
+
+        this.FindControl<StackPanel>("OutcomeSharingPanel")!.IsVisible = true;
+        this.FindControl<TextBlock>("OutcomeSharingDescriptionBlock")!.Text = ViewModels.OutcomeSharingSettingsViewModel.Description;
+        this.FindControl<TextBlock>("OutcomeSharingAnonymityBlock")!.Text = ViewModels.OutcomeSharingSettingsViewModel.Anonymity;
+        this.FindControl<TextBlock>("OutcomeSharingSeparateBlock")!.Text = ViewModels.OutcomeSharingSettingsViewModel.SeparateFromWorkbench;
+        TextBlock noServers = this.FindControl<TextBlock>("OutcomeSharingNoServersBlock")!;
+        noServers.Text = ViewModels.OutcomeSharingSettingsViewModel.NoServers;
+        noServers.IsVisible = outcomeSharing.HasNoServers;
+        this.FindControl<ItemsControl>("OutcomeSharingServers")!.ItemsSource = outcomeSharing.Servers;
+    }
 
     private void UpdateHint()
     {
@@ -849,6 +868,7 @@ public partial class SettingsWindow : ChromedWindow, IHostableModuleWindow
         var autoStartSites = _autoStartSitesBox.IsChecked ?? true;
         var weekStartsOn = _weekStartsOnBox.SelectedIndex == 1 ? DayOfWeek.Sunday : DayOfWeek.Monday;
         var includeNightlyBuilds = _channelNightlyButton?.IsChecked ?? false;
-        return new SettingsResult(dir, shareLocation, shareBounty, shareCombat, loadTypeImages, SelectedFaction(), reimportSde, openFitDetailAfterImport, toastPosition, enableLocalApi, localApiPort, checkUpdatesOnStartup, openFleetRunWindowImmediately, autoPublishFleetRuns, shareLoot, shareMining, autoStartMissions, autoStartSites, weekStartsOn, includeNightlyBuilds, _channelTouched, OfferHomefrontRunsBox.IsChecked ?? true, IncludeLocationInLocalApiBox.IsChecked ?? false, shareKillmails, followFleetCommanderEnd, compactRunStyle, openRunsCompact, ValueBlueprintsInLootBox.IsChecked ?? true);
+        return new SettingsResult(dir, shareLocation, shareBounty, shareCombat, loadTypeImages, SelectedFaction(), reimportSde, openFitDetailAfterImport, toastPosition, enableLocalApi, localApiPort, checkUpdatesOnStartup, openFleetRunWindowImmediately, autoPublishFleetRuns, shareLoot, shareMining, autoStartMissions, autoStartSites, weekStartsOn, includeNightlyBuilds, _channelTouched, OfferHomefrontRunsBox.IsChecked ?? true, IncludeLocationInLocalApiBox.IsChecked ?? false, shareKillmails, followFleetCommanderEnd, compactRunStyle, openRunsCompact, ValueBlueprintsInLootBox.IsChecked ?? true,
+            _outcomeSharing?.Changes());
     }
 }

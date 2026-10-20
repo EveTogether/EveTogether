@@ -1,6 +1,7 @@
 using EveUtils.Client.LocalApi;
 using EveUtils.Client.Notifications;
 using EveUtils.Client.Theming;
+using EveUtils.Client.ViewModels;
 using EveUtils.Client.ViewModels.Activity;
 
 namespace EveUtils.Client.Dialogs;
@@ -34,4 +35,5 @@ public sealed record SettingsResult(
     bool OfferHomefrontRuns = true,
     bool IncludeLocationInLocalApi = false,
     bool ShareKillmails = true, bool FollowFleetCommanderEnd = false,
-    CompactRunStyle CompactRunStyle = CompactRunStyle.Card, bool OpenRunsCompact = false, bool ValueBlueprintsInLoot = true);
+    CompactRunStyle CompactRunStyle = CompactRunStyle.Card, bool OpenRunsCompact = false, bool ValueBlueprintsInLoot = true,
+    IReadOnlyList<OutcomeSharingChange>? OutcomeSharing = null);
