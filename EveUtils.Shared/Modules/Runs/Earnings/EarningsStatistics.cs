@@ -13,10 +13,11 @@ public static class EarningsStatistics
 {
     /// <param name="unitPrice">Today's price per type; null counts the loot line as 0 and reports the type unpriced.</param>
     /// <param name="nowUtc">The end of the window.</param>
+    /// <param name="window">The window the figures are labelled with unless the fallback inside takes over: for a caller
+    /// that already chose the longer window itself by reading its samples over it.</param>
     public static EarningsFiguresDto Compute(IReadOnlyList<EarningsSample> samples, Func<int, decimal?> unitPrice,
-        EarningsPolicy policy, DateTime nowUtc)
+        EarningsPolicy policy, DateTime nowUtc, EarningsWindow window = EarningsWindow.Recent)
     {
-        EarningsWindow window = EarningsWindow.Recent;
         DateTime sinceUtc = nowUtc - policy.Window;
         IReadOnlyList<(EarningsSample Sample, double Weight)> counted = _Weighted(_Counted(samples, sinceUtc, policy), policy);
         if (counted.Sum(entry => entry.Weight) < policy.MinimumRuns && policy.FallbackWindow is { } fallback)
@@ -120,7 +121,8 @@ public static class EarningsStatistics
         Dictionary<string, int> runsByPilot = all
             .GroupBy(sample => sample.PilotBucket, StringComparer.Ordinal)
             .ToDictionary(pilot => pilot.Key, pilot => pilot.Count(), StringComparer.Ordinal);
-        return [.. all.Select(sample => (sample, Math.Min(1d, (double)policy.RunsPerPilotCap / runsByPilot[sample.PilotBucket])))];
+        return [.. all.Select(sample => (sample,
+            sample.CapWeight ?? Math.Min(1d, (double)policy.RunsPerPilotCap / runsByPilot[sample.PilotBucket])))];
     }
 
     private static decimal? _TypicalPerHour(IEnumerable<(EarningsSample Sample, decimal Yield, double Weight)> valued,

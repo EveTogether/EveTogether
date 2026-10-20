@@ -82,6 +82,11 @@
 
         <TextBlock x:Name="CompactWhere" Classes="chint" Margin="12,2,12,0" Text="{Binding CompactWhereText}"/>
 
+        <!-- Expected earnings in one line (ET-516), in the plain text ink: a hint's dim ink is under 4.5:1 here. -->
+        <TextBlock x:Name="CompactEarnings" Margin="12,2,12,0" FontSize="10" Foreground="{StaticResource TextBrush}"
+                   Text="{Binding ExpectedEarnings.CompactLine}"
+                   IsVisible="{Binding ExpectedEarnings.HasFigures}"/>
+
         <v:ActivityCompactNoticesView Margin="12,6,12,0"/>
 
         <!-- The commander saved or discarded the shared run (ET-458): the countdown takes the buttons' place, since
