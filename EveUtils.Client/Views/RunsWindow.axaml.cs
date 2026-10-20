@@ -9,6 +9,7 @@ using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using EveUtils.Client.Controls;
+using EveUtils.Client.Input;
 using EveUtils.Client.ViewModels.Runs;
 
 namespace EveUtils.Client.Views;
@@ -87,6 +88,46 @@ public partial class RunsWindow : ChromedWindow
         // Esc before anything a shortcut may have been bound to. Docked content gets no keys at all unless the
         // focus is inside it, which is why opening the drawer moves the focus into it.
         _root.AddHandler(KeyDownEvent, _OnKeyDown, RoutingStrategies.Tunnel);
+
+        TextBox search = this.FindControl<TextBox>(ShortcutDispatch.SearchBoxName)!;
+        search.KeyDown += _OnSearchKeyDown;
+        search.LostFocus += (_, _) => _Search?.DismissSuggestions();
+    }
+
+    private RunsSearchViewModel? _Search => _ViewModel?.Search;
+
+    /// <summary>Esc clears the search, ↓ ↑ walk the suggestions and ↵ takes the highlighted one — or just applies what is
+    /// typed. The field keeps the focus throughout, so typing on never needs a click.</summary>
+    private void _OnSearchKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (_Search is not { } search)
+            return;
+
+        switch (e.Key)
+        {
+            case Key.Escape:
+                search.Clear();
+                break;
+            case Key.Down:
+                search.MoveSuggestion(1);
+                break;
+            case Key.Up:
+                search.MoveSuggestion(-1);
+                break;
+            case Key.Enter:
+                search.Accept();
+                break;
+            default:
+                return;
+        }
+
+        e.Handled = true;
+    }
+
+    private void OnSuggestionClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button { DataContext: SearchSuggestionViewModel suggestion } && _Search is { } search)
+            search.Pick(suggestion);
     }
 
     public RunsWindow(RunsOverviewViewModel viewModel) : this()

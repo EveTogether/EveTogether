@@ -1,5 +1,10 @@
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Globalization;
+using System.Linq;
+using EveUtils.Client.Opsec;
+using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Sde;
 using EveUtils.Shared.Modules.Sde.Dtos;
@@ -29,6 +34,31 @@ public sealed class RunRowFacts(ISdeAccessor? sde)
         if (sde is not { IsAvailable: false })
             _types[key] = resolved;
         return resolved;
+    }
+
+    private IReadOnlyDictionary<int, SdeSite>? _sites;
+
+    /// <summary>The static data's site for a dungeon id, read once for the whole screen (the catalogue is a few thousand
+    /// sites) and only once the SDE is imported; null where it is missing or does not know the id, never an error.</summary>
+    public SdeSite? SiteOf(int dungeonId)
+    {
+        if (dungeonId <= 0 || sde is not { IsAvailable: true } available)
+            return null;
+
+        _sites ??= available.SearchSites().GroupBy(site => site.DungeonId).ToDictionary(group => group.Key, group => group.First());
+        return _sites.GetValueOrDefault(dungeonId);
+    }
+
+    /// <summary>What the search (ET-518) matches this activity on. A site only the name is known of is found by its name
+    /// and type alone.</summary>
+    public ActivitySearchProfile SearchProfileOf(ActivityOverviewRowDto row, RunTypeDefinition type)
+    {
+        SdeSite? site = row.ActivityKind is ActivityKind.Site ? SiteOf(row.SiteTypeId) : null;
+        string name = string.IsNullOrWhiteSpace(row.SiteName) && site is not null
+            ? site.Name
+            : OpsecText.Strip(ActivityOverviewRowViewModel.SiteTextOf(row, type));
+        return new ActivitySearchProfile(name, site?.FactionName, site?.ArchetypeName, type.Name,
+            site?.DedRating is > 0 and { } ded ? $"DED {ded.ToString(CultureInfo.InvariantCulture)}" : string.Empty);
     }
 
     /// <summary>Null when the activity recorded no system, or the static data does not know it (yet).</summary>

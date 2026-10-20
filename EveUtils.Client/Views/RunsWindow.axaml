@@ -287,6 +287,50 @@
                 <Setter Property="Background" Value="Transparent"/>
                 <Setter Property="Foreground" Value="{StaticResource TextDimSmallBrush}"/>
             </Style>
+            <!-- The search box's clear button and its suggestions (ET-518). Ink is the text colours, never the dim ones. -->
+            <Style Selector="Button.searchclear">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="BorderThickness" Value="0"/>
+                <Setter Property="CornerRadius" Value="0"/>
+                <Setter Property="Padding" Value="8,4"/>
+                <Setter Property="MinHeight" Value="0"/>
+                <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+                <Setter Property="Cursor" Value="Hand"/>
+            </Style>
+            <Style Selector="Button.searchclear:pointerover /template/ ContentPresenter">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+            </Style>
+            <Style Selector="Border.suggestions">
+                <Setter Property="Background" Value="{StaticResource DrawerSurfaceBrush}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}"/>
+                <Setter Property="BorderThickness" Value="1"/>
+            </Style>
+            <Style Selector="Button.suggestion">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="BorderThickness" Value="0"/>
+                <Setter Property="CornerRadius" Value="0"/>
+                <Setter Property="Padding" Value="10,0"/>
+                <Setter Property="MinHeight" Value="0"/>
+                <Setter Property="Height" Value="26"/>
+                <Setter Property="HorizontalAlignment" Value="Stretch"/>
+                <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                <Setter Property="Cursor" Value="Hand"/>
+            </Style>
+            <Style Selector="Button.suggestion:pointerover /template/ ContentPresenter, Button.suggestion.on /template/ ContentPresenter">
+                <Setter Property="Background" Value="{DynamicResource BgRowSelectedBrush}"/>
+            </Style>
+            <Style Selector="TextBlock.suggestiontext">
+                <Setter Property="FontSize" Value="12"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+                <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+            </Style>
+            <Style Selector="TextBlock.suggestionkind, TextBlock.suggestioncount">
+                <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+                <Setter Property="FontSize" Value="10"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+                <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+            </Style>
             <Style Selector="Button.rangeclear">
                 <Setter Property="Background" Value="Transparent"/>
                 <Setter Property="BorderThickness" Value="0"/>
@@ -840,6 +884,54 @@
             </StackPanel>
         </Border>
 
+        <!-- ══ Search (ET-518) ══ one box for RUNS and BY ACTIVITY alike, in a row of its own under the header: the header
+             is held to a height bound per width (ET-303) that a row inside it would break. Ctrl+F finds the box by its
+             well-known name. -->
+        <Border DockPanel.Dock="Top" Padding="14,6" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource BorderBrush}">
+            <Grid x:Name="SearchBar" ColumnSpacing="12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" MaxWidth="420"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <TextBox x:Name="ModuleSearchBox" Grid.Column="0" MinHeight="28" FontSize="12"
+                         PlaceholderText="Search site, faction or type…" Text="{Binding Search.Text, Mode=TwoWay}"
+                         ToolTip.Tip="Finds activities by site name, faction, family or type. Ctrl+F to focus, Esc to clear.">
+                    <TextBox.InnerRightContent>
+                        <Button x:Name="SearchClear" Classes="searchclear" Focusable="False" IsVisible="{Binding Search.HasText}"
+                                Command="{Binding Search.ClearCommand}" ToolTip.Tip="Clear the search (Esc)">
+                            <mi:MaterialIcon Kind="CloseThick" Width="12" Height="12"/>
+                        </Button>
+                    </TextBox.InnerRightContent>
+                </TextBox>
+                <TextBlock x:Name="SearchCount" Grid.Column="1" Classes="filtersummary" IsVisible="{Binding IsByActivity}"
+                           Text="{Binding ByActivity.CountText}"/>
+                <Popup x:Name="SearchSuggestions" PlacementTarget="{Binding #ModuleSearchBox}" Placement="Bottom"
+                       IsLightDismissEnabled="False" IsOpen="{Binding Search.ShowsSuggestions, Mode=OneWay}"
+                       Width="{Binding Bounds.Width, ElementName=ModuleSearchBox}">
+                    <Border Classes="suggestions">
+                        <ItemsControl ItemsSource="{Binding Search.Suggestions}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vr:SearchSuggestionViewModel">
+                                    <Button Classes="suggestion" Classes.on="{Binding IsHighlighted}" Focusable="False"
+                                            Click="OnSuggestionClick">
+                                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                                            <TextBlock Grid.Column="0" Classes="suggestiontext" TextTrimming="CharacterEllipsis"
+                                                       Text="{Binding DisplayText}"/>
+                                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                                                <TextBlock Classes="suggestionkind" Text="{Binding KindText}"/>
+                                                <TextBlock Classes="suggestioncount" Text="{Binding CountText}"/>
+                                            </StackPanel>
+                                        </Grid>
+                                    </Button>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </Border>
+                </Popup>
+            </Grid>
+        </Border>
+
         <!-- ══ Finished activities ══ the one undocked child (ET-285): the list, and the pane's own column beside it.
              The column is explicit and never Auto; its width is set from the content root's bounds in the code-behind
              (400 wide, 0 below the breakpoint, where the very same pane is the drawer instead). The days belong to the
@@ -963,9 +1055,15 @@
             </Grid.DataTemplates>
 
             <Grid x:Name="RunsListArea" Grid.Column="0" RowDefinitions="Auto,Auto,*" IsVisible="{Binding IsRunsList}">
-                <TextBlock x:Name="TabStatus" Grid.Row="0" Classes="hint" Margin="14,10" TextWrapping="Wrap"
-                           IsVisible="{Binding SelectedTab.StatusMessage, Converter={x:Static ObjectConverters.IsNotNull}}"
-                           Text="{Binding SelectedTab.StatusMessage}"/>
+                <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="12" Margin="14,10"
+                            IsVisible="{Binding SelectedTab.StatusMessage, Converter={x:Static ObjectConverters.IsNotNull}}">
+                    <TextBlock x:Name="TabStatus" Classes="hint" TextWrapping="Wrap" VerticalAlignment="Center"
+                               Text="{Binding SelectedTab.StatusMessage}"/>
+                    <Button x:Name="ClearFilters" Classes="showall" IsVisible="{Binding ShowsClearFilters}"
+                            Command="{Binding ClearFiltersCommand}">
+                        <TextBlock Classes="showalltext" Text="clear filters"/>
+                    </Button>
+                </StackPanel>
                 <!-- The day of the topmost row, pinned while its own header is scrolled away (RunsWindow.axaml.cs).
                      Its own Auto row above the list (ET-302), not an overlay sharing the list's own row: an overlay
                      drew over whatever the list already had at the top rather than making room for it, so the row
