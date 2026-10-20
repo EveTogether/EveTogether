@@ -191,6 +191,61 @@
                 <Setter Property="Padding" Value="37,2,14,13"/>
             </Style>
 
+            <!-- ── EXPECTED EARNINGS ── (ET-516) All ink is TextBrush or brighter: the dim ink measures 4.0-4.7:1 on the
+                 section body and 3.2-4.2:1 on a hovered header, under the 4.5:1 a small figure needs. -->
+            <Style Selector="TextBlock.eelabel">
+                <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+                <Setter Property="FontSize" Value="9.5"/>
+                <Setter Property="LetterSpacing" Value="1.6"/>
+            </Style>
+            <Style Selector="TextBlock.eetitle">
+                <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+                <Setter Property="FontSize" Value="10"/>
+                <Setter Property="LetterSpacing" Value="1.8"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+            </Style>
+            <Style Selector="TextBlock.eebig">
+                <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+                <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+                <Setter Property="FontSize" Value="22"/>
+                <Setter Property="FontWeight" Value="SemiBold"/>
+            </Style>
+            <Style Selector="TextBlock.eefigure">
+                <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+                <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+                <Setter Property="FontSize" Value="13"/>
+            </Style>
+            <Style Selector="TextBlock.eetext">
+                <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+                <Setter Property="FontSize" Value="10.5"/>
+                <Setter Property="LineHeight" Value="15"/>
+                <Setter Property="TextWrapping" Value="Wrap"/>
+            </Style>
+            <Style Selector="TextBlock.eemono">
+                <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+                <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+                <Setter Property="FontSize" Value="10"/>
+            </Style>
+            <Style Selector="TextBlock.eenow">
+                <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+                <Setter Property="Foreground" Value="{StaticResource ValueBrush}"/>
+                <Setter Property="FontSize" Value="10.5"/>
+                <Setter Property="FontWeight" Value="SemiBold"/>
+            </Style>
+            <Style Selector="ToggleButton.section:checked TextBlock.eesummary">
+                <Setter Property="IsVisible" Value="False"/>
+            </Style>
+            <Style Selector="Border.eedot">
+                <Setter Property="Width" Value="9"/>
+                <Setter Property="Height" Value="9"/>
+                <Setter Property="Margin" Value="0,0,3,0"/>
+                <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+            </Style>
+            <Style Selector="Border.eedot.filled">
+                <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
+            </Style>
+
             <!-- ── A key/value line ── the label carries the letterspacing, the value carries the ink. -->
             <!-- ColumnDefinitions is not a styled property, so the two columns stay on each Grid; everything else
                  about a key/value line lives here. -->
@@ -717,6 +772,107 @@
                      silence is the whole of ET-165. -->
                 <TextBlock x:Name="FleetNoticeText" Classes="hint" Margin="0" TextWrapping="Wrap"
                            IsVisible="{Binding HasFleetNotice}" Text="{Binding FleetNoticeText}"/>
+            </StackPanel>
+        </Border>
+
+        <!-- ══ Expected earnings ══ (ET-516) what this site typically yields, open by itself once the site is known.
+             Informational: nothing in it asks for a click. -->
+        <Border x:Name="ExpectedEarningsPanel" DockPanel.Dock="Top" DataContext="{Binding ExpectedEarnings}"
+                x:DataType="va:ExpectedEarningsViewModel" IsVisible="{Binding IsShown}">
+            <StackPanel>
+                <ToggleButton x:Name="ExpectedEarningsHeader" Classes="section" Content="{Binding}"
+                              IsChecked="{Binding IsExpanded, Mode=TwoWay}">
+                    <ToggleButton.ContentTemplate>
+                        <DataTemplate DataType="va:ExpectedEarningsViewModel">
+                            <Grid ColumnDefinitions="Auto,Auto,*,Auto" ColumnSpacing="10">
+                                <TextBlock Grid.Column="0" Classes="caret" Text="&#x25B6;"/>
+                                <TextBlock Grid.Column="1" Classes="eetitle" Text="EXPECTED EARNINGS"/>
+                                <TextBlock Grid.Column="2" Classes="sectionsummary eesummary" Text="{Binding HeaderSummary}"/>
+                                <Border Grid.Column="3" Classes="chip" Classes.ok="{Binding IsSharedSource}"
+                                        IsVisible="{Binding HasFigures}">
+                                    <TextBlock x:Name="SourceChipText" Text="{Binding SourceChip}"/>
+                                </Border>
+                            </Grid>
+                        </DataTemplate>
+                    </ToggleButton.ContentTemplate>
+                </ToggleButton>
+                <Border x:Name="ExpectedEarningsBody" Classes="sectionbody" Padding="14,8,14,12" IsVisible="{Binding IsExpanded}">
+                    <StackPanel Spacing="8">
+                        <TextBlock x:Name="ExpectedEarningsLoading" Classes="eetext" Text="Looking up this site…"
+                                   IsVisible="{Binding IsLoading}"/>
+
+                        <StackPanel x:Name="ExpectedEarningsFigures" Spacing="6" IsVisible="{Binding HasFigures}">
+                            <Grid ColumnDefinitions="Auto,Auto,*" ColumnSpacing="18">
+                                <StackPanel Grid.Column="0" Spacing="2">
+                                    <TextBlock Classes="eelabel" Text="TYPICAL RUN"/>
+                                    <StackPanel Orientation="Horizontal" Spacing="4">
+                                        <TextBlock x:Name="TypicalFigure" Classes="eebig" Text="{Binding TypicalText}"/>
+                                        <TextBlock Classes="eemono" VerticalAlignment="Bottom" Margin="0,0,0,3" Text="ISK"/>
+                                    </StackPanel>
+                                    <TextBlock x:Name="PerPilotLine" Classes="eemono" IsVisible="{Binding HasPerPilot}"
+                                               Text="{Binding PerPilotText}"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Bottom" IsVisible="{Binding HasPerHour}">
+                                    <TextBlock Classes="eelabel" Text="TYPICAL ISK/H"/>
+                                    <TextBlock x:Name="PerHourFigure" Classes="eefigure" Text="{Binding PerHourText}"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="2" Spacing="2" VerticalAlignment="Bottom" HorizontalAlignment="Right">
+                                    <TextBlock Classes="eelabel" HorizontalAlignment="Right" Text="{Binding BandLabel}"/>
+                                    <TextBlock x:Name="BandFigure" Classes="eefigure" HorizontalAlignment="Right" Text="{Binding BandText}"/>
+                                </StackPanel>
+                            </Grid>
+
+                            <v:EarningsBandBar x:Name="BandBar" Height="30" Margin="0,6,0,0"
+                                               RangeStart="{Binding BandStart}" RangeEnd="{Binding BandEnd}"
+                                               TypicalMark="{Binding TypicalMark}" CurrentMark="{Binding CurrentMark}"
+                                               TrackBrush="{DynamicResource DividerBrush}"
+                                               RangeBrush="{DynamicResource AccentBrush}"
+                                               TypicalBrush="{StaticResource TextBrightBrush}"
+                                               CurrentBrush="{StaticResource ValueBrush}"/>
+                            <Grid ColumnDefinitions="*,Auto,*">
+                                <TextBlock Grid.Column="0" Classes="eemono" Text="{Binding ScaleMinText}"/>
+                                <TextBlock Grid.Column="1" Classes="eemono" Text="log scale"/>
+                                <TextBlock Grid.Column="2" Classes="eemono" HorizontalAlignment="Right" Text="{Binding ScaleMaxText}"/>
+                            </Grid>
+                            <TextBlock x:Name="CurrentRunLine" Classes="eenow" IsVisible="{Binding HasCurrent}" Text="{Binding CurrentText}"/>
+
+                            <Grid ColumnDefinitions="52,Auto,*" RowDefinitions="Auto,Auto" ColumnSpacing="10" RowSpacing="3">
+                                <TextBlock Grid.Row="0" Grid.Column="0" Classes="eelabel" Text="WORST"/>
+                                <TextBlock x:Name="WorstFigure" Grid.Row="0" Grid.Column="1" Classes="eefigure" FontSize="11.5" Text="{Binding WorstText}"/>
+                                <TextBlock Grid.Row="0" Grid.Column="2" Classes="eemono" Text="{Binding WorstMeta}"/>
+                                <TextBlock Grid.Row="1" Grid.Column="0" Classes="eelabel" Text="BEST"/>
+                                <TextBlock x:Name="BestFigure" Grid.Row="1" Grid.Column="1" Classes="eefigure" FontSize="11.5" Text="{Binding BestText}"/>
+                                <TextBlock Grid.Row="1" Grid.Column="2" Classes="eemono" Text="{Binding BestMeta}"/>
+                            </Grid>
+                        </StackPanel>
+
+                        <StackPanel x:Name="ExpectedEarningsTooFew" Spacing="6" IsVisible="{Binding IsTooFewRuns}">
+                            <ItemsControl ItemsSource="{Binding RunDots}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <StackPanel Orientation="Horizontal"/>
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="x:Boolean">
+                                        <Border Classes="eedot" Classes.filled="{Binding}"/>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <TextBlock x:Name="TooFewLine" Classes="eefigure" FontSize="11.5" Text="{Binding TooFewText}"/>
+                        </StackPanel>
+
+                        <TextBlock x:Name="BasisLine" Classes="eemono" TextWrapping="Wrap" IsVisible="{Binding !IsLoading}"
+                                   Text="{Binding BasisText}"/>
+                        <Border Classes="chip warn" HorizontalAlignment="Left" IsVisible="{Binding HasConfidenceText}">
+                            <TextBlock Text="{Binding ConfidenceText}"/>
+                        </Border>
+                        <TextBlock x:Name="ExpectedEarningsNote" Classes="eetext" IsVisible="{Binding HasNote}" Text="{Binding NoteText}"/>
+                        <!-- Held back until the loot table exists (ET-519); that ticket gives it a command and flips the flag. -->
+                        <Button x:Name="LootTableButton" Classes="pick" HorizontalAlignment="Left" IsEnabled="False"
+                                IsVisible="{Binding IsLootTableShown}" Content="LOOT TABLE ›"/>
+                    </StackPanel>
+                </Border>
             </StackPanel>
         </Border>
 

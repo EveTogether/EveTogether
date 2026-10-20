@@ -206,6 +206,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         if (_fleetShares is not null)
             _fleetShares.Changed += _OnFleetShareChanged;
 
+        _CreateExpectedEarnings();
         _SyncSectionsToType();
         Refresh(DateTime.UtcNow);
     }
@@ -1905,6 +1906,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         OnPropertyChanged(nameof(IsCommanderRoomsHintShown));
         OnPropertyChanged(nameof(CommanderRoomsHintText));
         _RefreshGroupTotalIsk(nowUtc);
+        _RefreshExpectedEarnings();
         _RefreshSummaries();
         _RefreshCompact(nowUtc);
         _ = _RefreshActingCharacterAsync();
@@ -3935,6 +3937,7 @@ public sealed partial class ActivityWindowViewModel : ObservableObject, IDisposa
         IskBreakdown isk = IskContributors.Breakdown([.. runs.Select(run => run.Facts)], nowUtc);
         HasGroupTotalIsk = isk.HasFigure;
         GroupTotalIskText = IskFormat.Whole(isk.Total) + IskFormat.ExpectedPart(isk);
+        ExpectedEarnings?.UpdateCurrentIsk(isk.HasFigure ? isk.Total : null);
         // Per character, from the very same facts: FLEET's rows (ET-272) can then never tell a different story than
         // the total they sit above. Split the way a saved activity is (ET-296), so the mission reward every own toon's
         // run carries a copy of lands on one row only, the earliest run's — ordered as the saved side orders them, a

@@ -9,6 +9,7 @@ using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.RunOutcomes.Dtos;
 using EveUtils.Shared.Modules.Runs.Commands;
 using EveUtils.Shared.Modules.Runs.Dtos;
+using EveUtils.Shared.Modules.Runs.Earnings;
 using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Transport;
 using Microsoft.Extensions.DependencyInjection;
@@ -199,5 +200,13 @@ public sealed class OutcomeSharingSettingsViewModelTests
 
         public Task<OutcomeCallResult> WithdrawAsync(string serverAddress, long characterId, CancellationToken cancellationToken = default) =>
             Task.FromResult(OutcomeCallResult.Transient("not used"));
+
+        public Task<OutcomeReadResult<ActivityOutcomesDto>> GetOutcomesAsync(string serverAddress, long characterId,
+            ActivityStatsKey key, DateOnly since, CancellationToken cancellationToken = default) =>
+            Task.FromResult(OutcomeReadResult<ActivityOutcomesDto>.Transient("not used"));
+
+        public Task<OutcomeReadResult<ActivityOutcomeLootDto>> GetOutcomeLootAsync(string serverAddress, long characterId,
+            ActivityStatsKey key, DateOnly since, CancellationToken cancellationToken = default) =>
+            Task.FromResult(OutcomeReadResult<ActivityOutcomeLootDto>.Transient("not used"));
     }
 }

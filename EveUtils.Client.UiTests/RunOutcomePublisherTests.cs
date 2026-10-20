@@ -9,6 +9,7 @@ using EveUtils.Shared.Modules.RunOutcomes.Dtos;
 using EveUtils.Shared.Modules.RunOutcomes.Enums;
 using EveUtils.Shared.Modules.Runs.Commands;
 using EveUtils.Shared.Modules.Runs.Dtos;
+using EveUtils.Shared.Modules.Runs.Earnings;
 using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Runs.Events;
 using EveUtils.Shared.Modules.Runs.Queries;
@@ -412,5 +413,13 @@ public sealed class RunOutcomePublisherTests
                 _withdraws.Add((serverAddress, characterId));
             return Task.FromResult(new OutcomeCallResult(true, "", "Outcomes withdrawn.", Count: WithdrawCount));
         }
+
+        public Task<OutcomeReadResult<ActivityOutcomesDto>> GetOutcomesAsync(string serverAddress, long characterId,
+            ActivityStatsKey key, DateOnly since, CancellationToken cancellationToken = default) =>
+            Task.FromResult(OutcomeReadResult<ActivityOutcomesDto>.Transient("not used"));
+
+        public Task<OutcomeReadResult<ActivityOutcomeLootDto>> GetOutcomeLootAsync(string serverAddress, long characterId,
+            ActivityStatsKey key, DateOnly since, CancellationToken cancellationToken = default) =>
+            Task.FromResult(OutcomeReadResult<ActivityOutcomeLootDto>.Transient("not used"));
     }
 }

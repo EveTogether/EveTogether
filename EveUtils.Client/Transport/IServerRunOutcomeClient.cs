@@ -1,5 +1,6 @@
 using EveUtils.Shared.Modules.RunOutcomes.Dtos;
 using EveUtils.Shared.Modules.RunOutcomes.Enums;
+using EveUtils.Shared.Modules.Runs.Earnings;
 
 namespace EveUtils.Client.Transport;
 
@@ -14,6 +15,17 @@ public interface IServerRunOutcomeClient
 
     /// <summary>The opt-out: removes everything <paramref name="characterId"/> shared with the server.</summary>
     Task<OutcomeCallResult> WithdrawAsync(string serverAddress, long characterId, CancellationToken cancellationToken = default);
+
+    /// <summary>The shared outcomes of <paramref name="key"/> since <paramref name="since"/>, as the server's pilots
+    /// shared them (ET-514): weights, no buckets. Below the server's minimum of pilots the answer carries no outcomes
+    /// and says so in its availability.</summary>
+    Task<OutcomeReadResult<ActivityOutcomesDto>> GetOutcomesAsync(string serverAddress, long characterId, ActivityStatsKey key,
+        DateOnly since, CancellationToken cancellationToken = default);
+
+    /// <summary>The loot lines of the outcomes <see cref="GetOutcomesAsync"/> answers for the same key and day, in the
+    /// same order.</summary>
+    Task<OutcomeReadResult<ActivityOutcomeLootDto>> GetOutcomeLootAsync(string serverAddress, long characterId,
+        ActivityStatsKey key, DateOnly since, CancellationToken cancellationToken = default);
 }
 
 /// <param name="Code">The server's machine-readable refusal, empty when accepted.</param>
@@ -23,4 +35,13 @@ public sealed record OutcomeCallResult(bool Accepted, string Code, string Messag
     int Count = 0, bool IsTransient = false)
 {
     public static OutcomeCallResult Transient(string message) => new(false, string.Empty, message, IsTransient: true);
+}
+
+/// <param name="Value">What the server answered, null when it refused or never answered.</param>
+/// <param name="IsTransient">Same meaning as <see cref="OutcomeCallResult.IsTransient"/>.</param>
+public sealed record OutcomeReadResult<T>(T? Value, string Code, string Message, bool IsTransient = false) where T : class
+{
+    public bool Accepted => Value is not null;
+
+    public static OutcomeReadResult<T> Transient(string message) => new(null, string.Empty, message, true);
 }
