@@ -10,7 +10,7 @@
              x:DataType="vr:RunPositionViewModel">
 
     <!-- The run window's EXPECTED EARNINGS panel (ET-516) over a saved run, with the run's own ISK as the marker, and
-         under it the run's rank and, for an outlier, the drop that made it (ET-520). Not folded: it is here to be read.
+         under it, for an outlier, the drop that made it (ET-520); the rank is the label on the bar (ET-524). Not folded: it is here to be read.
          All ink is TextBrush or brighter, as in the panel: the dim ink is under 4.5:1 on the opaque pane and the body. -->
     <UserControl.Styles>
         <Style Selector="TextBlock.eelabel">
@@ -124,49 +124,7 @@
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
 
-                <StackPanel x:Name="PositionFigures" Spacing="6" IsVisible="{Binding HasFigures}">
-                    <Grid ColumnDefinitions="Auto,Auto,*" ColumnSpacing="18">
-                        <StackPanel Grid.Column="0" Spacing="2">
-                            <TextBlock Classes="eelabel" Text="TYPICAL RUN"/>
-                            <StackPanel Orientation="Horizontal" Spacing="4">
-                                <TextBlock x:Name="PositionTypical" Classes="eebig" Text="{Binding TypicalText}"/>
-                                <TextBlock Classes="eemono" VerticalAlignment="Bottom" Margin="0,0,0,3" Text="ISK"/>
-                            </StackPanel>
-                            <TextBlock Classes="eemono" IsVisible="{Binding HasPerPilot}" Text="{Binding PerPilotText}"/>
-                        </StackPanel>
-                        <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Bottom" IsVisible="{Binding HasPerHour}">
-                            <TextBlock Classes="eelabel" Text="TYPICAL ISK/H"/>
-                            <TextBlock Classes="eefigure" Text="{Binding PerHourText}"/>
-                        </StackPanel>
-                        <StackPanel Grid.Column="2" Spacing="2" VerticalAlignment="Bottom" HorizontalAlignment="Right">
-                            <TextBlock Classes="eelabel" HorizontalAlignment="Right" Text="{Binding BandLabel}"/>
-                            <TextBlock x:Name="PositionBand" Classes="eefigure" HorizontalAlignment="Right" Text="{Binding BandText}"/>
-                        </StackPanel>
-                    </Grid>
-
-                    <v:EarningsBandBar x:Name="PositionBar" Height="30" Margin="0,6,0,0"
-                                       RangeStart="{Binding BandStart}" RangeEnd="{Binding BandEnd}"
-                                       TypicalMark="{Binding TypicalMark}" CurrentMark="{Binding CurrentMark}"
-                                       TrackBrush="{DynamicResource DividerBrush}"
-                                       RangeBrush="{DynamicResource AccentBrush}"
-                                       TypicalBrush="{StaticResource TextBrightBrush}"
-                                       CurrentBrush="{StaticResource ValueBrush}"/>
-                    <Grid ColumnDefinitions="*,Auto,*">
-                        <TextBlock Grid.Column="0" Classes="eemono" Text="{Binding ScaleMinText}"/>
-                        <TextBlock Grid.Column="1" Classes="eemono" Text="log scale"/>
-                        <TextBlock Grid.Column="2" Classes="eemono" HorizontalAlignment="Right" Text="{Binding ScaleMaxText}"/>
-                    </Grid>
-                    <TextBlock x:Name="PositionThisRun" Classes="eenow" IsVisible="{Binding HasCurrent}" Text="{Binding CurrentText}"/>
-
-                    <Grid ColumnDefinitions="52,Auto,*" RowDefinitions="Auto,Auto" ColumnSpacing="10" RowSpacing="3">
-                        <TextBlock Grid.Row="0" Grid.Column="0" Classes="eelabel" Text="WORST"/>
-                        <TextBlock Grid.Row="0" Grid.Column="1" Classes="eefigure" FontSize="11.5" Text="{Binding WorstText}"/>
-                        <TextBlock Grid.Row="0" Grid.Column="2" Classes="eemono" Text="{Binding WorstMeta}"/>
-                        <TextBlock Grid.Row="1" Grid.Column="0" Classes="eelabel" Text="BEST"/>
-                        <TextBlock Grid.Row="1" Grid.Column="1" Classes="eefigure" FontSize="11.5" Text="{Binding BestText}"/>
-                        <TextBlock Grid.Row="1" Grid.Column="2" Classes="eemono" Text="{Binding BestMeta}"/>
-                    </Grid>
-                </StackPanel>
+                <v:EarningsRangeStrip x:Name="PositionFigures" IsVisible="{Binding HasFigures}"/>
 
                 <StackPanel x:Name="PositionTooFew" Spacing="6" IsVisible="{Binding IsTooFewRuns}">
                     <ItemsControl ItemsSource="{Binding RunDots}">
@@ -184,32 +142,32 @@
                     <TextBlock x:Name="PositionTooFewLine" Classes="eefigure" FontSize="11.5" Text="{Binding TooFewText}"/>
                 </StackPanel>
 
-                <TextBlock x:Name="PositionBasis" Classes="eemono" TextWrapping="Wrap" IsVisible="{Binding !IsLoading}"
-                           Text="{Binding BasisText}"/>
-                <Border Classes="chip warn" HorizontalAlignment="Left" IsVisible="{Binding HasConfidenceText}">
-                    <TextBlock Text="{Binding ConfidenceText}"/>
-                </Border>
-                <TextBlock x:Name="PositionNote" Classes="eetext" IsVisible="{Binding HasNote}" Text="{Binding NoteText}"/>
+                <!-- The foot: the runs the figures rest on and whose they are; the full reason is the tooltip. -->
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8" IsVisible="{Binding !IsLoading}">
+                    <TextBlock x:Name="PositionBasis" Classes="eemono" TextWrapping="Wrap" VerticalAlignment="Center"
+                               Text="{Binding BasisText}" ToolTip.Tip="{Binding NoteText}"/>
+                    <Border Grid.Column="1" Classes="chip warn" VerticalAlignment="Center" IsVisible="{Binding HasConfidenceText}">
+                        <TextBlock Text="{Binding ConfidenceText}"/>
+                    </Border>
+                </Grid>
             </StackPanel>
         </Border>
 
-        <!-- This run's standing: the rank, then the why of an outlier. Each line is there only when it has something to say. -->
+        <!-- This run's standing: the why of an outlier, or why it has no rank. The rank itself is on the bar's label.
+             Each line is there only when it has something to say. -->
         <Border x:Name="PositionStanding" Padding="14,0,14,10" IsVisible="{Binding Earnings.HasFigures}">
-            <StackPanel Spacing="4">
-                <TextBlock x:Name="PositionRank" Classes="eefigure" TextWrapping="Wrap" IsVisible="{Binding HasRank}"
-                           Text="{Binding RankText}"/>
-                <TextBlock x:Name="PositionRankDetail" Classes="eemono" TextWrapping="Wrap" IsVisible="{Binding HasRank}"
-                           Text="{Binding RankDetailText}"/>
+            <StackPanel Spacing="3">
                 <TextBlock x:Name="PositionRankNote" Classes="eetext" IsVisible="{Binding HasRankNote}" Text="{Binding RankNoteText}"/>
-                <TextBlock x:Name="PositionOutlier" Classes="eenow" IsVisible="{Binding HasOutlier}" Text="{Binding OutlierText}"/>
-                <StackPanel x:Name="PositionTopDrop" Spacing="2" IsVisible="{Binding HasTopDrop}">
-                    <TextBlock Classes="eelabel" Text="NOTABLE DROP"/>
-                    <TextBlock x:Name="PositionTopDropName" Classes="eefigure" FontSize="11.5" TextWrapping="Wrap" Text="{Binding TopDropText}"/>
-                    <TextBlock Classes="eemono" TextWrapping="Wrap" Text="{Binding TopDropMetaText}"/>
-                    <Button x:Name="PositionLootTable" Classes="pick" HorizontalAlignment="Left" Margin="0,4,0,0"
-                            IsVisible="{Binding IsLootTableShown}" Command="{Binding OpenLootTableCommand}"
-                            Content="OPEN LOOT TABLE ›" ToolTip.Tip="What can drop here, and how often"/>
-                </StackPanel>
+                <TextBlock x:Name="PositionOutlier" Classes="eenow" TextWrapping="Wrap" IsVisible="{Binding HasOutlier}" Text="{Binding OutlierText}"/>
+                <WrapPanel x:Name="PositionTopDrop" IsVisible="{Binding HasTopDrop}">
+                    <TextBlock Classes="eelabel" VerticalAlignment="Center" Margin="0,0,8,0" Text="NOTABLE DROP"/>
+                    <TextBlock x:Name="PositionTopDropName" Classes="eefigure" FontSize="11.5" VerticalAlignment="Center"
+                               Margin="0,0,8,0" Text="{Binding TopDropText}"/>
+                    <TextBlock Classes="eemono" VerticalAlignment="Center" Margin="0,0,8,0" Text="{Binding TopDropMetaText}"/>
+                    <Button x:Name="PositionLootTable" Classes="pick" IsVisible="{Binding IsLootTableShown}"
+                            Command="{Binding OpenLootTableCommand}" Content="OPEN LOOT TABLE ›"
+                            ToolTip.Tip="What can drop here, and how often"/>
+                </WrapPanel>
             </StackPanel>
         </Border>
     </StackPanel>

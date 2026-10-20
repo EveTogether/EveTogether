@@ -44,14 +44,11 @@ public sealed partial class RunPositionViewModel : ViewModelBase
     /// <summary>The run window's panel, laid out the same way.</summary>
     public ExpectedEarningsViewModel Earnings { get; }
 
-    [ObservableProperty] [NotifyPropertyChangedFor(nameof(HasRank))] private string _rankText = string.Empty;
-    [ObservableProperty] private string _rankDetailText = string.Empty;
     [ObservableProperty] [NotifyPropertyChangedFor(nameof(HasRankNote))] private string _rankNoteText = string.Empty;
     [ObservableProperty] [NotifyPropertyChangedFor(nameof(HasOutlier))] private string _outlierText = string.Empty;
     [ObservableProperty] [NotifyPropertyChangedFor(nameof(HasTopDrop))] private string _topDropText = string.Empty;
     [ObservableProperty] private string _topDropMetaText = string.Empty;
 
-    public bool HasRank => RankText.Length > 0;
     public bool HasRankNote => RankNoteText.Length > 0;
     public bool HasOutlier => OutlierText.Length > 0;
     public bool HasTopDrop => TopDropText.Length > 0;
@@ -141,7 +138,8 @@ public sealed partial class RunPositionViewModel : ViewModelBase
 
     private void _ClearStanding()
     {
-        RankText = RankDetailText = RankNoteText = OutlierText = TopDropText = TopDropMetaText = string.Empty;
+        Earnings.SetRank(string.Empty);
+        RankNoteText = OutlierText = TopDropText = TopDropMetaText = string.Empty;
     }
 
     private void _RenderStanding(RunPosition position)
@@ -167,11 +165,7 @@ public sealed partial class RunPositionViewModel : ViewModelBase
 
         double above = 1 - rank.Percentile;
         string top = above <= TopShareLimit ? $" · top {Math.Max(1, (int)Math.Ceiling(above * 100)).ToString(CultureInfo.InvariantCulture)}%" : string.Empty;
-        RankText = $"Better than {(int)Math.Floor(rank.Percentile * 100)}% of runs{top}";
-        string window = ExpectedEarningsViewModel.WindowText(figures);
-        RankDetailText = position.Basis.Basis is EarningsBasis.AllPilots
-            ? $"ranked against {rank.OtherRunCount} other runs · {position.Basis.PilotCount} pilots · {window}"
-            : $"ranked against {rank.OtherRunCount} of your other runs · {window}";
+        Earnings.SetRank($" · better than {(int)Math.Floor(rank.Percentile * 100)}%{top}");
     }
 
     private void _RenderOutlier(RunPosition position, EarningsFiguresDto figures)
