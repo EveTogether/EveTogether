@@ -342,6 +342,42 @@ public sealed class RunPositionTests(ITestOutputHelper output)
         Assert.Null(position.Rank);
     }
 
+    /// <summary>ET-521: the RUNS list asks once for all its rows. Eight runs worth 1,000 to 8,000 against their own typical: the
+    /// lowest is in the bottom quarter, the highest in the top, one from the middle in neither, and a reference nobody knows
+    /// gets no entry. Counter-proof: ranking against the pilot's single best run puts the middle one at the bottom.</summary>
+    [AvaloniaFact]
+    public async Task TheListRows_AreReadAgainstTheirTypicalRun_InOneCall()
+    {
+        using TestClientInstance instance = TestClientInstance.Create();
+        Guid[] runs = await SeedAsync(instance, 8);
+        IRunPositionSource source = instance.Services.GetRequiredService<IRunPositionSource>();
+
+        IReadOnlyDictionary<string, RunVsTypical> read = await source.ReadVsTypicalAsync(
+            [.. runs.Select(run => run.ToString()), "no-such-run"], [(int)Pilot], Token);
+
+        Assert.Equal(8, read.Count);
+        Assert.False(read.ContainsKey("no-such-run"));
+        Assert.Equal(RunBand.Bottom, read[runs[0].ToString()].Band);
+        Assert.Equal(RunBand.Top, read[runs[7].ToString()].Band);
+        Assert.Equal(RunBand.Middle, read[runs[3].ToString()].Band);
+        Assert.InRange(read[runs[0].ToString()].Typical, 4000m, 5000m);
+        Assert.Equal(read[runs[0].ToString()].Typical, read[runs[7].ToString()].Typical);
+        Assert.Equal(1000m - read[runs[0].ToString()].Typical, read[runs[0].ToString()].Difference);
+    }
+
+    /// <summary>Below the minimum of runs there is no typical run, so nothing to say about any of them.</summary>
+    [AvaloniaFact]
+    public async Task TheListRows_OfAnActivityWithTooFewRuns_GetNoEntry()
+    {
+        using TestClientInstance instance = TestClientInstance.Create();
+        Guid[] runs = await SeedAsync(instance, 3);
+
+        IReadOnlyDictionary<string, RunVsTypical> read = await instance.Services.GetRequiredService<IRunPositionSource>()
+            .ReadVsTypicalAsync([.. runs.Select(run => run.ToString())], [(int)Pilot], Token);
+
+        Assert.Empty(read);
+    }
+
     /// <summary>A second click on a run of the same activity is answered from memory; any change to a run drops it.
     /// Counter-proof: without the cache the second read asks again, without the invalidation the third does not.</summary>
     [AvaloniaFact]

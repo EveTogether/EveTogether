@@ -687,6 +687,85 @@ public sealed class RunsByActivityWindowTests
 
     // ── Helpers ───────────────────────────────────────────────────────────────────────────────────────────────
 
+    /// <summary>ET-521: a RUNS row says what its activity typically earns and, when the run is in the best or worst quarter, which.
+    /// The row is read once for the whole list, the chip stays inside the row at 758 and 1303, and a run with no typical run behind
+    /// it shows neither. Counter-proof: take the chip from the list and the row only has the figure.</summary>
+    [AvaloniaTheory]
+    [InlineData(1303d)]
+    [InlineData(758d)]
+    public async Task ARunsRow_ShowsVsTypicalAndTheQuarterChip_InsideItself(double width)
+    {
+        Dictionary<string, RunVsTypical> answers = [];
+        using var instance = TestClientInstance.Create(services =>
+        {
+            _Services()(services);
+            services.AddSingleton<IRunPositionSource>(new RunPositionTests.FixedPosition(null, answers));
+        });
+        Guid top = await _SaveRunAsync(instance, 90000001, Evening);
+        Guid bottom = await _SaveRunAsync(instance, 90000001, Evening.AddHours(1));
+        await _SaveRunAsync(instance, 90000001, Evening.AddHours(2));
+        answers[top.ToString()] = new RunVsTypical(38_000_000m, 20_000_000m, RunBand.Top);
+        answers[bottom.ToString()] = new RunVsTypical(38_000_000m, -25_000_000m, RunBand.Bottom);
+        Presented presented = await _PresentAsync(instance, width);
+        await ActivityWindowHarness.WaitUntil(() => presented.ViewModel.Tabs[0].Days.SelectMany(day => day.Rows).Count(row => row.HasVsTypical) == 2);
+        _Settle(presented);
+
+        ActivityOverviewRowViewModel[] rows = [.. presented.ViewModel.Tabs[0].Days.SelectMany(day => day.Rows)];
+        Assert.Equal("top 25 %", rows.Single(row => row.RunId == top).StandingText);
+        Assert.Equal("bottom 25 %", rows.Single(row => row.RunId == bottom).StandingText);
+        Assert.Equal("38M", rows.Single(row => row.RunId == top).VsTypicalText);
+        ActivityOverviewRowViewModel without = rows.Single(row => !row.HasVsTypical);
+        Assert.False(without.HasStanding);
+
+        List<ActivityRowView> views = [.. _Named<Control>(presented, "ActivityList").GetVisualDescendants().OfType<ActivityRowView>()];
+        Assert.Equal(3, views.Count);
+        foreach (ActivityRowView view in views)
+        {
+            var row = Assert.IsType<ActivityOverviewRowViewModel>(view.DataContext);
+            Rect rowRect = _Rect(presented, view);
+            Border[] chips = [.. view.GetVisualDescendants().OfType<Border>().Where(border => border.Classes.Contains("chip") && border.IsEffectivelyVisible
+                && border.GetVisualDescendants().OfType<TextBlock>().Any(text => text.Text == row.StandingText))];
+            Assert.Equal(row.HasStanding ? 1 : 0, chips.Length);
+            foreach (Border chip in chips)
+            {
+                Rect rect = _Rect(presented, chip);
+                Assert.True(rect.X >= rowRect.X && rect.Right <= rowRect.Right + 0.5 && rect.Y >= rowRect.Y && rect.Bottom <= rowRect.Bottom + 0.5,
+                    $"the chip {rect} leaves its row {rowRect} at {width}");
+            }
+
+            TextBlock label = view.GetVisualDescendants().OfType<TextBlock>().First(text => text.Text == "vs typical");
+            Assert.Equal(row.HasVsTypical, label.IsEffectivelyVisible);
+            if (row.HasVsTypical)
+                Assert.True(_Rect(presented, label).Right <= rowRect.Right - 100, "the figure column leaves the NET column its room");
+        }
+    }
+
+    /// <summary>ET-521: the search box shows examples while it is empty, and the shortcut as a badge inside it rather than only in
+    /// the tooltip; typing swaps the badge for the clear button.</summary>
+    [AvaloniaTheory]
+    [InlineData(1303d)]
+    [InlineData(420d)]
+    public async Task TheSearchBox_ShowsExamplesAndTheShortcutBadge_WhileEmpty(double width)
+    {
+        using var instance = TestClientInstance.Create(_Services());
+        Presented presented = await _PresentAsync(instance, width);
+        TextBox box = _Named<TextBox>(presented, "ModuleSearchBox");
+        Border badge = _Named<Border>(presented, "SearchShortcut");
+
+        Assert.Contains("e.g. Sleeper, Crimson", box.PlaceholderText);
+        Assert.True(badge.IsEffectivelyVisible);
+        Assert.Equal("Ctrl+F", badge.GetVisualDescendants().OfType<TextBlock>().Single().Text);
+        Rect boxRect = _Rect(presented, box);
+        Rect badgeRect = _Rect(presented, badge);
+        Assert.True(badgeRect.X >= boxRect.X && badgeRect.Right <= boxRect.Right + 0.5, $"badge {badgeRect} leaves the box {boxRect}");
+
+        box.Text = "cri";
+        _Settle(presented);
+
+        Assert.False(badge.IsEffectivelyVisible);
+        Assert.True(_Named<Button>(presented, "SearchClear").IsEffectivelyVisible);
+    }
+
     private static Action<IServiceCollection> _Services() => services => services.AddSingleton<IActivityStatsSource, FakeStatsSource>();
 
     private static async Task _ShowByActivityAsync(Presented presented)
