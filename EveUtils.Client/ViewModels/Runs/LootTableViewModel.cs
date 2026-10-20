@@ -100,6 +100,9 @@ public sealed partial class LootTableViewModel(ILootTableSource source, Activity
 
     public string SinceUpdateText => $"SINCE {UpdateLabel} UPDATE";
 
+    /// <summary>SHOW SINCE UPDATE ONLY, in the banner that says the game data changed: one click to the runs that came after it (ET-521).</summary>
+    public bool OffersSinceUpdateOnly => HasUpdate && !IsSinceUpdate;
+
     public string RareArrow => IsRareOpen ? "▼" : "▶";
 
     public string HowToggleText => IsHowOpen ? "How is this calculated? ▾" : "How is this calculated? ›";
@@ -131,7 +134,7 @@ public sealed partial class LootTableViewModel(ILootTableSource source, Activity
     public bool HasNoChoices => Choices.Count == 0 && Stage is LootTableStage.Picking;
 
     public string NoChoicesText => _choices.Count == 0
-        ? "No activity flown yet. Loot tables list the sites you have flown once you have."
+        ? "No sites to list: the site catalogue is not loaded and you have not flown a site yet."
         : "No site matches.";
 
     /// <summary>Opens the window on <paramref name="key"/>, or with none on the list of activities the pilot has flown. A
@@ -181,6 +184,7 @@ public sealed partial class LootTableViewModel(ILootTableSource source, Activity
         OnPropertyChanged(nameof(IsDays30));
         OnPropertyChanged(nameof(IsDays90));
         OnPropertyChanged(nameof(IsSinceUpdate));
+        OnPropertyChanged(nameof(OffersSinceUpdateOnly));
     }
 
     partial void OnIsRareOpenChanged(bool value)
@@ -273,7 +277,7 @@ public sealed partial class LootTableViewModel(ILootTableSource source, Activity
         try
         {
             var request = new LootTableRequest(key, IsAllPilots ? EarningsBasis.AllPilots : EarningsBasis.YourRuns, Window, _characterIds);
-            Task<IReadOnlyList<LootSiteChoice>> flown = source.ListFlownAsync(reading.Token);
+            Task<IReadOnlyList<LootSiteChoice>> flown = source.ListSitesAsync(reading.Token);
             LootTableReading read = await Task.Run(() => source.ReadAsync(request, reading.Token), reading.Token);
             _flown = await flown;
             if (reading.IsCancellationRequested)
@@ -310,7 +314,7 @@ public sealed partial class LootTableViewModel(ILootTableSource source, Activity
         _RenderTooFew(table, rows);
         _RenderSummary(table);
         _RenderBanners(table);
-        _RenderFooter(table);
+        _RenderFooter(table, read.PricedAtUtc);
 
         Items.Clear();
         if (HasTable)
@@ -381,7 +385,7 @@ public sealed partial class LootTableViewModel(ILootTableSource source, Activity
             : string.Empty;
     }
 
-    private void _RenderFooter(LootTableDto table)
+    private void _RenderFooter(LootTableDto table, DateTime? pricedAtUtc)
     {
         string span = table.Window switch
         {
@@ -389,8 +393,11 @@ public sealed partial class LootTableViewModel(ILootTableSource source, Activity
             LootTableWindow.SinceUpdate => $"since {UpdateLabel}",
             _ => "last 90 days"
         };
+        string priced = pricedAtUtc is { } pricedAt
+            ? $"priced at today's ESI average, {OutcomeSharingServerViewModel.Age(_time.GetUtcNow().UtcDateTime - pricedAt)}"
+            : "priced at today's ESI average";
         BasedOnText = $"based on {table.RunCount.ToString(CultureInfo.InvariantCulture)} runs · {table.PilotCount.ToString(CultureInfo.InvariantCulture)} "
-                      + $"{(table.PilotCount == 1 ? "pilot" : "pilots")} · {span} · priced at today's ESI average";
+                      + $"{(table.PilotCount == 1 ? "pilot" : "pilots")} · {span} · {priced}";
         List<string> leftOut = [];
         if (table.UncountedRunCount > 0)
             leftOut.Add($"{table.UncountedRunCount.ToString(CultureInfo.InvariantCulture)} {(table.UncountedRunCount == 1 ? "run" : "runs")} without a loot count");
@@ -431,20 +438,21 @@ public sealed partial class LootTableViewModel(ILootTableSource source, Activity
 
     private async Task _LoadChoicesAsync()
     {
-        IReadOnlyList<LootSiteChoice> flown = await source.ListFlownAsync();
-        _flown = flown;
         DateTime nowUtc = _time.GetUtcNow().UtcDateTime;
-        _choices = [.. flown.Select(choice => new LootSiteChoiceViewModel(choice, labels.For(choice.Key, choice.SiteName), nowUtc,
-            key => _ = ShowAsync(key, _characterIds)))];
+        // A thousand sites to name from the catalogue: built off the UI thread, drawn when they are all there.
+        (_flown, _choices) = await Task.Run(async () =>
+        {
+            IReadOnlyList<LootSiteChoice> sites = await source.ListSitesAsync();
+            return (sites, (IReadOnlyList<LootSiteChoiceViewModel>)[.. sites.Select(choice => new LootSiteChoiceViewModel(choice,
+                labels.For(choice.Key, choice.SiteName), nowUtc, key => _ = ShowAsync(key, _characterIds)))]);
+        });
         _ApplyChoiceFilter();
     }
 
     private void _ApplyChoiceFilter()
     {
         IReadOnlyList<string> words = ActivitySearchTerms.Words(SearchText);
-        Choices.Clear();
-        foreach (LootSiteChoiceViewModel choice in _choices.Where(choice => ActivitySearchTerms.Matches(choice.SearchText, words)))
-            Choices.Add(choice);
+        Choices.ReconcileTo([.. _choices.Where(choice => ActivitySearchTerms.Matches(choice.SearchText, words))]);
 
         OnPropertyChanged(nameof(HasNoChoices));
         OnPropertyChanged(nameof(NoChoicesText));

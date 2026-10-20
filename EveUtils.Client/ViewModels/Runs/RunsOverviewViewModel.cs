@@ -232,7 +232,7 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
             key => _ = ShowActivityStatsAsync(key), _CreatePosition(services), _PositionOf);
         ByActivity = new RunsByActivityViewModel(services.GetService<IActivityStatsSource>(),
             new ActivityStatsLabels(services.GetService<ISdeAccessor>(), _facts), _PassesTypeFilter,
-            services.GetService<ISharedServerPicks>(), _OpenOwnActivityAsync, _time, _LootTables(services));
+            services.GetService<ISharedServerPicks>(), _OpenOwnActivityAsync, _time, _LootTables(services), _NameOf);
         // A click on a row asks for its earnings: the summary steps aside, and the drawer opens where the pane is not beside the list.
         ByActivity.RowSelected += _ =>
         {

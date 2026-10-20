@@ -920,12 +920,12 @@
                         <TextBlock x:Name="ExpectedEarningsNote" Classes="eetext" TextWrapping="Wrap" IsVisible="{Binding ShowsPlainNote}"
                                    Text="{Binding NoteText}"/>
                         <!-- A pilot who shares nothing is told so, and the setting is one click away (ET-521). -->
-                        <TextBlock x:Name="SharingNote" Classes="eetext" TextWrapping="Wrap" IsVisible="{Binding ShowsSharingLink}">
-                            <Run Text="{Binding SharingNoteLead}"/><InlineUIContainer BaselineAlignment="Center">
-                                <Button x:Name="TurnOnSharingLink" Classes="link" Command="{Binding TurnOnSharingCommand}"
-                                        Content="{Binding SharingLinkText}" ToolTip.Tip="Settings › Privacy &amp; Sharing"/>
-                            </InlineUIContainer><Run Text="{Binding SharingNoteTail}"/>
-                        </TextBlock>
+                        <WrapPanel x:Name="SharingNote" IsVisible="{Binding ShowsSharingLink}">
+                            <TextBlock Classes="eetext" VerticalAlignment="Center" Text="{Binding SharingNoteLead}"/>
+                            <Button x:Name="TurnOnSharingLink" Classes="link" FontSize="10.5" Command="{Binding TurnOnSharingCommand}"
+                                    Content="{Binding SharingLinkText}" ToolTip.Tip="Settings › Privacy &amp; Sharing"/>
+                            <TextBlock Classes="eetext" VerticalAlignment="Center" Text="{Binding SharingNoteTail}"/>
+                        </WrapPanel>
                         <!-- The foot: how many runs it rests on and how old it is, and the two ways further in. -->
                         <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10" IsVisible="{Binding !IsLoading}">
                             <TextBlock x:Name="BasisLine" Grid.Column="0" Classes="eemono" TextWrapping="Wrap" VerticalAlignment="Center">

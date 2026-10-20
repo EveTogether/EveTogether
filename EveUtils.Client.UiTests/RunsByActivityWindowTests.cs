@@ -351,7 +351,7 @@ public sealed class RunsByActivityWindowTests
         Border topDrops = _Named<Border>(presented, "StatsTopDrops");
         Assert.True(topDrops.IsVisible);
         Assert.Equal(2, presented.ViewModel.ByActivity.Detail.TopDrops.Count);
-        Assert.Equal("+ 1 rare kind · in 3 % of runs", _Named<TextBlock>(presented, "StatsTopDropsRare").Text);
+        Assert.Equal("+ 1 rare kind — 89 % of loot value", _Named<TextBlock>(presented, "StatsTopDropsRare").Text);
         Rect box = _Rect(presented, topDrops);
         Button open = _Named<Button>(presented, "StatsLootTable");
         Assert.True(open.IsVisible);

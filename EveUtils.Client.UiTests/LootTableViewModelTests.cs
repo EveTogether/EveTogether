@@ -74,7 +74,7 @@ public sealed class LootTableViewModelTests
                 request.Basis is EarningsBasis.AllPilots ? "Krah Server" : null, OwnRunsReason.None, NowUtc));
         }
 
-        public Task<IReadOnlyList<LootSiteChoice>> ListFlownAsync(CancellationToken cancellationToken = default) => Task.FromResult(Flown);
+        public Task<IReadOnlyList<LootSiteChoice>> ListSitesAsync(CancellationToken cancellationToken = default) => Task.FromResult(Flown);
     }
 
     private static LootTableViewModel Create(FakeSource source, TimeProvider? time = null) =>
@@ -318,7 +318,7 @@ public sealed class LootTableViewModelTests
 
         table.SearchText = "crimson";
         LootSiteChoiceViewModel crimson = Assert.Single(table.Choices);
-        Assert.Contains("3 runs", crimson.MetaText);
+        Assert.Contains("3 of 5 needed", crimson.MetaText);
         table.SearchText = "nothing like it";
         Assert.True(table.HasNoChoices);
         Assert.Equal("No site matches.", table.NoChoicesText);
@@ -331,14 +331,64 @@ public sealed class LootTableViewModelTests
     }
 
     [Fact]
-    public async Task WithoutAnyFlownActivity_TheWindowSaysSo()
+    public async Task WithoutAnySiteAtAll_TheWindowSaysSo()
     {
         LootTableViewModel table = Create(new FakeSource { Flown = [] });
 
         await table.ShowAsync(null, []);
 
         Assert.True(table.HasNoChoices);
-        Assert.StartsWith("No activity flown yet", table.NoChoicesText);
+        Assert.StartsWith("No sites to list", table.NoChoicesText);
+    }
+
+    /// <summary>ET-521, the approved mockup: the picker lists every site, not only the flown ones, and says what each has to go
+    /// on — "12 runs with loot" from the table's minimum, "3 of 5 needed" below it, "0 of 5 needed" for a site never flown. The
+    /// flown ones come first, a site that was not flown has no "last flown". Counter-proof: list the flown only and the
+    /// unflown site is not there to pick.</summary>
+    [Fact]
+    public async Task ThePicker_ListsEverySite_FlownFirst_WithTheirRunsWithLoot()
+    {
+        ActivityStatsKey sleeper = ActivityStatsKey.Site(SiteTypeSource.Site, 2400);
+        var source = new FakeSource
+        {
+            Flown =
+            [
+                new(Sanctum, "Angel Sanctum", 12, NowUtc.AddDays(-1)),
+                new(Cache, "Crimson Cache", 3, NowUtc.AddDays(-9)),
+                new(sleeper, null, 0, null)
+            ]
+        };
+        LootTableViewModel table = Create(source);
+
+        await table.ShowAsync(null, [1]);
+
+        Assert.Equal(3, table.Choices.Count);
+        Assert.Contains("12 runs with loot", table.Choices[0].MetaText);
+        Assert.Contains("last flown 1 d ago", table.Choices[0].MetaText);
+        Assert.Contains("3 of 5 needed", table.Choices[1].MetaText);
+        LootSiteChoiceViewModel unflown = table.Choices[2];
+        Assert.Contains("0 of 5 needed", unflown.MetaText);
+        Assert.DoesNotContain("last flown", unflown.MetaText);
+        unflown.PickCommand.Execute(null);
+        await WaitAsync(() => table.ShowsTable);
+        Assert.Equal(sleeper, source.Requests.Single().Key);
+    }
+
+    /// <summary>ET-521: the footer says how old the prices are, and the game-data banner offers the since-update view in one click.</summary>
+    [Fact]
+    public async Task TheFooter_SaysHowOldThePricesAre_AndTheBannerOffersSinceUpdateOnly()
+    {
+        var source = new FakeSource
+        {
+            Script = request => new LootTableReading(Table(request.Key, 30, request.Window), request.Basis, null, OwnRunsReason.None, NowUtc,
+                NowUtc.AddHours(-3))
+        };
+        LootTableViewModel table = Create(source);
+
+        await table.ShowAsync(Sanctum, [1]);
+
+        Assert.Equal("based on 30 runs · 30 pilots · last 90 days · priced at today's ESI average, 3 h ago", table.BasedOnText);
+        Assert.False(table.OffersSinceUpdateOnly);
     }
 
     // ── Entry points ─────────────────────────────────────────────────────────────────────────────────────────

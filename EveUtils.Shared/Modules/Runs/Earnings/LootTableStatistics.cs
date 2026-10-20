@@ -84,6 +84,11 @@ public static class LootTableStatistics
         };
     }
 
+    /// <summary>How many runs the table of this activity would count over its long window: the ones whose loot was counted
+    /// between a starting and an ending hold, fleet runs left out (ET-521). What the picker says a site has to go on.</summary>
+    public static int CountedRunCount(IEnumerable<EarningsSample> samples, LootTablePolicy policy, DateTime nowUtc) =>
+        _Counted(samples, nowUtc - policy.LongWindow, policy).Count();
+
     /// <summary>The 90 % Wilson score interval of <paramref name="successes"/> out of <paramref name="trials"/>, which
     /// may be weighted counts: it stays inside 0-1 and does not collapse for a rate of 0 or 1 the way the normal one does.</summary>
     public static (double Low, double High) WilsonInterval(double successes, double trials, double z)

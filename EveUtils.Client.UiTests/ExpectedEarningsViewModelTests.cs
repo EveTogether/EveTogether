@@ -271,6 +271,86 @@ public sealed class ExpectedEarningsViewModelTests
         Assert.False(panel.IsLootTableShown);
     }
 
+    /// <summary>ET-521: DETAILS and a click on the panel are one command, and it opens the figures of the activity the panel is
+    /// on; nothing opens before the panel knows one, or where no screen is registered. The sharing link opens Settings.</summary>
+    [Fact]
+    public async Task TheDetailsCommand_OpensTheFiguresOfItsActivity_AndTheSharingLinkOpensSettings()
+    {
+        var screens = new RecordingEarningsScreens();
+        var source = new ScriptedSource { Own = Own(runs: 8), Shared = new SharedEarningsAttempt(null, OwnRunsReason.NotSharing) };
+        var panel = new ExpectedEarningsViewModel(source, screens: screens);
+        Assert.False(panel.IsDetailsShown);
+        panel.OpenDetailsCommand.Execute(null);
+        Assert.Empty(screens.Opened);
+
+        await panel.TrackAsync(Sanctum, 90000001);
+        panel.OpenDetailsCommand.Execute(null);
+        Assert.True(panel.IsDetailsShown);
+        Assert.Equal([Sanctum], screens.Opened);
+
+        Assert.True(panel.ShowsSharingLink);
+        Assert.False(panel.ShowsPlainNote);
+        Assert.Equal("Showing your own runs. Turn on sharing in Settings to include the other pilots' runs.", panel.NoteText);
+        Assert.Equal(panel.NoteText, panel.SharingNoteLead + panel.SharingLinkText + panel.SharingNoteTail);
+        panel.TurnOnSharingCommand.Execute(null);
+        Assert.Equal(1, screens.SharingSettingsOpened);
+
+        Assert.False(new ExpectedEarningsViewModel(source).ShowsSharingLink);
+    }
+
+    [Fact]
+    public async Task AnyOtherReason_StaysPlainText_WithNoLink()
+    {
+        var source = new ScriptedSource { Own = Own(runs: 8), Shared = new SharedEarningsAttempt(null, OwnRunsReason.TooFewPilots) };
+        var panel = new ExpectedEarningsViewModel(source, screens: new RecordingEarningsScreens());
+
+        await panel.TrackAsync(Sanctum, 90000001);
+
+        Assert.False(panel.ShowsSharingLink);
+        Assert.True(panel.ShowsPlainNote);
+    }
+
+    /// <summary>ET-521: the source chip stays when there are too few runs for a number, so the dots say whose runs they count.
+    /// Counter-proof: the chip needing figures hides it here.</summary>
+    [Fact]
+    public async Task TooFewRuns_KeepTheSourceChip()
+    {
+        var panel = new ExpectedEarningsViewModel(new ScriptedSource { Own = Own(runs: 3) });
+
+        await panel.TrackAsync(Sanctum, null);
+
+        Assert.True(panel.IsTooFewRuns);
+        Assert.True(panel.ShowsPlainSourceChip);
+        Assert.Equal("YOUR RUNS", panel.SourceChip);
+    }
+
+    /// <summary>ET-521: "updated … ago" counts from when the figures were read and moves on with the window's tick.</summary>
+    [Fact]
+    public async Task TheUpdatedLine_SaysHowOldTheFiguresAre_AndMovesOn()
+    {
+        var time = new SettableTime(Now);
+        var panel = new ExpectedEarningsViewModel(new ScriptedSource { Own = Own(runs: 8) with { ReadAtUtc = Now } }, time: time);
+
+        await panel.TrackAsync(Sanctum, null);
+        Assert.Equal("updated just now", panel.UpdatedText);
+
+        time.Advance(TimeSpan.FromSeconds(150));
+        panel.RefreshAge();
+        Assert.Equal("updated 2 min ago", panel.UpdatedText);
+
+        await panel.TrackAsync(null, null);
+        Assert.Equal(string.Empty, panel.UpdatedText);
+    }
+
+    private sealed class SettableTime(DateTime nowUtc) : TimeProvider
+    {
+        private DateTime _nowUtc = nowUtc;
+
+        public override DateTimeOffset GetUtcNow() => new(_nowUtc, TimeSpan.Zero);
+
+        public void Advance(TimeSpan by) => _nowUtc += by;
+    }
+
     [Fact]
     public void TheLogScale_KeepsOrder_AndPinsValuesOutsideTheRangeToTheEdges()
     {

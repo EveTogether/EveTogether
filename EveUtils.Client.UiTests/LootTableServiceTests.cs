@@ -2,11 +2,16 @@ using Avalonia.Headless.XUnit;
 using EveUtils.Client.Messaging;
 using EveUtils.Client.Runs;
 using EveUtils.Client.Transport;
+using EveUtils.Shared.Cqrs;
+using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Modules.RunOutcomes.Dtos;
 using EveUtils.Shared.Modules.RunOutcomes.Enums;
+using EveUtils.Shared.Modules.Runs.Commands;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Earnings;
 using EveUtils.Shared.Modules.Runs.Enums;
+using EveUtils.Shared.Modules.Sde;
+using EveUtils.Shared.Modules.Sde.Dtos;
 using EveUtils.Shared.Transport;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -118,11 +123,36 @@ public sealed class LootTableServiceTests
     }
 
     [AvaloniaFact]
-    public async Task TheActivitiesTheyHaveFlown_AreListed_EvenWithNone()
+    public async Task WithoutACatalogueOrARun_NoSiteIsListed()
     {
         using Fixture fixture = await Fixture.CreateAsync();
 
-        Assert.Empty(await fixture.Source.ListFlownAsync(Token));
+        Assert.Empty(await fixture.Source.ListSitesAsync(Token));
+    }
+
+    /// <summary>ET-521: the picker offers every site of the catalogue, the one flown first with its own name, the others by
+    /// name with no "last flown"; a twin pair is one site, not two. Counter-proof: list only what was flown and the two
+    /// unflown sites are missing.</summary>
+    [AvaloniaFact]
+    public async Task EverySiteOfTheCatalogue_IsListed_TheFlownOneFirst_AndTwinsOnce()
+    {
+        FakeSdeAccessor sde = new FakeSdeAccessor()
+            .AddSite(new SdeSite(2311, "Angel Sanctum", 1, null, null, null, null, null, false, []))
+            .AddSite(new SdeSite(2400, "Superior Sleeper Cache", 1, null, null, null, null, null, false, []))
+            .AddSite(new SdeSite(2401, "Superior Sleeper Cache", 1, null, null, null, null, null, false, []))
+            .AddSite(new SdeSite(2316, "Crimson Cache", 1, null, null, null, null, null, false, []));
+        using TestClientInstance instance = TestClientInstance.Create(services => services.AddSingleton<ISdeAccessor>(sde));
+        IDispatcher dispatcher = instance.Services.GetRequiredService<IDispatcher>();
+        DateTime startedAtUtc = DateTime.UtcNow.AddDays(-2);
+        Result<Guid> started = await dispatcher.Send(new StartRunCommand(Pilot, ActivityKind.Site, startedAtUtc, 2316, "Crimson Cache", 30000142), Token);
+        await dispatcher.Send(new SaveRunCommand(started.Value, startedAtUtc.AddMinutes(15), startedAtUtc.AddMinutes(16), [], [], [], []), Token);
+
+        IReadOnlyList<LootSiteChoice> sites = await instance.Services.GetRequiredService<ILootTableSource>().ListSitesAsync(Token);
+
+        Assert.Equal([2316, 2311, 2400], sites.Select(site => site.Key.TypeId));
+        Assert.NotNull(sites[0].LastFlownUtc);
+        Assert.Equal("Crimson Cache", sites[0].SiteName);
+        Assert.All(sites.Skip(1), site => Assert.Null(site.LastFlownUtc));
     }
 
     private sealed class Fixture : IDisposable
