@@ -1,0 +1,360 @@
+<v:ChromedWindow xmlns="https://github.com/avaloniaui" xmlns:v="using:EveUtils.Client.Views"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vr="using:EveUtils.Client.ViewModels.Runs"
+        xmlns:ctl="using:EveUtils.Client.Controls"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="760" d:DesignHeight="640"
+        x:Class="EveUtils.Client.Views.ActivityLootWindow"
+        x:DataType="vr:LootTableViewModel"
+        Width="760" Height="640" MinWidth="640" MinHeight="420"
+        WindowStartupLocation="CenterOwner"
+        Title="Loot table">
+
+    <v:ChromedWindow.Resources>
+        <!-- A rate that is a percentage draws a bar; "seen in 9 of 12" has none, as a bar would read as a percentage. -->
+        <DataTemplate x:Key="LootRowTemplate" DataType="vr:LootTableRowViewModel">
+            <Border Classes="lrowline" Height="44">
+                <Grid ColumnDefinitions="28,*,110,64,96,120" ColumnSpacing="8">
+                    <Image Grid.Column="0" Width="24" Height="24" Source="{Binding Icon}"/>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <TextBlock Classes="lname" Text="{Binding NameText}"/>
+                            <Border Classes="chip" IsVisible="{Binding HasTag}" VerticalAlignment="Center">
+                                <TextBlock Text="{Binding TagText}"/>
+                            </Border>
+                            <Border Classes="chip warn" IsVisible="{Binding HasChange}" VerticalAlignment="Center">
+                                <TextBlock Text="{Binding ChangeText}"/>
+                            </Border>
+                        </StackPanel>
+                        <TextBlock Classes="lmono" FontSize="10" Text="{Binding LastSeenText}"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="2" VerticalAlignment="Center" Spacing="2" ToolTip.Tip="{Binding RateTooltip}">
+                        <TextBlock Classes="lfigure" Text="{Binding RateText}"/>
+                        <Panel Height="5" IsVisible="{Binding ShowsRatePercentage}">
+                            <Border Classes="ltrack"/>
+                            <Border Classes="lbar" Width="{Binding RateBarWidth}"/>
+                        </Panel>
+                    </StackPanel>
+                    <TextBlock Grid.Column="3" Classes="lfigure" HorizontalAlignment="Right" Text="{Binding QuantityText}"/>
+                    <StackPanel Grid.Column="4" VerticalAlignment="Center" HorizontalAlignment="Right">
+                        <TextBlock Classes="lfigure" HorizontalAlignment="Right" Text="{Binding ValueText}"/>
+                        <TextBlock Classes="lmono" FontSize="10" HorizontalAlignment="Right" Text="{Binding ValueSub}"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="5" VerticalAlignment="Center" Spacing="2">
+                        <TextBlock Classes="lfigure" IsVisible="{Binding ShowsShareText}" Text="{Binding ShareText}"/>
+                        <Panel Height="5">
+                            <Border Classes="ltrack"/>
+                            <Border Classes="lbar" Width="{Binding ShareBarWidth}"/>
+                        </Panel>
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </DataTemplate>
+    </v:ChromedWindow.Resources>
+
+    <!-- The loot table (ET-519): what can drop in one activity. Hosted like the other tools: a docked tab, or its own window
+         that stays open beside the run window. Ink is the text colour throughout, never the dim one: the dim brush measured
+         3.3-4.7:1 on the surfaces this window uses and the rows must read at 4.5:1 in every state, hover and selection
+         included. The key words (RATE, VALUE, SHARE) and the figures in a row share one column grid so they line up. -->
+    <DockPanel x:Name="LootRoot" Margin="14">
+        <DockPanel.Styles>
+            <Style Selector="TextBlock.lk">
+                <Setter Property="Foreground">
+                    <SolidColorBrush Color="#FFA0958A"/>
+                </Setter>
+                <Setter Property="FontSize" Value="9.5"/>
+                <Setter Property="LetterSpacing" Value="1.4"/>
+            </Style>
+            <Style Selector="TextBlock.ltext">
+                <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+                <Setter Property="FontSize" Value="11"/>
+                <Setter Property="LineHeight" Value="16"/>
+                <Setter Property="TextWrapping" Value="Wrap"/>
+            </Style>
+            <Style Selector="TextBlock.lmono">
+                <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+                <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+                <Setter Property="FontSize" Value="11"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+            </Style>
+            <Style Selector="TextBlock.lfigure">
+                <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+                <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+                <Setter Property="FontSize" Value="12"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+            </Style>
+            <Style Selector="TextBlock.lbig">
+                <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+                <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+                <Setter Property="FontSize" Value="20"/>
+                <Setter Property="FontWeight" Value="SemiBold"/>
+            </Style>
+            <Style Selector="TextBlock.lname">
+                <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+                <Setter Property="FontSize" Value="12"/>
+                <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+            </Style>
+            <Style Selector="Border.lsec">
+                <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}"/>
+                <Setter Property="BorderThickness" Value="0,0,0,1"/>
+                <Setter Property="Padding" Value="0,8,0,8"/>
+            </Style>
+            <Style Selector="Border.ldot">
+                <Setter Property="Width" Value="9"/>
+                <Setter Property="Height" Value="9"/>
+                <Setter Property="Margin" Value="0,0,3,0"/>
+                <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}"/>
+            </Style>
+            <Style Selector="Border.ldot.filled">
+                <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
+            </Style>
+            <Style Selector="Border.lbar">
+                <Setter Property="Height" Value="5"/>
+                <Setter Property="HorizontalAlignment" Value="Left"/>
+                <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
+            </Style>
+            <Style Selector="Border.ltrack">
+                <Setter Property="Height" Value="5"/>
+                <Setter Property="Background" Value="{DynamicResource BorderStrongBrush}"/>
+            </Style>
+            <Style Selector="Button.lhead, Button.lrow, Button.llink">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="BorderThickness" Value="0"/>
+                <Setter Property="CornerRadius" Value="0"/>
+                <Setter Property="Padding" Value="0"/>
+                <Setter Property="MinHeight" Value="0"/>
+                <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+            </Style>
+            <Style Selector="Button.lhead">
+                <Setter Property="FontSize" Value="9.5"/>
+                <Setter Property="FontWeight" Value="SemiBold"/>
+            </Style>
+            <Style Selector="Button.lrow">
+                <Setter Property="HorizontalAlignment" Value="Stretch"/>
+                <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                <Setter Property="Height" Value="44"/>
+            </Style>
+            <Style Selector="Button.lhead:pointerover /template/ ContentPresenter, Button.lrow:pointerover /template/ ContentPresenter, Button.llink:pointerover /template/ ContentPresenter">
+                <Setter Property="Background" Value="{DynamicResource BgRowHoverBrush}"/>
+                <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+            </Style>
+            <Style Selector="Border.lrowline">
+                <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}"/>
+                <Setter Property="BorderThickness" Value="0,0,0,1"/>
+            </Style>
+        </DockPanel.Styles>
+
+        <!-- ══ Head ══ -->
+        <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,8">
+            <StackPanel Grid.Column="0" Spacing="3">
+                <TextBlock x:Name="LootKind" Classes="lk" IsVisible="{Binding ShowsTable}" Text="{Binding KindText}"/>
+                <TextBlock x:Name="LootTitle" FontSize="15" FontWeight="Medium" Foreground="{StaticResource TextBrightBrush}"
+                           TextTrimming="CharacterEllipsis" Text="LOOT TABLES" IsVisible="{Binding IsPicking}"/>
+                <TextBlock x:Name="LootName" FontSize="15" FontWeight="Medium" Foreground="{StaticResource TextBrightBrush}"
+                           TextTrimming="CharacterEllipsis" IsVisible="{Binding !IsPicking}" Text="{Binding NameText}"/>
+                <WrapPanel Margin="0,3,0,0" IsVisible="{Binding ShowsTable}">
+                    <Border Classes="chip" Margin="0,0,5,4">
+                        <TextBlock Text="{Binding FamilyText}"/>
+                    </Border>
+                    <Border x:Name="LootSourceChip" Classes="chip" Classes.ok="{Binding IsSharedSource}" Margin="0,0,5,4">
+                        <TextBlock Text="{Binding SourceChip}"/>
+                    </Border>
+                </WrapPanel>
+            </StackPanel>
+            <Button x:Name="LootSwitchSite" Grid.Column="1" Classes="sumbtn" VerticalAlignment="Top" IsVisible="{Binding !IsPicking}"
+                    Command="{Binding SwitchSiteCommand}" Content="ALL SITES"
+                    ToolTip.Tip="Pick another site from the ones you have flown"/>
+        </Grid>
+
+        <!-- ══ Picking ══ the window opened without a site: the activities the pilot has flown, searched like the runs overview. -->
+        <DockPanel x:Name="LootPicking" IsVisible="{Binding IsPicking}">
+            <TextBox x:Name="LootSearch" DockPanel.Dock="Top" MinHeight="28" FontSize="12" Margin="0,0,0,8"
+                     PlaceholderText="Search site, faction or type…" Text="{Binding SearchText, Mode=TwoWay}"/>
+            <TextBlock x:Name="LootNoChoices" DockPanel.Dock="Top" Classes="ltext" IsVisible="{Binding HasNoChoices}"
+                       Text="{Binding NoChoicesText}"/>
+            <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+                <ItemsControl x:Name="LootChoices" ItemsSource="{Binding Choices}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="vr:LootSiteChoiceViewModel">
+                            <Border Classes="lrowline">
+                                <Button Classes="lrow" Height="44" Command="{Binding PickCommand}">
+                                    <Grid Margin="4,0" ColumnDefinitions="22,*" ColumnSpacing="8">
+                                        <ctl:IconGlyph Grid.Column="0" Kind="{Binding TypeIcon}" ToolTip.Tip="{Binding TypeText}"/>
+                                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
+                                            <TextBlock Classes="lname" Text="{Binding NameText}"/>
+                                            <TextBlock Classes="lmono" FontSize="10" TextTrimming="CharacterEllipsis" Text="{Binding MetaText}"/>
+                                        </StackPanel>
+                                    </Grid>
+                                </Button>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+        </DockPanel>
+
+        <TextBlock x:Name="LootLoading" DockPanel.Dock="Top" Classes="ltext" IsVisible="{Binding IsLoading}" Text="Loading…"/>
+
+        <!-- ══ Table ══ -->
+        <DockPanel x:Name="LootTableArea" IsVisible="{Binding ShowsTable}">
+
+            <!-- Source and period. SINCE UPDATE is offered only where the SDE tells which update that is. -->
+            <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,8">
+                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="2">
+                    <Button x:Name="LootAllPilots" Classes="sumbtn" Classes.on="{Binding IsAllPilots}" Content="ALL PILOTS"
+                            Command="{Binding ShowAllPilotsCommand}" ToolTip.Tip="What the pilots sharing with your server found"/>
+                    <Button x:Name="LootYourRuns" Classes="sumbtn" Classes.on="{Binding IsYourRuns}" Content="YOUR RUNS"
+                            Command="{Binding ShowYourRunsCommand}" ToolTip.Tip="Only your own runs"/>
+                </StackPanel>
+                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="2">
+                    <Button x:Name="LootDays30" Classes="sumbtn" Classes.on="{Binding IsDays30}" Content="30 D"
+                            Command="{Binding Show30DaysCommand}"/>
+                    <Button x:Name="LootDays90" Classes="sumbtn" Classes.on="{Binding IsDays90}" Content="90 D"
+                            Command="{Binding Show90DaysCommand}"/>
+                    <Button x:Name="LootSinceUpdate" Classes="sumbtn" Classes.on="{Binding IsSinceUpdate}" IsVisible="{Binding HasUpdate}"
+                            Content="{Binding SinceUpdateText}" Command="{Binding ShowSinceUpdateCommand}"
+                            ToolTip.Tip="Only runs since the last game update"/>
+                </StackPanel>
+            </Grid>
+
+            <TextBlock x:Name="LootNote" DockPanel.Dock="Top" Classes="ltext" Margin="0,0,0,6" IsVisible="{Binding HasNote}"
+                       Text="{Binding NoteText}"/>
+
+            <!-- Footer: what it is based on, what was left out, and what has no price. -->
+            <Border DockPanel.Dock="Bottom" Classes="lsec" BorderThickness="0" Padding="0,8,0,0">
+                <StackPanel Spacing="4">
+                    <TextBlock x:Name="LootBasedOn" Classes="lmono" TextWrapping="Wrap" Text="{Binding BasedOnText}"/>
+                    <TextBlock x:Name="LootLeftOut" Classes="ltext" IsVisible="{Binding HasLeftOut}" Text="{Binding LeftOutText}"/>
+                    <TextBlock x:Name="LootUnpriced" Classes="ltext" IsVisible="{Binding HasUnpriced}" Text="{Binding UnpricedText}"/>
+                    <Button x:Name="LootHowToggle" Classes="llink" HorizontalAlignment="Left" Command="{Binding ToggleHowCommand}">
+                        <TextBlock Classes="ltext" Foreground="{DynamicResource AccentBrightBrush}" Text="{Binding HowToggleText}"/>
+                    </Button>
+                    <StackPanel x:Name="LootHow" Spacing="4" IsVisible="{Binding IsHowOpen}">
+                        <TextBlock Classes="ltext" Text="The drop rate is the share of runs in which the item dropped. Only runs whose loot was counted between a starting and an ending hold are in it: a run that was never pasted is not a run with nothing."/>
+                        <TextBlock Classes="ltext" Text="Each pilot counts for at most 10 runs, so one pilot farming a site does not decide the table. “Seen in 9 of 12” is a count of whole runs; a percentage is weighted that way."/>
+                        <TextBlock Classes="ltext" Text="Value is the average quantity times today's ESI average price. Blueprints are valued by build appraisal; copies and originals cannot be told apart."/>
+                        <TextBlock Classes="ltext" Text="Expected is the mean loot per run and sits above Typical, the median, because rare drops pull a mean up."/>
+                        <TextBlock Classes="ltext" Text="Rare is a faction, storyline, deadspace, officer or blueprint item, or anything that dropped in under 5 % of runs."/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <ScrollViewer x:Name="LootScroll" HorizontalScrollBarVisibility="Disabled">
+                <StackPanel>
+
+                    <!-- Too few runs: no numbers at all, how far off it is, and the names of what was seen. -->
+                    <StackPanel x:Name="LootTooFew" Spacing="6" IsVisible="{Binding !HasTable}">
+                        <ItemsControl ItemsSource="{Binding RunDots}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Orientation="Horizontal"/>
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="x:Boolean">
+                                    <Border Classes="ldot" Classes.filled="{Binding}"/>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <TextBlock x:Name="LootTooFewLine" Classes="lfigure" Text="{Binding TooFewText}"/>
+                        <TextBlock Classes="lk" Margin="0,6,0,0" IsVisible="{Binding HasSeenNames}" Text="SEEN SO FAR"/>
+                        <ItemsControl x:Name="LootSeenNames" ItemsSource="{Binding SeenNames}" IsVisible="{Binding HasSeenNames}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="vr:LootTableRowViewModel">
+                                    <Border Classes="lrowline" Height="28">
+                                        <Grid ColumnDefinitions="28,*,Auto" ColumnSpacing="8">
+                                            <Image Grid.Column="0" Width="20" Height="20" Source="{Binding Icon}"/>
+                                            <TextBlock Grid.Column="1" Classes="lname" Text="{Binding NameText}"/>
+                                            <Border Grid.Column="2" Classes="chip" IsVisible="{Binding HasTag}" VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding TagText}"/>
+                                            </Border>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+
+                    <!-- Enough runs for a table. -->
+                    <StackPanel x:Name="LootRated" IsVisible="{Binding HasTable}">
+                        <Border x:Name="LootFewRuns" Classes="chip warn" HorizontalAlignment="Stretch" Margin="0,0,0,8"
+                                IsVisible="{Binding HasFewRunsText}">
+                            <TextBlock TextWrapping="Wrap" Text="{Binding FewRunsText}"/>
+                        </Border>
+                        <Border x:Name="LootChanged" Classes="chip warn" HorizontalAlignment="Stretch" Margin="0,0,0,8"
+                                IsVisible="{Binding HasChangedText}">
+                            <TextBlock TextWrapping="Wrap" Text="{Binding ChangedText}"/>
+                        </Border>
+
+                        <!-- Expected beside typical, so the table does not seem to contradict the earnings panel. -->
+                        <Border Classes="lsec" IsVisible="{Binding HasSummaryFigures}">
+                            <Grid ColumnDefinitions="Auto,Auto,*" ColumnSpacing="24">
+                                <StackPanel Grid.Column="0" Spacing="2">
+                                    <TextBlock Classes="lk" Text="EXPECTED LOOT / RUN"/>
+                                    <TextBlock x:Name="LootExpected" Classes="lbig" Text="{Binding ExpectedText}"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Bottom">
+                                    <TextBlock Classes="lk" Text="TYPICAL (MEDIAN)"/>
+                                    <TextBlock x:Name="LootTypical" Classes="lfigure" Text="{Binding TypicalText}"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="2" Spacing="2" VerticalAlignment="Bottom" IsVisible="{Binding HasFixed}">
+                                    <TextBlock Classes="lk" Text="PLUS BOUNTY / REWARD"/>
+                                    <TextBlock x:Name="LootFixed" Classes="lfigure" Text="{Binding FixedText}"/>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+
+                        <!-- Column heads that also sort. Same grid as the rows. -->
+                        <Border Classes="lrowline" Height="26">
+                            <Grid x:Name="LootHeader" ColumnDefinitions="28,*,110,64,96,120" ColumnSpacing="8">
+                                <Button x:Name="SortName" Grid.Column="1" Classes="lhead" HorizontalAlignment="Left"
+                                        Command="{Binding SortByNameCommand}" Content="{Binding NameMark, StringFormat='ITEM{0}'}"/>
+                                <Button x:Name="SortRate" Grid.Column="2" Classes="lhead" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                                        Command="{Binding SortByRateCommand}" ToolTip.Tip="Share of runs in which it dropped"
+                                        Content="{Binding RateMark, StringFormat='DROP RATE{0}'}"/>
+                                <Button x:Name="SortQuantity" Grid.Column="3" Classes="lhead" HorizontalAlignment="Stretch" HorizontalContentAlignment="Right"
+                                        Command="{Binding SortByQuantityCommand}" ToolTip.Tip="Average quantity when it drops"
+                                        Content="{Binding QuantityMark, StringFormat='AVG QTY{0}'}"/>
+                                <Button x:Name="SortValue" Grid.Column="4" Classes="lhead" HorizontalAlignment="Stretch" HorizontalContentAlignment="Right"
+                                        Command="{Binding SortByValueCommand}" ToolTip.Tip="Average quantity times today's price"
+                                        Content="{Binding ValueMark, StringFormat='VALUE{0}'}"/>
+                                <Button x:Name="SortShare" Grid.Column="5" Classes="lhead" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                                        Command="{Binding SortByShareCommand}" ToolTip.Tip="Share of the loot value"
+                                        Content="{Binding ShareMark, StringFormat='SHARE{0}'}"/>
+                            </Grid>
+                        </Border>
+
+                        <ItemsControl x:Name="LootItems" ItemsSource="{Binding Items}">
+                            <ItemsControl.ItemTemplate>
+                                <StaticResource ResourceKey="LootRowTemplate"/>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <!-- Rare drops: one folded line with what they come to, open on a click. -->
+                        <Border x:Name="LootRareGroup" Classes="lrowline" IsVisible="{Binding HasRare}">
+                            <Button x:Name="LootRareToggle" Classes="lrow" Height="44" Command="{Binding ToggleRareCommand}">
+                                <Grid Margin="0" ColumnDefinitions="28,*,Auto" ColumnSpacing="8">
+                                    <TextBlock Grid.Column="0" Classes="lmono" HorizontalAlignment="Center" Text="{Binding RareArrow}"/>
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
+                                        <TextBlock Classes="lname" Text="{Binding RareTitleText}"/>
+                                        <TextBlock Classes="lmono" FontSize="10" TextTrimming="CharacterEllipsis" Text="{Binding RareDetailText}"/>
+                                    </StackPanel>
+                                    <TextBlock Grid.Column="2" Classes="lfigure" Text="{Binding RareFigureText}"/>
+                                </Grid>
+                            </Button>
+                        </Border>
+                        <ItemsControl x:Name="LootRareItems" ItemsSource="{Binding RareItems}">
+                            <ItemsControl.ItemTemplate>
+                                <StaticResource ResourceKey="LootRowTemplate"/>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </StackPanel>
+            </ScrollViewer>
+        </DockPanel>
+    </DockPanel>
+
+</v:ChromedWindow>

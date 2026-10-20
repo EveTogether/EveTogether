@@ -231,7 +231,7 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
             key => _ = ShowActivityStatsAsync(key));
         ByActivity = new RunsByActivityViewModel(services.GetService<IActivityStatsSource>(),
             new ActivityStatsLabels(services.GetService<ISdeAccessor>(), _facts), _PassesTypeFilter,
-            services.GetService<ISharedServerPicks>(), _OpenOwnActivityAsync, _time);
+            services.GetService<ISharedServerPicks>(), _OpenOwnActivityAsync, _time, _LootTables(services));
         // A click on a row asks for its earnings: the summary steps aside, and the drawer opens where the pane is not beside the list.
         ByActivity.RowSelected += _ =>
         {
@@ -478,6 +478,23 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
 
     /// <summary>Wide, it swaps the pane between the run and the summary — with no run selected there is nothing to swap
     /// to, and it stays on. Narrow, it opens the drawer on the summary.</summary>
+    private LootTableAccess? _LootTables(IServiceProvider services)
+    {
+        if (services.GetService<ILootTableOpener>() is not { } opener || services.GetService<ILootTableSource>() is not { } source)
+            return null;
+
+        _lootTables = new LootTableAccess(opener, source, _ownCharacterIds, services.GetService<ISdeAccessor>());
+        return _lootTables;
+    }
+
+    private LootTableAccess? _lootTables;
+
+    /// <summary>The LOOT TABLES button on the range line: the window without a site, listing the ones the pilot has flown.</summary>
+    public bool HasLootTables => _lootTables is not null;
+
+    [RelayCommand]
+    private void OpenLootTables() => _lootTables?.Open(null);
+
     [RelayCommand]
     public void ToggleSummary()
     {

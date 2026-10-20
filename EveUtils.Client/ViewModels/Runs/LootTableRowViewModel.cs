@@ -19,6 +19,8 @@ namespace EveUtils.Client.ViewModels.Runs;
 public sealed partial class LootTableRowViewModel : ViewModelBase
 {
     private const double BarScale = 2.2;
+    private const double RateColumnWidth = 110;
+    private const double ShareColumnWidth = 120;
 
     public LootTableRowViewModel(LootTableItemDto item, string name, LootTableConfidence tableConfidence, int tableRuns,
         DateTime nowUtc)
@@ -89,6 +91,10 @@ public sealed partial class LootTableRowViewModel : ViewModelBase
     public double RateBar { get; }
 
     public string RateTooltip { get; } = string.Empty;
+
+    public double RateBarWidth => RateBar * RateColumnWidth;
+
+    public double ShareBarWidth => ShareBar * ShareColumnWidth;
 
     public string QuantityText { get; } = string.Empty;
 

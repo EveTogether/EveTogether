@@ -7,8 +7,7 @@
              x:DataType="vr:ActivityStatsRowViewModel">
 
     <!-- One activity as the BY ACTIVITY list draws it (ET-517): its type and name with family, type and when it was last
-         flown under it, then YOURS, TYPICAL with the runs and pilots behind it, the range, ISK/h and — held back until the
-         loot table exists (ET-519) — LOOT. The column widths are the header's in RunsWindow.axaml; the two move together.
+         flown under it, then YOURS, TYPICAL with the runs and pilots behind it, the range, ISK/h and LOOT (ET-519). The column widths are the header's in RunsWindow.axaml; the two move together.
          Fixed-width cells inside Auto columns, so YOURS leaves no gap on a server tab, which has none.
 
          The ink is the text colour at rest as well as hover and selection: the dim one measured 3.3–4.4:1 on a selected row. -->
@@ -44,9 +43,10 @@
                 </Panel>
                 <TextBlock x:Name="StatsRowPerHour" Grid.Column="5" Width="78" Margin="10,0,0,0" Classes="rowfigure"
                            VerticalAlignment="Center" Text="{Binding PerHourText}"/>
-                <!-- LOOT (ET-519): the mockup's column, not on screen until the loot table exists. -->
-                <Button x:Name="StatsRowLoot" Grid.Column="6" Margin="10,0,0,0" Classes="pick" IsEnabled="False"
-                        IsVisible="{Binding IsLootShown}" Content="LOOT ›"/>
+                <!-- LOOT (ET-519): a fixed 64 px column, the header's width, only where a loot table is registered. -->
+                <Button x:Name="StatsRowLoot" Grid.Column="6" Width="64" Margin="10,0,0,0" Classes="pick"
+                        IsVisible="{Binding IsLootShown}" Command="{Binding OpenLootCommand}" Content="LOOT ›"
+                        ToolTip.Tip="What can drop in this activity"/>
             </Grid>
         </Button>
     </Border>

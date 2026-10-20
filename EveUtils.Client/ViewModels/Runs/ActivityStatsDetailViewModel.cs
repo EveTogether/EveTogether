@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -44,17 +45,20 @@ public sealed partial class ActivityRunLineViewModel(string iskText, string whoT
 /// row's: a server's when there is one, else the pilot's own runs, and the source chip says which and switches between
 /// servers when several answered.
 ///
-/// <para>TOP DROPS is held back until the loot table exists (ET-519); that ticket gives it content and flips
-/// <see cref="IsTopDropsShown"/>.</para>
+/// <para>TOP DROPS (ET-519) is the three biggest regular drops of the activity with a line for the rare ones, read out of
+/// the loot table on its own, so the figures above never wait for it.</para>
 /// </summary>
 public sealed partial class ActivityStatsDetailViewModel(ISharedServerPicks? picks = null, Func<string, DateTime, Task>? openRun = null,
-    TimeProvider? time = null) : ViewModelBase
+    TimeProvider? time = null, LootTableAccess? loot = null) : ViewModelBase
 {
+    private const int TopDropsShown = 3;
+
     private const int DistributionBins = 16;
     private const int MaximumOwnDots = 100;
 
     private readonly TimeProvider _time = time ?? TimeProvider.System;
     private ActivityStatsRowViewModel? _row;
+    private CancellationTokenSource? _readingDrops;
 
     [ObservableProperty] private bool _hasRow;
     [ObservableProperty] private string _kindText = string.Empty;
@@ -100,11 +104,22 @@ public sealed partial class ActivityStatsDetailViewModel(ISharedServerPicks? pic
 
     public bool ShowsChoiceSourceChip => HasRow && HasServerChoice;
 
-    /// <summary>TOP DROPS area of the mockup. Nothing to show until the loot table exists (ET-519), so it is not on screen.</summary>
-    public bool IsTopDropsShown => false;
+    /// <summary>TOP DROPS: the three biggest regular drops and a line for the rare ones, with the button to the whole table.</summary>
+    public bool IsTopDropsShown => loot is not null && HasRow;
 
-    /// <summary>The LOOT TABLE button of the mockup, held back with TOP DROPS.</summary>
-    public bool IsLootTableShown => false;
+    public bool IsLootTableShown => IsTopDropsShown;
+
+    [ObservableProperty] private string _topDropsNote = string.Empty;
+    [ObservableProperty] private string _topDropsRareText = string.Empty;
+
+    public bool HasTopDropsNote => TopDropsNote.Length > 0;
+
+    public bool HasTopDropsRare => TopDropsRareText.Length > 0;
+
+    public ObservableCollection<LootTableRowViewModel> TopDrops { get; } = [];
+
+    [RelayCommand]
+    private void OpenLootTable() => loot?.Open(Key);
 
     public ActivityStatsKey? Key => _row?.Key;
 
@@ -121,6 +136,7 @@ public sealed partial class ActivityStatsDetailViewModel(ISharedServerPicks? pic
     {
         _row = row;
         OnPropertyChanged(nameof(Key));
+        _StartReadingTopDrops(row);
         if (row is null)
         {
             HasRow = false;
@@ -153,6 +169,76 @@ public sealed partial class ActivityStatsDetailViewModel(ISharedServerPicks? pic
 
         _RenderFigures(basis, typical, row);
     }
+
+    private void _StartReadingTopDrops(ActivityStatsRowViewModel? row)
+    {
+        _readingDrops?.Cancel();
+        _readingDrops?.Dispose();
+        _readingDrops = null;
+        TopDrops.Clear();
+        TopDropsNote = string.Empty;
+        TopDropsRareText = string.Empty;
+        if (loot is null || row is null)
+            return;
+
+        var reading = _readingDrops = new CancellationTokenSource();
+        _ = _ReadTopDropsAsync(row, loot, reading.Token);
+    }
+
+    private async Task _ReadTopDropsAsync(ActivityStatsRowViewModel row, LootTableAccess access, CancellationToken cancellationToken)
+    {
+        try
+        {
+            EarningsBasis basis = row.Basis?.Basis is EarningsBasis.AllPilots ? EarningsBasis.AllPilots : EarningsBasis.YourRuns;
+            var request = new LootTableRequest(row.Key, basis, LootTableWindow.Days90, access.CharacterIds);
+            LootTableReading read = await Task.Run(() => access.Source.ReadAsync(request, cancellationToken), cancellationToken);
+            if (cancellationToken.IsCancellationRequested)
+                return;
+
+            LootTableDto table = read.Table;
+            if (table.Confidence is LootTableConfidence.None)
+            {
+                TopDropsNote = "Not enough runs for a drop table yet.";
+                return;
+            }
+
+            DateTime nowUtc = _time.GetUtcNow().UtcDateTime;
+            foreach (LootTableItemDto item in table.Items.Where(item => !item.IsRare).Take(TopDropsShown))
+            {
+                string name = access.Sde is { } sde && sde.TryGetTypeName(item.TypeId, out string known)
+                    ? known
+                    : $"Type {item.TypeId.ToString(CultureInfo.InvariantCulture)}";
+                TopDrops.Add(new LootTableRowViewModel(item, name, table.Confidence, table.RunCount, nowUtc));
+            }
+
+            TopDropsRareText = table.RareKindCount == 0
+                ? string.Empty
+                : $"+ {table.RareKindCount.ToString(CultureInfo.InvariantCulture)} rare {(table.RareKindCount == 1 ? "kind" : "kinds")}"
+                  + (table.Confidence is LootTableConfidence.Rated
+                      ? $" · in {LootTableRowViewModel.Percentage(table.RareRunShare)} of runs"
+                      : $" · seen in {table.RareRunCount.ToString(CultureInfo.InvariantCulture)} of {table.RunCount.ToString(CultureInfo.InvariantCulture)} runs");
+            if (TopDrops.Count == 0 && TopDropsRareText.Length == 0)
+                TopDropsNote = "Nothing has dropped in the counted runs yet.";
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception)
+        {
+            if (!cancellationToken.IsCancellationRequested)
+                TopDropsNote = "Top drops could not be read.";
+        }
+    }
+
+    partial void OnHasRowChanged(bool value)
+    {
+        OnPropertyChanged(nameof(IsTopDropsShown));
+        OnPropertyChanged(nameof(IsLootTableShown));
+    }
+
+    partial void OnTopDropsNoteChanged(string value) => OnPropertyChanged(nameof(HasTopDropsNote));
+
+    partial void OnTopDropsRareTextChanged(string value) => OnPropertyChanged(nameof(HasTopDropsRare));
 
     private void _RenderFigures(ExpectedEarnings basis, decimal typical, ActivityStatsRowViewModel row)
     {

@@ -16,6 +16,7 @@ using EveUtils.Client.ViewModels.Skills;
 using EveUtils.Client.ViewModels.Skills.Plans;
 using EveUtils.Client.ViewModels.Skills.WhatIf;
 using EveUtils.Shared.Modules.Esi;
+using EveUtils.Shared.Modules.Runs.Earnings;
 using EveUtils.Shared.Modules.Fittings.Dtos;
 using EveUtils.Client.ViewModels.Coupling;
 using EveUtils.Client.ViewModels.Setup;
@@ -358,6 +359,17 @@ public sealed class RecordingDialogService : IDialogService
         LastAppraisal = viewModel;
         LastAppraisalBlueprintTypeId = blueprintTypeId;
     }
+
+    public void ShowLootTable(LootTableViewModel viewModel, ActivityStatsKey? key, IReadOnlyList<int> characterIds)
+    {
+        LastLootTable = viewModel;
+        LastLootTableKey = key;
+    }
+
+    /// <summary>The loot table the last <see cref="ShowLootTable"/> was asked to open, and the key it was opened on.</summary>
+    public LootTableViewModel? LastLootTable { get; private set; }
+
+    public ActivityStatsKey? LastLootTableKey { get; private set; }
 
     /// <summary>The blueprint the last <see cref="ShowAppraisal"/> was asked to show, if any.</summary>
     public int? LastAppraisalBlueprintTypeId { get; private set; }

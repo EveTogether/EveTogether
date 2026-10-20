@@ -22,6 +22,7 @@ using EveUtils.Client.ViewModels.Skills.WhatIf;
 using EveUtils.Client.Views;
 using EveUtils.Client.Views.Skills;
 using EveUtils.Shared.Modules.Esi;
+using EveUtils.Shared.Modules.Runs.Earnings;
 using EveUtils.Shared.Modules.Fittings.Dtos;
 using EveUtils.Shared.Modules.Fleet.Entities;
 using EveUtils.Shared.Modules.Runs.Enums;
@@ -570,6 +571,13 @@ public sealed class DialogService : IDialogService, ISingletonService
         object? shown = Route(new AppraisalWindow(viewModel), "APPRAISAL", "tools", "appraisal", MaterialIconKind.CurrencyUsd);
         if (blueprintTypeId is { } typeId && (shown ?? viewModel) is AppraisalViewModel standing)
             _Observe(standing.ShowBlueprintAsync(typeId), "the appraisal tool could not value that blueprint");
+    }
+
+    public void ShowLootTable(LootTableViewModel viewModel, ActivityStatsKey? key, IReadOnlyList<int> characterIds)
+    {
+        LootTableViewModel standing = Route(new ActivityLootWindow(viewModel), "LOOT TABLE", "runs", "loot-table",
+            MaterialIconKind.TableLarge) as LootTableViewModel ?? viewModel;
+        _Observe(standing.ShowAsync(key, characterIds), "the loot table could not be read");
     }
 
     public void ShowActivityDetail(ActivityDetailViewModel viewModel, Guid activitySummaryId)

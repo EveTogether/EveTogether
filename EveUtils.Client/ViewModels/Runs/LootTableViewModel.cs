@@ -313,8 +313,11 @@ public sealed partial class LootTableViewModel(ILootTableSource source, Activity
         _RenderFooter(table);
 
         Items.Clear();
-        foreach (LootTableRowViewModel row in _Sorted(rows.Where(row => !row.IsRare)))
-            Items.Add(row);
+        if (HasTable)
+        {
+            foreach (LootTableRowViewModel row in _Sorted(rows.Where(row => !row.IsRare)))
+                Items.Add(row);
+        }
 
         _rareRows = [.. _Sorted(rows.Where(row => row.IsRare))];
         HasRare = HasTable && _rareRows.Count > 0;
