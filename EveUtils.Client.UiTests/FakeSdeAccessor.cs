@@ -141,6 +141,8 @@ public sealed class FakeSdeAccessor : ISdeAccessor
         return _types.TryGetValue(typeId, out var e) ? new SdeType(e.TypeId, e.GroupId, e.Name, true, 0, e.Volume, 0, null) : null;
     }
 
+    public int? GetMetaGroupId(int typeId) => _types.TryGetValue(typeId, out var e) ? e.MetaGroupId : null;
+
     public bool IsMutatedType(int typeId) => _types.TryGetValue(typeId, out var e) && e.IsMutated;
 
     // No mutaplasmid fixtures here — nothing under test today reads them through this fake.

@@ -252,6 +252,17 @@ public sealed class SqliteSdeAccessor : ISdeAccessor
             reader.IsDBNull(8) ? null : reader.GetString(8));
     }
 
+    public int? GetMetaGroupId(int typeId)
+    {
+        using var connection = Open();
+        if (connection is null)
+            return null;
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT metaGroupId FROM Type WHERE typeId = $id;";
+        command.Parameters.AddWithValue("$id", typeId);
+        return command.ExecuteScalar() is long metaGroupId ? (int)metaGroupId : null;
+    }
+
     public bool IsMutatedType(int typeId)
     {
         using var connection = Open();
