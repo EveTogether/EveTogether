@@ -11,4 +11,8 @@ public sealed class EarningsRunDto
     /// <summary>The reference (group code, else run id) of one of the pilot's own activities, so it can be opened; null
     /// for a run another pilot shared.</summary>
     public string? ActivityRef { get; init; }
+
+    /// <summary>The character that flew the pilot's own run, so the detail can say which one it was (ET-521); null for a
+    /// run another pilot shared.</summary>
+    public long? OwnCharacterId { get; init; }
 }

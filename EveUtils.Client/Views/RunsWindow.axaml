@@ -898,13 +898,20 @@
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
                 <TextBox x:Name="ModuleSearchBox" Grid.Column="0" MinHeight="28" FontSize="12"
-                         PlaceholderText="Search site, faction or type…" Text="{Binding Search.Text, Mode=TwoWay}"
+                         PlaceholderText="Search site, faction or type…  e.g. Sleeper, Crimson" Text="{Binding Search.Text, Mode=TwoWay}"
                          ToolTip.Tip="Finds activities by site name, faction, family or type. Ctrl+F to focus, Esc to clear.">
                     <TextBox.InnerRightContent>
-                        <Button x:Name="SearchClear" Classes="searchclear" Focusable="False" IsVisible="{Binding Search.HasText}"
-                                Command="{Binding Search.ClearCommand}" ToolTip.Tip="Clear the search (Esc)">
-                            <mi:MaterialIcon Kind="CloseThick" Width="12" Height="12"/>
-                        </Button>
+                        <Panel>
+                            <!-- The shortcut is in view while the box is empty, where it can be found without hovering (ET-521). -->
+                            <Border x:Name="SearchShortcut" Classes="chip dim" Margin="0,0,6,0" VerticalAlignment="Center"
+                                    IsVisible="{Binding !Search.HasText}">
+                                <TextBlock Text="Ctrl+F"/>
+                            </Border>
+                            <Button x:Name="SearchClear" Classes="searchclear" Focusable="False" IsVisible="{Binding Search.HasText}"
+                                    Command="{Binding Search.ClearCommand}" ToolTip.Tip="Clear the search (Esc)">
+                                <mi:MaterialIcon Kind="CloseThick" Width="12" Height="12"/>
+                            </Button>
+                        </Panel>
                     </TextBox.InnerRightContent>
                 </TextBox>
                 <TextBlock x:Name="SearchCount" Grid.Column="1" Classes="filtersummary" IsVisible="{Binding IsByActivity}"

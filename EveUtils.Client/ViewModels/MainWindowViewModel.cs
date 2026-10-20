@@ -477,6 +477,8 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         _gamelog = services.GetRequiredService<GamelogClientService>();
         services.GetRequiredService<MapTrailRecorder>(); // records trails from app start, map open or not
         services.GetRequiredService<IMapLauncher>().MapOpened += _WatchMapStatus;
+        if (services.GetService<EarningsScreens>() is { } earningsScreens)
+            earningsScreens.SettingsOpener = OpenSettings;
         _login = services.GetRequiredService<LocalEsiLoginService>();
         _pairing = services.GetRequiredService<ServerPairingService>();
         _busConnector = services.GetRequiredService<IRemoteBusConnector>();

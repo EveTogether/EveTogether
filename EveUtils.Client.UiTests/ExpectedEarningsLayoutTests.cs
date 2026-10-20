@@ -1,6 +1,8 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
+using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
@@ -157,6 +159,52 @@ public sealed class ExpectedEarningsLayoutTests
         Assert.False(list.IsVisible);
     }
 
+    /// <summary>ET-521: the foot holds "updated … ago" and DETAILS inside the panel's padding, under the figures; DETAILS and a click
+    /// on the panel's text both open the figures of the activity, while a click on a button in it does only its own thing. The
+    /// pilot who shares nothing gets the link to Settings, in a readable ink. Counter-proof: open from the whole panel including its
+    /// buttons and the sharing link opens the figures too.</summary>
+    [AvaloniaFact]
+    public async Task TheFoot_HoldsTheAgeAndDetails_AndThePanelOpensTheFigures()
+    {
+        var screens = new RecordingEarningsScreens();
+        using var harness = await ActivityWindowHarness.CreateAsync(configure: services =>
+        {
+            services.AddSingleton<IExpectedEarningsSource>(new AnsweringSource(Figures(runs: 25), new SharedEarningsAttempt(null, OwnRunsReason.NotSharing)));
+            services.AddSingleton<IEarningsScreens>(screens);
+        });
+        ActivityWindowViewModel model = await harness.OpenAsync();
+        await model.ApplySignatureAsync("AAA-001", "Combat Site", "Angel Sanctum", [new SdeSite(2311, "Angel Sanctum", 1, null, null, null, null, null, false, [])]);
+        ActivityWindow window = Open(model);
+
+        Border panel = Find<Border>(window, "ExpectedEarningsPanel");
+        TextBlock basis = Find<TextBlock>(window, "BasisLine");
+        Button details = Find<Button>(window, "DetailsButton");
+        Button sharing = Find<Button>(window, "TurnOnSharingLink");
+        Assert.True(details.IsVisible);
+        Assert.True(sharing.IsVisible);
+        Assert.Equal("updated just now", model.ExpectedEarnings!.UpdatedText);
+        Assert.Contains(basis.Inlines!.OfType<Avalonia.Controls.Documents.Run>(), run => run.Text == "updated just now");
+        Assert.True(Left(basis, window) >= Left(panel, window) + 13.5);
+        Assert.True(Left(details, window) + details.Bounds.Width <= Left(panel, window) + panel.Bounds.Width - 13.5);
+        Assert.True(Left(basis, window) + basis.Bounds.Width <= Left(details, window) + 0.5);
+        Assert.True(Top(basis, window) + basis.Bounds.Height <= Top(panel, window) + panel.Bounds.Height);
+        Assert.NotEqual(DimInk, Assert.IsAssignableFrom<ISolidColorBrush>(sharing.Foreground).Color);
+
+        Point onText = Find<TextBlock>(window, "TypicalFigure").TranslatePoint(new Point(4, 4), window)!.Value;
+        window.MouseDown(onText, MouseButton.Left);
+        window.MouseUp(onText, MouseButton.Left);
+        Assert.Single(screens.Opened);
+
+        Point onSharing = sharing.TranslatePoint(new Point(sharing.Bounds.Width / 2, sharing.Bounds.Height / 2), window)!.Value;
+        window.MouseDown(onSharing, MouseButton.Left);
+        window.MouseUp(onSharing, MouseButton.Left);
+        Assert.Single(screens.Opened);
+        Assert.Equal(1, screens.SharingSettingsOpened);
+
+        details.Command!.Execute(null);
+        Assert.Equal(2, screens.Opened.Count);
+    }
+
     private static ActivityWindow Open(ActivityWindowViewModel model)
     {
         var window = new ActivityWindow(model);
@@ -173,6 +221,9 @@ public sealed class ExpectedEarningsLayoutTests
 
     private static double Top(Visual visual, Visual relativeTo) =>
         visual.TranslatePoint(new Point(0, 0), relativeTo)?.Y ?? throw new InvalidOperationException("Not in the same tree.");
+
+    private static double Left(Visual visual, Visual relativeTo) =>
+        visual.TranslatePoint(new Point(0, 0), relativeTo)?.X ?? throw new InvalidOperationException("Not in the same tree.");
 
     private static ExpectedEarnings Figures(int runs)
     {

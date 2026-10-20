@@ -13,7 +13,7 @@ namespace EveUtils.Shared.Modules.Runs.Queries;
 
 [ClientOnly]
 internal sealed class GetActivityEarningsQueryHandler(IDbContextFactory<ClientDbContext> contextFactory, ISdeAccessor sde,
-    IMarketPriceRepository marketPrices, IBlueprintAppraisalService blueprints)
+    IMarketPriceRepository marketPrices, IBlueprintAppraisalService blueprints, ActivityEarningsBook book)
     : IQueryHandler<GetActivityEarningsQuery, Result<IReadOnlyList<ActivityEarningsDto>>>
 {
     public async Task<Result<IReadOnlyList<ActivityEarningsDto>>> Handle(GetActivityEarningsQuery query,
@@ -25,9 +25,12 @@ internal sealed class GetActivityEarningsQueryHandler(IDbContextFactory<ClientDb
         TimeSpan widest = query.Window
                           ?? (defaults.FallbackWindow is { } fallback && fallback > defaults.Window ? fallback : defaults.Window);
 
+        // A range read covers the widest window too, so the read that follows it for the recent figure is the same read.
+        DateTime widestFromUtc = nowUtc - widest;
+        DateTime sinceUtc = range is { } wanted && wanted.From < widestFromUtc ? wanted.From : widestFromUtc;
+
         await using ClientDbContext db = await contextFactory.CreateDbContextAsync(cancellationToken);
-        IReadOnlyList<ActivityEarningsSample> samples = await LocalEarningsSamples.ReadAsync(db, sde,
-            range?.From ?? nowUtc - widest, nowUtc, cancellationToken);
+        IReadOnlyList<ActivityEarningsSample> samples = await book.ReadAsync(db, sde, sinceUtc, nowUtc, cancellationToken);
         ActivityEarningsSample[] asked = [.. samples
             .Where(sample => query.Key is null || sample.Key == query.Key)
             .Where(sample => range is not { } inRange

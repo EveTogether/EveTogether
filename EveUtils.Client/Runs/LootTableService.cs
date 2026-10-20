@@ -4,12 +4,15 @@ using EveUtils.Client.Transport;
 using EveUtils.Shared.Cqrs;
 using EveUtils.Shared.DependencyInjection;
 using EveUtils.Shared.Messaging;
+using EveUtils.Shared.Modules.Market.Repositories;
+using EveUtils.Shared.Modules.Runs;
 using EveUtils.Shared.Modules.RunOutcomes.Dtos;
 using EveUtils.Shared.Modules.RunOutcomes.Enums;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Earnings;
 using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Runs.Queries;
+using EveUtils.Shared.Modules.Sde;
 using EveUtils.Shared.Transport;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -22,7 +25,7 @@ namespace EveUtils.Client.Runs;
 /// the activity, gets the own runs and is told so, never an error and never a toast.
 /// </summary>
 public sealed class LootTableService(IServiceScopeFactory scopeFactory, IServerRunOutcomeClient client, IRemoteBusConnector connector,
-    RunOutcomeSharingChoices choices, ISharedServerPicks picks) : ILootTableSource, ISingletonService
+    RunOutcomeSharingChoices choices, ISharedServerPicks picks, ISdeAccessor sde) : ILootTableSource, ISingletonService
 {
     public static readonly TimeSpan CacheFor = TimeSpan.FromMinutes(10);
 
@@ -30,33 +33,55 @@ public sealed class LootTableService(IServiceScopeFactory scopeFactory, IServerR
 
     private readonly ConcurrentDictionary<string, ServerRead> _reads = new(StringComparer.Ordinal);
 
+    private IReadOnlyList<ActivityStatsKey>? _catalogue;
+
     public async Task<LootTableReading> ReadAsync(LootTableRequest request, CancellationToken cancellationToken = default)
     {
         await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
         IDispatcher dispatcher = scope.ServiceProvider.GetRequiredService<IDispatcher>();
+        DateTime? pricedAtUtc = (await scope.ServiceProvider.GetRequiredService<IMarketPriceRepository>()
+            .GetSnapshotTimeAsync(cancellationToken))?.UtcDateTime;
         OwnRunsReason reason = OwnRunsReason.None;
         if (request.Basis is EarningsBasis.AllPilots)
         {
             (LootTableReading? shared, reason) = await _ReadSharedAsync(dispatcher, request, cancellationToken);
             if (shared is not null)
-                return shared;
+                return shared with { PricedAtUtc = pricedAtUtc };
         }
 
         Result<LootTableDto> own = await dispatcher.Query(new GetActivityLootTableQuery(request.Key, request.Window), cancellationToken);
         LootTableDto table = own.Value ?? LootTableStatistics.Compute(request.Key, [], _ => LootRarityClass.Common, _ => null,
             LootTablePolicy.Default, request.Window, DateTime.UtcNow, null);
-        return new LootTableReading(table, EarningsBasis.YourRuns, null, reason, DateTime.UtcNow);
+        return new LootTableReading(table, EarningsBasis.YourRuns, null, reason, DateTime.UtcNow, pricedAtUtc);
     }
 
-    public async Task<IReadOnlyList<LootSiteChoice>> ListFlownAsync(CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<LootSiteChoice>> ListSitesAsync(CancellationToken cancellationToken = default)
     {
         await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
         IDispatcher dispatcher = scope.ServiceProvider.GetRequiredService<IDispatcher>();
         IReadOnlyList<ActivityEarningsDto> flown = (await dispatcher.Query(new GetActivityEarningsQuery(), cancellationToken)).Value ?? [];
-        return [.. flown
-            .OrderByDescending(activity => activity.LastFlownUtc)
-            .Select(activity => new LootSiteChoice(activity.Key, activity.SiteName, activity.Figures.RunCount, activity.LastFlownUtc))];
+        IReadOnlyDictionary<ActivityStatsKey, int> lootRuns =
+            (await dispatcher.Query(new GetLootRunCountsQuery(), cancellationToken)).Value ?? new Dictionary<ActivityStatsKey, int>();
+        HashSet<ActivityStatsKey> flownKeys = [.. flown.Select(activity => activity.Key)];
+        return
+        [
+            .. flown
+                .OrderByDescending(activity => activity.LastFlownUtc)
+                .Select(activity => new LootSiteChoice(activity.Key, activity.SiteName, lootRuns.GetValueOrDefault(activity.Key),
+                    activity.LastFlownUtc)),
+            .. _CatalogueKeys().Where(key => !flownKeys.Contains(key)).Select(key => new LootSiteChoice(key, null, 0, null))
+        ];
     }
+
+    // Once per run of the app: the catalogue only changes with an SDE import, and the keys are all the picker needs of it.
+    private IReadOnlyList<ActivityStatsKey> _CatalogueKeys() => _catalogue ??=
+    [
+        .. SdeSiteCanonicalization.Canonicalize(sde.SearchSites())
+            .Select(site => HomefrontCatalogue.IsHomefrontDungeonId(site.DungeonId)
+                ? ActivityStatsKey.Homefront(site.DungeonId)
+                : ActivityStatsKey.Site(SiteTypeSource.Site, site.DungeonId))
+            .Distinct()
+    ];
 
     private async Task<(LootTableReading? Reading, OwnRunsReason Reason)> _ReadSharedAsync(IDispatcher dispatcher,
         LootTableRequest request, CancellationToken cancellationToken)

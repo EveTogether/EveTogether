@@ -49,7 +49,7 @@ public sealed partial class ActivityRunLineViewModel(string iskText, string whoT
 /// the loot table on its own, so the figures above never wait for it.</para>
 /// </summary>
 public sealed partial class ActivityStatsDetailViewModel(ISharedServerPicks? picks = null, Func<string, DateTime, Task>? openRun = null,
-    TimeProvider? time = null, LootTableAccess? loot = null) : ViewModelBase
+    TimeProvider? time = null, LootTableAccess? loot = null, Func<long, string>? characterName = null) : ViewModelBase
 {
     private const int TopDropsShown = 3;
 
@@ -215,7 +215,7 @@ public sealed partial class ActivityStatsDetailViewModel(ISharedServerPicks? pic
                 ? string.Empty
                 : $"+ {table.RareKindCount.ToString(CultureInfo.InvariantCulture)} rare {(table.RareKindCount == 1 ? "kind" : "kinds")}"
                   + (table.Confidence is LootTableConfidence.Rated
-                      ? $" · in {LootTableRowViewModel.Percentage(table.RareRunShare)} of runs"
+                      ? $" — {LootTableRowViewModel.Percentage(table.RareValueShare)} of loot value"
                       : $" · seen in {table.RareRunCount.ToString(CultureInfo.InvariantCulture)} of {table.RunCount.ToString(CultureInfo.InvariantCulture)} runs");
             if (TopDrops.Count == 0 && TopDropsRareText.Length == 0)
                 TopDropsNote = "Nothing has dropped in the counted runs yet.";
@@ -325,8 +325,15 @@ public sealed partial class ActivityStatsDetailViewModel(ISharedServerPicks? pic
     }
 
     private ActivityRunLineViewModel _LineOf(EarningsRunDto run) =>
-        new($"{IskFormat.Compact(run.YieldIsk)} ISK", run.ActivityRef is not null ? "your run ›" : "another pilot",
-            ExpectedEarningsViewModel.RunMeta(run), run.ActivityRef, run.CompletedAtUtc, openRun);
+        new($"{IskFormat.Compact(run.YieldIsk)} ISK", _WhoOf(run), ExpectedEarningsViewModel.RunMeta(run), run.ActivityRef,
+            run.CompletedAtUtc, openRun);
+
+    /// <summary>A run of the pilot's own names the character that flew it; any other pilot's stays anonymous (ET-512 decision 2).</summary>
+    private string _WhoOf(EarningsRunDto run) => run.ActivityRef is null
+        ? "another pilot"
+        : run.OwnCharacterId is { } characterId && characterName?.Invoke(characterId) is { Length: > 0 } name
+            ? $"your run · {name} ›"
+            : "your run ›";
 
     private string _FooterOf(ExpectedEarnings basis, DateTime readAtUtc)
     {

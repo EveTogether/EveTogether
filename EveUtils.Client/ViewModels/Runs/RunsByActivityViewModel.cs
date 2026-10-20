@@ -37,14 +37,15 @@ public sealed partial class RunsByActivityViewModel : ViewModelBase
 
     /// <param name="passesType">The TYPES tiles of the screen: whether an activity of this type is shown.</param>
     public RunsByActivityViewModel(IActivityStatsSource? source, ActivityStatsLabels labels, Func<RunTypeId, bool> passesType,
-        ISharedServerPicks? picks, Func<string, DateTime, Task>? openRun, TimeProvider? time = null, LootTableAccess? loot = null)
+        ISharedServerPicks? picks, Func<string, DateTime, Task>? openRun, TimeProvider? time = null, LootTableAccess? loot = null,
+        Func<long, string>? characterName = null)
     {
         _loot = loot;
         _source = source;
         _labels = labels;
         _passesType = passesType;
         _time = time ?? TimeProvider.System;
-        Detail = new ActivityStatsDetailViewModel(picks, openRun, _time, loot);
+        Detail = new ActivityStatsDetailViewModel(picks, openRun, _time, loot, characterName);
     }
 
     /// <summary>The rows as the list draws them: filtered, then ordered.</summary>

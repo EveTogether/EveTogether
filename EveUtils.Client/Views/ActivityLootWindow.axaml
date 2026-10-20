@@ -57,7 +57,7 @@
          that stays open beside the run window. Ink is the text colour throughout, never the dim one: the dim brush measured
          3.3-4.7:1 on the surfaces this window uses and the rows must read at 4.5:1 in every state, hover and selection
          included. The key words (RATE, VALUE, SHARE) and the figures in a row share one column grid so they line up. -->
-    <DockPanel x:Name="LootRoot" Margin="14">
+    <DockPanel x:Name="LootRoot" Margin="14" KeyDown="OnContentKeyDown">
         <DockPanel.Styles>
             <Style Selector="TextBlock.lk">
                 <Setter Property="Foreground">
@@ -165,19 +165,33 @@
                 </WrapPanel>
             </StackPanel>
             <Button x:Name="LootSwitchSite" Grid.Column="1" Classes="sumbtn" VerticalAlignment="Top" IsVisible="{Binding !IsPicking}"
-                    Command="{Binding SwitchSiteCommand}" Content="ALL SITES"
-                    ToolTip.Tip="Pick another site from the ones you have flown"/>
+                    Command="{Binding SwitchSiteCommand}" Content="SWITCH SITE"
+                    ToolTip.Tip="Pick another site"/>
         </Grid>
 
-        <!-- ══ Picking ══ the window opened without a site: the activities the pilot has flown, searched like the runs overview. -->
+        <!-- ══ Picking ══ the window opened without a site: every site there is, the ones the pilot has flown first, searched
+             like the runs overview. -->
         <DockPanel x:Name="LootPicking" IsVisible="{Binding IsPicking}">
+            <TextBlock DockPanel.Dock="Top" Classes="ltext" Margin="0,0,0,6" Text="Pick a site. Sites you have flown come first."/>
             <TextBox x:Name="LootSearch" DockPanel.Dock="Top" MinHeight="28" FontSize="12" Margin="0,0,0,8"
-                     PlaceholderText="Search site, faction or type…" Text="{Binding SearchText, Mode=TwoWay}"/>
+                     PlaceholderText="Search site, faction or type…  e.g. Sleeper, Crimson" Text="{Binding SearchText, Mode=TwoWay}"/>
             <TextBlock x:Name="LootNoChoices" DockPanel.Dock="Top" Classes="ltext" IsVisible="{Binding HasNoChoices}"
                        Text="{Binding NoChoicesText}"/>
-            <ScrollViewer HorizontalScrollBarVisibility="Disabled">
-                <ItemsControl x:Name="LootChoices" ItemsSource="{Binding Choices}">
-                    <ItemsControl.ItemTemplate>
+            <!-- A thousand sites: only the rows on screen are built. The scroll viewer is in the template, where the panel looks for it. -->
+            <ItemsControl x:Name="LootChoices" ItemsSource="{Binding Choices}">
+                <ItemsControl.Template>
+                    <ControlTemplate>
+                        <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+                            <ItemsPresenter ItemsPanel="{TemplateBinding ItemsPanel}"/>
+                        </ScrollViewer>
+                    </ControlTemplate>
+                </ItemsControl.Template>
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <VirtualizingStackPanel/>
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
                         <DataTemplate DataType="vr:LootSiteChoiceViewModel">
                             <Border Classes="lrowline">
                                 <Button Classes="lrow" Height="44" Command="{Binding PickCommand}">
@@ -191,9 +205,8 @@
                                 </Button>
                             </Border>
                         </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
-            </ScrollViewer>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
         </DockPanel>
 
         <TextBlock x:Name="LootLoading" DockPanel.Dock="Top" Classes="ltext" IsVisible="{Binding IsLoading}" Text="Loading…"/>
@@ -284,10 +297,14 @@
                                 IsVisible="{Binding HasFewRunsText}">
                             <TextBlock TextWrapping="Wrap" Text="{Binding FewRunsText}"/>
                         </Border>
-                        <Border x:Name="LootChanged" Classes="chip warn" HorizontalAlignment="Stretch" Margin="0,0,0,8"
-                                IsVisible="{Binding HasChangedText}">
-                            <TextBlock TextWrapping="Wrap" Text="{Binding ChangedText}"/>
-                        </Border>
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8" Margin="0,0,0,8" IsVisible="{Binding HasChangedText}">
+                            <Border x:Name="LootChanged" Grid.Column="0" Classes="chip warn" HorizontalAlignment="Stretch">
+                                <TextBlock TextWrapping="Wrap" Text="{Binding ChangedText}"/>
+                            </Border>
+                            <Button x:Name="LootShowSinceUpdateOnly" Grid.Column="1" Classes="sumbtn" VerticalAlignment="Center"
+                                    IsVisible="{Binding OffersSinceUpdateOnly}" Command="{Binding ShowSinceUpdateCommand}"
+                                    Content="SHOW SINCE UPDATE ONLY" ToolTip.Tip="Only the runs since the last game update"/>
+                        </Grid>
 
                         <!-- Expected beside typical, so the table does not seem to contradict the earnings panel. -->
                         <Border Classes="lsec" IsVisible="{Binding HasSummaryFigures}">

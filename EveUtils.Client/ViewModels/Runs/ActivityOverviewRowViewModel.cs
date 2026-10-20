@@ -421,6 +421,38 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase, IRunsA
 
     [ObservableProperty] private bool _isExpanded;
 
+    /// <summary>What the activity typically earns, "38M", beside "vs typical" on the row (ET-521); empty until the figures
+    /// are in, and for an activity that has none.</summary>
+    [ObservableProperty] [NotifyPropertyChangedFor(nameof(HasVsTypical))] private string _vsTypicalText = string.Empty;
+
+    /// <summary>"top 25 %" or "bottom 25 %": the end of the activity's runs this one is in; empty between them.</summary>
+    [ObservableProperty] [NotifyPropertyChangedFor(nameof(HasStanding))] private string _standingText = string.Empty;
+
+    [ObservableProperty] private bool _isTopQuarter;
+
+    [ObservableProperty] private bool _isBottomQuarter;
+
+    public bool HasVsTypical => VsTypicalText.Length > 0;
+
+    public bool HasStanding => StandingText.Length > 0;
+
+    /// <summary>The reference the activity goes by, <c>GroupCode ?? RunId</c>; null for a row with neither.</summary>
+    public string? ActivityRef => GroupCode ?? RunId?.ToString();
+
+    /// <summary>Sets the row against its activity's typical run, or clears it.</summary>
+    public void ShowVsTypical(RunVsTypical? against)
+    {
+        VsTypicalText = against is null ? string.Empty : IskFormat.Compact(against.Typical);
+        StandingText = against?.Band switch
+        {
+            RunBand.Top => "top 25 %",
+            RunBand.Bottom => "bottom 25 %",
+            _ => string.Empty
+        };
+        IsTopQuarter = against?.Band is RunBand.Top;
+        IsBottomQuarter = against?.Band is RunBand.Bottom;
+    }
+
     /// <summary>Why the sub-runs are not there, when they are not — a failed read is a state, not silence.</summary>
     [ObservableProperty] private string? _subRunsStatus;
 

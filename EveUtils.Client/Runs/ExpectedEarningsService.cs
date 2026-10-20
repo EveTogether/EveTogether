@@ -34,7 +34,7 @@ public sealed class ExpectedEarningsService(IServiceScopeFactory scopeFactory, I
         IReadOnlyList<ActivityEarningsDto> own = (await dispatcher.Query(new GetActivityEarningsQuery(key), cancellationToken)).Value ?? [];
         EarningsFiguresDto figures = own.FirstOrDefault(activity => activity.Key == key)?.Figures
                                      ?? EarningsStatistics.Compute([], _ => null, EarningsPolicy.For(key.Kind), DateTime.UtcNow);
-        return new ExpectedEarnings(EarningsBasis.YourRuns, figures, figures.PilotCount);
+        return new ExpectedEarnings(EarningsBasis.YourRuns, figures, figures.PilotCount, ReadAtUtc: DateTime.UtcNow);
     }
 
     public async Task<SharedEarningsAttempt> LoadSharedAsync(ActivityStatsKey key, int characterId,
@@ -107,7 +107,7 @@ public sealed class ExpectedEarningsService(IServiceScopeFactory scopeFactory, I
             return (null, taken.Pilots < RunOutcomesModule.MinimumPilots ? OwnRunsReason.TooFewPilots : OwnRunsReason.TooFewSharedRuns);
 
         return (new ExpectedEarnings(EarningsBasis.AllPilots, taken.Figures, taken.Pilots,
-            await registry.DisplayNameAsync(server, cancellationToken), server), OwnRunsReason.None);
+            await registry.DisplayNameAsync(server, cancellationToken), server, DateTime.UtcNow), OwnRunsReason.None);
     }
 
     /// <summary>The server's figures over one window with the pilots behind them, or null when the server could not

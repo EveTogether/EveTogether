@@ -1,3 +1,4 @@
+using System.Globalization;
 using EveUtils.Shared.Modules.Runs.Dtos;
 using EveUtils.Shared.Modules.Runs.Enums;
 
@@ -154,6 +155,10 @@ public static class EarningsStatistics
         YieldIsk = entry.Yield,
         DurationSeconds = entry.Sample.DurationSeconds,
         FleetSize = entry.Sample.FleetSize,
-        ActivityRef = entry.Sample.ActivityRef
+        ActivityRef = entry.Sample.ActivityRef,
+        // An own sample's bucket is its character; a server's is a bucket that names nobody and has no reference.
+        OwnCharacterId = entry.Sample.ActivityRef is not null && long.TryParse(entry.Sample.PilotBucket, CultureInfo.InvariantCulture, out long characterId)
+            ? characterId
+            : null
     };
 }

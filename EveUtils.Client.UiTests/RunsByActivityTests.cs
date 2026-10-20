@@ -260,6 +260,19 @@ public sealed class RunsByActivityTests
         Assert.Matches(@"\d+m · \d+ \w+", own.MetaText);
     }
 
+    /// <summary>ET-521, the mockup's "your run · Jith Ranor ›": an own run names the character that flew it, another pilot's still
+    /// names nobody. Counter-proof: resolve a name for every line and the other pilot's line is named too.</summary>
+    [Fact]
+    public void AnOwnRun_NamesItsCharacter_AndAnotherPilotsStaysAnonymous()
+    {
+        var detail = new ActivityStatsDetailViewModel(openRun: (_, _) => Task.CompletedTask, characterName: id => id == 90000001 ? "Jith Ranor" : "someone");
+        detail.Show(_Row(_Stats(Sanctum, runs: 25, shared: true, ownBest: true)));
+
+        Assert.Equal("your run · Jith Ranor ›", detail.BestRuns[0].WhoText);
+        Assert.Equal("another pilot", detail.BestRuns[2].WhoText);
+        Assert.True(detail.BestRuns[0].IsOwn);
+    }
+
     /// <summary>The long-run average and the jackpot share come from 30 runs; below that the drawer says so instead.</summary>
     [Fact]
     public void TheLongRunAverage_AppearsFromThirtyRuns()
@@ -361,7 +374,7 @@ public sealed class RunsByActivityTests
     {
         EarningsSample[] samples = [.. Enumerable.Range(1, runs).Select(index => new EarningsSample
         {
-            PilotBucket = $"pilot-{index % 4}",
+            PilotBucket = refOf?.Invoke(index) is not null ? "90000001" : $"pilot-{index % 4}",
             CompletedAtUtc = Now.AddDays(-1 - index),
             DurationSeconds = minutes * 60,
             FixedIsk = baseIsk * (0.2m + index % 9 / 4m),

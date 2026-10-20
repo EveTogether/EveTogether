@@ -3,6 +3,7 @@ using System.ComponentModel;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.VisualTree;
 using EveUtils.Client.Input;
 using EveUtils.Client.ViewModels.Activity;
 using Microsoft.Extensions.DependencyInjection;
@@ -181,6 +182,18 @@ public partial class ActivityWindow : OverlayWindow
     }
 
     private void OnHeaderPressed(object? sender, PointerPressedEventArgs e) => BeginHeaderDrag(e);
+
+    // The panel as a whole opens the figures; a button inside it (the server list, the loot table, the sharing link)
+    // has already done its own thing with the same click.
+    private void OnExpectedEarningsBodyReleased(object? sender, PointerReleasedEventArgs e)
+    {
+        if (e.InitialPressMouseButton is not MouseButton.Left || e.Source is not Visual source
+            || source.FindAncestorOfType<Button>(includeSelf: true) is not null)
+            return;
+
+        if (_viewModel?.ExpectedEarnings is { } panel)
+            panel.OpenDetailsCommand.Execute(null);
+    }
 
     /// <summary>The compact views' own header and line are drag handles like the full view's header.</summary>
     internal void BeginDrag(PointerPressedEventArgs e) => BeginHeaderDrag(e);
