@@ -28,9 +28,13 @@ public sealed record RunsActivityFacts(
     int CrewCount = 1,
     IReadOnlyDictionary<long, IskBreakdown>? IskByOwnCharacter = null,
     string? AbyssalFilamentText = null,
-    bool HasShipLoss = false) : IRunsActivityFigures
+    bool HasShipLoss = false,
+    ActivitySearchProfile? SearchProfile = null) : IRunsActivityFigures
 {
     public DateOnly Day => DateOnly.FromDateTime(StartedAtLocal);
+
+    /// <summary>What the runs search (ET-518) matches on; the empty profile matches only an empty search.</summary>
+    public ActivitySearchProfile Search => SearchProfile ?? ActivitySearchProfile.Empty;
 
     /// <summary>One own character's share: the stored split (ET-296), or with none stored the whole own share when
     /// exactly one own character flew it (ET-294).</summary>
@@ -60,6 +64,7 @@ public sealed record RunsActivityFacts(
             Math.Max(row.Crew.Count, row.ParticipantCount),
             row.OwnIskByCharacter,
             row.AbyssalFilamentText,
-            row.HasShipLoss);
+            row.HasShipLoss,
+            facts.SearchProfileOf(row, type));
     }
 }

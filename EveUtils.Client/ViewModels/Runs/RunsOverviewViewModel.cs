@@ -152,6 +152,10 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
 
     public RunFilterBlockViewModel CharacterFilter { get; }
 
+    /// <summary>The search over site, faction, family and type (ET-518), shared by RUNS and BY ACTIVITY. It stacks with
+    /// TYPES and CHARACTERS; the CHARACTERS tiles still do not reach BY ACTIVITY (ET-517).</summary>
+    public RunsSearchViewModel Search { get; }
+
     /// <summary>The month in view, or a day or week picked in the strip. Picking never filters the list: the list is
     /// always the month, and the pick is what the range line totals and the strip outlines.</summary>
     [ObservableProperty]
@@ -202,6 +206,7 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
         _fleetFilter = fleetFilter;
         Tabs = [new RunsTabViewModel("Local", null, _PublishDayAsync)];
         _facts = new RunRowFacts(services.GetService<ISdeAccessor>());
+        Search = new RunsSearchViewModel(_AfterSearchChanged, _SearchPool);
         _publisher = new RunPublisher(dispatcher, dialogs, services);
         _faces = new CharacterFaceCache(services.GetService<ICharacterPortraitProvider>());
         _namesById = characters
@@ -1614,10 +1619,33 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
     }
 
     private bool _PassesFilters(ActivityOverviewRowViewModel row) =>
-        _PassesTypeFilter(row.TypeId) && _PassesCharacterFilter(row.CrewCharacterIds);
+        _PassesTypeFilter(row.TypeId) && _PassesCharacterFilter(row.CrewCharacterIds) && Search.Matches(row.Search);
 
     private bool _PassesFilters(RunsActivityFacts facts) =>
-        _PassesTypeFilter(facts.TypeId) && _PassesCharacterFilter(facts.CrewCharacterIds);
+        _PassesTypeFilter(facts.TypeId) && _PassesCharacterFilter(facts.CrewCharacterIds) && Search.Matches(facts.Search);
+
+    /// <summary>What the suggestions under the search are counted over: the list in view.</summary>
+    private SearchPool _SearchPool() => IsByActivity
+        ? new SearchPool(ByActivity.Profiles, "activity", "activities")
+        : new SearchPool([.. (SelectedTab is null ? [] : _FactsOf(SelectedTab)).Select(facts => facts.Search)], "run", "runs");
+
+    private void _AfterSearchChanged()
+    {
+        ByActivity.SearchFilter = Search.HasTerm ? row => Search.Matches(row.Label.Search) : null;
+        _AfterFilterChanged();
+    }
+
+    /// <summary>True while filters, not an empty month, are why the list shows nothing — the moment "clear filters" helps.</summary>
+    public bool ShowsClearFilters => SelectedTab is { Days.Count: 0 } tab && _RowsOf(tab).Any();
+
+    [RelayCommand]
+    private void ClearFilters()
+    {
+        _excludedTypes.Clear();
+        _excludedCharacters.Clear();
+        Search.Clear();
+        _AfterFilterChanged();
+    }
 
     /// <summary>Local holds every activity the local read built; a server tab what its own read brought (ET-311) — a
     /// group mate's run included, as that server's own rule hands it to anyone holding a run in the group.</summary>
@@ -1639,8 +1667,10 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
             tab.Show([.. tabRows.Where(_PassesFilters)], _canPublish, IsPublishingMany);
             tab.StatusMessage = tab.Days.Count > 0
                 ? null
-                : tabRows.Length > 0 ? "No activity matches the current filters." : _EmptyMessageFor(tab);
+                : tabRows.Length > 0 ? _NoMatchMessage() : _EmptyMessageFor(tab);
         }
+
+        OnPropertyChanged(nameof(ShowsClearFilters));
 
         // PUBLISH n LOCAL on the range line (RO-6): the selected tab's own local count, re-read every time a day's
         // could have changed — a filter toggle, a live refresh, or IsPublishingMany flipping.
@@ -1648,6 +1678,10 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
         OnPropertyChanged(nameof(ShowPublishView));
         OnPropertyChanged(nameof(PublishViewButtonText));
     }
+
+    private string _NoMatchMessage() => Search.HasTerm
+        ? $"No runs match '{Search.TermText}' with the current filters."
+        : "No activity matches the current filters.";
 
     /// <summary>A tile toggled, soloed, or SHOW ALL: the tabs, the selection, the range line, the strip and the tiles
     /// themselves all follow, without reading anything again.</summary>
@@ -1710,7 +1744,7 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
     /// never against its own — turning a type off must not also erase every other type's own count.</summary>
     private void _ShowTypeTiles(IReadOnlyList<ActivityOverviewRowViewModel> tabRows)
     {
-        ActivityOverviewRowViewModel[] scoped = [.. tabRows.Where(row => _PassesCharacterFilter(row.CrewCharacterIds))];
+        ActivityOverviewRowViewModel[] scoped = [.. tabRows.Where(row => _PassesCharacterFilter(row.CrewCharacterIds) && Search.Matches(row.Search))];
         Dictionary<RunTypeId, int> counts = scoped.GroupBy(row => row.TypeId).ToDictionary(group => group.Key, group => group.Count());
         List<RunTypeId> order = [.. RunTypeCatalogue.All.Select(definition => definition.Id).Distinct()
             .Where(typeId => tabRows.Any(row => row.TypeId == typeId))];
@@ -1736,7 +1770,7 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
     /// same reason <see cref="_ShowTypeTiles"/> counts against CHARACTERS.</summary>
     private void _ShowCharacterTiles(IReadOnlyList<ActivityOverviewRowViewModel> tabRows)
     {
-        ActivityOverviewRowViewModel[] scoped = [.. tabRows.Where(row => _PassesTypeFilter(row.TypeId))];
+        ActivityOverviewRowViewModel[] scoped = [.. tabRows.Where(row => _PassesTypeFilter(row.TypeId) && Search.Matches(row.Search))];
         Dictionary<object, RunFilterTileViewModel> shown = CharacterFilter.Tiles.ToDictionary(tile => tile.Key);
         List<RunFilterTileViewModel> tiles = [];
         foreach ((long characterId, string name) in _namesById.OrderBy(pair => pair.Value, StringComparer.OrdinalIgnoreCase))
@@ -1832,6 +1866,7 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
 
     public void Dispose()
     {
+        Search.Dispose();
         _runChangesSubscription?.Dispose();
         if (_weekStart is not null)
             _weekStart.Changed -= _OnWeekStartChanged;

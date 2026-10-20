@@ -17,8 +17,9 @@ namespace EveUtils.Client.ViewModels.Runs;
 /// <param name="SearchText">Name, family and type unmarked, for the search ET-518 adds: it matches on what is typed, never
 /// on what is masked.</param>
 /// <param name="FamilyText">Faction or archetype and DED rating from the static data, empty where it has none.</param>
+/// <param name="Search">The same text in its parts, which the search's suggestions are drawn from.</param>
 public sealed record ActivityStatsLabel(string NameText, string SearchText, string FamilyText, string TypeText, RunTypeId TypeId,
-    MaterialIconKind TypeIcon);
+    MaterialIconKind TypeIcon, ActivitySearchProfile Search);
 
 /// <summary>
 /// Names an <see cref="ActivityStatsKey"/>: the pilot's own latest name for it when they flew it, otherwise what the
@@ -27,10 +28,6 @@ public sealed record ActivityStatsLabel(string NameText, string SearchText, stri
 /// </summary>
 public sealed class ActivityStatsLabels(ISdeAccessor? sde, RunRowFacts facts)
 {
-    private readonly Lazy<IReadOnlyDictionary<int, SdeSite>> _sites = new(() => sde is { IsAvailable: true } available
-        ? available.SearchSites().GroupBy(site => site.DungeonId).ToDictionary(group => group.Key, group => group.First())
-        : new Dictionary<int, SdeSite>());
-
     public ActivityStatsLabel For(ActivityStatsKey key, string? siteName)
     {
         ActivityKind kind = key.Kind switch
@@ -39,13 +36,13 @@ public sealed class ActivityStatsLabels(ISdeAccessor? sde, RunRowFacts facts)
             ActivityStatsKind.Abyssal => ActivityKind.Abyssal,
             _ => ActivityKind.Site
         };
-        SdeSite? site = key.Kind is ActivityStatsKind.Site or ActivityStatsKind.Homefront && key.TypeId > 0
-            ? _sites.Value.GetValueOrDefault(key.TypeId)
-            : null;
+        SdeSite? site = key.Kind is ActivityStatsKind.Site or ActivityStatsKind.Homefront ? facts.SiteOf(key.TypeId) : null;
         string name = _NameOf(key, siteName, site);
         RunTypeDefinition type = facts.TypeOf(kind, null, key.TypeId, name);
         string family = _FamilyOf(key, site);
-        return new ActivityStatsLabel(OpsecText.Mark(name), $"{name} {family} {type.Name}", family, type.Name, type.Id, type.Icon);
+        var search = new ActivitySearchProfile(name, site?.FactionName, site?.ArchetypeName, type.Name,
+            key.Kind is ActivityStatsKind.Mission ? family : site?.DedRating is > 0 and { } ded ? $"DED {ded.ToString(CultureInfo.InvariantCulture)}" : string.Empty);
+        return new ActivityStatsLabel(OpsecText.Mark(name), $"{name} {family} {type.Name}", family, type.Name, type.Id, type.Icon, search);
     }
 
     private string _NameOf(ActivityStatsKey key, string? siteName, SdeSite? site)

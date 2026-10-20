@@ -97,6 +97,7 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase, IRunsA
         TypeText = type.Name.ToUpperInvariant();
         TypeIcon = type.Icon;
         TypeId = type.Id;
+        Search = facts?.SearchProfileOf(row, type) ?? new ActivitySearchProfile(OpsecText.Strip(SiteText), null, null, type.Name);
 
         SdeSolarSystem? system = facts?.SystemOf(row.SolarSystemId);
         HasSystem = system is not null;
@@ -251,6 +252,9 @@ public sealed partial class ActivityOverviewRowViewModel : ViewModelBase, IRunsA
     /// <summary>The catalogue key TYPE reads off (ET-293): unlike <see cref="TypeText"/>, never refined past its base
     /// row — a TYPES tile for a homefront covers every one of its "Homefront · …" sub-kinds, not one tile each.</summary>
     public RunTypeId TypeId { get; }
+
+    /// <summary>What the runs search (ET-518) matches on: the real name, never the OPSEC-masked <see cref="SiteText"/>.</summary>
+    public ActivitySearchProfile Search { get; }
     public string DurationText { get; }
     public string CrewText { get; }
     public string EnemiesText { get; }

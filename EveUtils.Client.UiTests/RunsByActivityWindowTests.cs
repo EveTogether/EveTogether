@@ -374,6 +374,133 @@ public sealed class RunsByActivityWindowTests
         Assert.Equal("https://krah.invalid", presented.Source.Requests[^1].ServerAddress);
     }
 
+    // ── ET-518: the search box ────────────────────────────────────────────────────────────────────────────────
+
+    /// <summary>The box has a row of its own under the header, inside the content, above the list and clear of the tiles at
+    /// every width; empty, it shows no clear button. It is outside the header so the header keeps its height bound (ET-303).</summary>
+    [AvaloniaTheory]
+    [InlineData(1303d)]
+    [InlineData(758d)]
+    [InlineData(420d)]
+    public async Task TheSearchBox_SitsUnderTheHeader_InsideTheContent(double width)
+    {
+        using var instance = TestClientInstance.Create(_Services());
+        Presented presented = await _PresentAsync(instance, width);
+
+        Rect box = _Rect(presented, _Named<Control>(presented, "ModuleSearchBox"));
+        Assert.True(box.X >= -0.5 && box.Right <= presented.Content.Bounds.Width + 0.5, $"the search box {box} leaves the content at {width}");
+        Assert.True(box.Height >= 26, $"the search box is {box.Height} tall");
+        Rect characters = _Rect(presented, _Named<Control>(presented, "CharacterFilterBlock"));
+        Rect types = _Rect(presented, _Named<Control>(presented, "TypeFilterBlock"));
+        Assert.True(box.Y >= Math.Max(characters.Bottom, types.Bottom) - 0.5, $"{box} is not under the tiles {types} {characters} at {width}");
+        Assert.True(box.Bottom <= _Rect(presented, _Named<Control>(presented, "ActivityList")).Y + 0.5, $"{box} is not above the list at {width}");
+        Assert.False(_Named<Button>(presented, "SearchClear").IsVisible);
+    }
+
+    /// <summary>Typing narrows BY ACTIVITY live, "1 of 2" says how much is left, and one click on ✕ brings everything back and
+    /// empties the field. Counter-proof: a clear that leaves the term applied keeps one row.</summary>
+    [AvaloniaFact]
+    public async Task Typing_FiltersByActivityLive_AndOneClearClickBringsItAllBack()
+    {
+        using var instance = TestClientInstance.Create(_Services());
+        Presented presented = await _PresentAsync(instance, 1303);
+        await _ShowByActivityAsync(presented);
+        TextBox box = _Named<TextBox>(presented, "ModuleSearchBox");
+
+        box.Text = "crimson";
+        await ActivityWindowHarness.WaitUntil(() => presented.ViewModel.ByActivity.Items.Count == 1);
+        _Settle(presented);
+
+        Assert.Single(_Rows(presented));
+        Assert.Equal("1 of 2", _Named<TextBlock>(presented, "SearchCount").Text);
+        Button clear = _Named<Button>(presented, "SearchClear");
+        Assert.True(clear.IsVisible);
+
+        clear.Command?.Execute(null);
+        _Settle(presented);
+
+        Assert.Equal(2, _Rows(presented).Count);
+        Assert.True(string.IsNullOrEmpty(box.Text));
+        Assert.False(clear.IsVisible);
+        Assert.Equal(string.Empty, _Named<TextBlock>(presented, "SearchCount").Text);
+    }
+
+    /// <summary>Esc in the field clears it, ↓ then ↵ takes a suggestion, and Ctrl+F's target (the well-known name) takes the
+    /// focus.</summary>
+    [AvaloniaFact]
+    public async Task TheKeys_ClearTheField_PickASuggestion_AndCtrlFFindsTheBox()
+    {
+        using var instance = TestClientInstance.Create(_Services());
+        Presented presented = await _PresentAsync(instance, 1303);
+        await _ShowByActivityAsync(presented);
+        TextBox box = _Named<TextBox>(presented, "ModuleSearchBox");
+
+        EveUtils.Client.Input.ShortcutDispatch.FocusSearch(presented.Content);
+        Assert.True(box.IsFocused);
+
+        box.Text = "cri";
+        await ActivityWindowHarness.WaitUntil(() => presented.ViewModel.Search.Suggestions.Count > 0);
+        Assert.True(_Named<Avalonia.Controls.Primitives.Popup>(presented, "SearchSuggestions").IsOpen);
+        _Key(box, Key.Down);
+        _Key(box, Key.Enter);
+        await ActivityWindowHarness.WaitUntil(() => presented.ViewModel.ByActivity.Items.Count == 1);
+        Assert.Equal("Crimson Cache", box.Text);
+
+        _Key(box, Key.Escape);
+        await ActivityWindowHarness.WaitUntil(() => presented.ViewModel.ByActivity.Items.Count == 2);
+        Assert.True(string.IsNullOrEmpty(box.Text));
+    }
+
+    /// <summary>RUNS: a term nothing matches says so with the term and offers clear filters; one click and the run is back.</summary>
+    [AvaloniaFact]
+    public async Task InRuns_ANoMatch_SaysSo_AndClearFiltersBringsTheRunBack()
+    {
+        using var instance = TestClientInstance.Create(_Services());
+        await _SaveRunAsync(instance, 90000001, Evening);
+        Presented presented = await _PresentAsync(instance, 1303);
+        TextBox box = _Named<TextBox>(presented, "ModuleSearchBox");
+
+        box.Text = "zzz";
+        await ActivityWindowHarness.WaitUntil(() => presented.ViewModel.Search.HasTerm);
+        _Settle(presented);
+
+        Assert.Equal("No runs match 'zzz' with the current filters.", _Named<TextBlock>(presented, "TabStatus").Text);
+        Button clearFilters = _Named<Button>(presented, "ClearFilters");
+        Assert.True(clearFilters.IsVisible);
+
+        clearFilters.Command?.Execute(null);
+        _Settle(presented);
+
+        Assert.Single(presented.ViewModel.Tabs[0].Days.SelectMany(day => day.Rows));
+        Assert.False(_Named<Button>(presented, "ClearFilters").IsVisible);
+        Assert.True(string.IsNullOrEmpty(box.Text));
+    }
+
+    /// <summary>Nothing the search draws is in the dim ink: the clear button, the count and the suggestion lines read in the
+    /// text colours.</summary>
+    [AvaloniaFact]
+    public async Task TheSearch_NeverUsesTheDimInk()
+    {
+        using var instance = TestClientInstance.Create(_Services());
+        Presented presented = await _PresentAsync(instance, 1303);
+        await _ShowByActivityAsync(presented);
+        _Named<TextBox>(presented, "ModuleSearchBox").Text = "cri";
+        await ActivityWindowHarness.WaitUntil(() => presented.ViewModel.ByActivity.Items.Count == 1);
+        _Settle(presented);
+
+        Assert.NotEqual(DimInk, _Color(_Named<Button>(presented, "SearchClear").Foreground));
+        Assert.NotEqual(DimInk, _Color(_Named<TextBlock>(presented, "SearchCount").Foreground));
+        Avalonia.Controls.Primitives.Popup popup = _Named<Avalonia.Controls.Primitives.Popup>(presented, "SearchSuggestions");
+        Assert.True(popup.IsOpen);
+        foreach (TextBlock text in (popup.Child?.GetVisualDescendants() ?? []).OfType<TextBlock>())
+            Assert.NotEqual(DimInk, _Color(text.Foreground));
+    }
+
+    private static Color? _Color(IBrush? brush) => (brush as ISolidColorBrush)?.Color;
+
+    private static void _Key(Control target, Key key) =>
+        target.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = key });
+
     // ── Helpers ───────────────────────────────────────────────────────────────────────────────────────────────
 
     private static Action<IServiceCollection> _Services() => services => services.AddSingleton<IActivityStatsSource, FakeStatsSource>();

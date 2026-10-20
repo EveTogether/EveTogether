@@ -66,6 +66,12 @@ public sealed partial class RunsByActivityViewModel : ViewModelBase
     /// <summary>The filter ET-518's search sets; null shows everything. Applied to every row on top of the TYPES tiles.</summary>
     public Func<ActivityStatsRowViewModel, bool>? SearchFilter { get; set; }
 
+    /// <summary>"3 of 12" while a search narrows the list; empty otherwise.</summary>
+    [ObservableProperty] private string _countText = string.Empty;
+
+    /// <summary>What every row of the list is searched on, for the suggestions under the search box.</summary>
+    public IReadOnlyList<ActivitySearchProfile> Profiles => [.. _all.Select(row => row.Label.Search)];
+
     public bool HasStatus => StatusText.Length > 0;
 
     /// <summary>The YOURS column: the pilot's own runs, which a server tab has none of.</summary>
@@ -227,6 +233,7 @@ public sealed partial class RunsByActivityViewModel : ViewModelBase
     {
         ActivityStatsRowViewModel[] shown = [.. _all.Where(row => _passesType(row.Label.TypeId) && (SearchFilter?.Invoke(row) ?? true))];
         Items.ReconcileTo(_Ordered(shown));
+        CountText = SearchFilter is null ? string.Empty : $"{Items.Count} of {TotalCount}";
         OnPropertyChanged(nameof(HasNoRows));
         OnPropertyChanged(nameof(EmptyText));
 
