@@ -10,6 +10,7 @@ using EveUtils.Client.ViewModels.Map;
 using EveUtils.Client.ViewModels.Runs;
 using EveUtils.Client.ViewModels.Skills;
 using EveUtils.Shared.Modules.Esi;
+using EveUtils.Shared.Modules.Runs.Earnings;
 using EveUtils.Shared.Modules.Fittings.Dtos;
 using EveUtils.Shared.Modules.Fleet.Entities;
 using EveUtils.Client.ViewModels.Coupling;
@@ -270,6 +271,11 @@ public interface IDialogService
     /// <paramref name="blueprintTypeId"/> the tool shows that blueprint in its BLUEPRINTS mode (ET-502) — in the tool
     /// already open, when there is one.</summary>
     void ShowAppraisal(AppraisalViewModel viewModel, int? blueprintTypeId = null);
+
+    /// <summary>Opens the loot table (ET-519) as a hosted module that stays beside the run window. One window: when it is
+    /// already open it is brought forward and switched to <paramref name="key"/> instead of a second one opening. With no
+    /// key it lists the activities the pilot has flown.</summary>
+    void ShowLootTable(LootTableViewModel viewModel, ActivityStatsKey? key, IReadOnlyList<int> characterIds);
 
     /// <summary>Opens the manual run-start dialog (ET-163): modal, and gone again as soon as the run exists —
     /// from there the run is the activity window's, the same one the clipboard route lands in.</summary>

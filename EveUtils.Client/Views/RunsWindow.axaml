@@ -786,6 +786,9 @@
                                 IsEnabled="{Binding !IsPublishingMany}" Content="{Binding PublishViewButtonText}"
                                 Command="{Binding PublishViewCommand}"
                                 ToolTip.Tip="Publish every local activity the view shows, after filters"/>
+                        <Button x:Name="LootTablesButton" Classes="sumbtn" IsVisible="{Binding HasLootTables}"
+                                Content="LOOT TABLES" Command="{Binding OpenLootTablesCommand}"
+                                ToolTip.Tip="What can drop in a site, and how often"/>
                         <Button x:Name="SummaryToggle" Classes="sumbtn" Classes.on="{Binding IsSummaryOn}"
                                 Content="SUMMARY" Command="{Binding ToggleSummaryCommand}"
                                 ToolTip.Tip="The day, week or month added up, with the list's own filters"/>
@@ -1120,6 +1123,8 @@
                                 HorizontalContentAlignment="Right" Command="{Binding SortByPerHourCommand}"
                                 ToolTip.Tip="Highest ISK per hour first (the median of each run's own ISK per hour)"
                                 Content="{Binding PerHourMark, StringFormat='ISK/H{0}'}"/>
+                        <TextBlock x:Name="HeadLoot" Grid.Column="6" Width="64" Margin="10,0,0,0" Classes="statshead"
+                                   IsVisible="{Binding HasLoot}" Text="LOOT" ToolTip.Tip="What can drop here"/>
                     </Grid>
                 </Border>
                 <ctl:RecyclingListBox x:Name="StatsList" Grid.Row="2" Classes="runslist"

@@ -30,25 +30,30 @@ public sealed partial class RunsByActivityViewModel : ViewModelBase
     private readonly ActivityStatsLabels _labels;
     private readonly Func<RunTypeId, bool> _passesType;
     private readonly TimeProvider _time;
+    private readonly LootTableAccess? _loot;
     private IReadOnlyList<ActivityStatsRowViewModel> _all = [];
     private CancellationTokenSource? _reading;
     private ActivityStatsKey? _selectedKey;
 
     /// <param name="passesType">The TYPES tiles of the screen: whether an activity of this type is shown.</param>
     public RunsByActivityViewModel(IActivityStatsSource? source, ActivityStatsLabels labels, Func<RunTypeId, bool> passesType,
-        ISharedServerPicks? picks, Func<string, DateTime, Task>? openRun, TimeProvider? time = null)
+        ISharedServerPicks? picks, Func<string, DateTime, Task>? openRun, TimeProvider? time = null, LootTableAccess? loot = null)
     {
+        _loot = loot;
         _source = source;
         _labels = labels;
         _passesType = passesType;
         _time = time ?? TimeProvider.System;
-        Detail = new ActivityStatsDetailViewModel(picks, openRun, _time);
+        Detail = new ActivityStatsDetailViewModel(picks, openRun, _time, loot);
     }
 
     /// <summary>The rows as the list draws them: filtered, then ordered.</summary>
     public ObservableCollection<ActivityStatsRowViewModel> Items { get; } = [];
 
     public ActivityStatsDetailViewModel Detail { get; }
+
+    /// <summary>The LOOT column and its head: only where a loot table is registered.</summary>
+    public bool HasLoot => _loot is not null;
 
     /// <summary>Raised when the reader picks a row, so the screen can open the drawer where the pane is not beside the list.</summary>
     public event Action<ActivityStatsRowViewModel>? RowSelected;
@@ -117,7 +122,7 @@ public sealed partial class RunsByActivityViewModel : ViewModelBase
             {
                 ActivityStatsOverview overview = await _source.ReadAsync(request, reading.Token);
                 return ((IReadOnlyList<ActivityStatsRowViewModel>)
-                    [.. overview.Activities.Select(stats => new ActivityStatsRowViewModel(stats, _labels.For(stats.Key, stats.SiteName), nowUtc))],
+                    [.. overview.Activities.Select(stats => new ActivityStatsRowViewModel(stats, _labels.For(stats.Key, stats.SiteName), nowUtc, _loot))],
                     overview.Status);
             }, reading.Token);
             if (reading.IsCancellationRequested)
@@ -144,7 +149,7 @@ public sealed partial class RunsByActivityViewModel : ViewModelBase
     {
         _selectedKey = key;
         ActivityStatsRowViewModel? row = _all.FirstOrDefault(known => known.Key == key);
-        row ??= new ActivityStatsRowViewModel(read, _labels.For(read.Key, read.SiteName), _time.GetUtcNow().UtcDateTime);
+        row ??= new ActivityStatsRowViewModel(read, _labels.For(read.Key, read.SiteName), _time.GetUtcNow().UtcDateTime, _loot);
 
         SelectedRow = Items.Contains(row) ? row : null;
         Detail.Show(row);

@@ -35,6 +35,10 @@ public interface ISdeAccessor
     /// 0 false positives, 0 missed). False when the SDE is unavailable or the type does not exist.</summary>
     bool IsMutatedType(int typeId);
 
+    /// <summary>The type's meta group id (Tech I, faction, storyline, deadspace, officer, ...), or null when the type
+    /// has none, does not exist or the SDE is unavailable (ET-519: the loot table's catalogue classes).</summary>
+    int? GetMetaGroupId(int typeId);
+
     /// <summary>A mutaplasmid's per-attribute roll ranges (ET-146 deel D), or empty when the type carries none
     /// (including when it is not a mutaplasmid at all).</summary>
     IReadOnlyList<SdeMutaplasmidAttributeRange> GetMutaplasmidAttributeRanges(int mutaplasmidTypeId);

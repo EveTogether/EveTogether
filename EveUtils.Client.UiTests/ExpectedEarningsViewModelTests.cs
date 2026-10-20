@@ -240,11 +240,34 @@ public sealed class ExpectedEarningsViewModelTests
     }
 
     [Fact]
-    public async Task TheLootTableButton_StaysOffScreenUntilThereIsATableToOpen()
+    public async Task TheLootTableButton_IsOffScreenWhereNoLootTableIsRegistered()
     {
         var panel = new ExpectedEarningsViewModel(new ScriptedSource { Own = Own(runs: 8) });
         await panel.TrackAsync(Sanctum, null);
 
+        Assert.False(panel.IsLootTableShown);
+        panel.OpenLootTableCommand.Execute(null);
+    }
+
+    /// <summary>One click from the panel to the table of this site (ET-519): the button is there once the panel knows the
+    /// activity, also for a folded panel, opens that activity with the pilot's character and goes with the activity.</summary>
+    [Fact]
+    public async Task TheLootTableButton_OpensTheTableOfItsActivity_InOneClick()
+    {
+        var opener = new LootTableViewModelTests.RecordingOpener();
+        var panel = new ExpectedEarningsViewModel(new ScriptedSource { Own = Own(runs: 8) }, lootTables: opener);
+        Assert.False(panel.IsLootTableShown);
+        await panel.TrackAsync(Sanctum, 90000001);
+        panel.IsExpanded = false;
+
+        Assert.True(panel.IsLootTableShown);
+        panel.OpenLootTableCommand.Execute(null);
+
+        (ActivityStatsKey? key, IReadOnlyList<int> characters) = Assert.Single(opener.Opened);
+        Assert.Equal(Sanctum, key);
+        Assert.Equal([90000001], characters);
+
+        await panel.TrackAsync(null, null);
         Assert.False(panel.IsLootTableShown);
     }
 

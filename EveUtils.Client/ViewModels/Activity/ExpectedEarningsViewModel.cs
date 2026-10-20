@@ -23,13 +23,14 @@ namespace EveUtils.Client.ViewModels.Activity;
 /// new site's panel.</para>
 /// </summary>
 public sealed partial class ExpectedEarningsViewModel(IExpectedEarningsSource source, ILogger<ExpectedEarningsViewModel>? logger = null,
-    ISharedServerPicks? picks = null) : ViewModelBase
+    ISharedServerPicks? picks = null, ILootTableOpener? lootTables = null) : ViewModelBase
 {
     private const int MinimumRunsDots = 5;
 
     private readonly Dictionary<string, SharedEarningsAttempt> _cache = new(StringComparer.Ordinal);
     private CancellationTokenSource? _loading;
     private ActivityStatsKey? _key;
+    private int? _characterId;
     private ExpectedEarnings? _shown;
     private IReadOnlyList<ExpectedEarnings> _answers = [];
     private OwnRunsReason _reason;
@@ -83,8 +84,15 @@ public sealed partial class ExpectedEarningsViewModel(IExpectedEarningsSource so
 
     public ObservableCollection<ServerOptionViewModel> ServerOptions { get; } = [];
 
-    /// <summary>The LOOT TABLE button of the mockup. Nothing to open until the loot table exists (ET-519), so it is not on screen.</summary>
-    public bool IsLootTableShown => false;
+    /// <summary>The LOOT TABLE button: on screen where a window can open and the panel knows which activity it is on.</summary>
+    public bool IsLootTableShown => lootTables is not null && _key is not null;
+
+    [RelayCommand]
+    private void OpenLootTable()
+    {
+        if (_key is { } key)
+            lootTables?.Open(key, _characterId is { } character ? [character] : []);
+    }
 
     /// <summary>One line for the compact views and the folded header: "Typical 38M · 9–97M".</summary>
     public string CompactLine { get; private set; } = string.Empty;
@@ -102,6 +110,8 @@ public sealed partial class ExpectedEarningsViewModel(IExpectedEarningsSource so
 
         _loading?.Cancel();
         _key = key;
+        _characterId = characterId;
+        OnPropertyChanged(nameof(IsLootTableShown));
         _shown = null;
         _answers = [];
         _reason = OwnRunsReason.None;

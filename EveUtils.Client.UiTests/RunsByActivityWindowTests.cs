@@ -21,6 +21,7 @@ using EveUtils.Shared.Modules.Runs.Earnings;
 using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Runs.Queries;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Xunit;
 using Xunit.Sdk;
 using ICqrsDispatcher = EveUtils.Shared.Cqrs.IDispatcher;
@@ -272,11 +273,16 @@ public sealed class RunsByActivityWindowTests
             text => Assert.NotEqual(DimInk, Assert.IsAssignableFrom<ISolidColorBrush>(text.Foreground).Color));
     }
 
-    /// <summary>LOOT, TOP DROPS and the LOOT TABLE button are in the layout as hidden placeholders for ET-519.</summary>
+    /// <summary>Without a loot table registered the LOOT column, TOP DROPS and its button are not on screen.</summary>
     [AvaloniaFact]
-    public async Task TheLootColumnAndTopDrops_AreHeldBackForTheLootTable()
+    public async Task WithoutALootTable_NoLootColumnAndNoTopDrops()
     {
-        using var instance = TestClientInstance.Create(_Services());
+        using var instance = TestClientInstance.Create(services =>
+        {
+            _Services()(services);
+            services.RemoveAll<ILootTableOpener>();
+            services.RemoveAll<ILootTableSource>();
+        });
         Presented presented = await _PresentAsync(instance, 1303);
         await _ShowByActivityAsync(presented);
         presented.ViewModel.ByActivity.Select(presented.ViewModel.ByActivity.Items[0]);
@@ -285,6 +291,109 @@ public sealed class RunsByActivityWindowTests
         Assert.False(_Child<Button>(_Rows(presented)[0], "StatsRowLoot").IsVisible);
         Assert.False(_Named<Border>(presented, "StatsTopDrops").IsVisible);
         Assert.False(_Named<Button>(presented, "StatsLootTable").IsVisible);
+        Assert.False(_Named<TextBlock>(presented, "HeadLoot").IsVisible);
+        Assert.False(_Named<Button>(presented, "LootTablesButton").IsVisible);
+    }
+
+    private static Action<IServiceCollection> _ServicesWithLoot(LootTableViewModelTests.RecordingOpener opener) => services =>
+    {
+        _Services()(services);
+        services.AddSingleton<ILootTableOpener>(opener);
+        services.AddSingleton<ILootTableSource, LootTableViewModelTests.FakeSource>();
+    };
+
+    /// <summary>The LOOT column is one click to the table of that row, in the head's column and clear of ISK/H, at the
+    /// floating and the docked width (ET-519). Measured: the name keeps room at 758 even with the column in.</summary>
+    [AvaloniaTheory]
+    [InlineData(1303d)]
+    [InlineData(758d)]
+    public async Task TheLootColumn_SharesTheHeadsColumn_AndOpensTheTableOfItsRow(double width)
+    {
+        var opener = new LootTableViewModelTests.RecordingOpener();
+        using var instance = TestClientInstance.Create(_ServicesWithLoot(opener));
+        Presented presented = await _PresentAsync(instance, width);
+        await _ShowByActivityAsync(presented);
+
+        Control row = _Rows(presented)[0];
+        Button loot = _Child<Button>(row, "StatsRowLoot");
+        Assert.True(loot.IsVisible);
+        Rect cell = _Rect(presented, loot);
+        Rect head = _Rect(presented, _Named<TextBlock>(presented, "HeadLoot"));
+        Rect perHour = _Rect(presented, _Child<TextBlock>(row, "StatsRowPerHour"));
+        Assert.Equal(64, cell.Width, 0.5);
+        Assert.True(Math.Abs(cell.X - head.X) < 1.5, $"LOOT cell {cell} and head {head} are not one column at {width}");
+        Assert.True(perHour.Right <= cell.X + 0.5, $"ISK/H {perHour} runs into LOOT {cell}");
+        Assert.True(cell.Right <= presented.Content.Bounds.Width + 0.5, $"LOOT {cell} leaves the window at {width}");
+        Rect name = _Rect(presented, _Child<TextBlock>(row, "StatsRowName"));
+        Assert.True(name.Width >= 100, $"the activity name {name} is squeezed at {width}");
+
+        loot.Command?.Execute(null);
+
+        (ActivityStatsKey? key, _) = Assert.Single(opener.Opened);
+        Assert.Equal(Sanctum, key);
+        Assert.All(_Rows(presented)[0].GetVisualDescendants().OfType<TextBlock>().Where(text => text.IsVisible && !string.IsNullOrEmpty(text.Text)),
+            text => Assert.NotEqual(DimInk, _Color(text.Foreground)));
+    }
+
+    /// <summary>TOP DROPS in the pane: the biggest regular drops, a line for the rare ones and a button to the whole table.</summary>
+    [AvaloniaFact]
+    public async Task TopDrops_ShowTheBiggestDrops_AndTheButtonOpensTheTable()
+    {
+        var opener = new LootTableViewModelTests.RecordingOpener();
+        using var instance = TestClientInstance.Create(_ServicesWithLoot(opener));
+        Presented presented = await _PresentAsync(instance, 1303);
+        await _ShowByActivityAsync(presented);
+
+        presented.ViewModel.ByActivity.Select(presented.ViewModel.ByActivity.Items[0]);
+        await LootTableViewModelTests.WaitAsync(() => presented.ViewModel.ByActivity.Detail.TopDrops.Count > 0);
+        _Settle(presented);
+
+        Border topDrops = _Named<Border>(presented, "StatsTopDrops");
+        Assert.True(topDrops.IsVisible);
+        Assert.Equal(2, presented.ViewModel.ByActivity.Detail.TopDrops.Count);
+        Assert.Equal("+ 1 rare kind · in 3 % of runs", _Named<TextBlock>(presented, "StatsTopDropsRare").Text);
+        Rect box = _Rect(presented, topDrops);
+        Button open = _Named<Button>(presented, "StatsLootTable");
+        Assert.True(open.IsVisible);
+        Assert.True(box.Contains(_Rect(presented, open)), $"OPEN LOOT TABLE {_Rect(presented, open)} is not inside TOP DROPS {box}");
+        Assert.All(topDrops.GetVisualDescendants().OfType<TextBlock>().Where(text => text.IsVisible && !string.IsNullOrEmpty(text.Text)),
+            text => Assert.NotEqual(DimInk, _Color(text.Foreground)));
+
+        open.Command?.Execute(null);
+
+        Assert.Equal(Sanctum, Assert.Single(opener.Opened).Key);
+    }
+
+    /// <summary>The LOOT TABLES button on the range line opens the window without a site. It is a piece of the range line like
+    /// the others: inside the window and overlapping none of them, at every width the line is held to.</summary>
+    [AvaloniaTheory]
+    [InlineData(1303d)]
+    [InlineData(1100d)]
+    [InlineData(758d)]
+    [InlineData(630d)]
+    [InlineData(420d)]
+    public async Task TheLootTablesButton_SitsOnTheRangeLine_ClearOfTheOtherPieces(double width)
+    {
+        var opener = new LootTableViewModelTests.RecordingOpener();
+        using var instance = TestClientInstance.Create(_ServicesWithLoot(opener));
+        Presented presented = await _PresentAsync(instance, width);
+
+        Button button = _Named<Button>(presented, "LootTablesButton");
+        Assert.True(button.IsVisible);
+        Rect rect = _Rect(presented, button);
+        double right = presented.Content.Bounds.Width;
+        Assert.True(rect.X >= -0.5 && rect.Right <= right + 0.5, $"LOOT TABLES {rect} leaves 0..{right} at {width}");
+        foreach (string name in new[] { "RangePrevious", "RangeTitle", "RangeNext", "RangeFigures", "RangeIsk", "SummaryToggle" })
+        {
+            Rect other = _Rect(presented, _Named<Control>(presented, name));
+            if (other.Width > 0 && other.Height > 0)
+                Assert.False(rect.Intersects(other), $"LOOT TABLES {rect} overlaps {name} {other} at {width}");
+        }
+
+        button.Command?.Execute(null);
+
+        (ActivityStatsKey? key, _) = Assert.Single(opener.Opened);
+        Assert.Null(key);
     }
 
     /// <summary>A run's drawer says how it stands against the typical run, and one click on the line opens the activity's

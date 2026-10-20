@@ -10,8 +10,8 @@
 
     <!-- One activity's earnings (ET-517): the same control in both hosts, the 400 px column beside the list and the 430 px
          drawer over it, like the run pane. Its ink is the pane's own opaque one (6.6:1 on the drawer surface) or the text
-         colour; the dim brush measured 4.0-4.7:1 on this surface and is not used. TOP DROPS and the LOOT TABLE button
-         are held back until the loot table exists (ET-519). -->
+         colour; the dim brush measured 4.0-4.7:1 on this surface and is not used. TOP DROPS and its OPEN LOOT TABLE button
+         are the entry to the loot table (ET-519). -->
     <UserControl.Styles>
         <Style Selector="TextBlock.sk">
             <Setter Property="Foreground">
@@ -133,9 +133,7 @@
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
-                        <!-- Held back with the loot table (ET-519). -->
-                        <Button x:Name="StatsLootTable" Classes="slink" HorizontalAlignment="Left" IsEnabled="False"
-                                IsVisible="{Binding IsLootTableShown}" Content="LOOT TABLE ›"/>
+
                     </StackPanel>
                 </Border>
 
@@ -248,10 +246,32 @@
                     </Border>
                 </StackPanel>
 
-                <!-- ══ Top drops ══ held back until the loot table exists (ET-519), which gives it content and flips the flag. -->
+                <!-- ══ Top drops ══ (ET-519) the three biggest regular drops, a line for the rare ones and the way to the
+                     whole table. Below the minimum of runs the rows are not drawn: the note says why. -->
                 <Border x:Name="StatsTopDrops" Classes="ssec" IsVisible="{Binding IsTopDropsShown}">
                     <StackPanel Spacing="3">
                         <TextBlock Classes="sk" Text="TOP DROPS"/>
+                        <TextBlock x:Name="StatsTopDropsNote" Classes="stext" IsVisible="{Binding HasTopDropsNote}"
+                                   Text="{Binding TopDropsNote}"/>
+                        <ItemsControl x:Name="StatsTopDropRows" ItemsSource="{Binding TopDrops}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="vr:LootTableRowViewModel">
+                                    <Grid Height="22" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
+                                        <TextBlock Grid.Column="0" Classes="stext" VerticalAlignment="Center" TextWrapping="NoWrap"
+                                                   TextTrimming="CharacterEllipsis" Text="{Binding NameText}"/>
+                                        <TextBlock Grid.Column="1" Classes="smono" VerticalAlignment="Center" Text="{Binding RateText}"/>
+                                        <TextBlock Grid.Column="2" Classes="sfigure" FontSize="11" VerticalAlignment="Center"
+                                                   HorizontalAlignment="Right" Text="{Binding ValueText}"/>
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <TextBlock x:Name="StatsTopDropsRare" Classes="stext" IsVisible="{Binding HasTopDropsRare}"
+                                   Text="{Binding TopDropsRareText}"/>
+                        <Button x:Name="StatsLootTable" Classes="slink" HorizontalAlignment="Left" Margin="0,4,0,0"
+                                IsVisible="{Binding IsLootTableShown}" Command="{Binding OpenLootTableCommand}">
+                            <TextBlock Classes="stext" Foreground="{DynamicResource AccentBrightBrush}" Text="OPEN LOOT TABLE ›"/>
+                        </Button>
                     </StackPanel>
                 </Border>
 

@@ -26,8 +26,11 @@ public sealed partial class ActivityStatsRowViewModel : ViewModelBase
 {
     private static readonly double MinimumRuns = EarningsPolicy.Default.MinimumRuns;
 
-    public ActivityStatsRowViewModel(ActivityStats stats, ActivityStatsLabel label, DateTime nowUtc)
+    private readonly LootTableAccess? _loot;
+
+    public ActivityStatsRowViewModel(ActivityStats stats, ActivityStatsLabel label, DateTime nowUtc, LootTableAccess? loot = null)
     {
+        _loot = loot;
         Stats = stats;
         Label = label;
         Basis = stats.Basis;
@@ -84,8 +87,11 @@ public sealed partial class ActivityStatsRowViewModel : ViewModelBase
     [ObservableProperty] private string _rangeTooltip = string.Empty;
     [ObservableProperty] private string _perHourText = "—";
 
-    /// <summary>The LOOT column of the mockup. Nothing to open until the loot table exists (ET-519), so it is not on screen.</summary>
-    public bool IsLootShown => false;
+    /// <summary>The LOOT column: a button to the loot table of this activity, on screen where a loot table is registered.</summary>
+    public bool IsLootShown => _loot is not null;
+
+    [RelayCommand]
+    private void OpenLoot() => _loot?.Open(Key);
 
     /// <summary>The sort values: null for an activity with no figure, which sorts after every one that has.</summary>
     public decimal? TypicalValue => Basis?.Figures.Typical;
