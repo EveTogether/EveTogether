@@ -246,7 +246,7 @@
                         <TextBlock Classes="ltext" Foreground="{DynamicResource AccentBrightBrush}" Text="{Binding HowToggleText}"/>
                     </Button>
                     <StackPanel x:Name="LootHow" Spacing="4" IsVisible="{Binding IsHowOpen}">
-                        <TextBlock Classes="ltext" Text="The drop rate is the share of runs in which the item dropped. Only runs whose loot was counted between a starting and an ending hold are in it: a run that was never pasted is not a run with nothing."/>
+                        <TextBlock Classes="ltext" Text="The drop rate is the share of runs in which the item dropped. Only runs whose loot was counted are in it, whether you pasted what you looted or counted a starting and an ending hold: a run that was never counted is not a run with nothing."/>
                         <TextBlock Classes="ltext" Text="Each pilot counts for at most 10 runs, so one pilot farming a site does not decide the table. “Seen in 9 of 12” is a count of whole runs; a percentage is weighted that way."/>
                         <TextBlock Classes="ltext" Text="Value is the average quantity times today's ESI average price. Blueprints are valued by build appraisal; copies and originals cannot be told apart."/>
                         <TextBlock Classes="ltext" Text="Expected is the mean loot per run and sits above Typical, the median, because rare drops pull a mean up."/>

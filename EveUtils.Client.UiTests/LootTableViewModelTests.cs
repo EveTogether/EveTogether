@@ -45,7 +45,7 @@ public sealed class LootTableViewModelTests
         }));
         samples.AddRange(Enumerable.Range(0, uncountedRuns).Select(index => new EarningsSample
         {
-            PilotBucket = $"loose-{index}", CompletedAtUtc = NowUtc.AddDays(-2), FixedIsk = 0m, LootBasis = LootBasis.Captures
+            PilotBucket = $"loose-{index}", CompletedAtUtc = NowUtc.AddDays(-2), FixedIsk = 0m, LootBasis = LootBasis.None
         }));
         return LootTableStatistics.Compute(key, samples,
             typeId => typeId == Rarity ? LootRarityClass.Faction : LootRarityClass.Common, price ?? (typeId => typeId switch

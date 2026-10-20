@@ -44,10 +44,12 @@ public sealed class LootTableStatisticsTests
 
     private static LootTableItemDto Item(LootTableDto table, int typeId) => table.Items.Single(item => item.TypeId == typeId);
 
-    /// <summary>The denominator is runs with counted loot. 20 counted runs, 10 with the item, and 10 more that were never
-    /// pasted: the rate is 10 of 20, not 10 of 30. Counter-proof: count every run in the denominator and the rate is 0.33.</summary>
+    /// <summary>The denominator is runs with counted loot, whichever way they were counted (ET-522). 20 runs counted by a
+    /// cargo difference, 10 with the item; 6 pasted runs, all with it; 4 never counted. The rate is 16 of 26, and the 4 are the
+    /// only ones reported. Counter-proof: count only the cargo difference and the rate is 10 of 20 with 10 uncounted; count every
+    /// run and it is 16 of 30.</summary>
     [Fact]
-    public void DropRate_CountsOnlyRunsWhoseLootWasCounted()
+    public void DropRate_CountsRunsWhoseLootWasCounted_ByPastesOrByCargoDifference()
     {
         EarningsSample[] counted = Runs(20, index => index < 10 ? [(Tag, 4)] : [(Charge, 1)]);
         EarningsSample[] pasteOnly = Runs(6, _ => [(Tag, 1)], basis: LootBasis.Captures);
@@ -55,22 +57,23 @@ public sealed class LootTableStatisticsTests
 
         LootTableDto table = Compute([.. counted, .. pasteOnly, .. neverPasted]);
 
-        Assert.Equal(20, table.RunCount);
-        Assert.Equal(10, table.UncountedRunCount);
-        Assert.Equal(0.5, Item(table, Tag).DropRate, 9);
-        Assert.Equal(10, Item(table, Tag).RunCount);
+        Assert.Equal(26, table.RunCount);
+        Assert.Equal(4, table.UncountedRunCount);
+        Assert.Equal(16 / 26d, Item(table, Tag).DropRate, 9);
+        Assert.Equal(16, Item(table, Tag).RunCount);
         Assert.Equal(LootTableConfidence.Rated, table.Confidence);
     }
 
     [Fact]
-    public void ARunWithOpenUnrecognisedLines_IsNotCounted()
+    public void ARunWithOpenUnrecognisedLines_IsNotCounted_AndIsReportedAsThat()
     {
         EarningsSample[] runs = [.. Runs(20, _ => [(Tag, 1)]), Run("pilot-x", unrecognised: 2, lines: [(Charge, 5)])];
 
         LootTableDto table = Compute(runs);
 
         Assert.Equal(20, table.RunCount);
-        Assert.Equal(1, table.UncountedRunCount);
+        Assert.Equal(0, table.UncountedRunCount);
+        Assert.Equal(1, table.UnrecognisedRunCount);
         Assert.DoesNotContain(table.Items, item => item.TypeId == Charge);
     }
 
