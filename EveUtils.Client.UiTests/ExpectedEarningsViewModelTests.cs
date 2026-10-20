@@ -260,6 +260,53 @@ public sealed class ExpectedEarningsViewModelTests
         Assert.InRange(scale.Position(40_000_000m), 0.2, 0.8);
     }
 
+    /// <summary>Several servers answered (ET-512 decision 10): the source chip offers them, a pick shows that server's figure at
+    /// once and is remembered. Counter-proof: leave the pick unremembered and the last assertion goes red.</summary>
+    [Fact]
+    public async Task SeveralServersAnswered_TheChipOffersThem_AndAPickIsShownAndRemembered()
+    {
+        var picks = new RecordingPicks();
+        ExpectedEarnings krah = Shared(runs: 30, pilots: 9) with { ServerAddress = "https://krah.invalid" };
+        ExpectedEarnings alliance = Shared(runs: 12, pilots: 3) with { ServerName = "Alliance Server", ServerAddress = "https://alliance.invalid" };
+        var source = new ScriptedSource { Own = Own(runs: 8), Shared = new SharedEarningsAttempt(krah, OwnRunsReason.None, [krah, alliance]) };
+        var panel = new ExpectedEarningsViewModel(source, picks: picks);
+        await panel.TrackAsync(Sanctum, 1);
+
+        Assert.True(panel.HasServerChoice);
+        Assert.True(panel.ShowsChoiceSourceChip);
+        Assert.False(panel.ShowsPlainSourceChip);
+        Assert.False(panel.IsServerListOpen);
+        panel.ToggleServerListCommand.Execute(null);
+        Assert.True(panel.IsServerListOpen);
+
+        await panel.ServerOptions.Single(option => !option.IsCurrent).ChooseCommand.ExecuteAsync(null);
+
+        Assert.Equal("ALL PILOTS · Alliance Server", panel.SourceChip);
+        Assert.Contains("12 runs · 3 pilots", panel.BasisText);
+        Assert.False(panel.IsServerListOpen);
+        Assert.Equal(["https://alliance.invalid"], picks.Set);
+
+        // Left and come back to the same site: the pick is still the one shown.
+        await panel.TrackAsync(null, null);
+        await panel.TrackAsync(Sanctum, 1);
+        Assert.Equal("ALL PILOTS · Alliance Server", panel.SourceChip);
+    }
+
+    [Fact]
+    public async Task OneServer_KeepsThePlainChip_AndNoList()
+    {
+        var source = new ScriptedSource { Own = Own(runs: 8), Shared = new SharedEarningsAttempt(Shared(runs: 30, pilots: 9), OwnRunsReason.None) };
+        var panel = new ExpectedEarningsViewModel(source);
+
+        await panel.TrackAsync(Sanctum, 1);
+        panel.ToggleServerListCommand.Execute(null);
+
+        Assert.False(panel.HasServerChoice);
+        Assert.True(panel.ShowsPlainSourceChip);
+        Assert.False(panel.ShowsChoiceSourceChip);
+        Assert.False(panel.IsServerListOpen);
+    }
+
     private static ExpectedEarnings Own(int runs, decimal perRun = 40_000_000m) =>
         new(EarningsBasis.YourRuns, Figures(runs, perRun, EarningsWindow.Recent), 1);
 
@@ -280,6 +327,19 @@ public sealed class ExpectedEarningsViewModelTests
         return EarningsStatistics.Compute(samples, _ => null, EarningsPolicy.For(ActivityStatsKind.Site), Now, window);
     }
 
+    private sealed class RecordingPicks : ISharedServerPicks
+    {
+        public List<string> Set { get; } = [];
+
+        public Task<string?> LoadAsync(CancellationToken cancellationToken = default) => Task.FromResult(Set.LastOrDefault());
+
+        public Task SetAsync(string serverAddress, CancellationToken cancellationToken = default)
+        {
+            Set.Add(serverAddress);
+            return Task.CompletedTask;
+        }
+    }
+
     private sealed class ScriptedSource : IExpectedEarningsSource
     {
         public ExpectedEarnings? Own { get; init; }
@@ -296,7 +356,7 @@ public sealed class ExpectedEarningsViewModelTests
         }
 
         public async Task<SharedEarningsAttempt> LoadSharedAsync(ActivityStatsKey key, int characterId,
-            CancellationToken cancellationToken = default, string? activityRef = null)
+            CancellationToken cancellationToken = default, string? activityRef = null, string? onlyServer = null)
         {
             SharedCalls++;
             if (SharedGate is not null)

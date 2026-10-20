@@ -104,7 +104,7 @@ public sealed class ExpectedEarningsWindowTests
             return Task.FromResult(new ExpectedEarnings(EarningsBasis.YourRuns, none, 1));
         }
 
-        public Task<SharedEarningsAttempt> LoadSharedAsync(ActivityStatsKey key, int characterId, CancellationToken cancellationToken = default, string? activityRef = null) =>
+        public Task<SharedEarningsAttempt> LoadSharedAsync(ActivityStatsKey key, int characterId, CancellationToken cancellationToken = default, string? activityRef = null, string? onlyServer = null) =>
             Task.FromResult(new SharedEarningsAttempt(null, OwnRunsReason.None));
     }
 }

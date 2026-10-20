@@ -6,8 +6,11 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using Material.Icons;
 using EveUtils.Client.Formatting;
+using EveUtils.Shared.Modules.Runs.Dtos;
+using EveUtils.Shared.Modules.Runs.Earnings;
 using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Runs.Isk;
 
@@ -17,6 +20,24 @@ namespace EveUtils.Client.ViewModels.Runs;
 /// <param name="Status">Why there is nothing, when there is nothing — a failed read is a state, not silence.</param>
 public sealed record RunsPaneDetail(
     IReadOnlyList<ActivityRunRowViewModel> Crew, int LootItemCount, decimal? LootIsk, string? Status);
+
+/// <summary>How a run stands against what its activity typically earns (ET-517), worded for the pane: "Compared to typical:
+/// +12M (top 25 %)". <paramref name="Key"/> is the activity whose detail the line opens.</summary>
+public sealed record RunComparison(ActivityStatsKey Key, string Text)
+{
+    /// <summary>Null where the figures have no typical run: below the minimum there is nothing to compare with.</summary>
+    public static RunComparison? Of(ActivityStatsKey key, decimal yield, EarningsFiguresDto figures)
+    {
+        if (figures.Typical is not { } typical)
+            return null;
+
+        decimal difference = yield - typical;
+        string standing = yield >= (figures.P75 ?? typical) && yield > typical ? " (top 25 %)"
+            : yield <= (figures.P25 ?? typical) && yield < typical ? " (bottom 25 %)"
+            : string.Empty;
+        return new RunComparison(key, $"Compared to typical: {(difference >= 0 ? "+" : string.Empty)}{IskFormat.Compact(difference)}{standing}");
+    }
+}
 
 /// <summary>One line of the ISK section: the source's own ink, its name and its whole figure.</summary>
 /// <param name="Ink">A breakdown of this source alone, so the swatch is the same <c>IskSourceBar</c> the row and the
@@ -59,17 +80,27 @@ public sealed partial class RunsActivityPaneViewModel : ViewModelBase
     private readonly Func<ActivityOverviewRowViewModel, CancellationToken, Task<RunsPaneDetail>> _readDetail;
     private readonly Func<string?> _publishTargetName;
     private readonly TimeSpan _readDelay;
+    private readonly Func<ActivityOverviewRowViewModel, CancellationToken, Task<RunComparison?>>? _compare;
+    private readonly Action<ActivityStatsKey>? _openStats;
     private CancellationTokenSource? _reading;
+    private RunComparison? _comparison;
 
     /// <param name="readDetail">The activity's runs and loot, read off the UI thread by whoever owns the dispatcher.</param>
     /// <param name="publishTargetName">The coupled server PUBLISH would send to, named as its tab names it; null when
     /// none is coupled or several are, which the button's own text then leaves unnamed.</param>
     /// <param name="readDelay">Zero in a test that wants the read to have happened by the time it looks.</param>
+    /// <param name="compare">How the run stands against the typical run of its activity (ET-517), read after the detail; null
+    /// leaves the line out.</param>
+    /// <param name="openStats">Opens an activity's earnings in the overview's BY ACTIVITY detail.</param>
     public RunsActivityPaneViewModel(
         Func<ActivityOverviewRowViewModel, CancellationToken, Task<RunsPaneDetail>> readDetail,
         Func<string?>? publishTargetName = null,
-        TimeSpan? readDelay = null)
+        TimeSpan? readDelay = null,
+        Func<ActivityOverviewRowViewModel, CancellationToken, Task<RunComparison?>>? compare = null,
+        Action<ActivityStatsKey>? openStats = null)
     {
+        _compare = compare;
+        _openStats = openStats;
         _readDetail = readDetail;
         _publishTargetName = publishTargetName ?? (() => null);
         _readDelay = readDelay ?? ReadDelay;
@@ -145,6 +176,23 @@ public sealed partial class RunsActivityPaneViewModel : ViewModelBase
 
     [ObservableProperty] private string _lootSummaryText = string.Empty;
 
+    // ── Compared to typical (ET-517) ────────────────────────────────────────────────────────────────────────────
+
+    /// <summary>"Compared to typical: +12M (top 25 %)", empty until the comparison is read and where the activity has no
+    /// typical run yet. A click opens the activity's earnings.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasComparison))]
+    private string _comparisonText = string.Empty;
+
+    public bool HasComparison => ComparisonText.Length > 0;
+
+    [RelayCommand]
+    private void OpenStats()
+    {
+        if (_comparison is { } comparison)
+            _openStats?.Invoke(comparison.Key);
+    }
+
     // ── Actions ─────────────────────────────────────────────────────────────────────────────────────────────────
 
     /// <summary>"PUBLISH TO ET" where exactly one server is coupled, the bare verb where the target is a choice.</summary>
@@ -162,6 +210,8 @@ public sealed partial class RunsActivityPaneViewModel : ViewModelBase
         _reading = null;
 
         Row = row;
+        _comparison = null;
+        ComparisonText = string.Empty;
         if (row is null)
         {
             Crew.Clear();
@@ -280,6 +330,16 @@ public sealed partial class RunsActivityPaneViewModel : ViewModelBase
             LootSummaryText = HasLoot
                 ? $"{detail.LootItemCount} items · {(detail.LootIsk is { } loot ? IskFormat.Compact(loot) : "—")}"
                 : string.Empty;
+
+            if (_compare is null)
+                return;
+
+            RunComparison? comparison = await _compare(row, cancellationToken);
+            if (cancellationToken.IsCancellationRequested || !ReferenceEquals(Row, row))
+                return;
+
+            _comparison = comparison;
+            ComparisonText = comparison?.Text ?? string.Empty;
         }
         catch (OperationCanceledException)
         {

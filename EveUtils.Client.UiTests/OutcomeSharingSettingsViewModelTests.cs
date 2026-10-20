@@ -208,5 +208,9 @@ public sealed class OutcomeSharingSettingsViewModelTests
         public Task<OutcomeReadResult<ActivityOutcomeLootDto>> GetOutcomeLootAsync(string serverAddress, long characterId,
             ActivityStatsKey key, DateOnly since, CancellationToken cancellationToken = default) =>
             Task.FromResult(OutcomeReadResult<ActivityOutcomeLootDto>.Transient("not used"));
+
+        public Task<OutcomeReadResult<IReadOnlyList<RunOutcomeKeyCountDto>>> ListOutcomeKeysAsync(string serverAddress,
+            long characterId, DateOnly since, CancellationToken cancellationToken = default) =>
+            Task.FromResult(OutcomeReadResult<IReadOnlyList<RunOutcomeKeyCountDto>>.Transient("not used"));
     }
 }

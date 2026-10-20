@@ -11,4 +11,7 @@ public sealed class ActivityEarningsDto
     public required string? SiteName { get; init; }
 
     public required EarningsFiguresDto Figures { get; init; }
+
+    /// <summary>When the pilot last completed it, among the activities read (ET-517).</summary>
+    public DateTime LastFlownUtc { get; init; }
 }

@@ -63,4 +63,14 @@ public sealed class EarningsFiguresDto
 
     public EarningsRunDto? Worst { get; init; }
     public EarningsRunDto? Best { get; init; }
+
+    /// <summary>The three best activities, best first (ET-517); empty below the minimum.</summary>
+    public IReadOnlyList<EarningsRunDto> BestRuns { get; init; } = [];
+
+    /// <summary>The three worst activities, worst first (ET-517); empty below the minimum.</summary>
+    public IReadOnlyList<EarningsRunDto> WorstRuns { get; init; } = [];
+
+    /// <summary>Every counted activity's yield, lowest first (ET-517): the distribution the detail view draws. Empty
+    /// below the minimum, like every other figure.</summary>
+    public IReadOnlyList<EarningsYieldDto> Yields { get; init; } = [];
 }

@@ -338,6 +338,29 @@
                 <Setter Property="LetterSpacing" Value="1.4"/>
             </Style>
 
+            <!-- BY ACTIVITY (ET-517): the column heads that also sort. Plain text in the text colour, bright on hover;
+                 the caret on the one that orders the list says which it is. No dim ink on the list's own surface. -->
+            <Style Selector="Button.sorthead">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="BorderThickness" Value="0"/>
+                <Setter Property="CornerRadius" Value="0"/>
+                <Setter Property="Padding" Value="0"/>
+                <Setter Property="MinHeight" Value="0"/>
+                <Setter Property="FontSize" Value="9.5"/>
+                <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+                <Setter Property="Cursor" Value="Hand"/>
+            </Style>
+            <Style Selector="Button.sorthead:pointerover /template/ ContentPresenter">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+            </Style>
+            <Style Selector="TextBlock.statshead">
+                <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+                <Setter Property="FontSize" Value="9.5"/>
+                <Setter Property="LetterSpacing" Value="1.2"/>
+                <Setter Property="VerticalAlignment" Value="Center"/>
+            </Style>
+
             <!-- Where the strip and the two filter blocks sit is set from the code-behind off RunsLayout.Band (ET-303):
                  cell positions as styles lost to local values once already (ET-302's range line). What changes
                  inside a block follows from the band's .compact class: tiles without their names (the name stays in
@@ -507,12 +530,22 @@
         <Border DockPanel.Dock="Top" Padding="14,12" BorderThickness="0,0,0,1"
                 BorderBrush="{DynamicResource BorderBrush}">
             <StackPanel Spacing="2">
-                <Grid ColumnDefinitions="Auto,Auto">
-                    <TextBlock Grid.Column="0" Classes="panel-title" FontSize="13" Text="RUNS"/>
-                    <Border Grid.Column="1" Classes="chip dim" Margin="8,0,0,0"
+                <Grid ColumnDefinitions="Auto,*,Auto">
+                    <TextBlock Grid.Column="0" Classes="panel-title" FontSize="13" VerticalAlignment="Center" Text="RUNS"/>
+                    <Border Grid.Column="1" Classes="chip dim" Margin="8,0,8,0" HorizontalAlignment="Left"
                             IsVisible="{Binding FleetFilterText, Converter={x:Static ObjectConverters.IsNotNull}}">
-                        <TextBlock Text="{Binding FleetFilterText}"/>
+                        <TextBlock TextTrimming="CharacterEllipsis" Text="{Binding FleetFilterText}"/>
                     </Border>
+                    <!-- RUNS | BY ACTIVITY (ET-517). RUNS is where the screen opens, so the usual way in costs no click.
+                         On the title row and not on the range line: the range line has no room for it at 630 and 1100
+                         without a row more (ET-303 bounds that header), and here it has the same place at every width. -->
+                    <StackPanel x:Name="ViewSwitch" Grid.Column="2" Orientation="Horizontal" Spacing="2">
+                        <Button x:Name="ViewRuns" Classes="sumbtn" Classes.on="{Binding IsRunsList}" Content="RUNS"
+                                Command="{Binding ShowRunsCommand}" ToolTip.Tip="One line per finished activity, by day"/>
+                        <Button x:Name="ViewByActivity" Classes="sumbtn" Classes.on="{Binding IsByActivity}" Content="BY ACTIVITY"
+                                Command="{Binding ShowByActivityCommand}"
+                                ToolTip.Tip="One line per site or mission with what it typically earns"/>
+                    </StackPanel>
                 </Grid>
                 <TextBlock x:Name="OverviewStatus" Classes="hint" Margin="0" TextWrapping="Wrap"
                            IsVisible="{Binding StatusMessage, Converter={x:Static ObjectConverters.IsNotNull}}"
@@ -920,12 +953,16 @@
                     </Panel>
                 </DataTemplate>
 
+                <DataTemplate DataType="vr:ActivityStatsRowViewModel">
+                    <vw:ActivityStatsRowView/>
+                </DataTemplate>
+
                 <DataTemplate DataType="vr:RunsListNote">
                     <TextBlock Classes="hint" Margin="102,4,14,6" Text="{Binding Text}"/>
                 </DataTemplate>
             </Grid.DataTemplates>
 
-            <Grid Grid.Column="0" RowDefinitions="Auto,Auto,*">
+            <Grid x:Name="RunsListArea" Grid.Column="0" RowDefinitions="Auto,Auto,*" IsVisible="{Binding IsRunsList}">
                 <TextBlock x:Name="TabStatus" Grid.Row="0" Classes="hint" Margin="14,10" TextWrapping="Wrap"
                            IsVisible="{Binding SelectedTab.StatusMessage, Converter={x:Static ObjectConverters.IsNotNull}}"
                            Text="{Binding SelectedTab.StatusMessage}"/>
@@ -955,13 +992,63 @@
                 </ctl:RecyclingListBox>
             </Grid>
 
+            <!-- BY ACTIVITY (ET-517): a list of its own, with its own items source and head. Room above the head for the search
+                 ET-518 adds, which filters through RunsByActivityViewModel.SearchFilter. -->
+            <Grid x:Name="StatsListArea" Grid.Column="0" RowDefinitions="Auto,Auto,*" IsVisible="{Binding IsByActivity}">
+                <TextBlock x:Name="StatsStatus" Grid.Row="0" Classes="hint" Margin="14,10" TextWrapping="Wrap"
+                           IsVisible="{Binding ByActivity.HasStatus}" Text="{Binding ByActivity.StatusText}"/>
+                <Border x:Name="StatsHeader" Grid.Row="1" Height="26" BorderThickness="0,0,0,1"
+                        BorderBrush="{DynamicResource DividerBrush}" Background="{StaticResource DrawerSurfaceBrush}">
+                    <Grid Margin="14,0,14,0" ColumnDefinitions="18,*,Auto,Auto,Auto,Auto,Auto"
+                          x:DataType="vr:RunsByActivityViewModel" DataContext="{Binding ByActivity}">
+                        <Button x:Name="SortLastFlown" Grid.Column="1" Margin="8,0,0,0" Classes="sorthead" HorizontalAlignment="Left"
+                                Command="{Binding SortByLastFlownCommand}" ToolTip.Tip="Most recently flown by you first"
+                                Content="{Binding LastFlownMark, StringFormat='ACTIVITY · LAST FLOWN{0}'}"/>
+                        <TextBlock x:Name="HeadYours" Grid.Column="2" Width="84" Margin="10,0,0,0" Classes="statshead"
+                                   TextAlignment="Right" IsVisible="{Binding ShowsYoursColumn}" Text="YOURS"
+                                   ToolTip.Tip="Your own runs in the range on screen"/>
+                        <StackPanel x:Name="HeadTypical" Grid.Column="3" Width="116" Margin="10,0,0,0" Orientation="Horizontal"
+                                    HorizontalAlignment="Right" Spacing="8">
+                            <Button x:Name="SortRuns" Classes="sorthead" VerticalAlignment="Center" Command="{Binding SortByRunsCommand}"
+                                    ToolTip.Tip="Most runs behind the figure first"
+                                    Content="{Binding RunsMark, StringFormat='RUNS{0}'}"/>
+                            <Button x:Name="SortTypical" Classes="sorthead" VerticalAlignment="Center" Command="{Binding SortByTypicalCommand}"
+                                    ToolTip.Tip="Highest typical run first"
+                                    Content="{Binding TypicalMark, StringFormat='TYPICAL{0}'}"/>
+                        </StackPanel>
+                        <TextBlock x:Name="HeadRange" Grid.Column="4" Width="122" Margin="14,0,0,0" Classes="statshead" Text="RANGE"
+                                   ToolTip.Tip="Where most runs land, on a log scale"/>
+                        <Button x:Name="SortPerHour" Grid.Column="5" Width="78" Margin="10,0,0,0" Classes="sorthead"
+                                HorizontalContentAlignment="Right" Command="{Binding SortByPerHourCommand}"
+                                ToolTip.Tip="Highest ISK per hour first (the median of each run's own ISK per hour)"
+                                Content="{Binding PerHourMark, StringFormat='ISK/H{0}'}"/>
+                    </Grid>
+                </Border>
+                <ctl:RecyclingListBox x:Name="StatsList" Grid.Row="2" Classes="runslist"
+                                      ItemsSource="{Binding ByActivity.Items}"
+                                      SelectedItem="{Binding ByActivity.SelectedRow, Mode=TwoWay}"
+                                      SelectionMode="Single"
+                                      ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                    <ctl:RecyclingListBox.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <VirtualizingStackPanel/>
+                        </ItemsPanelTemplate>
+                    </ctl:RecyclingListBox.ItemsPanel>
+                </ctl:RecyclingListBox>
+                <TextBlock x:Name="StatsEmpty" Grid.Row="2" Classes="hint" Margin="14,12" TextWrapping="Wrap" VerticalAlignment="Top"
+                           IsVisible="{Binding ByActivity.HasNoRows}" Text="{Binding ByActivity.EmptyText}"/>
+            </Grid>
+
             <!-- The pane beside the list, on the wide layout. One view model, two hosts (ET-291): this one and the
                  drawer below, of which exactly one is ever shown. It holds the selected run, or the summary (ET-294)
                  when that was asked for or there is no run to show. -->
             <Border x:Name="PaneHost" Grid.Column="1" Classes="panecolumn" IsVisible="{Binding IsWide}">
                 <Panel>
-                    <Panel IsVisible="{Binding !ShowsSummaryInPane}">
+                    <Panel IsVisible="{Binding ShowsRunInPane}">
                         <vw:RunsActivityPane DataContext="{Binding Pane}"/>
+                    </Panel>
+                    <Panel x:Name="PaneStats" IsVisible="{Binding ShowsStatsInPane}">
+                        <vw:ActivityStatsDetailPane DataContext="{Binding ByActivity.Detail}"/>
                     </Panel>
                     <Panel x:Name="PaneSummary" IsVisible="{Binding ShowsSummaryInPane}">
                         <vw:RunsSummaryPane DataContext="{Binding Summary}"/>
@@ -996,8 +1083,11 @@
                 </Grid>
             </Border>
             <Panel>
-                <Panel IsVisible="{Binding !ShowsSummaryInDrawer}">
+                <Panel IsVisible="{Binding ShowsRunInDrawer}">
                     <vw:RunsActivityPane DataContext="{Binding Pane}"/>
+                </Panel>
+                <Panel x:Name="DrawerStats" IsVisible="{Binding ShowsStatsInDrawer}">
+                    <vw:ActivityStatsDetailPane DataContext="{Binding ByActivity.Detail}"/>
                 </Panel>
                 <Panel x:Name="DrawerSummary" IsVisible="{Binding ShowsSummaryInDrawer}">
                     <vw:RunsSummaryPane DataContext="{Binding Summary}"/>

@@ -76,14 +76,15 @@ internal static class LocalEarningsSamples
                 continue;
 
             samples.Add(new ActivityEarningsSample(key, source.SiteName,
-                _Sample(key, ordered, parametersByRun, ores, isCharge, openUnrecognisedByCapture, nowUtc),
+                _Sample(key, ordered, activity.Key, parametersByRun, ores, isCharge, openUnrecognisedByCapture, nowUtc),
                 activity.Key, source.CharacterId));
         }
 
         return samples;
     }
 
-    private static EarningsSample _Sample(ActivityStatsKey key, IReadOnlyList<Run> runs, ILookup<Guid, RunParameter> parametersByRun,
+    private static EarningsSample _Sample(ActivityStatsKey key, IReadOnlyList<Run> runs, string activityRef,
+        ILookup<Guid, RunParameter> parametersByRun,
         MiningOreTypes ores, Func<int, bool> isCharge, IReadOnlyDictionary<Guid, int> openUnrecognisedByCapture, DateTime nowUtc)
     {
         // No live prices: loot is valued later at today's price, and an item reward counts at the price fixed on it
@@ -100,6 +101,7 @@ internal static class LocalEarningsSamples
         return new EarningsSample
         {
             PilotBucket = runs[0].CharacterId.ToString(CultureInfo.InvariantCulture),
+            ActivityRef = activityRef,
             CompletedAtUtc = stoppedAtUtc ?? runs.Max(run => run.StoppedAtUtc ?? run.StartedAtUtc),
             // The activity's own span, as its summary measures it (ActivitySummaryBuilder).
             DurationSeconds = stoppedAtUtc is { } end ? Math.Max(0, (int)(end - startedAtUtc).TotalSeconds) : null,

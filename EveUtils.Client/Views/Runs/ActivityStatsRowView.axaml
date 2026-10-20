@@ -1,0 +1,53 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vr="using:EveUtils.Client.ViewModels.Runs"
+             xmlns:ctl="using:EveUtils.Client.Controls"
+             xmlns:v="using:EveUtils.Client.Views"
+             x:Class="EveUtils.Client.Views.Runs.ActivityStatsRowView"
+             x:DataType="vr:ActivityStatsRowViewModel">
+
+    <!-- One activity as the BY ACTIVITY list draws it (ET-517): its type and name with family, type and when it was last
+         flown under it, then YOURS, TYPICAL with the runs and pilots behind it, the range, ISK/h and — held back until the
+         loot table exists (ET-519) — LOOT. The column widths are the header's in RunsWindow.axaml; the two move together.
+         Fixed-width cells inside Auto columns, so YOURS leaves no gap on a server tab, which has none.
+
+         The ink is the text colour at rest as well as hover and selection: the dim one measured 3.3–4.4:1 on a selected row. -->
+    <Border x:Name="StatsRow" Height="40" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource DividerBrush}">
+        <Button Classes="activityrow" Foreground="{StaticResource TextBrush}" Command="{Binding SelectCommand}">
+            <Grid Margin="14,0,14,0" ColumnDefinitions="18,*,Auto,Auto,Auto,Auto,Auto">
+                <ctl:IconGlyph Grid.Column="0" Classes="typeicon" Kind="{Binding TypeIcon}" ToolTip.Tip="{Binding TypeText}"/>
+                <StackPanel Grid.Column="1" Margin="8,0,0,0" VerticalAlignment="Center" Spacing="1">
+                    <TextBlock x:Name="StatsRowName" Classes="rowsite" Text="{Binding NameText}"/>
+                    <TextBlock x:Name="StatsRowMeta" Classes="rowline" TextTrimming="CharacterEllipsis" Text="{Binding MetaText}"/>
+                </StackPanel>
+                <StackPanel x:Name="StatsRowYours" Grid.Column="2" Width="84" Margin="10,0,0,0" VerticalAlignment="Center"
+                            IsVisible="{Binding ShowsYours}">
+                    <TextBlock Classes="rowfigure" Text="{Binding YoursText}"/>
+                    <TextBlock Classes="rowsmall" HorizontalAlignment="Right" Text="{Binding YoursSub}"/>
+                </StackPanel>
+                <StackPanel x:Name="StatsRowTypical" Grid.Column="3" Width="116" Margin="10,0,0,0" VerticalAlignment="Center"
+                            ToolTip.Tip="{Binding BasisTooltip}">
+                    <TextBlock Classes="rowfigure" Text="{Binding TypicalText}"/>
+                    <TextBlock Classes="rowsmall" HorizontalAlignment="Right" TextTrimming="CharacterEllipsis" Text="{Binding TypicalSub}"/>
+                </StackPanel>
+                <Panel x:Name="StatsRowRange" Grid.Column="4" Width="122" Margin="14,0,0,0" VerticalAlignment="Center"
+                       ToolTip.Tip="{Binding RangeTooltip}">
+                    <StackPanel IsVisible="{Binding HasBand}" Spacing="0">
+                        <v:EarningsBandBar x:Name="StatsRowBar" IsCompact="True" RangeStart="{Binding BandStart}" RangeEnd="{Binding BandEnd}"
+                                           TypicalMark="{Binding TypicalMark}"
+                                           TrackBrush="{DynamicResource BorderStrongBrush}"
+                                           RangeBrush="{DynamicResource AccentBrush}"
+                                           TypicalBrush="{StaticResource TextBrightBrush}"/>
+                        <TextBlock Classes="rowsmall" HorizontalAlignment="Left" Text="{Binding BandText}"/>
+                    </StackPanel>
+                    <TextBlock Classes="rownone" HorizontalAlignment="Left" IsVisible="{Binding !HasBand}" Text="not enough runs"/>
+                </Panel>
+                <TextBlock x:Name="StatsRowPerHour" Grid.Column="5" Width="78" Margin="10,0,0,0" Classes="rowfigure"
+                           VerticalAlignment="Center" Text="{Binding PerHourText}"/>
+                <!-- LOOT (ET-519): the mockup's column, not on screen until the loot table exists. -->
+                <Button x:Name="StatsRowLoot" Grid.Column="6" Margin="10,0,0,0" Classes="pick" IsEnabled="False"
+                        IsVisible="{Binding IsLootShown}" Content="LOOT ›"/>
+            </Grid>
+        </Button>
+    </Border>
+</UserControl>

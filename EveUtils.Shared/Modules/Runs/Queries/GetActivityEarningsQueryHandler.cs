@@ -21,13 +21,17 @@ internal sealed class GetActivityEarningsQueryHandler(IDbContextFactory<ClientDb
     {
         DateTime nowUtc = DateTime.UtcNow;
         EarningsPolicy defaults = EarningsPolicy.Default;
+        (DateTime From, DateTime To)? range = query is { FromUtc: { } from, ToUtc: { } to } ? (from, to) : null;
         TimeSpan widest = query.Window
                           ?? (defaults.FallbackWindow is { } fallback && fallback > defaults.Window ? fallback : defaults.Window);
 
         await using ClientDbContext db = await contextFactory.CreateDbContextAsync(cancellationToken);
-        IReadOnlyList<ActivityEarningsSample> samples = await LocalEarningsSamples.ReadAsync(db, sde, nowUtc - widest, nowUtc,
-            cancellationToken);
-        ActivityEarningsSample[] asked = [.. samples.Where(sample => query.Key is null || sample.Key == query.Key)];
+        IReadOnlyList<ActivityEarningsSample> samples = await LocalEarningsSamples.ReadAsync(db, sde,
+            range?.From ?? nowUtc - widest, nowUtc, cancellationToken);
+        ActivityEarningsSample[] asked = [.. samples
+            .Where(sample => query.Key is null || sample.Key == query.Key)
+            .Where(sample => range is not { } inRange
+                             || (sample.Sample.CompletedAtUtc >= inRange.From && sample.Sample.CompletedAtUtc < inRange.To))];
         Func<int, decimal?> unitPrice = await TodaysLootPrices.ForAsync(marketPrices, blueprints, sde,
             [.. asked
                 .SelectMany(sample => sample.Sample.LootGained.Concat(sample.Sample.LootLost).Concat(sample.Sample.Mined))
@@ -43,16 +47,22 @@ internal sealed class GetActivityEarningsQueryHandler(IDbContextFactory<ClientDb
                 {
                     Key = activity.Key,
                     SiteName = activity.MaxBy(sample => sample.Sample.CompletedAtUtc)?.SiteName,
+                    LastFlownUtc = activity.Max(sample => sample.Sample.CompletedAtUtc),
                     Figures = EarningsStatistics.Compute([.. activity.Select(sample => sample.Sample)], unitPrice,
-                        _PolicyFor(activity.Key, query.Window), nowUtc)
+                        _PolicyFor(activity.Key, query.Window, range), range?.To ?? nowUtc)
                 })
                 .OrderByDescending(activity => activity.Figures.EffectiveRunCount)
                 .ThenBy(activity => activity.Key.Code, StringComparer.Ordinal)
         ]);
     }
 
-    private static EarningsPolicy _PolicyFor(ActivityStatsKey key, TimeSpan? window) =>
-        window is { } asked
-            ? EarningsPolicy.For(key.Kind) with { Window = asked, FallbackWindow = null }
+    private static EarningsPolicy _PolicyFor(ActivityStatsKey key, TimeSpan? window, (DateTime From, DateTime To)? range)
+    {
+        if (range is { } asked)
+            return EarningsPolicy.For(key.Kind) with { Window = asked.To - asked.From, FallbackWindow = null };
+
+        return window is { } custom
+            ? EarningsPolicy.For(key.Kind) with { Window = custom, FallbackWindow = null }
             : EarningsPolicy.For(key.Kind);
+    }
 }

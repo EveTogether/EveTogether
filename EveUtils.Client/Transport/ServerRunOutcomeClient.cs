@@ -50,6 +50,37 @@ public sealed class ServerRunOutcomeClient(
             reply => (reply.Accepted, reply.Code, reply.Message, FromWire(reply)),
             cancellationToken);
 
+    public Task<OutcomeReadResult<IReadOnlyList<RunOutcomeKeyCountDto>>> ListOutcomeKeysAsync(string serverAddress, long characterId,
+        DateOnly since, CancellationToken cancellationToken = default) =>
+        _ReadAsync(serverAddress, characterId,
+            (client, headers) => client.ListOutcomeKeysAsync(
+                new ListOutcomeKeysRequest { Since = since.ToString(DateFormat, CultureInfo.InvariantCulture) },
+                headers, cancellationToken: cancellationToken),
+            reply => (reply.Accepted, reply.Code, reply.Message, FromWire(reply)),
+            cancellationToken);
+
+    internal static IReadOnlyList<RunOutcomeKeyCountDto> FromWire(ListOutcomeKeysReply reply) =>
+    [
+        .. reply.Keys.Select(count => new RunOutcomeKeyCountDto
+        {
+            Key = FromWire(count.Key),
+            RunCount = count.RunCount,
+            EffectiveRunCount = count.EffectiveRunCount,
+            PilotCount = count.PilotCount
+        })
+    ];
+
+    internal static ActivityStatsKey FromWire(RunOutcomeKey wire) => new()
+    {
+        Kind = (ActivityStatsKind)wire.Kind,
+        SiteTypeSource = wire.HasSiteTypeSource ? (SiteTypeSource)wire.SiteTypeSource : null,
+        TypeId = wire.TypeId,
+        Name = wire.Name.Length > 0 ? wire.Name : null,
+        MissionLevel = wire.HasMissionLevel ? wire.MissionLevel : null,
+        AbyssalTier = wire.HasAbyssalTier ? wire.AbyssalTier : null,
+        AbyssalWeather = wire.AbyssalWeather.Length > 0 ? wire.AbyssalWeather : null
+    };
+
     internal static ActivityOutcomesDto FromWire(ActivityStatsKey key, ActivityOutcomes activity) => new()
     {
         Key = key,

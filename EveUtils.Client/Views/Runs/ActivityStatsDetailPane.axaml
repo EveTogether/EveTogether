@@ -1,0 +1,288 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vr="using:EveUtils.Client.ViewModels.Runs"
+             xmlns:v="using:EveUtils.Client.Views"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="400" d:DesignHeight="720"
+             x:Class="EveUtils.Client.Views.Runs.ActivityStatsDetailPane"
+             x:DataType="vr:ActivityStatsDetailViewModel">
+
+    <!-- One activity's earnings (ET-517): the same control in both hosts, the 400 px column beside the list and the 430 px
+         drawer over it, like the run pane. Its ink is the pane's own opaque one (6.6:1 on the drawer surface) or the text
+         colour; the dim brush measured 4.0-4.7:1 on this surface and is not used. TOP DROPS and the LOOT TABLE button
+         are held back until the loot table exists (ET-519). -->
+    <UserControl.Styles>
+        <Style Selector="TextBlock.sk">
+            <Setter Property="Foreground">
+                <SolidColorBrush Color="#FFA0958A"/>
+            </Setter>
+            <Setter Property="FontSize" Value="9.5"/>
+            <Setter Property="LetterSpacing" Value="1.4"/>
+        </Style>
+        <Style Selector="TextBlock.stitle">
+            <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+            <Setter Property="FontSize" Value="15"/>
+            <Setter Property="FontWeight" Value="Medium"/>
+            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+        </Style>
+        <Style Selector="TextBlock.stext">
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+            <Setter Property="FontSize" Value="10.5"/>
+            <Setter Property="LineHeight" Value="15"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+        </Style>
+        <Style Selector="TextBlock.smono">
+            <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+            <Setter Property="FontSize" Value="10"/>
+        </Style>
+        <Style Selector="TextBlock.sfigure">
+            <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+            <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+            <Setter Property="FontSize" Value="13"/>
+        </Style>
+        <Style Selector="TextBlock.sbig">
+            <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+            <Setter Property="FontSize" Value="22"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+        <Style Selector="Border.ssec">
+            <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}"/>
+            <Setter Property="BorderThickness" Value="0,0,0,1"/>
+            <Setter Property="Padding" Value="14,10,14,12"/>
+        </Style>
+        <Style Selector="Border.sdot">
+            <Setter Property="Width" Value="9"/>
+            <Setter Property="Height" Value="9"/>
+            <Setter Property="Margin" Value="0,0,3,0"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}"/>
+        </Style>
+        <Style Selector="Border.sdot.filled">
+            <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
+        </Style>
+        <Style Selector="Button.slink, Button.srun, Button.sserver, Button.show">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="CornerRadius" Value="0"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="MinHeight" Value="0"/>
+            <Setter Property="HorizontalAlignment" Value="Stretch"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+        </Style>
+        <Style Selector="Button.srun">
+            <Setter Property="Height" Value="22"/>
+        </Style>
+        <Style Selector="Button.srun:pointerover /template/ ContentPresenter, Button.sserver:pointerover /template/ ContentPresenter, Button.slink:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource BgRowHoverBrush}"/>
+            <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+        </Style>
+        <Style Selector="Button.sserver">
+            <Setter Property="Padding" Value="6,5"/>
+            <Setter Property="FontSize" Value="11"/>
+        </Style>
+        <Style Selector="Button.sserver.current">
+            <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+        </Style>
+    </UserControl.Styles>
+
+    <Panel>
+        <TextBlock x:Name="StatsPaneEmpty" Classes="stext" Margin="14,16" IsVisible="{Binding !HasRow}"
+                   Text="Pick an activity to see how its runs spread out."/>
+
+        <ScrollViewer x:Name="StatsPaneScroll" IsVisible="{Binding HasRow}" HorizontalScrollBarVisibility="Disabled">
+            <StackPanel>
+
+                <!-- ══ Head ══ -->
+                <Border x:Name="StatsHead" Classes="ssec">
+                    <StackPanel Spacing="3">
+                        <TextBlock x:Name="StatsKind" Classes="sk" Text="{Binding KindText}"/>
+                        <TextBlock x:Name="StatsName" Classes="stitle" Text="{Binding NameText}"/>
+                        <WrapPanel Margin="0,4,0,0">
+                            <Border Classes="chip" Margin="0,0,5,4" IsVisible="{Binding HasFamily}">
+                                <TextBlock Text="{Binding FamilyText}"/>
+                            </Border>
+                            <Border x:Name="StatsSourceChip" Classes="chip" Classes.ok="{Binding IsSharedSource}" Margin="0,0,5,4"
+                                    IsVisible="{Binding ShowsPlainSourceChip}">
+                                <TextBlock Text="{Binding SourceChip}"/>
+                            </Border>
+                            <!-- Several servers answered: the chip opens the list to switch by hand, and the pick is
+                                 remembered (ET-512 decision 10). -->
+                            <Button x:Name="StatsSourceButton" Margin="0,0,5,4" Background="Transparent" BorderThickness="0" Padding="0"
+                                    MinHeight="0" Cursor="Hand" IsVisible="{Binding ShowsChoiceSourceChip}"
+                                    Command="{Binding ToggleServerListCommand}"
+                                    ToolTip.Tip="Choose which server's figures to show">
+                                <Border Classes="chip ok">
+                                    <TextBlock Text="{Binding SourceChip, StringFormat='{}{0} ▾'}"/>
+                                </Border>
+                            </Button>
+                        </WrapPanel>
+                        <ItemsControl x:Name="StatsServerList" ItemsSource="{Binding ServerOptions}" IsVisible="{Binding IsServerListOpen}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="vr:ServerOptionViewModel">
+                                    <Button Classes="sserver" Classes.current="{Binding IsCurrent}" Command="{Binding ChooseCommand}">
+                                        <Grid ColumnDefinitions="14,*,Auto" ColumnSpacing="6">
+                                            <TextBlock Grid.Column="0" Text="&#x2713;" IsVisible="{Binding IsCurrent}"/>
+                                            <TextBlock Grid.Column="1" Text="{Binding NameText}"/>
+                                            <TextBlock Grid.Column="2" Classes="smono" Text="{Binding DetailText}"/>
+                                        </Grid>
+                                    </Button>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <!-- Held back with the loot table (ET-519). -->
+                        <Button x:Name="StatsLootTable" Classes="slink" HorizontalAlignment="Left" IsEnabled="False"
+                                IsVisible="{Binding IsLootTableShown}" Content="LOOT TABLE ›"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- ══ Not enough runs ══ no number, only how far off it is. -->
+                <Border x:Name="StatsTooFew" Classes="ssec" IsVisible="{Binding IsTooFew}">
+                    <StackPanel Spacing="6">
+                        <ItemsControl ItemsSource="{Binding RunDots}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Orientation="Horizontal"/>
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="x:Boolean">
+                                    <Border Classes="sdot" Classes.filled="{Binding}"/>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <TextBlock x:Name="StatsTooFewLine" Classes="sfigure" FontSize="11.5" Text="{Binding TooFewText}"/>
+                    </StackPanel>
+                </Border>
+
+                <StackPanel x:Name="StatsFigures" IsVisible="{Binding HasFigures}">
+
+                    <!-- ══ Typical, band, ISK/h ══ -->
+                    <Border Classes="ssec">
+                        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="16">
+                            <StackPanel Grid.Column="0" Spacing="2">
+                                <TextBlock Classes="sk" Text="TYPICAL RUN"/>
+                                <StackPanel Orientation="Horizontal" Spacing="4">
+                                    <TextBlock x:Name="StatsTypical" Classes="sbig" Text="{Binding TypicalText}"/>
+                                    <TextBlock Classes="smono" VerticalAlignment="Bottom" Margin="0,0,0,3" Text="ISK"/>
+                                </StackPanel>
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Bottom">
+                                <TextBlock Classes="sk" Text="{Binding BandLabel}"/>
+                                <TextBlock x:Name="StatsBand" Classes="sfigure" Text="{Binding BandText}"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="2" Spacing="2" VerticalAlignment="Bottom" IsVisible="{Binding HasPerHour}">
+                                <TextBlock Classes="sk" Text="TYPICAL ISK/H"/>
+                                <TextBlock x:Name="StatsPerHour" Classes="sfigure" Text="{Binding PerHourText}"/>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
+                    <!-- ══ Distribution ══ log scale, the pilot's own runs as dots. -->
+                    <Border Classes="ssec">
+                        <StackPanel Spacing="4">
+                            <TextBlock Classes="sk" Text="DISTRIBUTION · LOG SCALE"/>
+                            <v:EarningsHistogram x:Name="StatsHistogram" Distribution="{Binding Distribution}"
+                                                 BarBrush="{StaticResource IskLootBrush}"
+                                                 BandBrush="{DynamicResource AccentSoftBrush}"
+                                                 TypicalBrush="{StaticResource TextBrightBrush}"
+                                                 MeanBrush="{StaticResource ValueBrush}"
+                                                 OwnBrush="{StaticResource ValueBrush}"/>
+                            <Grid ColumnDefinitions="*,Auto,*">
+                                <TextBlock Grid.Column="0" Classes="smono" Text="{Binding ScaleMinText}"/>
+                                <TextBlock Grid.Column="1" Classes="smono" Text="│ typical   ┆ band"/>
+                                <TextBlock Grid.Column="2" Classes="smono" HorizontalAlignment="Right" Text="{Binding ScaleMaxText}"/>
+                            </Grid>
+                            <TextBlock Classes="stext" IsVisible="{Binding HasOwnDots}" Text="● your runs"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- ══ Best and worst ══ real runs. A pilot's own opens; another's names nobody. -->
+                    <Border Classes="ssec">
+                        <StackPanel Spacing="2">
+                            <TextBlock Classes="sk" Text="BEST RUNS"/>
+                            <ItemsControl x:Name="StatsBestRuns" ItemsSource="{Binding BestRuns}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="vr:ActivityRunLineViewModel">
+                                        <Button Classes="srun" Command="{Binding OpenCommand}" IsHitTestVisible="{Binding IsOwn}"
+                                                IsTabStop="{Binding IsOwn}">
+                                            <Grid ColumnDefinitions="84,*,Auto" ColumnSpacing="8">
+                                                <TextBlock Grid.Column="0" Classes="sfigure" FontSize="11" VerticalAlignment="Center" Text="{Binding IskText}"/>
+                                                <TextBlock Grid.Column="1" Classes="stext" VerticalAlignment="Center" Text="{Binding WhoText}"/>
+                                                <TextBlock Grid.Column="2" Classes="smono" VerticalAlignment="Center" Text="{Binding MetaText}"/>
+                                            </Grid>
+                                        </Button>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <TextBlock Classes="sk" Margin="0,8,0,0" Text="WORST RUNS"/>
+                            <ItemsControl x:Name="StatsWorstRuns" ItemsSource="{Binding WorstRuns}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="vr:ActivityRunLineViewModel">
+                                        <Button Classes="srun" Command="{Binding OpenCommand}" IsHitTestVisible="{Binding IsOwn}"
+                                                IsTabStop="{Binding IsOwn}">
+                                            <Grid ColumnDefinitions="84,*,Auto" ColumnSpacing="8">
+                                                <TextBlock Grid.Column="0" Classes="sfigure" FontSize="11" VerticalAlignment="Center" Text="{Binding IskText}"/>
+                                                <TextBlock Grid.Column="1" Classes="stext" VerticalAlignment="Center" Text="{Binding WhoText}"/>
+                                                <TextBlock Grid.Column="2" Classes="smono" VerticalAlignment="Center" Text="{Binding MetaText}"/>
+                                            </Grid>
+                                        </Button>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <TextBlock Classes="stext" Margin="0,6,0,0" Text="Other pilots' runs show no name."/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- ══ Long-run average ══ from 30 runs: a few rare drops swing it before that. -->
+                    <Border Classes="ssec">
+                        <StackPanel Spacing="3">
+                            <TextBlock Classes="sk" Text="LONG-RUN AVERAGE"/>
+                            <TextBlock x:Name="StatsLongRun" Classes="sfigure" IsVisible="{Binding HasLongRunAverage}"
+                                       Text="{Binding LongRunText}"/>
+                            <TextBlock x:Name="StatsLongRunHint" Classes="stext" Text="{Binding LongRunHint}"/>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+
+                <!-- ══ Top drops ══ held back until the loot table exists (ET-519), which gives it content and flips the flag. -->
+                <Border x:Name="StatsTopDrops" Classes="ssec" IsVisible="{Binding IsTopDropsShown}">
+                    <StackPanel Spacing="3">
+                        <TextBlock Classes="sk" Text="TOP DROPS"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- ══ What it is based on ══ -->
+                <Border Classes="ssec">
+                    <StackPanel Spacing="6">
+                        <TextBlock x:Name="StatsFooter" Classes="smono" TextWrapping="Wrap" Text="{Binding FooterText}"/>
+                        <Border Classes="chip warn" HorizontalAlignment="Left" IsVisible="{Binding HasConfidenceText}">
+                            <TextBlock Text="{Binding ConfidenceText}"/>
+                        </Border>
+                        <TextBlock x:Name="StatsNote" Classes="stext" IsVisible="{Binding HasNote}" Text="{Binding NoteText}"/>
+                        <TextBlock Classes="stext" Text="Loot is valued at today's prices; bounty and rewards as paid. Gross: consumables and losses are not taken off."/>
+                    </StackPanel>
+                </Border>
+
+                <Border Classes="ssec">
+                    <StackPanel Spacing="4">
+                        <Button x:Name="StatsHowToggle" Classes="slink" HorizontalAlignment="Left" Command="{Binding ToggleHowCommand}">
+                            <TextBlock Classes="stext" Foreground="{DynamicResource AccentBrightBrush}"
+                                       Text="{Binding HowToggleText}"/>
+                        </Button>
+                        <StackPanel x:Name="StatsHow" Spacing="5" IsVisible="{Binding IsHowOpen}">
+                            <TextBlock Classes="stext" Text="Typical is the median: half of the runs earned more, half less. One lucky drop does not pull it up and one aborted run does not pull it down."/>
+                            <TextBlock Classes="stext" Text="The range shows where most runs land: 8 of 10 from 20 runs, half of them below that."/>
+                            <TextBlock Classes="stext" Text="Each pilot counts for at most 10 runs, so one pilot farming a site all day does not decide the number."/>
+                            <TextBlock Classes="stext" Text="Runs shorter than a minute are left out, and so are site runs with no loot counted. Mining and freeruns have no site, so they have no statistic."/>
+                            <TextBlock Classes="stext" Text="Nothing is shown below 5 runs. Another pilot's figures need at least two pilots sharing."/>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </ScrollViewer>
+    </Panel>
+</UserControl>

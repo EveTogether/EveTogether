@@ -12,6 +12,10 @@ namespace EveUtils.Client.Views;
 public sealed class EarningsBandBar : Control
 {
     public const double BarHeight = 30;
+
+    /// <summary>The height of the one-line variant a list row carries (ET-517): the track, the band and the typical mark,
+    /// with no room for the flag of a run in progress.</summary>
+    public const double CompactBarHeight = 16;
     private const double TrackTop = 12;
     private const double TrackHeight = 6;
     private const double RangeTop = 10;
@@ -22,6 +26,7 @@ public sealed class EarningsBandBar : Control
     private const double FlagWidth = 8;
     private const double FlagHeight = 7;
 
+    public static readonly StyledProperty<bool> IsCompactProperty = AvaloniaProperty.Register<EarningsBandBar, bool>(nameof(IsCompact));
     public static readonly StyledProperty<double> RangeStartProperty = AvaloniaProperty.Register<EarningsBandBar, double>(nameof(RangeStart));
     public static readonly StyledProperty<double> RangeEndProperty = AvaloniaProperty.Register<EarningsBandBar, double>(nameof(RangeEnd));
     public static readonly StyledProperty<double> TypicalMarkProperty = AvaloniaProperty.Register<EarningsBandBar, double>(nameof(TypicalMark));
@@ -33,10 +38,12 @@ public sealed class EarningsBandBar : Control
 
     static EarningsBandBar()
     {
-        AffectsRender<EarningsBandBar>(RangeStartProperty, RangeEndProperty, TypicalMarkProperty, CurrentMarkProperty,
+        AffectsMeasure<EarningsBandBar>(IsCompactProperty);
+        AffectsRender<EarningsBandBar>(IsCompactProperty, RangeStartProperty, RangeEndProperty, TypicalMarkProperty, CurrentMarkProperty,
             TrackBrushProperty, RangeBrushProperty, TypicalBrushProperty, CurrentBrushProperty);
     }
 
+    public bool IsCompact { get => GetValue(IsCompactProperty); set => SetValue(IsCompactProperty, value); }
     public double RangeStart { get => GetValue(RangeStartProperty); set => SetValue(RangeStartProperty, value); }
     public double RangeEnd { get => GetValue(RangeEndProperty); set => SetValue(RangeEndProperty, value); }
     public double TypicalMark { get => GetValue(TypicalMarkProperty); set => SetValue(TypicalMarkProperty, value); }
@@ -47,11 +54,17 @@ public sealed class EarningsBandBar : Control
     public IBrush? CurrentBrush { get => GetValue(CurrentBrushProperty); set => SetValue(CurrentBrushProperty, value); }
 
     protected override Size MeasureOverride(Size availableSize) =>
-        new(double.IsInfinity(availableSize.Width) ? 0 : availableSize.Width, BarHeight);
+        new(double.IsInfinity(availableSize.Width) ? 0 : availableSize.Width, IsCompact ? CompactBarHeight : BarHeight);
 
     public override void Render(DrawingContext context)
     {
         double width = Bounds.Width;
+        if (IsCompact)
+        {
+            _RenderCompact(context, width);
+            return;
+        }
+
         context.DrawRectangle(TrackBrush, null, new Rect(0, TrackTop, width, TrackHeight));
 
         double start = _X(RangeStart, width);
@@ -73,6 +86,19 @@ public sealed class EarningsBandBar : Control
         }
 
         context.DrawGeometry(CurrentBrush, null, flag);
+    }
+
+    private void _RenderCompact(DrawingContext context, double width)
+    {
+        const double track = 4;
+        const double range = 8;
+        const double typical = 14;
+        context.DrawRectangle(TrackBrush, null, new Rect(0, (CompactBarHeight - track) / 2, width, track));
+        double start = _X(RangeStart, width);
+        context.DrawRectangle(RangeBrush, null,
+            new Rect(start, (CompactBarHeight - range) / 2, Math.Max(MarkWidth, _X(RangeEnd, width) - start), range));
+        context.DrawRectangle(TypicalBrush, null,
+            new Rect(_X(TypicalMark, width) - MarkWidth / 2, (CompactBarHeight - typical) / 2, MarkWidth, typical));
     }
 
     private static double _X(double fraction, double width) => Math.Clamp(fraction, 0d, 1d) * width;
