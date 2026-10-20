@@ -34,6 +34,7 @@ using EveUtils.Shared.Modules.Runs.Queries;
 using EveUtils.Shared.Modules.Sde;
 using EveUtils.Shared.Transport;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using CqrsDispatcher = EveUtils.Shared.Cqrs.IDispatcher;
 
 namespace EveUtils.Client.ViewModels.Runs;
@@ -228,7 +229,7 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
         SelectedTab = LocalTab;
         _ownCharacterIds = [.. characters.Select(character => character.EsiCharacterId).OfType<int>().Where(id => id > 0)];
         Pane = new RunsActivityPaneViewModel(_ReadPaneDetailAsync, _PublishTargetName, paneReadDelay, _CompareToTypicalAsync,
-            key => _ = ShowActivityStatsAsync(key));
+            key => _ = ShowActivityStatsAsync(key), _CreatePosition(services), _PositionOf);
         ByActivity = new RunsByActivityViewModel(services.GetService<IActivityStatsSource>(),
             new ActivityStatsLabels(services.GetService<ISdeAccessor>(), _facts), _PassesTypeFilter,
             services.GetService<ISharedServerPicks>(), _OpenOwnActivityAsync, _time, _LootTables(services));
@@ -396,23 +397,31 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
 
     private static DateTime _LocalDayUtc(DateOnly day) => day.ToDateTime(TimeOnly.MinValue, DateTimeKind.Local).ToUniversalTime();
 
+    private static RunPositionViewModel? _CreatePosition(IServiceProvider services) =>
+        services.GetService<IRunPositionSource>() is { } source
+            ? new RunPositionViewModel(source, services.GetService<ILootTableOpener>(), services.GetService<ISharedServerPicks>(),
+                services.GetService<ILogger<RunPositionViewModel>>())
+            : null;
+
+    /// <summary>Null for a server's copy, which is not the pilot's own take.</summary>
+    private RunPositionTarget? _PositionOf(ActivityOverviewRowViewModel row) =>
+        row.ServerDetail is null && (row.GroupCode ?? row.RunId?.ToString()) is { } activityRef
+            ? new RunPositionTarget(activityRef, _ownCharacterIds)
+            : null;
+
     /// <summary>The line in a run's drawer: its earnings against what its activity typically brings. Null for a server's
     /// copy, which is not the pilot's own take, and for an activity with no key or no typical run yet.</summary>
     private async Task<RunComparison?> _CompareToTypicalAsync(ActivityOverviewRowViewModel row, CancellationToken cancellationToken)
     {
-        if (row.ServerDetail is not null || _services.GetService<IActivityStatsSource>() is not { } source
+        if (row.ServerDetail is not null || _services.GetService<IRunPositionSource>() is not { } positions
             || (row.GroupCode ?? row.RunId?.ToString()) is not { } activityRef)
             return null;
 
+        // The same read the position block under it makes (ET-520), so the one click costs one.
         return await Task.Run<RunComparison?>(async () =>
-        {
-            Result<ActivityYieldDto?> yield = await _dispatcher.Query(new GetActivityYieldQuery(activityRef), cancellationToken);
-            if (yield.Value is not { } own)
-                return null;
-
-            ActivityStats stats = await source.ReadKeyAsync(own.Key, _ownCharacterIds, cancellationToken);
-            return stats.Basis is { } basis ? RunComparison.Of(own.Key, own.YieldIsk, basis.Figures) : null;
-        }, cancellationToken);
+            await positions.ReadAsync(activityRef, _ownCharacterIds, cancellationToken) is { } position
+                ? RunComparison.Of(position.Run.Key, position.Run.YieldIsk, position.Basis.Figures)
+                : null, cancellationToken);
     }
 
     /// <summary>The run's "Compared to typical" line: BY ACTIVITY with this activity's earnings selected, wherever the

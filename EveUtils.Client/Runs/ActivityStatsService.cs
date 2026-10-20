@@ -23,7 +23,8 @@ namespace EveUtils.Client.Runs;
 /// the own runs and is told so. A server that cannot answer is a reason on the row, never an error and never a toast.</para>
 /// </summary>
 public sealed class ActivityStatsService(IServiceScopeFactory scopeFactory, IExpectedEarningsSource source,
-    IServerRunOutcomeClient client, IRemoteBusConnector connector, RunOutcomeSharingChoices choices, ISharedServerPicks picks)
+    IServerRunOutcomeClient client, IRemoteBusConnector connector, RunOutcomeSharingChoices choices, ISharedServerPicks picks,
+    OwnEarningsCache ownFigures)
     : IActivityStatsSource, ISingletonService
 {
     public static readonly TimeSpan CacheFor = TimeSpan.FromMinutes(10);
@@ -42,7 +43,7 @@ public sealed class ActivityStatsService(IServiceScopeFactory scopeFactory, IExp
     public async Task<ActivityStats> ReadKeyAsync(ActivityStatsKey key, IReadOnlyList<int> characterIds,
         CancellationToken cancellationToken = default)
     {
-        ExpectedEarnings own = await source.LoadOwnAsync(key, cancellationToken);
+        ExpectedEarnings own = await ownFigures.GetAsync(key, () => source.LoadOwnAsync(key, cancellationToken));
         (int characterId, string[] servers, OwnRunsReason reason, _) = await _ReaderAsync(characterIds, null, cancellationToken);
         SharedEarningsAttempt attempt = servers.Length == 0
             ? new SharedEarningsAttempt(null, reason)

@@ -443,6 +443,81 @@ public sealed class RunsByActivityWindowTests
         Assert.False(_Named<Button>(presented, "PaneComparison").IsVisible);
     }
 
+    /// <summary>ET-520: the drawer holds the run window's panel over this run — the diagram with the run marked, the rank,
+    /// the notable drop of an outlier — and everything that was in it before. Layout claims are Bounds: the block fills the
+    /// pane's width, its bar sits inside the padding, nothing runs past the edge. Counter-proof: leave the block out and the
+    /// section is not visible; the old comparison line and the ISK section stay either way.</summary>
+    [AvaloniaTheory]
+    [InlineData(1303)]
+    [InlineData(758)]
+    public async Task TheRunsDrawer_HoldsThePositionOfTheRun_BesideEverythingItHadBefore(double width)
+    {
+        var drop = new ActivityTopDropDto { TypeId = 1, Name = "Gistii A-Type Shield Booster", Quantity = 3, ValueIsk = 15_000m, Rarity = LootRarityClass.Faction };
+        RunPosition position = RunPositionTests.Position(20_000m, [.. RunPositionTests.Many(8)], drop: drop);
+        using var instance = TestClientInstance.Create(services =>
+        {
+            _Services()(services);
+            services.AddSingleton<IRunPositionSource>(new RunPositionTests.FixedPosition(position));
+            services.AddSingleton<ILootTableOpener>(new NoLootTables());
+        });
+        await _SaveRunAsync(instance, 90000001, Evening);
+        Presented presented = await _PresentAsync(instance, width);
+        ActivityOverviewRowViewModel row = presented.ViewModel.Tabs[0].Days.SelectMany(day => day.Rows).Single();
+
+        presented.ViewModel.Select(row);
+        await ActivityWindowHarness.WaitUntil(() => presented.ViewModel.Pane.Position?.Earnings.HasFigures is true);
+        await ActivityWindowHarness.WaitUntil(() => presented.ViewModel.Pane.HasComparison);
+        _Settle(presented);
+
+        Control section = _Named<Control>(presented, "PanePositionSection");
+        Control block = _Named<Control>(presented, "PanePosition");
+        Control bar = _Named<Control>(presented, "PositionBar");
+        Assert.True(section.IsEffectivelyVisible);
+        Assert.True(block.Bounds.Width is >= 395 and <= 435, $"block is {block.Bounds.Width} wide");
+        Assert.InRange(bar.Bounds.Width, block.Bounds.Width - 29, block.Bounds.Width - 27);
+        Assert.Equal(30, bar.Bounds.Height);
+        foreach (TextBlock text in block.GetVisualDescendants().OfType<TextBlock>().Where(text => text.IsEffectivelyVisible && text.Bounds.Width > 0))
+        {
+            Point origin = text.TranslatePoint(new Point(0, 0), block) ?? default;
+            Assert.True(origin.X + text.Bounds.Width <= block.Bounds.Width + 1, $"{text.Text} runs past the block");
+            Assert.NotEqual(DimInk, _Color(text.Foreground));
+        }
+
+        Assert.True(_Named<TextBlock>(presented, "PositionRank").IsEffectivelyVisible);
+        Assert.True(_Named<TextBlock>(presented, "PositionThisRun").IsEffectivelyVisible);
+        Assert.True(_Named<TextBlock>(presented, "PositionOutlier").IsEffectivelyVisible);
+        Assert.True(_Named<Control>(presented, "PositionTopDrop").IsEffectivelyVisible);
+        Assert.True(_Named<Button>(presented, "PositionLootTable").IsEffectivelyVisible);
+        Assert.True(_Named<Button>(presented, "PaneComparison").IsEffectivelyVisible);
+        Assert.True(_Named<TextBlock>(presented, "PaneIskEmpty").IsEffectivelyVisible);
+        Assert.True(section.TranslatePoint(new Point(0, 0), presented.Content)!.Value.Y
+                    < _Named<TextBlock>(presented, "PaneIskEmpty").TranslatePoint(new Point(0, 0), presented.Content)!.Value.Y);
+    }
+
+    /// <summary>Opening a run's drawer waits for nothing the block needs: the pane is up and the block says it is looking
+    /// before the figures are in.</summary>
+    [AvaloniaFact]
+    public async Task TheRunsDrawer_OpensBeforeThePositionIsRead()
+    {
+        var pending = new TaskCompletionSource<RunPosition?>();
+        using var instance = TestClientInstance.Create(services =>
+        {
+            _Services()(services);
+            services.AddSingleton<IRunPositionSource>(new PendingPosition(pending.Task));
+        });
+        await _SaveRunAsync(instance, 90000001, Evening);
+        Presented presented = await _PresentAsync(instance, 1303);
+
+        presented.ViewModel.Select(presented.ViewModel.Tabs[0].Days.SelectMany(day => day.Rows).Single());
+        await ActivityWindowHarness.WaitUntil(() => presented.ViewModel.Pane.Position?.Earnings.IsLoading is true);
+        _Settle(presented);
+
+        Assert.True(presented.ViewModel.Pane.HasActivity);
+        Assert.True(_Named<TextBlock>(presented, "PaneIskEmpty").IsEffectivelyVisible);
+        Assert.True(_Named<TextBlock>(presented, "PositionLoading").IsEffectivelyVisible);
+        pending.SetResult(null);
+    }
+
     /// <summary>One of the pilot's own runs in the best or worst list opens: back to RUNS, that run selected.</summary>
     [AvaloniaFact]
     public async Task AnOwnRunInTheBestRuns_OpensThatRunInRuns()
@@ -683,6 +758,19 @@ public sealed class RunsByActivityWindowTests
         root.UpdateLayout();
         Dispatcher.UIThread.RunJobs();
         return new Presented(root, content, viewModel, (FakeStatsSource)instance.Services.GetRequiredService<IActivityStatsSource>());
+    }
+
+    private sealed class NoLootTables : ILootTableOpener
+    {
+        public void Open(ActivityStatsKey? key, IReadOnlyList<int> characterIds)
+        {
+        }
+    }
+
+    private sealed class PendingPosition(Task<RunPosition?> position) : IRunPositionSource
+    {
+        public Task<RunPosition?> ReadAsync(string activityRef, IReadOnlyList<int> characterIds, CancellationToken cancellationToken = default) =>
+            position;
     }
 
     /// <summary>Two activities, one with plenty of runs from four pilots and one the pilot flew a few times; the best runs of

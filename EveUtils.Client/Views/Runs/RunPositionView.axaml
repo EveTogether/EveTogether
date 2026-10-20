@@ -1,0 +1,216 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:v="using:EveUtils.Client.Views"
+             xmlns:va="using:EveUtils.Client.ViewModels.Activity"
+             xmlns:vr="using:EveUtils.Client.ViewModels.Runs"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="400" d:DesignHeight="320"
+             x:Class="EveUtils.Client.Views.Runs.RunPositionView"
+             x:DataType="vr:RunPositionViewModel">
+
+    <!-- The run window's EXPECTED EARNINGS panel (ET-516) over a saved run, with the run's own ISK as the marker, and
+         under it the run's rank and, for an outlier, the drop that made it (ET-520). Not folded: it is here to be read.
+         All ink is TextBrush or brighter, as in the panel: the dim ink is under 4.5:1 on the opaque pane and the body. -->
+    <UserControl.Styles>
+        <Style Selector="TextBlock.eelabel">
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+            <Setter Property="FontSize" Value="9.5"/>
+            <Setter Property="LetterSpacing" Value="1.6"/>
+        </Style>
+        <Style Selector="TextBlock.eetitle">
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+            <Setter Property="FontSize" Value="10"/>
+            <Setter Property="LetterSpacing" Value="1.8"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="Button.serveroption">
+            <Setter Property="HorizontalAlignment" Value="Stretch"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="CornerRadius" Value="0"/>
+            <Setter Property="Padding" Value="6,5"/>
+            <Setter Property="MinHeight" Value="0"/>
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+            <Setter Property="FontSize" Value="11"/>
+        </Style>
+        <Style Selector="Button.serveroption.current">
+            <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+        </Style>
+        <Style Selector="Button.serveroption:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource BgRowHoverBrush}"/>
+            <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+        </Style>
+        <Style Selector="TextBlock.eebig">
+            <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+            <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+            <Setter Property="FontSize" Value="22"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+        <Style Selector="TextBlock.eefigure">
+            <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+            <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+            <Setter Property="FontSize" Value="13"/>
+        </Style>
+        <Style Selector="TextBlock.eetext">
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+            <Setter Property="FontSize" Value="10.5"/>
+            <Setter Property="LineHeight" Value="15"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+        </Style>
+        <Style Selector="TextBlock.eemono">
+            <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+            <Setter Property="FontSize" Value="10"/>
+        </Style>
+        <Style Selector="TextBlock.eenow">
+            <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+            <Setter Property="Foreground" Value="{StaticResource ValueBrush}"/>
+            <Setter Property="FontSize" Value="10.5"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+        </Style>
+        <Style Selector="Border.eedot">
+            <Setter Property="Width" Value="9"/>
+            <Setter Property="Height" Value="9"/>
+            <Setter Property="Margin" Value="0,0,3,0"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+        </Style>
+        <Style Selector="Border.eedot.filled">
+            <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
+        </Style>
+    </UserControl.Styles>
+
+    <StackPanel x:Name="PositionRoot" IsVisible="{Binding Earnings.IsShown}">
+        <Border x:Name="PositionPanel" DataContext="{Binding Earnings}" x:DataType="va:ExpectedEarningsViewModel"
+                Padding="14,10,14,10">
+            <StackPanel Spacing="8">
+                <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
+                    <TextBlock Grid.Column="0" Classes="eetitle" Text="EXPECTED EARNINGS"/>
+                    <Border Grid.Column="1" Classes="chip" Classes.ok="{Binding IsSharedSource}"
+                            IsVisible="{Binding ShowsPlainSourceChip}">
+                        <TextBlock x:Name="PositionSourceChip" Text="{Binding SourceChip}"/>
+                    </Border>
+                    <Button x:Name="PositionSourceButton" Grid.Column="1" Background="Transparent" BorderThickness="0"
+                            Padding="0" MinHeight="0" Cursor="Hand" IsVisible="{Binding ShowsChoiceSourceChip}"
+                            Command="{Binding ToggleServerListCommand}" ToolTip.Tip="Choose which server's figures to show">
+                        <Border Classes="chip ok">
+                            <TextBlock Text="{Binding SourceChip, StringFormat='{}{0} ▾'}"/>
+                        </Border>
+                    </Button>
+                </Grid>
+
+                <TextBlock x:Name="PositionLoading" Classes="eetext" Text="Looking up this run…" IsVisible="{Binding IsLoading}"/>
+
+                <ItemsControl x:Name="PositionServerList" ItemsSource="{Binding ServerOptions}">
+                    <ItemsControl.IsVisible>
+                        <MultiBinding Converter="{x:Static BoolConverters.And}">
+                            <Binding Path="HasServerChoice"/>
+                            <Binding Path="IsServerListOpen"/>
+                        </MultiBinding>
+                    </ItemsControl.IsVisible>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="vr:ServerOptionViewModel">
+                            <Button Classes="serveroption" Classes.current="{Binding IsCurrent}" Command="{Binding ChooseCommand}">
+                                <Grid ColumnDefinitions="14,*,Auto" ColumnSpacing="6">
+                                    <TextBlock Grid.Column="0" Text="&#x2713;" IsVisible="{Binding IsCurrent}"/>
+                                    <TextBlock Grid.Column="1" Text="{Binding NameText}"/>
+                                    <TextBlock Grid.Column="2" Classes="eemono" Text="{Binding DetailText}"/>
+                                </Grid>
+                            </Button>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <StackPanel x:Name="PositionFigures" Spacing="6" IsVisible="{Binding HasFigures}">
+                    <Grid ColumnDefinitions="Auto,Auto,*" ColumnSpacing="18">
+                        <StackPanel Grid.Column="0" Spacing="2">
+                            <TextBlock Classes="eelabel" Text="TYPICAL RUN"/>
+                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                <TextBlock x:Name="PositionTypical" Classes="eebig" Text="{Binding TypicalText}"/>
+                                <TextBlock Classes="eemono" VerticalAlignment="Bottom" Margin="0,0,0,3" Text="ISK"/>
+                            </StackPanel>
+                            <TextBlock Classes="eemono" IsVisible="{Binding HasPerPilot}" Text="{Binding PerPilotText}"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Bottom" IsVisible="{Binding HasPerHour}">
+                            <TextBlock Classes="eelabel" Text="TYPICAL ISK/H"/>
+                            <TextBlock Classes="eefigure" Text="{Binding PerHourText}"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="2" Spacing="2" VerticalAlignment="Bottom" HorizontalAlignment="Right">
+                            <TextBlock Classes="eelabel" HorizontalAlignment="Right" Text="{Binding BandLabel}"/>
+                            <TextBlock x:Name="PositionBand" Classes="eefigure" HorizontalAlignment="Right" Text="{Binding BandText}"/>
+                        </StackPanel>
+                    </Grid>
+
+                    <v:EarningsBandBar x:Name="PositionBar" Height="30" Margin="0,6,0,0"
+                                       RangeStart="{Binding BandStart}" RangeEnd="{Binding BandEnd}"
+                                       TypicalMark="{Binding TypicalMark}" CurrentMark="{Binding CurrentMark}"
+                                       TrackBrush="{DynamicResource DividerBrush}"
+                                       RangeBrush="{DynamicResource AccentBrush}"
+                                       TypicalBrush="{StaticResource TextBrightBrush}"
+                                       CurrentBrush="{StaticResource ValueBrush}"/>
+                    <Grid ColumnDefinitions="*,Auto,*">
+                        <TextBlock Grid.Column="0" Classes="eemono" Text="{Binding ScaleMinText}"/>
+                        <TextBlock Grid.Column="1" Classes="eemono" Text="log scale"/>
+                        <TextBlock Grid.Column="2" Classes="eemono" HorizontalAlignment="Right" Text="{Binding ScaleMaxText}"/>
+                    </Grid>
+                    <TextBlock x:Name="PositionThisRun" Classes="eenow" IsVisible="{Binding HasCurrent}" Text="{Binding CurrentText}"/>
+
+                    <Grid ColumnDefinitions="52,Auto,*" RowDefinitions="Auto,Auto" ColumnSpacing="10" RowSpacing="3">
+                        <TextBlock Grid.Row="0" Grid.Column="0" Classes="eelabel" Text="WORST"/>
+                        <TextBlock Grid.Row="0" Grid.Column="1" Classes="eefigure" FontSize="11.5" Text="{Binding WorstText}"/>
+                        <TextBlock Grid.Row="0" Grid.Column="2" Classes="eemono" Text="{Binding WorstMeta}"/>
+                        <TextBlock Grid.Row="1" Grid.Column="0" Classes="eelabel" Text="BEST"/>
+                        <TextBlock Grid.Row="1" Grid.Column="1" Classes="eefigure" FontSize="11.5" Text="{Binding BestText}"/>
+                        <TextBlock Grid.Row="1" Grid.Column="2" Classes="eemono" Text="{Binding BestMeta}"/>
+                    </Grid>
+                </StackPanel>
+
+                <StackPanel x:Name="PositionTooFew" Spacing="6" IsVisible="{Binding IsTooFewRuns}">
+                    <ItemsControl ItemsSource="{Binding RunDots}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <StackPanel Orientation="Horizontal"/>
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="x:Boolean">
+                                <Border Classes="eedot" Classes.filled="{Binding}"/>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <TextBlock x:Name="PositionTooFewLine" Classes="eefigure" FontSize="11.5" Text="{Binding TooFewText}"/>
+                </StackPanel>
+
+                <TextBlock x:Name="PositionBasis" Classes="eemono" TextWrapping="Wrap" IsVisible="{Binding !IsLoading}"
+                           Text="{Binding BasisText}"/>
+                <Border Classes="chip warn" HorizontalAlignment="Left" IsVisible="{Binding HasConfidenceText}">
+                    <TextBlock Text="{Binding ConfidenceText}"/>
+                </Border>
+                <TextBlock x:Name="PositionNote" Classes="eetext" IsVisible="{Binding HasNote}" Text="{Binding NoteText}"/>
+            </StackPanel>
+        </Border>
+
+        <!-- This run's standing: the rank, then the why of an outlier. Each line is there only when it has something to say. -->
+        <Border x:Name="PositionStanding" Padding="14,0,14,10" IsVisible="{Binding Earnings.HasFigures}">
+            <StackPanel Spacing="4">
+                <TextBlock x:Name="PositionRank" Classes="eefigure" TextWrapping="Wrap" IsVisible="{Binding HasRank}"
+                           Text="{Binding RankText}"/>
+                <TextBlock x:Name="PositionRankDetail" Classes="eemono" TextWrapping="Wrap" IsVisible="{Binding HasRank}"
+                           Text="{Binding RankDetailText}"/>
+                <TextBlock x:Name="PositionRankNote" Classes="eetext" IsVisible="{Binding HasRankNote}" Text="{Binding RankNoteText}"/>
+                <TextBlock x:Name="PositionOutlier" Classes="eenow" IsVisible="{Binding HasOutlier}" Text="{Binding OutlierText}"/>
+                <StackPanel x:Name="PositionTopDrop" Spacing="2" IsVisible="{Binding HasTopDrop}">
+                    <TextBlock Classes="eelabel" Text="NOTABLE DROP"/>
+                    <TextBlock x:Name="PositionTopDropName" Classes="eefigure" FontSize="11.5" TextWrapping="Wrap" Text="{Binding TopDropText}"/>
+                    <TextBlock Classes="eemono" TextWrapping="Wrap" Text="{Binding TopDropMetaText}"/>
+                    <Button x:Name="PositionLootTable" Classes="pick" HorizontalAlignment="Left" Margin="0,4,0,0"
+                            IsVisible="{Binding IsLootTableShown}" Command="{Binding OpenLootTableCommand}"
+                            Content="OPEN LOOT TABLE ›" ToolTip.Tip="What can drop here, and how often"/>
+                </StackPanel>
+            </StackPanel>
+        </Border>
+    </StackPanel>
+</UserControl>
