@@ -21,7 +21,8 @@ namespace EveUtils.Client.Runs;
 /// shares nothing gets the own runs and is told so.
 /// </summary>
 public sealed class ExpectedEarningsService(IServiceScopeFactory scopeFactory, IServerRunOutcomeClient client,
-    IRemoteBusConnector connector, RunOutcomeSharingChoices choices) : IExpectedEarningsSource, ISingletonService
+    IRemoteBusConnector connector, RunOutcomeSharingChoices choices, ISharedServerPicks picks)
+    : IExpectedEarningsSource, ISingletonService
 {
     private static readonly TimeSpan RecentWindow = EarningsPolicy.Default.Window;
     private static readonly TimeSpan ExtendedWindow = EarningsPolicy.Default.FallbackWindow ?? RecentWindow;
@@ -37,7 +38,7 @@ public sealed class ExpectedEarningsService(IServiceScopeFactory scopeFactory, I
     }
 
     public async Task<SharedEarningsAttempt> LoadSharedAsync(ActivityStatsKey key, int characterId,
-        CancellationToken cancellationToken = default, string? activityRef = null)
+        CancellationToken cancellationToken = default, string? activityRef = null, string? onlyServer = null)
     {
         await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
         IServiceProvider services = scope.ServiceProvider;
@@ -46,13 +47,17 @@ public sealed class ExpectedEarningsService(IServiceScopeFactory scopeFactory, I
             return new SharedEarningsAttempt(null, OwnRunsReason.None);
 
         IReadOnlyDictionary<string, OutcomeSharingChoice> chosen = await choices.LoadAsync(cancellationToken);
-        string[] sharing = [.. coupled.Where(server => chosen.GetValueOrDefault(server) is OutcomeSharingChoice.Shared).Order(StringComparer.Ordinal)];
+        string[] sharing = [.. coupled
+            .Where(server => onlyServer is null || server == onlyServer)
+            .Where(server => chosen.GetValueOrDefault(server) is OutcomeSharingChoice.Shared)
+            .Order(StringComparer.Ordinal)];
         if (sharing.Length == 0)
             return new SharedEarningsAttempt(null, OwnRunsReason.NotSharing);
 
         IDispatcher dispatcher = services.GetRequiredService<IDispatcher>();
         IServerRegistry registry = services.GetRequiredService<IServerRegistry>();
         string? runServer = await _ServerOfRunAsync(dispatcher, activityRef, cancellationToken);
+        string? pinned = onlyServer is null ? await picks.LoadAsync(cancellationToken) : null;
         OwnRunsReason reason = OwnRunsReason.ServerUnavailable;
         List<ExpectedEarnings> answers = [];
         foreach (string server in sharing.Where(server => connector.StateFor(server, characterId) == ServerConnectionState.Connected))
@@ -67,7 +72,7 @@ public sealed class ExpectedEarningsService(IServiceScopeFactory scopeFactory, I
 
         return answers.Count == 0
             ? new SharedEarningsAttempt(null, reason)
-            : new SharedEarningsAttempt(SharedServerChoice.Pick(answers, runServer), OwnRunsReason.None);
+            : new SharedEarningsAttempt(SharedServerChoice.Pick(answers, runServer, pinned), OwnRunsReason.None, answers);
     }
 
     /// <summary>The server the run already belongs to: the one its fleet's group came from, else the one a run was

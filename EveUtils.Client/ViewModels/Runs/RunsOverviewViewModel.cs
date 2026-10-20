@@ -27,6 +27,7 @@ using EveUtils.Shared.Modules.Esi.Http;
 using EveUtils.Shared.Modules.Market.Services;
 using EveUtils.Shared.Modules.Runs.Commands;
 using EveUtils.Shared.Modules.Runs.Dtos;
+using EveUtils.Shared.Modules.Runs.Earnings;
 using EveUtils.Shared.Modules.Runs.Enums;
 using EveUtils.Shared.Modules.Runs.Isk;
 using EveUtils.Shared.Modules.Runs.Queries;
@@ -81,6 +82,7 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
     private readonly RunRowFacts _facts;
     private readonly RunPublisher _publisher;
     private readonly CharacterFaceCache _faces;
+    private readonly int[] _ownCharacterIds;
     private bool _canPublish;
 
     /// <summary>Set once per load when <see cref="_fleetFilter"/> is active and turned up nothing: whether that
@@ -219,7 +221,19 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
         if (_weekStart is not null)
             _weekStart.Changed += _OnWeekStartChanged;
         SelectedTab = LocalTab;
-        Pane = new RunsActivityPaneViewModel(_ReadPaneDetailAsync, _PublishTargetName, paneReadDelay);
+        _ownCharacterIds = [.. characters.Select(character => character.EsiCharacterId).OfType<int>().Where(id => id > 0)];
+        Pane = new RunsActivityPaneViewModel(_ReadPaneDetailAsync, _PublishTargetName, paneReadDelay, _CompareToTypicalAsync,
+            key => _ = ShowActivityStatsAsync(key));
+        ByActivity = new RunsByActivityViewModel(services.GetService<IActivityStatsSource>(),
+            new ActivityStatsLabels(services.GetService<ISdeAccessor>(), _facts), _PassesTypeFilter,
+            services.GetService<ISharedServerPicks>(), _OpenOwnActivityAsync, _time);
+        // A click on a row asks for its earnings: the summary steps aside, and the drawer opens where the pane is not beside the list.
+        ByActivity.RowSelected += _ =>
+        {
+            IsSummaryChosen = false;
+            if (!IsWide)
+                IsDrawerOpen = true;
+        };
         Summary = new RunsSummaryViewModel(_FaceOf, day => _ = PickDayAsync(day), line => _ = OpenSummaryRunAsync(line));
         // HOURS and DAYS shade the way the strip does, so they follow its ISK | runs switch.
         Strip.PropertyChanged += (_, e) =>
@@ -320,6 +334,109 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
     /// <summary>Why nothing is listed — a failed read and an empty history are different things and say so.</summary>
     [ObservableProperty] private string? _statusMessage;
 
+    // ══ RUNS | BY ACTIVITY (ET-517) ═════════════════════════════════════════════════════════════════════════════
+
+    /// <summary>BY ACTIVITY: one line per activity key with what it typically earns, in a list and detail of its own.</summary>
+    public RunsByActivityViewModel ByActivity { get; }
+
+    /// <summary>RUNS unless the reader asked otherwise: the normal flow costs no click, and the choice is not kept.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsByActivity))]
+    [NotifyPropertyChangedFor(nameof(IsRunsList))]
+    [NotifyPropertyChangedFor(nameof(ShowPublishView))]
+    private RunsViewMode _viewMode = RunsViewMode.Runs;
+
+    public bool IsByActivity => ViewMode is RunsViewMode.ByActivity;
+
+    public bool IsRunsList => ViewMode is RunsViewMode.Runs;
+
+    private ActivityStatsRequest? _statsRequested;
+
+    [RelayCommand]
+    private void ShowRuns() => ViewMode = RunsViewMode.Runs;
+
+    [RelayCommand]
+    private void ShowByActivity() => ViewMode = RunsViewMode.ByActivity;
+
+    partial void OnViewModeChanged(RunsViewMode value)
+    {
+        // The pane and the drawer hold something else in the other list: neither carries over.
+        IsSummaryChosen = false;
+        IsDrawerOpen = false;
+        _SyncSummaryShown();
+        if (value is RunsViewMode.ByActivity)
+            _ = _ReloadStatsAsync(force: true);
+    }
+
+    /// <summary>The BY ACTIVITY figures for what the screen shows now — the range on the range line, the selected tab —
+    /// read again when that moved or, forced, when the runs changed.</summary>
+    private Task _ReloadStatsAsync(bool force)
+    {
+        if (!IsByActivity || ByActivity is null)
+            return Task.CompletedTask;
+
+        (DateTime fromUtc, DateTime toUtc) = RangeKind switch
+        {
+            RunsRangeKind.Day => (_LocalDayUtc(RangeStart), _LocalDayUtc(RangeStart.AddDays(1))),
+            RunsRangeKind.Week => (_LocalDayUtc(RangeStart), _LocalDayUtc(RangeStart.AddDays(7))),
+            _ => _MonthRangeUtc(ViewedMonthLocal)
+        };
+        var request = new ActivityStatsRequest(fromUtc, toUtc, SelectedTab?.ServerAddress, _ownCharacterIds);
+        if (!force && request == _statsRequested)
+            return Task.CompletedTask;
+
+        _statsRequested = request;
+        return ByActivity.ShowAsync(request);
+    }
+
+    private static DateTime _LocalDayUtc(DateOnly day) => day.ToDateTime(TimeOnly.MinValue, DateTimeKind.Local).ToUniversalTime();
+
+    /// <summary>The line in a run's drawer: its earnings against what its activity typically brings. Null for a server's
+    /// copy, which is not the pilot's own take, and for an activity with no key or no typical run yet.</summary>
+    private async Task<RunComparison?> _CompareToTypicalAsync(ActivityOverviewRowViewModel row, CancellationToken cancellationToken)
+    {
+        if (row.ServerDetail is not null || _services.GetService<IActivityStatsSource>() is not { } source
+            || (row.GroupCode ?? row.RunId?.ToString()) is not { } activityRef)
+            return null;
+
+        return await Task.Run<RunComparison?>(async () =>
+        {
+            Result<ActivityYieldDto?> yield = await _dispatcher.Query(new GetActivityYieldQuery(activityRef), cancellationToken);
+            if (yield.Value is not { } own)
+                return null;
+
+            ActivityStats stats = await source.ReadKeyAsync(own.Key, _ownCharacterIds, cancellationToken);
+            return stats.Basis is { } basis ? RunComparison.Of(own.Key, own.YieldIsk, basis.Figures) : null;
+        }, cancellationToken);
+    }
+
+    /// <summary>The run's "Compared to typical" line: BY ACTIVITY with this activity's earnings selected, wherever the
+    /// reader was.</summary>
+    public async Task ShowActivityStatsAsync(ActivityStatsKey key)
+    {
+        if (_services.GetService<IActivityStatsSource>() is not { } source)
+            return;
+
+        ViewMode = RunsViewMode.ByActivity;
+        await _ReloadStatsAsync(force: true);
+        ActivityStats read = await source.ReadKeyAsync(key, _ownCharacterIds);
+        ByActivity.SelectKey(key, read);
+    }
+
+    /// <summary>One of the pilot's own runs named in the detail's best or worst: back to RUNS with that run open. The month
+    /// it was completed in is brought into view first, like a run opened from the summary's TOP RUNS.</summary>
+    private async Task _OpenOwnActivityAsync(string activityRef, DateTime completedAtUtc)
+    {
+        Result<Guid?> found = await _dispatcher.Query(Guid.TryParse(activityRef, out Guid runId)
+            ? new FindActivitySummaryIdQuery(null, runId)
+            : new FindActivitySummaryIdQuery(activityRef, null));
+        if (found.Value is not { } summaryId)
+            return;
+
+        ViewMode = RunsViewMode.Runs;
+        await OpenRunAsync(summaryId, DateOnly.FromDateTime(completedAtUtc.ToLocalTime()));
+    }
+
     // ══ The pane, the selection and the drawer (ET-291) ═════════════════════════════════════════════════════════
 
     /// <summary>The selected run, read out in full. One view model for both hosts — the column beside the list and the
@@ -335,15 +452,24 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
 
     /// <summary>Wide: the pane beside the list holds the summary when it was asked for, and whenever there is no run
     /// to show — never an empty column (ET-294).</summary>
-    public bool ShowsSummaryInPane => IsSummaryChosen || SelectedRow is null;
+    public bool ShowsSummaryInPane => IsSummaryChosen || (!IsByActivity && SelectedRow is null);
+
+    /// <summary>BY ACTIVITY (ET-517): the pane holds the selected activity's earnings, unless the summary was asked for.</summary>
+    public bool ShowsStatsInPane => IsByActivity && !IsSummaryChosen;
+
+    public bool ShowsRunInPane => !IsByActivity && !ShowsSummaryInPane;
 
     /// <summary>What the drawer holds on the narrow layout. Kept while it slides shut, so it leaves with its content.</summary>
     public bool ShowsSummaryInDrawer => IsSummaryChosen;
 
+    public bool ShowsStatsInDrawer => IsByActivity && !IsSummaryChosen;
+
+    public bool ShowsRunInDrawer => !IsByActivity && !IsSummaryChosen;
+
     /// <summary>SUMMARY's <c>on</c> state: the summary is actually on screen.</summary>
     public bool IsSummaryOn => IsWide ? ShowsSummaryInPane : IsDrawerOpen && IsSummaryChosen;
 
-    public string DrawerTitle => IsSummaryChosen ? "SUMMARY" : "ACTIVITY";
+    public string DrawerTitle => IsSummaryChosen ? "SUMMARY" : IsByActivity ? "EARNINGS" : "ACTIVITY";
 
     /// <summary>Wide, it swaps the pane between the run and the summary — with no run selected there is nothing to swap
     /// to, and it stays on. Narrow, it opens the drawer on the summary.</summary>
@@ -352,7 +478,8 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
     {
         if (IsWide)
         {
-            IsSummaryChosen = !(ShowsSummaryInPane && SelectedRow is not null);
+            // BY ACTIVITY has the earnings pane to go back to even with no run selected.
+            IsSummaryChosen = !(ShowsSummaryInPane && (IsByActivity || SelectedRow is not null));
             return;
         }
 
@@ -372,7 +499,7 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
     /// than what filtering already narrowed the screen to (§RO-6 "in beeld is ná filters").</summary>
     public int LocalInViewCount => SelectedTab?.Days.SelectMany(day => day.Rows).Count(row => row.IsLocal) ?? 0;
 
-    public bool ShowPublishView => LocalInViewCount > 0 && _canPublish;
+    public bool ShowPublishView => LocalInViewCount > 0 && _canPublish && IsRunsList;
 
     public string PublishViewButtonText =>
         IsPublishingMany ? "PUBLISHING…" : $"⤒ PUBLISH {LocalInViewCount} LOCAL";
@@ -430,7 +557,11 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
     private void _SyncSummaryShown()
     {
         OnPropertyChanged(nameof(ShowsSummaryInPane));
+        OnPropertyChanged(nameof(ShowsStatsInPane));
+        OnPropertyChanged(nameof(ShowsRunInPane));
         OnPropertyChanged(nameof(ShowsSummaryInDrawer));
+        OnPropertyChanged(nameof(ShowsStatsInDrawer));
+        OnPropertyChanged(nameof(ShowsRunInDrawer));
         OnPropertyChanged(nameof(IsSummaryOn));
         OnPropertyChanged(nameof(DrawerTitle));
         if (Summary is not null)
@@ -549,6 +680,12 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
     /// nothing selected yet, a step picks the first row there is.</summary>
     public void MoveSelection(int direction)
     {
+        if (IsByActivity)
+        {
+            ByActivity.MoveSelection(direction);
+            return;
+        }
+
         if (SelectedTab is not { } tab || direction == 0)
             return;
 
@@ -577,6 +714,14 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
     /// list and a whole screen there.</summary>
     public Task OpenSelectedDetailAsync()
     {
+        if (IsByActivity)
+        {
+            // The earnings are the whole of what BY ACTIVITY opens: the drawer where the pane is not beside the list.
+            if (ByActivity.SelectedRow is not null && !IsWide)
+                IsDrawerOpen = true;
+            return Task.CompletedTask;
+        }
+
         if (SelectedRow is not { } row)
             return Task.CompletedTask;
 
@@ -825,6 +970,9 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
             Pane.RereadDetail();
 
         await Task.WhenAll(subRunReads);
+        // A change to the runs is a change to the figures too; the list is read again, from the services' own cache
+        // where a server's figure was read a moment ago.
+        _ = _ReloadStatsAsync(force: true);
     }
 
     /// <summary>The rows one read built, taken onto the screen: a new row is wired up and takes over from the one it
@@ -1443,6 +1591,7 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
         RangeNetText = RunsActivitySummaryText.NetFor(figures);
         RangeIsk = RunTotals.Sources(figures);
         _ShowSummary();
+        _ = _ReloadStatsAsync(force: false);
     }
 
     // ── TYPES and CHARACTERS filters (ET-293) ────────────────────────────────────────────────────────────────────
@@ -1504,6 +1653,7 @@ public sealed partial class RunsOverviewViewModel : ViewModelBase, IRefreshableM
     /// themselves all follow, without reading anything again.</summary>
     private void _AfterFilterChanged()
     {
+        ByActivity?.Reapply();
         _ApplyFiltersToTabs();
         _SettleSelection();
         _RefreshRange();

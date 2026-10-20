@@ -204,6 +204,24 @@
                 <Setter Property="LetterSpacing" Value="1.8"/>
                 <Setter Property="VerticalAlignment" Value="Center"/>
             </Style>
+            <Style Selector="Button.serveroption">
+                <Setter Property="HorizontalAlignment" Value="Stretch"/>
+                <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="BorderThickness" Value="0"/>
+                <Setter Property="CornerRadius" Value="0"/>
+                <Setter Property="Padding" Value="6,5"/>
+                <Setter Property="MinHeight" Value="0"/>
+                <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+                <Setter Property="FontSize" Value="11"/>
+            </Style>
+            <Style Selector="Button.serveroption.current">
+                <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+            </Style>
+            <Style Selector="Button.serveroption:pointerover /template/ ContentPresenter">
+                <Setter Property="Background" Value="{DynamicResource BgRowHoverBrush}"/>
+                <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+            </Style>
             <Style Selector="TextBlock.eebig">
                 <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
                 <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
@@ -789,9 +807,18 @@
                                 <TextBlock Grid.Column="1" Classes="eetitle" Text="EXPECTED EARNINGS"/>
                                 <TextBlock Grid.Column="2" Classes="sectionsummary eesummary" Text="{Binding HeaderSummary}"/>
                                 <Border Grid.Column="3" Classes="chip" Classes.ok="{Binding IsSharedSource}"
-                                        IsVisible="{Binding HasFigures}">
+                                        IsVisible="{Binding ShowsPlainSourceChip}">
                                     <TextBlock x:Name="SourceChipText" Text="{Binding SourceChip}"/>
                                 </Border>
+                                <!-- Several servers gave a figure: the chip is a button that opens the list to switch by
+                                     hand (ET-512 decision 10). Alone, it stays the plain chip above. -->
+                                <Button x:Name="SourceChipButton" Grid.Column="3" Background="Transparent" BorderThickness="0"
+                                        Padding="0" MinHeight="0" Cursor="Hand" IsVisible="{Binding ShowsChoiceSourceChip}"
+                                        Command="{Binding ToggleServerListCommand}" ToolTip.Tip="Choose which server's figures to show">
+                                    <Border Classes="chip ok">
+                                        <TextBlock Text="{Binding SourceChip, StringFormat='{}{0} ▾'}"/>
+                                    </Border>
+                                </Button>
                             </Grid>
                         </DataTemplate>
                     </ToggleButton.ContentTemplate>
@@ -800,6 +827,26 @@
                     <StackPanel Spacing="8">
                         <TextBlock x:Name="ExpectedEarningsLoading" Classes="eetext" Text="Looking up this site…"
                                    IsVisible="{Binding IsLoading}"/>
+
+                        <ItemsControl x:Name="ServerChoiceList" ItemsSource="{Binding ServerOptions}">
+                            <ItemsControl.IsVisible>
+                                <MultiBinding Converter="{x:Static BoolConverters.And}">
+                                    <Binding Path="HasServerChoice"/>
+                                    <Binding Path="IsServerListOpen"/>
+                                </MultiBinding>
+                            </ItemsControl.IsVisible>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="vr:ServerOptionViewModel">
+                                    <Button Classes="serveroption" Classes.current="{Binding IsCurrent}" Command="{Binding ChooseCommand}">
+                                        <Grid ColumnDefinitions="14,*,Auto" ColumnSpacing="6">
+                                            <TextBlock Grid.Column="0" Text="&#x2713;" IsVisible="{Binding IsCurrent}"/>
+                                            <TextBlock Grid.Column="1" Text="{Binding NameText}"/>
+                                            <TextBlock Grid.Column="2" Classes="eemono" Text="{Binding DetailText}"/>
+                                        </Grid>
+                                    </Button>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
 
                         <StackPanel x:Name="ExpectedEarningsFigures" Spacing="6" IsVisible="{Binding HasFigures}">
                             <Grid ColumnDefinitions="Auto,Auto,*" ColumnSpacing="18">

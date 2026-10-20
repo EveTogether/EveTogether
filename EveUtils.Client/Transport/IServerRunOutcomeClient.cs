@@ -26,6 +26,12 @@ public interface IServerRunOutcomeClient
     /// same order.</summary>
     Task<OutcomeReadResult<ActivityOutcomeLootDto>> GetOutcomeLootAsync(string serverAddress, long characterId,
         ActivityStatsKey key, DateOnly since, CancellationToken cancellationToken = default);
+
+    /// <summary>The activities with shared outcomes since <paramref name="since"/>, with how many runs and pilots stand
+    /// behind each (ET-517). Only activities at least the server's minimum of pilots contribute to are listed, so a key
+    /// listed here is one <see cref="GetOutcomesAsync"/> will answer for.</summary>
+    Task<OutcomeReadResult<IReadOnlyList<RunOutcomeKeyCountDto>>> ListOutcomeKeysAsync(string serverAddress, long characterId,
+        DateOnly since, CancellationToken cancellationToken = default);
 }
 
 /// <param name="Code">The server's machine-readable refusal, empty when accepted.</param>

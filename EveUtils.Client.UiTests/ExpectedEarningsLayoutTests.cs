@@ -115,6 +115,48 @@ public sealed class ExpectedEarningsLayoutTests
         });
     }
 
+    /// <summary>Two servers answered: the source chip becomes a button that opens the list inside the panel, a pick switches the
+    /// chip, and everything stays inside the panel's padding. Alone, the chip is the plain one and there is no button.</summary>
+    [AvaloniaFact]
+    public async Task SeveralServers_TheChipOpensTheList_InsideThePanel()
+    {
+        ExpectedEarnings krah = Figures(runs: 25) with { Basis = EarningsBasis.AllPilots, ServerName = "Krah Server", ServerAddress = "https://krah.invalid" };
+        ExpectedEarnings alliance = Figures(runs: 12) with { Basis = EarningsBasis.AllPilots, ServerName = "Alliance Server", ServerAddress = "https://alliance.invalid" };
+        using var harness = await ActivityWindowHarness.CreateAsync(configure: services =>
+        {
+            services.AddSingleton<IExpectedEarningsSource>(new AnsweringSource(Figures(runs: 5), new SharedEarningsAttempt(krah, OwnRunsReason.None, [krah, alliance])));
+            services.AddSingleton<ISharedServerPicks>(new MemoryPicks());
+        });
+        ActivityWindowViewModel model = await harness.OpenAsync();
+        await model.ApplySignatureAsync("AAA-001", "Combat Site", "Angel Sanctum", [new SdeSite(2311, "Angel Sanctum", 1, null, null, null, null, null, false, [])]);
+        await ActivityWindowHarness.WaitUntil(() => model.ExpectedEarnings?.HasServerChoice == true);
+        ActivityWindow window = Open(model);
+
+        Button chip = window.GetVisualDescendants().OfType<Button>().First(button => button.Name == "SourceChipButton");
+        ItemsControl list = Find<ItemsControl>(window, "ServerChoiceList");
+        Border panel = Find<Border>(window, "ExpectedEarningsPanel");
+        Assert.True(chip.IsVisible);
+        Assert.False(list.IsVisible);
+        Assert.DoesNotContain(window.GetVisualDescendants().OfType<TextBlock>(), text => text.Name == "SourceChipText" && text.IsEffectivelyVisible);
+
+        chip.Command?.Execute(null);
+        Dispatcher.UIThread.RunJobs();
+        window.UpdateLayout();
+
+        Assert.True(list.IsVisible);
+        Assert.Equal(2, model.ExpectedEarnings!.ServerOptions.Count);
+        Assert.True(Top(list, window) >= Top(panel, window));
+        Assert.True(Top(list, window) + list.Bounds.Height <= Top(panel, window) + panel.Bounds.Height + 0.5);
+        Assert.InRange(list.Bounds.Width, panel.Bounds.Width - 28.5, panel.Bounds.Width - 27.5);
+        Assert.True(chip.Bounds.Right <= panel.Bounds.Width + 0.5);
+
+        await model.ExpectedEarnings!.ServerOptions.Single(option => !option.IsCurrent).ChooseCommand.ExecuteAsync(null);
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Equal("ALL PILOTS · Alliance Server", model.ExpectedEarnings.SourceChip);
+        Assert.False(list.IsVisible);
+    }
+
     private static ActivityWindow Open(ActivityWindowViewModel model)
     {
         var window = new ActivityWindow(model);
@@ -146,12 +188,34 @@ public sealed class ExpectedEarningsLayoutTests
             EarningsStatistics.Compute(samples, _ => null, EarningsPolicy.For(ActivityStatsKind.Site), DateTime.UtcNow), 1);
     }
 
+    private sealed class MemoryPicks : ISharedServerPicks
+    {
+        private string? _address;
+
+        public Task<string?> LoadAsync(CancellationToken cancellationToken = default) => Task.FromResult(_address);
+
+        public Task SetAsync(string serverAddress, CancellationToken cancellationToken = default)
+        {
+            _address = serverAddress;
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class AnsweringSource(ExpectedEarnings own, SharedEarningsAttempt shared) : IExpectedEarningsSource
+    {
+        public Task<ExpectedEarnings> LoadOwnAsync(ActivityStatsKey key, CancellationToken cancellationToken = default) =>
+            Task.FromResult(own);
+
+        public Task<SharedEarningsAttempt> LoadSharedAsync(ActivityStatsKey key, int characterId, CancellationToken cancellationToken = default,
+            string? activityRef = null, string? onlyServer = null) => Task.FromResult(shared);
+    }
+
     private sealed class FixedSource(ExpectedEarnings own) : IExpectedEarningsSource
     {
         public Task<ExpectedEarnings> LoadOwnAsync(ActivityStatsKey key, CancellationToken cancellationToken = default) =>
             Task.FromResult(own);
 
-        public Task<SharedEarningsAttempt> LoadSharedAsync(ActivityStatsKey key, int characterId, CancellationToken cancellationToken = default, string? activityRef = null) =>
+        public Task<SharedEarningsAttempt> LoadSharedAsync(ActivityStatsKey key, int characterId, CancellationToken cancellationToken = default, string? activityRef = null, string? onlyServer = null) =>
             Task.FromResult(new SharedEarningsAttempt(null, OwnRunsReason.None));
     }
 }

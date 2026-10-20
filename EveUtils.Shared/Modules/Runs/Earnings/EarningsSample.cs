@@ -42,4 +42,8 @@ public sealed record EarningsSample
     public int OpenUnrecognisedLootCount { get; init; }
 
     public int FleetSize { get; init; } = 1;
+
+    /// <summary>The group code, else run id, of an own activity (ET-517), carried to the worst and best run so the
+    /// pilot can open it. Null for a sample read from a server: it never leaves the machine.</summary>
+    public string? ActivityRef { get; init; }
 }

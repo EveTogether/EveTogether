@@ -22,7 +22,8 @@ public sealed partial class ActivityWindowViewModel
 
     private void _CreateExpectedEarnings() =>
         ExpectedEarnings = _services.GetService<IExpectedEarningsSource>() is { } source
-            ? new ExpectedEarningsViewModel(source, _services.GetService<ILogger<ExpectedEarningsViewModel>>())
+            ? new ExpectedEarningsViewModel(source, _services.GetService<ILogger<ExpectedEarningsViewModel>>(),
+                _services.GetService<ISharedServerPicks>())
             : null;
 
     /// <summary>Re-points the panel when the site, mission or pocket changed since the last tick. The key is looked up

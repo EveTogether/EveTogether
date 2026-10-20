@@ -11,7 +11,8 @@ public interface IExpectedEarningsSource
     /// <summary>The figure of the servers <paramref name="characterId"/> is coupled to and opted in on. A server that
     /// cannot answer is an <see cref="OwnRunsReason"/>, never an error and never a toast. <paramref name="activityRef"/>
     /// (group code, else run id) names the run the figure is for, when it has one: the server that run belongs to
-    /// goes first when several are coupled (ET-512 decision 10).</summary>
+    /// goes first when several are coupled (ET-512 decision 10), after one the pilot picked by hand.
+    /// <paramref name="onlyServer"/> restricts the read to one server and ignores any pick (ET-517: a server's own tab).</summary>
     Task<SharedEarningsAttempt> LoadSharedAsync(ActivityStatsKey key, int characterId, CancellationToken cancellationToken = default,
-        string? activityRef = null);
+        string? activityRef = null, string? onlyServer = null);
 }

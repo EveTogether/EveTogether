@@ -365,6 +365,10 @@ public sealed class ExpectedEarningsServiceTests
             LootCalls++;
             return Task.FromResult(new OutcomeReadResult<ActivityOutcomeLootDto>(ScriptFor(serverAddress, since).Item2, "", ""));
         }
+
+        public Task<OutcomeReadResult<IReadOnlyList<RunOutcomeKeyCountDto>>> ListOutcomeKeysAsync(string serverAddress,
+            long characterId, DateOnly since, CancellationToken cancellationToken = default) =>
+            Task.FromResult(new OutcomeReadResult<IReadOnlyList<RunOutcomeKeyCountDto>>([], "", ""));
     }
 
     private static class Scripted

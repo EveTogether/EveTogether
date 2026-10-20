@@ -46,6 +46,21 @@
             <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}"/>
             <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
         </Style>
+        <!-- The comparison with the activity's typical run (ET-517): a link in the accent ink, to its earnings. -->
+        <Style Selector="Button.pcompare">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="CornerRadius" Value="0"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="MinHeight" Value="0"/>
+            <Setter Property="HorizontalAlignment" Value="Left"/>
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrightBrush}"/>
+            <Setter Property="FontSize" Value="11"/>
+        </Style>
+        <Style Selector="Button.pcompare:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{StaticResource TextBrightBrush}"/>
+        </Style>
         <Style Selector="TextBlock.pk">
             <Setter Property="FontSize" Value="9.5"/>
             <Setter Property="LetterSpacing" Value="1.4"/>
@@ -214,6 +229,12 @@
                                 <TextBlock Grid.Column="2" Classes="pdur" VerticalAlignment="Center"
                                            Text="{Binding DurationText}"/>
                             </Grid>
+                            <!-- Only where the activity has a typical run to compare with; one click to its earnings. -->
+                            <Button x:Name="PaneComparison" Classes="pcompare" Margin="0,6,0,0" IsVisible="{Binding HasComparison}"
+                                    Command="{Binding OpenStatsCommand}"
+                                    ToolTip.Tip="Open the earnings of this activity (BY ACTIVITY)">
+                                <TextBlock Text="{Binding ComparisonText, StringFormat='{}{0} ›'}"/>
+                            </Button>
                         </StackPanel>
                     </Border>
 

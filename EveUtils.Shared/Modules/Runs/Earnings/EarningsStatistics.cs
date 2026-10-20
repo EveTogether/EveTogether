@@ -11,6 +11,9 @@ namespace EveUtils.Shared.Modules.Runs.Earnings;
 /// </summary>
 public static class EarningsStatistics
 {
+    /// <summary>How many of the best and the worst activities the figures name (ET-517).</summary>
+    public const int ExtremeRunCount = 3;
+
     /// <param name="unitPrice">Today's price per type; null counts the loot line as 0 and reports the type unpriced.</param>
     /// <param name="nowUtc">The end of the window.</param>
     /// <param name="window">The window the figures are labelled with unless the fallback inside takes over: for a caller
@@ -69,7 +72,10 @@ public static class EarningsStatistics
                 : null,
             TypicalIskPerHour = enough ? _TypicalPerHour(valued, policy) : null,
             Worst = enough ? _Run(valued[0]) : null,
-            Best = enough ? _Run(valued[^1]) : null
+            Best = enough ? _Run(valued[^1]) : null,
+            WorstRuns = [.. valued.Take(ExtremeRunCount).Select(_Run)],
+            BestRuns = [.. Enumerable.Reverse(valued).Take(ExtremeRunCount).Select(_Run)],
+            Yields = [.. valued.Select(entry => new EarningsYieldDto { YieldIsk = entry.Yield, Weight = entry.Weight })]
         };
     }
 
@@ -140,6 +146,7 @@ public static class EarningsStatistics
         CompletedAtUtc = entry.Sample.CompletedAtUtc,
         YieldIsk = entry.Yield,
         DurationSeconds = entry.Sample.DurationSeconds,
-        FleetSize = entry.Sample.FleetSize
+        FleetSize = entry.Sample.FleetSize,
+        ActivityRef = entry.Sample.ActivityRef
     };
 }
