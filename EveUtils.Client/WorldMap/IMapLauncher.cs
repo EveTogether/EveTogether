@@ -12,6 +12,9 @@ public interface IMapLauncher
     /// listens to show what the map follows in its status bar.</summary>
     event Action<MapViewModel>? MapOpened;
 
+    /// <summary>How a map asks a character to allow a scope it is missing (the main window's scope picker + sign-in).</summary>
+    Func<int, string, Task>? AllowScope { get; set; }
+
     /// <summary>A map that is not on screen: the fleet card's, sharing the graph the MAP tab reads.</summary>
     MapViewModel Create();
 

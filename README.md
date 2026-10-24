@@ -121,7 +121,8 @@ the permission gate, the event bus, auth, and the EF contexts.
 application and supplies the Client ID and Secret; the server refuses to start outside Development if
 they are missing. Configure it via **environment variables** (primary) or by mounting an
 `appsettings.Production.json` (alternative). Key settings:
-- `Esi__ClientId` / `Esi__ClientSecret` / `Esi__CallbackUri` — your EVE application (required).
+- `Esi__ClientId` / `Esi__ClientSecret` / `Esi__CallbackUri` — your EVE application (required). Enable
+  `esi-ui.write_waypoint.v1` on it if you want the map's SET DESTINATION to work, or EVE's sign-in answers `invalid_scope`.
 - `Database__Provider` (`Sqlite`|`MySql`|`SqlServer`|`PostgreSql`) + `ConnectionStrings__<Provider>`.
 - `Server__AdminSeedPassword` — initial Blazor control-panel admin password (required outside Development).
 

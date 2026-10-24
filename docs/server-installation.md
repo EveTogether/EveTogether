@@ -48,6 +48,13 @@ Configure via **environment variables**. Nested keys use a double underscore (`_
 | `ServerApi__RateLimitPerMinute` | no | Requests per minute allowed to one API key, and to all keyless callers together (default `120`). |
 | `ServerApi__KnownProxies__0`, … | no | Addresses whose `X-Forwarded-*` headers may be believed. Empty (the default) ignores them. |
 
+### Scopes of your own EVE application
+
+The scopes the EVE application allows must include every scope a client may ask for, or EVE's sign-in refuses with
+`invalid_scope`. The map's SET DESTINATION (set the in-game autopilot destination) needs `esi-ui.write_waypoint.v1`:
+enable it on your application at [developers.eveonline.com](https://developers.eveonline.com). It is opt-in per character,
+so nobody is asked for it until they use that feature.
+
 ### Data directory
 
 The data directory holds the SQLite database, TLS certificate, token-protector key, Data Protection keys, app log,

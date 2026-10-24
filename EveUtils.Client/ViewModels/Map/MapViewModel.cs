@@ -9,6 +9,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EveUtils.Client.Controls.Map;
 using EveUtils.Client.Dialogs;
+using EveUtils.Client.Esi;
 using EveUtils.Client.Fleet;
 using EveUtils.Client.Imaging;
 using EveUtils.Client.Opsec;
@@ -84,6 +85,8 @@ public sealed partial class MapViewModel : ObservableObject, IRefreshableModule,
     private readonly ICharacterPortraitProvider? _portraits;
     private readonly IDialogService? _dialogs;
     private readonly IOpsecService? _opsec;
+    private readonly IEsiAutopilotClient? _autopilot;
+    private readonly Func<int, string, Task>? _allowScope;
     private readonly IDisposable _rosterWatch;
     private readonly ITimer _badgeBeat;
     private readonly Dictionary<long, IReadOnlyCollection<int>> _fleetMembers = [];
@@ -104,8 +107,10 @@ public sealed partial class MapViewModel : ObservableObject, IRefreshableModule,
 
     public MapViewModel(IDispatcher dispatcher, ICharacterRegistry registry, IFleetPositionSource positions, MapTrailRecorder trails,
         IMapFleetSource fleets, TimeProvider clock, ICharacterPortraitProvider? portraits = null, IDialogService? dialogs = null,
-        IOpsecService? opsec = null)
+        IOpsecService? opsec = null, IEsiAutopilotClient? autopilot = null, Func<int, string, Task>? allowScope = null)
     {
+        _autopilot = autopilot;
+        _allowScope = allowScope;
         _dispatcher = dispatcher;
         _registry = registry;
         _positions = positions;
@@ -585,6 +590,7 @@ public sealed partial class MapViewModel : ObservableObject, IRefreshableModule,
 
     partial void OnFollowModeChanged(MapFollowMode value)
     {
+        _RaiseAutopilotTargetChanged();
         if (value != MapFollowMode.Character)
             _StopFollowingCharacter();
         if (value != MapFollowMode.Fleet)
@@ -983,6 +989,7 @@ public sealed partial class MapViewModel : ObservableObject, IRefreshableModule,
         foreach (MapCharacterRowViewModel row in rows)
             Characters.Add(row);
         OnPropertyChanged(nameof(HasCharacters));
+        _RaiseAutopilotTargetChanged();
     }
 
     // Own characters where the merged positions last put them, the followed one ringed, and its trail.
