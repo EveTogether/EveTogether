@@ -506,6 +506,32 @@
                                 <Button Content="ROUTE TO" FontSize="10.5" Command="{Binding RouteToSelectedCommand}"
                                         ToolTip.Tip="Plan the route to this system"/>
                             </StackPanel>
+                            <Button x:Name="SetDestinationButton" Content="{Binding AutopilotButtonText}" FontSize="10.5" Margin="0,6,0,0"
+                                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" IsVisible="{Binding CanSetAutopilot}"
+                                    IsEnabled="{Binding !IsAutopilotBusy}" ToolTip.Tip="{Binding AutopilotTip}"
+                                    Click="OnSetDestination">
+                                <Button.ContextMenu>
+                                    <ContextMenu>
+                                        <MenuItem Header="Add waypoint" Command="{Binding AddWaypointCommand}"/>
+                                    </ContextMenu>
+                                </Button.ContextMenu>
+                            </Button>
+                            <StackPanel Spacing="4" Margin="0,6,0,0" IsVisible="{Binding IsAutopilotChoosing}">
+                                <TextBlock Text="{Binding AutopilotChoiceTitle}" FontSize="11" Foreground="{StaticResource TextBrush}"/>
+                                <ItemsControl ItemsSource="{Binding AutopilotChoices}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:MapAutopilotCandidate">
+                                            <Button Content="{Binding Label}" Opacity="{Binding Opacity}" FontSize="10.5" Margin="0,0,0,4"
+                                                    HorizontalAlignment="Stretch"
+                                                    Command="{Binding $parent[ItemsControl].((vm:MapViewModel)DataContext).ChooseAutopilotCharacterCommand}"
+                                                    CommandParameter="{Binding}"/>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <Button Content="CANCEL" FontSize="10.5" HorizontalAlignment="Stretch" Command="{Binding CancelAutopilotChoiceCommand}"/>
+                            </StackPanel>
+                            <TextBlock Text="{Binding AutopilotMessage}" IsVisible="{Binding HasAutopilotMessage}" FontSize="11" TextWrapping="Wrap"
+                                       Foreground="{DynamicResource AccentBrightBrush}" Margin="0,6,0,0"/>
                         </StackPanel>
                         <Button Classes="tabclose" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-4,-6,0"
                                 Command="{Binding ClearSelectionCommand}" ToolTip.Tip="Close">

@@ -17,6 +17,8 @@ entries under `[Unreleased]` below that were not there yet at the previous night
 
 ## [Unreleased]
 
+- **Added: set your in-game autopilot destination from the map.** Select a system and press SET DESTINATION, and the EVE client's autopilot goes there for your own character. If the map follows a character, that is the one it is set for; otherwise it uses the only character that allowed it, or asks which one. Shift+click, or right-click the button, adds the system as a waypoint instead. It needs a new, optional permission ("Set destination") that each character allows once through ALLOW…; nothing changes for characters that never use it. The game plans the route with its own autopilot settings, not the route preference on the map, and the EVE client has to be running with that character.
+
 - **Changed: the EXPECTED EARNINGS block takes about a third less room.** In the run window, the run details and the runs overview, the worst and best run now sit at the two ends of the bar, with "This run 5.67M · better than 17%" as a label on the marker. The separate THIS RUN, WORST, BEST and rank lines are gone, and a single footer line says how many runs the figures rest on and, when it applies, why they are your own runs only. Nothing it showed before is missing.
 
 - **Fixed: your own runs no longer read as "low confidence" once you have plenty.** With 97 runs of one site, expected earnings said "Low confidence: fewer than 20 runs" and the loot table showed "seen in X of 97" instead of percentages, because a pilot's runs were limited to the weight of 10 even when no other pilot was involved. That limit now only applies when the runs of several pilots are combined, so every run of your own counts.

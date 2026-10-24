@@ -1,4 +1,5 @@
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
 using EveUtils.Client.Controls.Map;
@@ -12,13 +13,35 @@ namespace EveUtils.Client.Views;
 /// </summary>
 public partial class MapWindow : ChromedWindow
 {
-    public MapWindow() => AvaloniaXamlLoader.Load(this);
+    public MapWindow()
+    {
+        AvaloniaXamlLoader.Load(this);
+        this.FindControl<Button>("SetDestinationButton")?.AddHandler(PointerPressedEvent, OnSetDestinationPressed, RoutingStrategies.Tunnel);
+    }
 
     public MapWindow(MapViewModel viewModel) : this()
     {
         DataContext = viewModel;
         MapView?.ViewMovedByUser += (_, _) => viewModel.PauseFollow();
         Closed += (_, _) => viewModel.Dispose();
+    }
+
+    // Click carries no key state, so the Shift held at press time decides between the destination and a waypoint.
+    private bool _shiftHeld;
+
+    private void OnSetDestinationPressed(object? sender, PointerPressedEventArgs e) =>
+        _shiftHeld = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
+
+    private void OnSetDestination(object? sender, RoutedEventArgs e)
+    {
+        bool addWaypoint = _shiftHeld;
+        _shiftHeld = false;
+        if (DataContext is not MapViewModel map)
+            return;
+        if (addWaypoint)
+            map.AddWaypointCommand.Execute(null);
+        else
+            map.SetDestinationCommand.Execute(null);
     }
 
     private StarMapControl? MapView => this.FindControl<StarMapControl>("Map");

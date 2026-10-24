@@ -476,7 +476,9 @@ public partial class MainWindowViewModel : ViewModelBase, IModuleHostDisplay
         _services = services;
         _gamelog = services.GetRequiredService<GamelogClientService>();
         services.GetRequiredService<MapTrailRecorder>(); // records trails from app start, map open or not
-        services.GetRequiredService<IMapLauncher>().MapOpened += _WatchMapStatus;
+        IMapLauncher maps = services.GetRequiredService<IMapLauncher>();
+        maps.MapOpened += _WatchMapStatus;
+        maps.AllowScope = (characterId, scope) => ReAuthenticateAsync(characterId, [scope]);
         if (services.GetService<EarningsScreens>() is { } earningsScreens)
             earningsScreens.SettingsOpener = OpenSettings;
         _login = services.GetRequiredService<LocalEsiLoginService>();

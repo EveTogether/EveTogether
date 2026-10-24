@@ -26,6 +26,7 @@ using EveUtils.Shared.Messaging;
 using EveUtils.Shared.Messaging.Wire;
 using EveUtils.Shared.Modules.Fleet;
 using EveUtils.Shared.Modules.Location;
+using EveUtils.Shared.Modules.Map;
 using EveUtils.Shared.Modules.Market.Repositories;
 using EveUtils.Shared.Modules.Messaging;
 using EveUtils.Shared.Modules.Settings.Repositories;
@@ -175,6 +176,7 @@ public static class ClientServices
         services.AddModuleEsiScopes(KillmailsScopeCatalog.Catalog); // esi-killmails read_killmails (on by default)
         services.AddModuleEsiScopes(FleetsScopeCatalog.Catalog); // esi-fleets read/write (opt-in, Q1) for in-game fleet coupling
         services.AddModuleEsiScopes(LocationScopeCatalog.Catalog); // esi-location read_location (opt-in) for the abyssal countdown
+        services.AddModuleEsiScopes(AutopilotScopeCatalog.Catalog); // esi-ui write_waypoint (opt-in) for the map's SET DESTINATION
         services.AddEsiScopeRegistry(); // built from all IEsiScopeCatalog registrations (modules)
         services.AddEsiPipeline(DataDirectory()); // pivot + handler chain + file cache (ClientEsiTokenProvider auto-registered)
         // BackgroundService started manually (the client has no generic host); the other ESI services

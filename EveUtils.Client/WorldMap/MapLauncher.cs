@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using EveUtils.Client.Dialogs;
+using EveUtils.Client.Esi;
 using EveUtils.Client.Fleet;
 using EveUtils.Client.Imaging;
 using EveUtils.Client.Opsec;
@@ -22,6 +23,8 @@ public sealed class MapLauncher(IServiceProvider services, IDialogService dialog
     private readonly List<WeakReference<MapViewModel>> _created = [];
 
     public event Action<MapViewModel>? MapOpened;
+
+    public Func<int, string, Task>? AllowScope { get; set; }
 
     public MapViewModel Create()
     {
@@ -55,7 +58,9 @@ public sealed class MapLauncher(IServiceProvider services, IDialogService dialog
         services.GetRequiredService<TimeProvider>(),
         services.GetService<ICharacterPortraitProvider>(),
         dialogs,
-        services.GetRequiredService<IOpsecService>());
+        services.GetRequiredService<IOpsecService>(),
+        services.GetService<IEsiAutopilotClient>(),
+        (characterId, scope) => AllowScope?.Invoke(characterId, scope) ?? Task.CompletedTask);
 
     public MapViewModel Open()
     {
