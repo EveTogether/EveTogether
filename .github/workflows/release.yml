@@ -32,26 +32,20 @@ env:
   CHANNELS: win-x64-stable linux-x64-stable osx-arm64-stable osx-x64-stable
 
 jobs:
-  # What the update screen shows for this release: the CHANGELOG section of the tag, read once, before anything is
-  # built. A tag with no section fails here, so a release cannot go out reading "ships without notes" — and the
-  # section has to be split off by hand when the release is cut. A dispatch build has no tag and takes [Unreleased].
+  # Fails the release before anything is built when the tag has no CHANGELOG section, so a release cannot go out
+  # reading "ships without notes" - the section has to be split off by hand when the release is cut. The builds
+  # and the release page regenerate the notes themselves from the same script. A dispatch build has no tag and
+  # takes [Unreleased].
   notes:
     runs-on: ubuntu-latest
-    outputs:
-      notes: ${{ steps.extract.outputs.notes }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - id: extract
+      - name: Check the CHANGELOG has notes for this release
         env:
           TAG: ${{ github.event.release.tag_name }}
-        run: |
-          bash scripts/changelog-notes.sh release CHANGELOG.md "${TAG:-[Unreleased]}" > release-notes.md
-
-          delimiter="notes_$(openssl rand -hex 8)"
-          { echo "notes<<$delimiter"; cat release-notes.md; echo "$delimiter"; } >> "$GITHUB_OUTPUT"
-
+        run: bash scripts/changelog-notes.sh release CHANGELOG.md "${TAG:-[Unreleased]}" > /dev/null
   # Runs beside the builds and is not in publish-assets' needs: a failing test shows up in the run summary but
   # does not hold the release back.
   tests:
@@ -152,11 +146,13 @@ jobs:
         shell: bash
         run: dotnet tool install -g vpk --version ${{ env.VPK_VERSION }}
 
+      # Regenerated here rather than handed over from the notes job: the text is large, and a step output or
+      # environment variable of that size is refused on Linux (Argument list too long).
       - name: Write the release notes
         shell: bash
         env:
-          NOTES: ${{ needs.notes.outputs.notes }}
-        run: printf '%s\n' "$NOTES" > release-notes.md
+          TAG: ${{ github.event.release.tag_name }}
+        run: bash scripts/changelog-notes.sh release CHANGELOG.md "${TAG:-[Unreleased]}" > release-notes.md
 
       # Signing is deliberately absent: it has not been decided on yet, and every artifact here ships unsigned,
       # which the release notes say out loud. When it is decided, it arrives as --signTemplate (or --signParams)
@@ -228,11 +224,13 @@ jobs:
       - name: Install vpk
         run: dotnet tool install -g vpk --version ${{ env.VPK_VERSION }}
 
+      # Regenerated here rather than handed over from the notes job: the text is large, and a step output or
+      # environment variable of that size is refused on Linux (Argument list too long).
       - name: Write the release notes
         shell: bash
         env:
-          NOTES: ${{ needs.notes.outputs.notes }}
-        run: printf '%s\n' "$NOTES" > release-notes.md
+          TAG: ${{ github.event.release.tag_name }}
+        run: bash scripts/changelog-notes.sh release CHANGELOG.md "${TAG:-[Unreleased]}" > release-notes.md
 
       # An AppImage is Velopack's only Linux format — there is no installer, and this AppImage is the
       # self-updating one, which is why the hand-built AppDir/appimagetool leg that used to live here is gone.
@@ -328,11 +326,13 @@ jobs:
       - name: Install vpk
         run: dotnet tool install -g vpk --version ${{ env.VPK_VERSION }}
 
+      # Regenerated here rather than handed over from the notes job: the text is large, and a step output or
+      # environment variable of that size is refused on Linux (Argument list too long).
       - name: Write the release notes
         shell: bash
         env:
-          NOTES: ${{ needs.notes.outputs.notes }}
-        run: printf '%s\n' "$NOTES" > release-notes.md
+          TAG: ${{ github.event.release.tag_name }}
+        run: bash scripts/changelog-notes.sh release CHANGELOG.md "${TAG:-[Unreleased]}" > release-notes.md
 
       # Two architectures, two channels, two feeds — an Apple Silicon install asks for releases.osx-arm64.json
       # and finds only arm64 builds in it. vpk builds the .app bundle itself from this plain publish directory,

@@ -9,7 +9,10 @@ publishing a GitHub Release tagged `vX.Y.Z` attaches a self-contained Velopack b
 with the update feed those installs read, and publishes the
 server as a Docker image to `ghcr.io/evetogether/eve-together-server` — tagged both `:latest`
 (always the newest build) and with the release version (`:X.Y.Z`). The notes for a release are
-taken from the matching `## vX.Y.Z` section below.
+taken from the matching `## vX.Y.Z` section below, or from `release-highlights/vX.Y.Z.md` when that file
+exists: a release page holds at most 125,000 characters, so a release with many entries ships a curated
+highlights file instead, and its notes close with a link to this complete changelog at the tag. A section
+without a highlights file is cut at 100,000 characters with the same link.
 
 A separate nightly pipeline (`.github/workflows/nightly.yml`) publishes a rolling pre-release
 build of `main` on its own schedule, replacing itself each time. Its release notes are the
