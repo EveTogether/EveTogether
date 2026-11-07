@@ -105,3 +105,37 @@ if bash "$script" release "$work/versions.md" v9.9.9 2> /dev/null; then
     exit 1
 fi
 echo "ok   release with a missing section fails"
+
+mkdir "$work/release-highlights"
+cat > "$work/release-highlights/v0.2.1.md" <<'MD'
+### Highlights
+- **Added: one.** Curated wording.
+MD
+
+check "release prefers the curated highlights and links the full changelog" \
+"- Added: one. Curated wording.
+Full list of changes: https://example.test/repo/blob/v0.2.1/CHANGELOG.md" \
+"$(REPO_URL=https://example.test/repo bash "$script" release "$work/versions.md" v0.2.1)"
+
+check "section keeps the highlights as markdown and links the full changelog" \
+"### Highlights
+- **Added: one.** Curated wording.
+
+Full list of changes: https://example.test/repo/blob/v0.2.1/CHANGELOG.md" \
+"$(REPO_URL=https://example.test/repo bash "$script" section "$work/versions.md" v0.2.1)"
+
+cat > "$work/long.md" <<'MD'
+## v1.0.0 — 2026-03-01
+Short line.
+This second line is long enough to take the notes past the limit.
+MD
+
+check "a section over the limit is cut at a line and links the full changelog" \
+"Short line.
+
+Full list of changes: https://example.test/repo/blob/v1.0.0/CHANGELOG.md" \
+"$(NOTES_LIMIT=20 REPO_URL=https://example.test/repo bash "$script" section "$work/long.md" v1.0.0)"
+
+check "a section under the limit gets no link" \
+"Short line. This second line is long enough to take the notes past the limit." \
+"$(bash "$script" release "$work/long.md" v1.0.0)"
